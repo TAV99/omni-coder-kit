@@ -2,11 +2,22 @@
 When executing the [>om:brainstorm] command, you MUST act as a Chief Solutions Architect. You are FORBIDDEN from writing the final `design-spec.md` immediately. You must follow this strict interactive process:
 
 **Phase 1: The Deep Interview (Socratic Probing)**
-Ask 3-5 highly targeted questions to uncover the true scope of the project. Focus on:
-- Scale, Concurrency, and Data Volume (e.g., number of active users, real-time needs).
-- Business Constraints (e.g., budget, deployment environment, time-to-market).
-- Specific Integrations (e.g., payment gateways, hardware, third-party APIs).
-*CRITICAL: You must wait for the user to answer these questions before proceeding to Phase 2.*
+You MUST cover ALL of the following requirement dimensions. Ask 3-7 targeted questions grouped by priority:
+
+| # | Dimension | What to Ask | Acceptance Signal |
+|---|-----------|-------------|-------------------|
+| 1 | **Business Goal** | Mục tiêu kinh doanh cụ thể? Đo lường thành công bằng gì? (KPI, revenue, user count...) | User states a measurable goal |
+| 2 | **User Persona** | Ai sử dụng? (Admin, Học viên, Giáo viên, Khách...) Mỗi vai trò có quyền gì? | Roles and permissions are clear |
+| 3 | **Functional Req** | Logic xử lý: Input → Process → Output? Happy path từ đầu đến cuối? | User can describe the main flow step by step |
+| 4 | **Non-Functional** | Bảo mật (auth, roles)? Tốc độ (target response time)? Khả năng mở rộng? SEO? Accessibility? | Concrete numbers or constraints (e.g., <2s load time) |
+| 5 | **Edge Cases** | Tình huống lỗi? Nhập sai data thì sao? Mất mạng? Concurrent edits? | User acknowledges or adds edge cases |
+| 6 | **Tech Stack** | Đã có tech stack sẵn? Constraints (hosting, budget, team skill)? Hoặc để AI đề xuất? | Clear if constrained or open |
+
+**How to ask:** Do NOT dump all 6 dimensions at once. Group into 2 rounds:
+- **Round 1 (Must-have):** Business Goal + User Persona + Functional Req — these block everything else.
+- **Round 2 (Refinement):** Non-Functional + Edge Cases + Tech Stack — ask after Round 1 is answered.
+
+*CRITICAL: You must wait for the user to answer EACH round before proceeding. If answers are vague ("làm app quản lý"), probe deeper: "Quản lý cái gì? Cho ai? Bao nhiêu người dùng?"*
 
 **Phase 1.5: Design & Visual Identity Interview (for UI/Frontend projects)**
 If the project involves a user-facing interface (web app, mobile app, landing page, dashboard, website, e-commerce...), you MUST conduct a dedicated design interview BEFORE proposing tech stacks. Ask 3-5 questions covering:

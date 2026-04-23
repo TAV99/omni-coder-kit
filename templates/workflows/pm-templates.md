@@ -2,12 +2,14 @@
 When executing workflow commands, you MUST adhere to these exact output structures in standard Vietnamese:
 
 **For [>om:brainstorm] -> `design-spec.md`:**
-- **1. Mục tiêu cốt lõi:** (1-2 sentences explaining the exact value the feature brings).
-- **2. Phạm vi & Ràng buộc:** (What is IN scope, what is OUT of scope).
-- **3. Kiến trúc Dữ liệu (Database Schema):** (Proposed tables/collections and relationships).
-- **4. API Endpoints / Webhooks:** (List of methods, paths, and payload structures).
-- **5. Các trường hợp biên (Edge Cases):** (Potential failure points and mitigations).
-- **6. Visual Identity & Design System (UI projects only):** Design style, mood/tone, color palette (hex codes), typography, layout pattern, component style, animation level, references.
+- **1. Business Goal:** Mục tiêu kinh doanh + KPI đo lường thành công.
+- **2. User Personas & Permissions:** Vai trò người dùng, quyền hạn từng role, luồng tương tác chính.
+- **3. Functional Requirements:** Input → Process → Output cho từng tính năng. Happy path chi tiết.
+- **4. Non-Functional Requirements:** Bảo mật, tốc độ (target response time), khả năng mở rộng, SEO, accessibility.
+- **5. Edge Cases:** Tình huống lỗi, xử lý ngoại lệ, thông báo lỗi cho user.
+- **6. Kiến trúc Dữ liệu (Database Schema):** Tables/collections, relationships, indexes.
+- **7. API Endpoints / Webhooks:** Methods, paths, payload structures, auth requirements.
+- **8. Visual Identity & Design System (UI projects only):** Design style, mood/tone, color palette (hex codes), typography, layout pattern, component style, animation level, references.
 
 **For [>om:plan] -> `todo.md`:**
 - Must be grouped by components/modules.
