@@ -12,3 +12,10 @@ When executing workflow commands, you MUST adhere to these exact output structur
 - Must be grouped by components/modules.
 - Each task MUST use the `- [ ]` markdown checkbox format.
 - Tasks must be micro-sized (estimable to < 20 mins of coding).
+
+**For [>om:check] -> `test-report.md`:**
+- Build & Lint status (PASS/FAIL).
+- Automated test results (X/Y passed).
+- Feature verification table: each `- [x]` task from `todo.md` with method, result, and notes.
+- Summary: total/passed/failed/skipped counts + blocking issues.
+- Next steps: proceed to `>om:doc` or fix with `>om:fix` then re-check.
