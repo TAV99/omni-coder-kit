@@ -1,101 +1,101 @@
 # Omni-Coder Kit 🚀
 
-**Omni-Coder Kit** is a powerful CLI tool designed to manage and inject "ideologies" (mindset + workflows + specialized skills) into AI-powered coding environments. It ensures that your AI agents (Claude Code, Cursor, Windsurf, Antigravity, etc.) operate with senior-level discipline, follow strict SDLC processes, and utilize best-practice design patterns.
+**Omni-Coder Kit** là một công cụ CLI mạnh mẽ được thiết kế để quản lý và "bơm" hệ tư tưởng (tư duy + quy trình + kỹ năng chuyên biệt) vào các môi trường lập trình hỗ trợ bởi AI. Công cụ này đảm bảo các AI agent của bạn (Claude Code, Cursor, Windsurf, Antigravity, v.v.) hoạt động với kỷ luật của một kỹ sư cấp cao (Senior), tuân thủ quy trình SDLC nghiêm ngặt và sử dụng các mẫu thiết kế tối ưu nhất.
 
-## 🌟 Key Features
+## 🌟 Tính năng chính
 
-- **Multi-IDE Support:** Generates tailored configuration files for `Claude Code` (`CLAUDE.md`), `Cursor` (`.cursorrules`), `Windsurf` (`.windsurfrules`), `Antigravity` (`.antigravityrules`), and more.
-- **Core Mindset (Karpathy Style):** Enforces First Principles: Think before coding, Simplicity First, Surgical Changes, and Goal-Driven Execution.
-- **Structured SDLC Workflow:** Orchestrates the development process through specialized commands like `[>om:brainstorm]`, `[>om:plan]`, and `[>om:cook]`.
-- **Modular Stacks:** Quickly add domain-specific rules for React/Next.js, Hono/PostgreSQL, Automation, and Payment Gateways.
-- **External Skill Integration:** Seamlessly integrates with the `skills.sh` ecosystem to fetch expert skills from global repositories.
-- **Manifest System:** Tracks installed skills and prevents conflicts within your project.
+- **Hỗ trợ đa IDE:** Tạo file cấu hình tùy chỉnh cho `Claude Code` (`CLAUDE.md`), `Cursor` (`.cursorrules`), `Windsurf` (`.windsurfrules`), `Antigravity` (`.antigravityrules`), và nhiều công cụ khác.
+- **Tư duy cốt lõi (Phong cách Karpathy):** Áp dụng các nguyên tắc First Principles: Suy nghĩ trước khi code, Ưu tiên sự đơn giản, Thay đổi kiểu ngoại khoa (Surgical Changes), và Thực thi dựa trên mục tiêu.
+- **Quy trình SDLC cấu trúc:** Điều phối quá trình phát triển thông qua các lệnh chuyên biệt như `[>om:brainstorm]`, `[>om:plan]`, và `[>om:cook]`.
+- **Tech Stacks theo mô-đun:** Nhanh chóng thêm các quy tắc chuyên biệt cho React/Next.js, Hono/PostgreSQL, Tự động hóa (Bot), và Cổng thanh toán.
+- **Tích hợp Kỹ năng ngoài:** Kết nối mượt mà với hệ sinh thái `skills.sh` để tải các kỹ năng chuyên gia từ các kho lưu trữ toàn cầu.
+- **Hệ thống Manifest:** Theo dõi các kỹ năng đã cài đặt và ngăn ngừa xung đột trong dự án.
 
 ---
 
-## 🛠️ Installation
+## 🛠️ Cài đặt
 
-Ensure you have [Node.js](https://nodejs.org/) (>=16.0.0) installed.
+Đảm bảo bạn đã cài đặt [Node.js](https://nodejs.org/) (>=16.0.0).
 
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/TAV99/omni-coder-kit.git
 cd omni-coder-kit
 
-# Install dependencies
+# Cài đặt các phụ thuộc
 npm install
 
-# Link the CLI globally (optional)
+# Liên kết CLI toàn cục (tùy chọn)
 npm link
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Bắt đầu nhanh
 
-### 1. Initialize your project
-Run `omni init` in your project root to set up the foundation.
+### 1. Khởi tạo dự án
+Chạy `omni init` tại thư mục gốc của dự án để thiết lập nền tảng.
 ```bash
 omni init
 ```
-- Select your AI IDE (Claude Code, Cursor, etc.).
-- Choose your discipline level (Hardcore or Flexible).
-- Select your initial tech stacks.
+- Chọn AI IDE bạn đang dùng (Claude Code, Cursor, v.v.).
+- Chọn mức độ kỷ luật (Hardcore hoặc Flexible).
+- Chọn các tech stack ban đầu.
 
-### 2. List available skills
-Check the built-in library of specialized stacks.
+### 2. Xem danh sách kỹ năng
+Kiểm tra thư viện các stack chuyên biệt có sẵn trong kho.
 ```bash
 omni list
 ```
 
-### 3. Add specialized rules
-Inject specific technical rules into your existing configuration.
+### 3. Thêm quy tắc chuyên biệt
+Bơm thêm các quy tắc kỹ thuật cụ thể vào cấu hình hiện tại.
 ```bash
 omni add react-next
 ```
 
-### 4. Equip external skills
-Fetch advanced skills from the `skills.sh` registry or any GitHub repository.
+### 4. Trang bị kỹ năng từ bên ngoài
+Tải các kỹ năng nâng cao từ registry `skills.sh` hoặc bất kỳ repository GitHub nào.
 ```bash
 omni equip vercel-labs/agent-skills
 ```
 
-### 5. Check status
-Review which skills are currently active in your project.
+### 5. Kiểm tra trạng thái
+Xem các kỹ năng nào đang hoạt động trong dự án của bạn.
 ```bash
 omni status
 ```
 
 ---
 
-## 🧠 The Omni Workflow (SDLC)
+## 🧠 Quy trình làm việc Omni (SDLC)
 
-Once initialized, interact with your AI using these structured commands:
+Sau khi khởi tạo, hãy tương tác với AI của bạn bằng các lệnh có cấu trúc sau:
 
-| Command | Role | Description |
+| Lệnh | Vai trò | Mô tả |
 | :--- | :--- | :--- |
-| `[>om:brainstorm]` | **Architect** | Deep interview, tech stack selection, and `design-spec.md` creation. |
-| `[>om:equip]` | **Manager** | Automatically fetches necessary expert skills via `skills.sh`. |
-| `[>om:plan]` | **PM** | Breaks the spec into granular tasks in `todo.md`. |
-| `[>om:cook]` | **Coder** | Executes tasks with surgical precision and minimal code. |
-| `[>om:check]` | **QA** | Verifies functionality and generates `test-report.md`. |
-| `[>om:fix]` | **QA Agent** | Systematic debugging based on strict error logs. |
-| `[>om:doc]` | **Writer** | Finalizes documentation and READMEs. |
+| `[>om:brainstorm]` | **Architect** | Phỏng vấn chuyên sâu, chọn tech stack và tạo `design-spec.md`. |
+| `[>om:equip]` | **Manager** | Tự động tải các kỹ năng chuyên gia cần thiết qua `skills.sh`. |
+| `[>om:plan]` | **PM** | Chia nhỏ spec thành các nhiệm vụ chi tiết trong `todo.md`. |
+| `[>om:cook]` | **Coder** | Thực thi nhiệm vụ với độ chính xác cao và code tối giản nhất. |
+| `[>om:check]` | **QA** | Xác minh tính năng và tạo báo cáo `test-report.md`. |
+| `[>om:fix]` | **QA Agent** | Debug có hệ thống dựa trên phân tích log lỗi nghiêm ngặt. |
+| `[>om:doc]` | **Writer** | Hoàn thiện tài liệu hướng dẫn và README. |
 
 ---
 
-## 📂 Project Structure
+## 📂 Cấu trúc dự án
 
-- `bin/omni.js`: Core CLI logic and command definitions.
-- `templates/core/`: Foundation mindset and hygiene rules.
-- `templates/stacks/`: Technology-specific instruction sets.
-- `templates/workflows/`: SDLC process automation templates.
-- `.omni-manifest.json`: Tracks installed skills and project metadata.
+- `bin/omni.js`: Logic cốt lõi của CLI và định nghĩa các lệnh.
+- `templates/core/`: Các quy tắc tư duy nền tảng và vệ sinh mã nguồn.
+- `templates/stacks/`: Các bộ hướng dẫn chuyên biệt cho từng công nghệ.
+- `templates/workflows/`: Các mẫu tự động hóa quy trình SDLC.
+- `.omni-manifest.json`: Theo dõi các kỹ năng đã cài đặt và metadata của dự án.
 
 ---
 
-## 📜 License
+## 📜 Giấy phép
 
-This project is licensed under the ISC License.
+Dự án này được cấp phép theo Giấy phép ISC.
 
-Developed with ❤️ by [TAV](mailto:tav99.dev@gmail.com).
+Được phát triển với ❤️ bởi [TAV](mailto:tav99.dev@gmail.com).
