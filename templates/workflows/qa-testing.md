@@ -9,23 +9,17 @@ Read `todo.md`. Collect all tasks marked `- [x]` (completed). Group them by type
 - **Logic:** Business rules produce expected output?
 - **Integration:** External services connect properly?
 
-**Step 2: Build & Lint Gate**
-Run the project's build/lint/typecheck commands. If any fail, STOP and report — no point testing features on broken code.
-```
-# Detect and run (adapt to project)
-npm run build / npm run typecheck / npx tsc --noEmit
-npm run lint (if exists)
-```
-Record: PASS or FAIL + error summary.
+**Step 2: Validation Pipeline (P0 → P1 → P2 → P3 → P4)**
+Execute the full automated validation pipeline as defined in the VALIDATION SCRIPTS section. Run checks in strict priority order:
+- **P0: Security Scan** (dependency audit, secrets detection, dangerous patterns, SQL injection) — BLOCKING
+- **P1: Lint & Typecheck** (ESLint/Biome, TypeScript, Python lint) — BLOCKING
+- **P2: Build** (compile/bundle the project) — BLOCKING
+- **P3: Automated Tests** (vitest/jest/pytest) — BLOCKING
+- **P4: Bundle Analysis** (size, unused deps) — ADVISORY
 
-**Step 3: Automated Tests**
-Run existing test suites. If no tests exist, note it — do NOT skip verification, move to manual checks.
-```
-npm test / npx vitest run / npx jest (adapt to project)
-```
-Record: PASS (X/Y tests) or FAIL + failing test names.
+*If ANY blocking check (P0-P3) fails, STOP. Do NOT proceed to Feature Verification. Report failures and recommend `>om:fix`.*
 
-**Step 4: Feature Verification (per completed task)**
+**Step 3: Feature Verification (per completed task)**
 For EACH completed `- [x]` task in `todo.md`, verify it works:
 
 - **API endpoints:** Use `curl` or a script to hit the endpoint, check status code + response shape.
@@ -40,19 +34,27 @@ For each task, record:
 - Result: PASS / FAIL / SKIP (with reason)
 - If FAIL: specific error or unexpected behavior
 
-**Step 5: Generate Test Report**
+**Step 4: Generate Test Report**
 Output `test-report.md` in this format:
 
 ```markdown
 # Test Report
 > Generated: [date] | Project: [name]
 
-## Build & Lint
-- Build: PASS/FAIL
-- Lint: PASS/FAIL
+## P0: Security Scan
+- Dependencies: X vulnerabilities (Y critical, Z high) — PASS/FAIL
+- Secrets in code: PASS/FAIL
+- Dangerous patterns: PASS/WARN
+- SQL injection risk: PASS/WARN
+
+## P1: Lint & Typecheck
+- Lint: PASS/FAIL (X errors, Y warnings)
 - Typecheck: PASS/FAIL
 
-## Automated Tests
+## P2: Build
+- Build: PASS/FAIL
+
+## P3: Automated Tests
 - Result: X/Y passed
 - Failures: [list if any]
 

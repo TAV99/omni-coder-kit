@@ -19,19 +19,32 @@ You MUST cover ALL of the following requirement dimensions. Ask 3-7 targeted que
 
 *CRITICAL: You must wait for the user to answer EACH round before proceeding. If answers are vague ("làm app quản lý"), probe deeper: "Quản lý cái gì? Cho ai? Bao nhiêu người dùng?"*
 
+**Socratic Gate Enforcement:**
+- You MUST ask a MINIMUM of 3 questions in Round 1 and 2 questions in Round 2. No exceptions.
+- Even after the user answers, ask at least 2 follow-up "edge case" questions before moving to Phase 2:
+  - "Nếu [tình huống bất thường] xảy ra thì sao?" (What if [unusual scenario] happens?)
+  - "Có giới hạn nào về [resource/thời gian/budget] không?" (Any limits on [resource/time/budget]?)
+- **REJECT premature requests:** If the user says "bỏ qua phỏng vấn, code luôn" or "skip questions", respond: "Tôi hiểu bạn muốn nhanh, nhưng bỏ qua phỏng vấn sẽ dẫn đến code sai. Hãy trả lời 3 câu hỏi này trước."
+- **Self-check before Phase 2:** Before proposing tech stacks, verify you can answer ALL of these:
+  - [ ] Mục tiêu kinh doanh rõ ràng?
+  - [ ] Biết ai là người dùng và quyền hạn?
+  - [ ] Hiểu luồng xử lý chính (happy path)?
+  - [ ] Biết ít nhất 2 edge cases?
+  If any checkbox is unchecked, ask more questions — do NOT proceed.
+
 **Phase 1.5: Design & Visual Identity Interview (for UI/Frontend projects)**
 If the project involves a user-facing interface (web app, mobile app, landing page, dashboard, website, e-commerce...), you MUST conduct a dedicated design interview BEFORE proposing tech stacks. Ask 3-5 questions covering:
 
-- **Phong cách tổng thể (Design Style):** Minimalist, glassmorphism, neomorphism, brutalist, editorial, skeuomorphic, flat, material design? Show 2-3 style options with brief descriptions.
-- **Vibe / Cảm xúc (Mood & Tone):** Professional & corporate, playful & creative, luxury & premium, friendly & approachable, techy & futuristic, warm & organic? Ask the user to pick adjectives that describe the desired feel.
-- **Bảng màu (Color Palette):** Primary brand color? Preferred color family (earth tones, pastels, vibrant, monochrome, dark mode)? Any colors to AVOID? Ask for reference links or screenshots if available.
-- **Typography & Layout:** Serif vs sans-serif preference? Dense information layout vs spacious/airy? Card-based vs list-based? Fixed sidebar vs top navigation?
-- **Tham khảo (References & Inspiration):** Ask for 2-3 websites/apps the user admires visually. What specifically do they like about each? (colors, layout, animations, typography).
-- **Đối tượng người dùng (Target Audience):** Age range, tech savviness, device preference (mobile-first vs desktop-first). This directly impacts design decisions.
-- **Animation & Interaction:** Static/minimal vs rich animations? Micro-interactions (hover effects, transitions)? Scroll-triggered animations? Loading states style?
+- **Design Style:** Minimalist, glassmorphism, brutalist, editorial, flat, material design? Show 2-3 options.
+- **Mood & Tone:** Professional, playful, luxury, friendly, futuristic, warm? Pick adjectives.
+- **Color Palette:** Primary brand color? Color family (earth tones, pastels, vibrant, monochrome, dark mode)? Colors to AVOID?
+- **Typography & Layout:** Serif vs sans-serif? Dense vs spacious? Card vs list? Sidebar vs top nav?
+- **References:** 2-3 websites/apps the user admires visually — what specifically they like.
+- **Target Audience:** Age range, tech savviness, mobile-first vs desktop-first.
+- **Animation:** Static/minimal vs rich? Micro-interactions? Scroll-triggered?
 
-*If the user is unsure, propose 2-3 visual direction options (e.g., "Modern Minimal" vs "Bold Creative" vs "Corporate Clean") with brief descriptions of each, and let them pick or mix.*
-*CRITICAL: Record all design decisions in Phase 3's design-spec.md under a dedicated "Visual Identity" section.*
+*If unsure, propose 2-3 visual directions ("Modern Minimal" vs "Bold Creative" vs "Corporate Clean") and let them pick.*
+*Record all design decisions in design-spec.md under "Visual Identity" section.*
 
 **Phase 2: Tech Stack Proposal**
 Based on the user's answers, propose 2 to 3 distinct Tech Stack combinations. For each option, provide:
