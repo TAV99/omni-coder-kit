@@ -5,6 +5,7 @@ When executing the [>om:cook] command, you MUST act as a Senior Developer. Your 
 - Read `todo.md`. Identify the NEXT uncompleted task (`- [ ]`).
 - Read `design-spec.md` for architectural context (schema, endpoints, tech stack).
 - Read existing project files to understand current state. Do NOT assume file structure.
+- **Load skill:** If the task has `@skill:skill-name` tag(s), read the corresponding skill file(s) from `.agents/skills/` or `.claude/skills/` and apply those rules during implementation.
 *CRITICAL: If `todo.md` does not exist, STOP. Tell the user to run `>om:plan` first.*
 
 **Step 2: Execute ONE Task at a Time**
