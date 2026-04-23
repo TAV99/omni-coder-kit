@@ -1,29 +1,36 @@
 {
   "name": "omni-coder-kit",
-  "version": "1.0.0",
-  "description": "CLI quản lý hệ tư tưởng (mindset + workflow + skills) cho AI-powered coding — tương thích Claude Code, Cursor, Windsurf, CodeX, Antigravity.",
+  "version": "2.0.0",
+  "description": "CLI inject mindset + SDLC workflow + skills into AI coding agents — Claude Code, Codex CLI, Cursor, Windsurf, Antigravity",
   "main": "bin/omni.js",
   "bin": {
     "omni": "./bin/omni.js"
   },
   "files": [
     "bin/",
-    "templates/"
+    "templates/",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node -c bin/omni.js"
   },
   "keywords": [
     "ai",
     "cli",
     "claude",
+    "claude-code",
+    "codex",
     "cursor",
     "windsurf",
-    "codex",
+    "antigravity",
+    "agents-md",
     "sdlc",
     "workflow",
     "prompt-engineering",
-    "developer-tools"
+    "developer-tools",
+    "skills-sh",
+    "karpathy"
   ],
   "author": "TAV <tav99.dev@gmail.com>",
   "license": "ISC",
@@ -32,6 +39,9 @@
     "url": "git+https://github.com/TAV99/omni-coder-kit.git"
   },
   "homepage": "https://github.com/TAV99/omni-coder-kit#readme",
+  "bugs": {
+    "url": "https://github.com/TAV99/omni-coder-kit/issues"
+  },
   "engines": {
     "node": ">=16.0.0"
   },
