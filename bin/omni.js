@@ -8,6 +8,7 @@ const { program } = require('commander');
 const { execSync } = require('child_process');
 
 const MANIFEST_FILE = '.omni-manifest.json';
+const PKG = require(path.join(__dirname, '..', 'package.json'));
 
 // ========== SKILL REGISTRY (skills.sh) ==========
 
@@ -226,7 +227,7 @@ function appendSkillToConfig(configPath, skillName, skillContent) {
 program
     .name('omni')
     .description('Trình quản lý hệ tư tưởng Omni-Coder Kit')
-    .version('2.0.0');
+    .version(PKG.version);
 
 // ---------- INIT ----------
 program
@@ -897,6 +898,40 @@ program
         console.log(chalk.white('  Workflow: ') + chalk.cyan('brainstorm → equip → plan → cook → check → fix → doc'));
         console.log(chalk.gray('\n  Lưu ý: Các lệnh >om: được gõ trực tiếp trong chat AI (Claude, Codex, Cursor...),'));
         console.log(chalk.gray('  không phải lệnh terminal. Chạy ') + chalk.yellow('omni init') + chalk.gray(' trước để tạo file luật cho AI.\n'));
+    });
+
+// ---------- UPDATE ----------
+program
+    .command('update')
+    .description('Kiểm tra và cập nhật omni-coder-kit lên phiên bản mới nhất')
+    .action(() => {
+        const current = PKG.version;
+        console.log(chalk.cyan(`\n🔍 Phiên bản hiện tại: ${chalk.white.bold('v' + current)}`));
+        console.log(chalk.gray('   Đang kiểm tra phiên bản mới trên npm...\n'));
+
+        let latest;
+        try {
+            latest = execSync('npm view omni-coder-kit version', { encoding: 'utf-8' }).trim();
+        } catch {
+            console.log(chalk.red.bold('❌ Không thể kiểm tra npm. Kiểm tra kết nối mạng.\n'));
+            return;
+        }
+
+        if (current === latest) {
+            console.log(chalk.green.bold(`✅ Đã là phiên bản mới nhất (v${current}).\n`));
+            return;
+        }
+
+        console.log(chalk.yellow(`   Phiên bản mới: ${chalk.white.bold('v' + latest)} (hiện tại: v${current})\n`));
+        console.log(chalk.cyan('   Đang cập nhật...'));
+
+        try {
+            execSync('npm install -g omni-coder-kit@latest', { stdio: 'inherit', timeout: 60000 });
+            console.log(chalk.green.bold(`\n✅ Đã cập nhật lên v${latest}!\n`));
+        } catch {
+            console.log(chalk.red.bold('\n❌ Cập nhật thất bại. Thử chạy thủ công:'));
+            console.log(chalk.cyan('   npm install -g omni-coder-kit@latest\n'));
+        }
     });
 
 program.parse(process.argv);
