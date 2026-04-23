@@ -1,0 +1,7 @@
+.claude/
+.git/
+.gitignore
+CLAUDE.md
+.omni-manifest.json
+node_modules/
+*.tgz
