@@ -4,12 +4,16 @@
 
 ## Tính năng chính
 
-- **Đa IDE:** Claude Code (`CLAUDE.md`), Codex CLI (`AGENTS.md`), Cursor (`.cursorrules`), Windsurf (`.windsurfrules`), Antigravity (`.antigravityrules`), Generic (`SYSTEM_PROMPT.md`)
+- **Đa IDE:** Claude Code, Codex CLI, Cursor, Windsurf, Antigravity, Cross-tool, Generic — mỗi IDE sinh file cấu hình riêng
 - **Dual-Agent:** Tạo cả `CLAUDE.md` + `AGENTS.md` cùng lúc cho dự án dùng nhiều AI tool
-- **Karpathy Mindset:** 4 nguyên tắc First Principles — Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution
-- **Socratic Gate:** Bắt buộc AI hỏi tối thiểu 3 câu trước khi code — không có ngoại lệ cho feature mới
+- **Karpathy Mindset:** 4 nguyên tắc — Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution
+- **Socratic Gate:** Bắt buộc AI hỏi tối thiểu 3 câu trước khi code — không có ngoại lệ
 - **Phỏng vấn 6 dimensions:** Business Goal, User Persona, Functional, Non-Functional, Edge Cases, Tech Stack — kèm phỏng vấn thiết kế cho dự án có UI
-- **Validation Pipeline:** Security scan → Lint → Build → Tests → Bundle analysis — chạy tự động khi QA check
+- **IDE-Aware Skills:** `auto-equip` chỉ cài skill cho IDE/CLI đã chọn (không cài tất cả), dùng `--agent` flag của skills.sh
+- **Skill-Tagged Tasks:** `>om:plan` gắn `@skill:name` cho từng task trong `todo.md`, `>om:cook` tự động load skill tương ứng khi thực thi
+- **Automated Quality Pipeline:** 3 quality cycles bắt buộc — `cook → check → fix` loop tự động sau mỗi 1/3 tasks
+- **Antigravity Fallback:** Sinh `install-skills.sh` thay vì chạy trực tiếp (do Antigravity không hỗ trợ auto-approve)
+- **Validation Pipeline:** Security → Lint → Build → Tests → Bundle analysis — blocking tự động
 - **Tech Stacks:** React/Next.js, Hono/PostgreSQL, Automation Bot, Payment Gateway
 - **Skills.sh:** Tích hợp skills.sh ecosystem — auto-equip theo tech stack, conflict detection, manifest tracking
 
@@ -20,10 +24,13 @@
 Yêu cầu [Node.js](https://nodejs.org/) >= 16.0.0.
 
 ```bash
-git clone https://github.com/TAV99/omni-coder-kit.git
-cd omni-coder-kit
-npm install
-npm link  # tùy chọn — liên kết CLI toàn cục
+npm install -g omni-coder-kit
+```
+
+Cập nhật:
+
+```bash
+omni update
 ```
 
 ---
@@ -37,10 +44,10 @@ omni init
 # 2. Xem kỹ năng có sẵn
 omni list
 
-# 3. Thêm tech stack
+# 3. Thêm tech stack cục bộ
 omni add react-next
 
-# 4. Cài skill từ skills.sh
+# 4. Cài skill từ skills.sh (chỉ cho IDE đã chọn)
 omni equip vercel-labs/agent-skills
 
 # 5. Auto-equip theo design-spec
@@ -48,48 +55,100 @@ omni auto-equip --design-spec design-spec.md
 
 # 6. Xem trạng thái
 omni status
+
+# 7. Xem danh sách lệnh >om:
+omni commands
+
+# 8. Cập nhật lên phiên bản mới nhất
+omni update
 ```
+
+---
+
+## Lệnh CLI
+
+| Lệnh | Mô tả |
+|-------|-------|
+| `omni init` | Khởi tạo DNA và workflow cho dự án mới |
+| `omni add <skill>` | Bơm thêm kỹ năng cục bộ (local stack) vào file cấu hình |
+| `omni equip <source>` | Tải kỹ năng ngoài từ skills.sh (cài cho IDE đã chọn) |
+| `omni auto-equip` | Tự động cài tất cả skills theo tech stack |
+| `omni status` | Xem trạng thái kỹ năng đã cài (local + external) |
+| `omni list` | Xem danh sách kỹ năng có sẵn trong kho |
+| `omni commands` | Hiển thị danh sách lệnh `>om:` dùng trong chat AI |
+| `omni update` | Kiểm tra và cập nhật lên phiên bản mới nhất |
 
 ### IDE hỗ trợ khi `omni init`
 
-| Lựa chọn | File tạo ra | Ghi chú |
-|-----------|------------|---------|
-| Claude Code / OpenCode | `CLAUDE.md` | |
-| Codex CLI (OpenAI) | `AGENTS.md` | Sandbox awareness, 32 KiB limit |
-| Claude Code + Codex (dual) | `CLAUDE.md` + `AGENTS.md` | Tạo cả 2 file |
-| Cursor | `.cursorrules` | |
-| Windsurf | `.windsurfrules` | |
-| Antigravity | `.antigravityrules` | Knowledge Items, Multi-Agent |
+| Lựa chọn | File tạo ra | Gợi ý khởi động |
+|-----------|------------|-----------------|
+| Claude Code / OpenCode | `CLAUDE.md` | `claude --dangerously-skip-permissions` |
+| Codex CLI (OpenAI) | `AGENTS.md` | `codex --full-auto` |
+| Claude Code + Codex (dual) | `CLAUDE.md` + `AGENTS.md` | Cả 2 lệnh trên |
+| Antigravity | `.antigravityrules` | Skills sinh ra dạng script `install-skills.sh` |
+| Cursor | `.cursorrules` | Mở Cursor trong thư mục dự án |
+| Windsurf | `.windsurfrules` | Mở Windsurf trong thư mục dự án |
 | Cross-tool | `AGENTS.md` | Tool-agnostic |
-| Generic | `SYSTEM_PROMPT.md` | |
+| Generic | `SYSTEM_PROMPT.md` | — |
 
 ---
 
 ## Quy trình SDLC
 
-Sau khi khởi tạo, dùng các lệnh workflow trong chat với AI:
+Sau khi khởi tạo, gõ các lệnh `>om:` trong chat với AI:
 
 | Lệnh | Agent | Mô tả |
 |-------|-------|-------|
-| `>om:brainstorm` | Architect | Phỏng vấn 2 vòng (6 dimensions + design interview cho UI), đề xuất tech stack, xuất `design-spec.md` |
-| `>om:equip` | Skill Manager | Đề xuất và cài skills chuyên sâu từ skills.sh theo stack đã chọn |
-| `>om:plan` | PM | Phân tích spec → micro-tasks trong `todo.md` (mỗi task < 20 phút) |
-| `>om:cook` | Coder | Thực thi từng task, surgical changes, đánh dấu done, gợi ý check mỗi 5 tasks |
-| `>om:check` | QA Tester | Validation pipeline (P0 Security → P1 Lint → P2 Build → P3 Tests) + feature verification → `test-report.md` |
-| `>om:fix` | Debugger | Reproduce → Root cause → Surgical fix → Verify. Không shotgun-fix |
-| `>om:doc` | Writer | Đọc code thực tế → README.md + API docs bằng tiếng Việt |
+| `>om:brainstorm` | Architect | Phỏng vấn 2 vòng (6 dimensions + design), đề xuất tech stack, xuất `design-spec.md` |
+| `>om:equip` | Skill Manager | Đề xuất & cài skills từ skills.sh theo stack (chỉ cho IDE đã chọn) |
+| `>om:plan` | PM | Phân tích spec → micro-tasks trong `todo.md`, gắn `@skill:name` cho từng task |
+| `>om:cook` | Coder | Thực thi từng task, load skill theo `@skill:` tag, auto-continue, quality gate mỗi 1/3 |
+| `>om:check` | QA Tester | Validation pipeline (P0–P3 blocking) + feature verification → `test-report.md` |
+| `>om:fix` | Debugger | Reproduce → root cause → surgical fix → verify. Không shotgun-fix |
+| `>om:doc` | Writer | Đọc code thực tế → sinh README.md + API docs bằng tiếng Việt |
 
-### Luồng đề xuất
+### Automated Quality Pipeline
+
+Khi `>om:cook` chạy, hệ thống tự động chia dự án thành **3 quality cycles**:
 
 ```
->om:brainstorm → >om:equip → >om:plan → >om:cook → >om:check → >om:fix (nếu cần) → >om:doc
+om:cook (1/3 tasks)
+  → om:check
+    → [om:fix ↔ om:check loop, tối đa 3 lần]
+  → om:cook (1/3 tasks)
+    → om:check
+      → [om:fix ↔ om:check loop]
+    → om:cook (1/3 tasks)
+      → om:check
+        → [om:fix ↔ om:check loop]
+      → om:doc
 ```
+
+- **Checkpoint** = `ceil(total_tasks / 3)` — quality gate trigger tự động
+- **Fix loop** tối đa 3 lần/cycle — nếu vẫn lỗi, escalate cho user
+- **Auto-continue**: `>om:cook` tự động chạy task tiếp, chỉ dừng khi lỗi nghiêm trọng (build fail, breaking changes, security)
+
+### Skill-Tagged Tasks
+
+`>om:plan` tự động gắn `@skill:` tag cho mỗi task dựa trên skills đã cài:
+
+```markdown
+## 1. Database
+- [ ] Tạo migration users table `@skill:supabase-postgres-best-practices`
+- [ ] Seed data mẫu `@skill:supabase-postgres-best-practices`
+
+## 2. Frontend
+- [ ] Tạo trang login `@skill:vercel-react-best-practices` `@skill:tailwind-design-system`
+- [ ] Thêm form validation `@skill:vercel-react-best-practices`
+```
+
+`>om:cook` đọc tag → load skill file tương ứng → áp dụng rules khi code.
 
 ---
 
 ## Validation Pipeline
 
-Khi chạy `>om:check`, AI tự động thực thi pipeline theo thứ tự ưu tiên:
+Khi chạy `>om:check`, AI thực thi pipeline theo thứ tự:
 
 | Priority | Check | Blocking? |
 |----------|-------|-----------|
@@ -99,7 +158,7 @@ Khi chạy `>om:check`, AI tự động thực thi pipeline theo thứ tự ưu 
 | P3 | **Tests:** vitest/jest/pytest | Yes |
 | P4 | **Bundle:** unused deps, bundle size | No (advisory) |
 
-Nếu P0-P3 fail → dừng ngay, không verify feature, đề xuất `>om:fix`.
+P0–P3 fail → dừng ngay, auto-trigger `>om:fix`, loop cho đến khi pass.
 
 ---
 
@@ -107,23 +166,23 @@ Nếu P0-P3 fail → dừng ngay, không verify feature, đề xuất `>om:fix`.
 
 ```
 omni-coder-kit/
-├── bin/omni.js              # CLI chính (6 commands)
+├── bin/omni.js              # CLI chính (8 commands)
 ├── templates/
 │   ├── core/                # Karpathy mindset + context hygiene
 │   ├── stacks/              # Tech stack rules (react-next, hono-pg, ...)
 │   └── workflows/           # SDLC workflows (10 files)
-│       ├── superpower-sdlc.md        # Định nghĩa workflow commands
+│       ├── superpower-sdlc.md        # Workflow commands + quality pipeline
 │       ├── requirement-analysis.md   # >om:brainstorm (6 dimensions + design)
-│       ├── skill-manager.md          # >om:equip
-│       ├── task-planning.md          # >om:plan
-│       ├── coder-execution.md        # >om:cook
-│       ├── qa-testing.md             # >om:check
-│       ├── validation-scripts.md     # Security/lint/build/test pipeline
-│       ├── debugger-workflow.md      # >om:fix
+│       ├── skill-manager.md          # >om:equip (IDE-aware)
+│       ├── task-planning.md          # >om:plan (@skill tags)
+│       ├── coder-execution.md        # >om:cook (auto-continue + 3 cycles)
+│       ├── qa-testing.md             # >om:check (auto fix/check loop)
+│       ├── validation-scripts.md     # P0–P4 pipeline scripts
+│       ├── debugger-workflow.md      # >om:fix (auto-loop aware)
 │       ├── documentation-writer.md   # >om:doc
 │       └── pm-templates.md           # Output format standards
 ├── package.json
-└── .omni-manifest.json      # Tracking skills đã cài
+└── .omni-manifest.json      # Tracking: IDE, skills, config file
 ```
 
 ---
