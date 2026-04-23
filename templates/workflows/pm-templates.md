@@ -7,6 +7,7 @@ When executing workflow commands, you MUST adhere to these exact output structur
 - **3. Kiến trúc Dữ liệu (Database Schema):** (Proposed tables/collections and relationships).
 - **4. API Endpoints / Webhooks:** (List of methods, paths, and payload structures).
 - **5. Các trường hợp biên (Edge Cases):** (Potential failure points and mitigations).
+- **6. Visual Identity & Design System (UI projects only):** Design style, mood/tone, color palette (hex codes), typography, layout pattern, component style, animation level, references.
 
 **For [>om:plan] -> `todo.md`:**
 - Must be grouped by components/modules.
