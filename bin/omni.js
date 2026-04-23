@@ -5,6 +5,7 @@ const path = require('path');
 const prompts = require('prompts');
 const chalk = require('chalk');
 const { program } = require('commander');
+const { execSync } = require('child_process');
 
 const MANIFEST_FILE = '.omni-manifest.json';
 
@@ -43,10 +44,27 @@ function isValidSkillName(name) {
     return /^[a-z0-9-]+$/.test(name);
 }
 
-// Kiểm tra source hợp lệ cho equip (format: owner/repo hoặc owner/repo/skill)
-function isValidSource(source) {
-    if (source.includes('..')) return false;
-    return /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+(\/.+)?$/.test(source);
+// Parse source: hỗ trợ cả URL GitHub lẫn owner/repo format
+function parseSource(raw) {
+    if (!raw) return null;
+    let cleaned = raw.trim().replace(/\/+$/, ''); // bỏ trailing slashes
+
+    // Hỗ trợ full GitHub URL: https://github.com/owner/repo[/...]
+    const urlMatch = cleaned.match(/^https?:\/\/(?:www\.)?github\.com\/([a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+(?:\/.+)?)$/);
+    if (urlMatch) cleaned = urlMatch[1];
+
+    // Hỗ trợ git@ SSH format: git@github.com:owner/repo.git
+    const sshMatch = cleaned.match(/^git@github\.com:([a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+?)(?:\.git)?$/);
+    if (sshMatch) cleaned = sshMatch[1];
+
+    // Bỏ .git suffix nếu còn sót
+    cleaned = cleaned.replace(/\.git$/, '');
+
+    // Validate format cuối cùng: owner/repo hoặc owner/repo/path
+    if (cleaned.includes('..')) return null;
+    if (!/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+(\/.+)?$/.test(cleaned)) return null;
+
+    return cleaned;
 }
 
 // ========== MANIFEST SYSTEM ==========
@@ -353,15 +371,16 @@ program
     .command('equip <source>')
     .description('Tải và đồng bộ kỹ năng ngoài (external) từ skills.sh')
     .option('-n, --name <name>', 'Đặt tên ngắn gọn cho kỹ năng (mặc định: tự sinh từ source)')
+    .option('-f, --force', 'Bỏ qua cảnh báo xung đột để cài đè')
     .action(async (source, options) => {
-        // Kiểm tra source format (owner/repo)
-        if (!isValidSource(source)) {
-            console.log(chalk.red.bold(`\n❌ Source không hợp lệ. Định dạng đúng: owner/repo (ví dụ: cursor-tools/react-best-practices).\n`));
+        const parsedSource = parseSource(source);
+        if (!parsedSource) {
+            console.log(chalk.red.bold(`\n❌ Source không hợp lệ. Định dạng đúng: owner/repo hoặc URL GitHub.\n`));
             return;
         }
 
         // Sinh tên skill từ source nếu không có --name
-        const skillName = options.name || source.split('/').pop().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        const skillName = options.name || parsedSource.split('/').pop().toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
         if (!isValidSkillName(skillName)) {
             console.log(chalk.red.bold(`\n❌ Tên kỹ năng "${skillName}" không hợp lệ. Dùng --name <tên> để đặt tên thủ công.\n`));
@@ -376,52 +395,53 @@ program
 
         const manifest = loadManifest();
 
-        // Kiểm tra trùng lặp chính xác
+        // Kiểm tra trùng lặp
         const conflict = findSkillConflict(manifest, skillName);
-        if (conflict) {
+        if (conflict && !options.force) {
             const via = conflict.type === 'local' ? 'omni add' : 'omni equip';
             console.log(chalk.yellow.bold(`\n⚠️  Kỹ năng "${skillName}" đã được cài đặt trước đó (qua ${via}).`));
-            if (conflict.type === 'external') {
-                console.log(chalk.yellow(`   Source: ${conflict.source}`));
-            }
-            console.log(chalk.yellow(`   Bỏ qua để tránh trùng lặp. Dùng ${chalk.cyan('omni status')} để xem chi tiết.\n`));
+            console.log(chalk.yellow(`   Dùng thêm cờ ${chalk.cyan('--force')} nếu bạn muốn ghi đè.\n`));
             return;
         }
 
-        // Kiểm tra xung đột domain với local stacks
+        // Kiểm tra xung đột domain
         const domainConflict = findDomainConflict(manifest, skillName, 'external');
-        if (domainConflict) {
-            console.log(chalk.yellow(`\n⚠️  Cảnh báo: "${skillName}" có thể xung đột với kỹ năng local "${domainConflict.name}" (lĩnh vực trùng: ${domainConflict.overlapping.join(', ')}).`));
-            console.log(chalk.yellow(`   Cân nhắc dùng ${chalk.cyan('omni status')} để xem kỹ năng đã cài.\n`));
+        if (domainConflict && !options.force) {
+            console.log(chalk.yellow(`\n⚠️  Cảnh báo: "${skillName}" có thể xung đột với kỹ năng "${domainConflict.name}" (lĩnh vực trùng: ${domainConflict.overlapping.join(', ')}).`));
+            console.log(chalk.yellow(`   Dùng thêm cờ ${chalk.cyan('--force')} để bỏ qua cảnh báo này.\n`));
+            return;
         }
 
-        console.log(chalk.cyan.bold(`\n🔧 Cài đặt kỹ năng external: ${chalk.white(source)}\n`));
-        console.log(chalk.white(`   Chạy lệnh sau để tải kỹ năng từ skills.sh:\n`));
-        console.log(chalk.cyan(`   npx skills add ${source}\n`));
+        console.log(chalk.cyan.bold(`\n🔧 Đang cài đặt kỹ năng external: ${chalk.white(parsedSource)}\n`));
 
-        const { confirmed } = await prompts({
-            type: 'confirm',
-            name: 'confirmed',
-            message: 'Bạn đã chạy lệnh trên và kỹ năng đã được cài thành công?',
-            initial: false
-        });
-
-        if (!confirmed) {
-            console.log(chalk.yellow('\n⚠️  Hủy bỏ. Kỹ năng chưa được đồng bộ vào manifest.\n'));
+        try {
+            // Tự động chạy lệnh cài đặt skills
+            execSync(`npx skills add ${parsedSource}`, { stdio: 'inherit' });
+        } catch (err) {
+            console.log(chalk.red.bold(`\n❌ Quá trình cài đặt thất bại. Vui lòng kiểm tra lại source hoặc mạng.\n`));
             return;
         }
 
         // Đăng ký vào manifest
-        manifest.skills.external.push({
-            name: skillName,
-            source: source,
-            installedAt: new Date().toISOString()
-        });
+        if (!conflict) {
+            manifest.skills.external.push({
+                name: skillName,
+                source: parsedSource,
+                installedAt: new Date().toISOString()
+            });
+        } else if (conflict.type === 'external') {
+            const ext = manifest.skills.external.find(s => s.name === skillName);
+            if (ext) {
+                ext.source = parsedSource;
+                ext.installedAt = new Date().toISOString();
+            }
+        }
+
         manifest.configFile = configFile;
         saveManifest(manifest);
 
-        console.log(chalk.green.bold(`\n✅ Kỹ năng [${skillName}] đã được đồng bộ vào manifest thành công!`));
-        console.log(chalk.gray(`   Source: ${source}`));
+        console.log(chalk.green.bold(`\n✅ Kỹ năng [${skillName}] đã được cài đặt và đồng bộ thành công!`));
+        console.log(chalk.gray(`   Source: ${parsedSource}`));
         console.log(chalk.gray(`   Manifest: ${MANIFEST_FILE}\n`));
     });
 
