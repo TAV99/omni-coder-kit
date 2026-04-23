@@ -432,6 +432,7 @@ program
         } else {
             console.log(chalk.white(`\nBắt đầu trò chuyện với AI bằng lệnh: `) + chalk.cyan.bold(`>om:brainstorm\n`));
         }
+        console.log(chalk.gray(`💡 Xem toàn bộ lệnh >om: bằng: `) + chalk.yellow('omni commands') + chalk.gray('\n'));
     });
 
 // ---------- ADD (local stacks) ----------
@@ -778,6 +779,38 @@ program
         }
         console.log(chalk.white(`\n💡 Dùng ${chalk.yellow('omni add <tên>')} để bơm kỹ năng cục bộ.`));
         console.log(chalk.white(`💡 Dùng ${chalk.yellow('omni equip <source>')} để tải kỹ năng ngoài từ skills.sh.\n`));
+    });
+
+// ---------- COMMANDS (>om: workflow reference) ----------
+program
+    .command('commands')
+    .description('Hiển thị danh sách các lệnh >om: dùng trong chat với AI')
+    .action(() => {
+        console.log(chalk.cyan.bold('\n📋 Danh sách lệnh >om: (gõ trong chat với AI)\n'));
+
+        const commands = [
+            { cmd: '>om:brainstorm', role: 'Architect',  desc: 'Phỏng vấn yêu cầu → đề xuất Tech Stack → xuất design-spec.md' },
+            { cmd: '>om:equip',      role: 'Skill Mgr',  desc: 'Đề xuất & cài skills chuyên sâu từ skills.sh theo stack đã chọn' },
+            { cmd: '>om:plan',       role: 'PM',          desc: 'Phân tích design-spec → micro-tasks trong todo.md (<20 phút/task)' },
+            { cmd: '>om:cook',       role: 'Coder',       desc: 'Thực thi từng task trong todo.md, surgical changes, 1 task/lần' },
+            { cmd: '>om:check',      role: 'QA Tester',   desc: 'Validation pipeline: security → lint → build → test → feature verify' },
+            { cmd: '>om:fix',        role: 'Debugger',    desc: 'Reproduce → root cause → surgical fix → verify (không shotgun-fix)' },
+            { cmd: '>om:doc',        role: 'Writer',      desc: 'Đọc code thực tế → sinh README.md + API docs bằng tiếng Việt' },
+        ];
+
+        const maxCmd  = Math.max(...commands.map(c => c.cmd.length));
+        const maxRole = Math.max(...commands.map(c => c.role.length));
+
+        commands.forEach(({ cmd, role, desc }) => {
+            const paddedCmd  = cmd.padEnd(maxCmd);
+            const paddedRole = role.padEnd(maxRole);
+            console.log(`  ${chalk.yellow.bold(paddedCmd)}  ${chalk.gray('│')} ${chalk.green(paddedRole)}  ${chalk.gray('│')} ${chalk.white(desc)}`);
+        });
+
+        console.log(chalk.gray('\n  ─────────────────────────────────────────────────────'));
+        console.log(chalk.white('  Workflow: ') + chalk.cyan('brainstorm → equip → plan → cook → check → fix → doc'));
+        console.log(chalk.gray('\n  Lưu ý: Các lệnh >om: được gõ trực tiếp trong chat AI (Claude, Codex, Cursor...),'));
+        console.log(chalk.gray('  không phải lệnh terminal. Chạy ') + chalk.yellow('omni init') + chalk.gray(' trước để tạo file luật cho AI.\n'));
     });
 
 program.parse(process.argv);
