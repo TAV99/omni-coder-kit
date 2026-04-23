@@ -17,3 +17,6 @@ Based on the user's answers, propose 2 to 3 distinct Tech Stack combinations. Fo
 
 **Phase 3: Design Spec Generation**
 ONLY AFTER the user explicitly selects a tech stack, generate the final `design-spec.md` incorporating the chosen stack and the gathered requirements, following the defined Output Format Standards.
+
+**Phase 4: Skills Auto-Equip**
+IMMEDIATELY after generating `design-spec.md`, propose installing expert skills from skills.sh that match the chosen tech stack. Ask the user: "Bạn có muốn tôi tự động cài đặt các skills chuyên sâu cho stack này không?" If confirmed, execute: `omni auto-equip --stacks <detected-stacks>` or `omni auto-equip --design-spec design-spec.md`.

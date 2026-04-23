@@ -1,7 +1,18 @@
-## AGENT SKILLS MANAGER (SKILLS.SH INTEGRATION)
+## AGENT SKILLS MANAGER (SKILLS.SH AUTO-EQUIP)
 You are authorized to use the `skills.sh` ecosystem to extend your capabilities.
-1. **Skill Assessment:** During the [/om:brainstorm] or [/om:plan] phase, analyze if the project requires specialized domain knowledge (e.g., specific framework best practices, UI/UX guidelines, database optimization).
-2. **Skill Proposal:** If a specialized skill is needed, you MUST propose installing it from `https://skills.sh/`.
-3. **Execution Policy (AskUserFirst):** - Propose the exact terminal command to the user. Format: `npx skills add <owner/repo> --skill <skill-name>`
-   - DO NOT execute this command automatically. Wait for the user to run it and confirm success.
-4. **Context Absorption:** Once the user confirms the installation, automatically read the newly added `SKILL.md` files (usually located in `.agents/skills/` or the IDE's specific skills folder) and apply those rules to the current session.
+
+1. **Auto-Detection:** After completing [/om:brainstorm] Phase 3 (design-spec.md generated), you MUST analyze the chosen tech stack and propose installing relevant skills.
+2. **Proposal Format:** Present the skill list to the user in this format:
+   ```
+   Dựa trên tech stack đã chọn, tôi đề xuất cài các skills chuyên sâu sau từ skills.sh:
+   
+   1. skill-name — Mô tả ngắn (source)
+   2. ...
+   
+   Bạn có muốn cài tất cả không? Tôi sẽ chạy: omni auto-equip --stacks <detected-stacks>
+   ```
+3. **Execution:** If the user confirms, run the command: `omni auto-equip --stacks <stack1>,<stack2>`
+   - This will automatically install all related skills from skills.sh and sync the manifest.
+   - If `design-spec.md` exists, you can also use: `omni auto-equip --design-spec design-spec.md`
+4. **Context Absorption:** After installation, automatically read the newly added skill files (usually in `.agents/skills/`) and apply those rules to the current session.
+5. **Manual Override:** The user can always install individual skills via `omni equip <owner/repo>`.
