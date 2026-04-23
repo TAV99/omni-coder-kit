@@ -15,16 +15,22 @@ For the current task:
 4. After writing code, verify it works (compile check, quick test, or logical validation).
 5. Mark the task as done: change `- [ ]` to `- [x]` in `todo.md`.
 
-**Step 3: Report & Continue**
+**Step 3: Report & Auto-Continue**
 After completing a task, report:
 ```
 ✅ [Task description] — Done
    Files changed: [list]
    Next task: [next uncompleted task from todo.md]
 ```
-Then ask: "Tiếp tục task tiếp theo?" (Continue to next task?)
-- If user confirms, proceed to the next `- [ ]` task.
-- If user says stop, summarize progress (X/Y tasks completed).
+Then evaluate the result:
+- **Auto-continue (default):** If the task completed without errors, or only has minor/non-blocking issues — proceed to the next `- [ ]` task immediately. Do NOT ask for confirmation.
+- **STOP and ask:** Only pause when encountering:
+  - Build/compile errors that block subsequent tasks
+  - Breaking changes to shared interfaces (API contracts, DB schema, shared types)
+  - Security vulnerabilities introduced
+  - Task ambiguity that could lead the project in the wrong direction
+  - Dependency conflicts that affect multiple tasks
+- If user says stop at any point, summarize progress (X/Y tasks completed).
 
 **Rules:**
 - ONE task at a time. Do not batch multiple tasks unless the user explicitly asks.
