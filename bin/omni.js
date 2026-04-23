@@ -79,7 +79,7 @@ function resolveSkills(stacks) {
 // ========== HELPERS ==========
 
 function findConfigFile() {
-    const files = ['.cursorrules', '.windsurfrules', 'CLAUDE.md', '.codexrules', '.antigravityrules', 'SYSTEM_PROMPT.md'];
+    const files = ['.cursorrules', '.windsurfrules', 'CLAUDE.md', 'GEMINI.md', 'AGENTS.md', '.codexrules', 'SYSTEM_PROMPT.md'];
     for (const file of files) {
         if (fs.existsSync(path.join(process.cwd(), file))) return file;
     }
@@ -242,10 +242,11 @@ program
                 message: 'Bạn đang sử dụng AI IDE/Công cụ nào?',
                 choices: [
                     { title: 'Claude Code (CLI) / OpenCode', value: 'claudecode' },
-                    { title: 'CodeX', value: 'codex' },
-                    { title: 'Antigravity', value: 'antigravity' },
+                    { title: 'Google Antigravity (GEMINI.md)', value: 'antigravity' },
                     { title: 'Cursor', value: 'cursor' },
                     { title: 'Windsurf', value: 'windsurf' },
+                    { title: 'CodeX', value: 'codex' },
+                    { title: 'Cross-tool (AGENTS.md)', value: 'agents' },
                     { title: 'Generic (SYSTEM_PROMPT.md)', value: 'generic' }
                 ],
             },
@@ -315,8 +316,17 @@ program
                 finalRules += `- **CodeX Optimization:** Always explicitly state the logic and constraints in comments BEFORE writing the actual code to maximize inline completion accuracy.\n`;
                 break;
             case 'antigravity':
-                fileName = '.antigravityrules';
-                finalRules += `- **Antigravity Agentic Limits:** Maintain strict context hygiene. Summarize previous actions before executing complex terminal operations. Always ask for confirmation before major refactoring.\n`;
+                fileName = 'GEMINI.md';
+                finalRules += `- **Knowledge Items:** Persist architecture decisions, debugging solutions, and implementation patterns as Knowledge Items (KIs) — they survive across sessions unlike chat history.\n`;
+                finalRules += `- **Multi-Agent (Manager View):** For complex tasks, spawn specialized agents from Manager View (\`Cmd+E\` / \`Ctrl+E\`). Each agent gets its own isolated workspace.\n`;
+                finalRules += `- **Browser Testing:** Use the integrated browser to visually verify UI changes before confirming completion. Agents can take screenshots and detect visual regressions.\n`;
+                finalRules += `- **Workflows:** Place reusable workflows in \`.agent/workflows/\` and trigger via \`/workflow-name\` in chat.\n`;
+                finalRules += `- **Confirmation Policy:** ALWAYS require explicit confirmation before destructive operations (database writes, deployments, \`rm -rf\`, force push).\n`;
+                break;
+            case 'agents':
+                fileName = 'AGENTS.md';
+                finalRules += `- **Cross-Tool Compatibility:** This file is read by Antigravity, Claude Code, Cursor, Windsurf, Gemini CLI, and CodeX. Keep rules tool-agnostic.\n`;
+                finalRules += `- **CLI Safety:** DO NOT execute destructive terminal commands without explicit user permission.\n`;
                 break;
             case 'cursor':
                 fileName = '.cursorrules';
