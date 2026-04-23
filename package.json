@@ -4,7 +4,7 @@
   "description": "CLI inject mindset + SDLC workflow + skills into AI coding agents — Claude Code, Codex CLI, Cursor, Windsurf, Antigravity",
   "main": "bin/omni.js",
   "bin": {
-    "omni": "./bin/omni.js"
+    "omni": "bin/omni.js"
   },
   "files": [
     "bin/",
