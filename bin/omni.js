@@ -79,7 +79,7 @@ function resolveSkills(stacks) {
 // ========== HELPERS ==========
 
 function findConfigFile() {
-    const files = ['.cursorrules', '.windsurfrules', 'CLAUDE.md', 'GEMINI.md', 'AGENTS.md', '.codexrules', 'SYSTEM_PROMPT.md'];
+    const files = ['.cursorrules', '.windsurfrules', 'CLAUDE.md', '.codexrules', '.antigravityrules', 'AGENTS.md', 'SYSTEM_PROMPT.md'];
     for (const file of files) {
         if (fs.existsSync(path.join(process.cwd(), file))) return file;
     }
@@ -242,7 +242,7 @@ program
                 message: 'Bạn đang sử dụng AI IDE/Công cụ nào?',
                 choices: [
                     { title: 'Claude Code (CLI) / OpenCode', value: 'claudecode' },
-                    { title: 'Google Antigravity (GEMINI.md)', value: 'antigravity' },
+                    { title: 'Antigravity', value: 'antigravity' },
                     { title: 'Cursor', value: 'cursor' },
                     { title: 'Windsurf', value: 'windsurf' },
                     { title: 'CodeX', value: 'codex' },
@@ -316,7 +316,7 @@ program
                 finalRules += `- **CodeX Optimization:** Always explicitly state the logic and constraints in comments BEFORE writing the actual code to maximize inline completion accuracy.\n`;
                 break;
             case 'antigravity':
-                fileName = 'GEMINI.md';
+                fileName = '.antigravityrules';
                 finalRules += `- **Knowledge Items:** Persist architecture decisions, debugging solutions, and implementation patterns as Knowledge Items (KIs) — they survive across sessions unlike chat history.\n`;
                 finalRules += `- **Multi-Agent (Manager View):** For complex tasks, spawn specialized agents from Manager View (\`Cmd+E\` / \`Ctrl+E\`). Each agent gets its own isolated workspace.\n`;
                 finalRules += `- **Browser Testing:** Use the integrated browser to visually verify UI changes before confirming completion. Agents can take screenshots and detect visual regressions.\n`;
