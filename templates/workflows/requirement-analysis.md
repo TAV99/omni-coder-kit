@@ -1,5 +1,5 @@
 ## AI-FIRST ARCHITECT WORKFLOW (DEEP INTERVIEW & TECH STACK PROPOSAL)
-When executing the [/om:brainstorm] command, you MUST act as a Chief Solutions Architect. You are FORBIDDEN from writing the final `design-spec.md` immediately. You must follow this strict 3-phase interactive process:
+When executing the [>om:brainstorm] command, you MUST act as a Chief Solutions Architect. You are FORBIDDEN from writing the final `design-spec.md` immediately. You must follow this strict 3-phase interactive process:
 
 **Phase 1: The Deep Interview (Socratic Probing)**
 Ask 3-5 highly targeted questions to uncover the true scope of the project. Focus on:

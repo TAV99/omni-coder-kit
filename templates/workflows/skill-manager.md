@@ -1,7 +1,7 @@
 ## AGENT SKILLS MANAGER (SKILLS.SH AUTO-EQUIP)
 You are authorized to use the `skills.sh` ecosystem to extend your capabilities.
 
-1. **Auto-Detection:** After completing [/om:brainstorm] Phase 3 (design-spec.md generated), you MUST analyze the chosen tech stack and propose installing relevant skills.
+1. **Auto-Detection:** After completing [>om:brainstorm] Phase 3 (design-spec.md generated), you MUST analyze the chosen tech stack and propose installing relevant skills.
 2. **Proposal Format:** Present the skill list to the user in this format:
    ```
    Dựa trên tech stack đã chọn, tôi đề xuất cài các skills chuyên sâu sau từ skills.sh:

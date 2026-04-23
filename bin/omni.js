@@ -342,7 +342,7 @@ program
         }
 
         if (response.strictness === 'flexible') {
-            finalRules += `\n## FAST-TRACK MODE\n- **[/om:hotfix]:** Use to bypass PM/Architect planning for minor fixes. Add note in \`tech-debt.md\`.\n`;
+            finalRules += `\n## FAST-TRACK MODE\n- **[>om:hotfix]:** Use to bypass PM/Architect planning for minor fixes. Add note in \`tech-debt.md\`.\n`;
         }
 
         // Xác nhận trước khi ghi đè
@@ -370,10 +370,10 @@ program
         console.log(chalk.gray(`   Đã tạo manifest: ${MANIFEST_FILE}`));
 
         if (!response.stacks || response.stacks.length === 0) {
-            console.log(chalk.yellow(`\n💡 Gợi ý: Bạn chưa chọn Tech Stack. Hãy gõ ${chalk.cyan('/om:brainstorm')} để AI phỏng vấn và tư vấn kiến trúc.`));
+            console.log(chalk.yellow(`\n💡 Gợi ý: Bạn chưa chọn Tech Stack. Hãy gõ ${chalk.cyan('>om:brainstorm')} để AI phỏng vấn và tư vấn kiến trúc.`));
             console.log(chalk.yellow(`Sau khi chốt Stack, dùng ${chalk.cyan('omni add <tên-stack>')} hoặc ${chalk.cyan('omni equip <source>')} để bơm luật!\n`));
         } else {
-            console.log(chalk.white(`\nBắt đầu trò chuyện với AI bằng lệnh: `) + chalk.cyan.bold(`/om:brainstorm\n`));
+            console.log(chalk.white(`\nBắt đầu trò chuyện với AI bằng lệnh: `) + chalk.cyan.bold(`>om:brainstorm\n`));
         }
     });
 
