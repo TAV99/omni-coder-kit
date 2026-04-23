@@ -74,6 +74,20 @@ Output `test-report.md` in this format:
 - [If FAIL exists] Fix with >om:fix, then re-run >om:check
 ```
 
+**Step 5: Auto Fix/Check Loop**
+When >om:check is triggered automatically from >om:cook's quality gate:
+- If ANY blocking check (P0–P3) or feature verification FAILS:
+  1. Automatically execute [>om:fix] with the failures from `test-report.md`. No user prompt needed.
+  2. After >om:fix completes, re-run >om:check from Step 2.
+  3. Repeat until all checks PASS or **max 3 fix attempts** reached.
+  4. If max attempts reached and errors remain, STOP and escalate:
+     ```
+     ⚠️ Quality Gate — [N] fix attempts exhausted. Remaining errors:
+        - [list blocking failures]
+        Cần review thủ công. Chạy >om:fix để debug chi tiết.
+     ```
+- If all checks PASS: return control to >om:cook for the next cycle (or finish if cycle 3).
+
 **Rules:**
 - Do NOT mark a feature as PASS without actually running/testing it. "The code looks correct" is NOT verification.
 - If you cannot test something (e.g., needs real API key, hardware), mark SKIP with the reason.

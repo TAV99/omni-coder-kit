@@ -35,8 +35,10 @@ Trace the error to its root cause:
    Verification: [command ran] → PASS/FAIL
 ```
 
-If the fix resolves the issue, suggest: "Chạy lại `>om:check` để xác nhận toàn bộ project."
-If the fix fails or creates new errors, go back to Step 2.
+**Auto-loop behavior:**
+- If >om:fix was triggered automatically from >om:check's fix/check loop: after fix is verified, automatically return control to >om:check for re-validation. Do NOT ask the user.
+- If >om:fix was triggered manually by the user: suggest "Chạy lại `>om:check` để xác nhận toàn bộ project."
+- If the fix fails or creates new errors, go back to Step 2.
 
 **Rules:**
 - NEVER apply a "shotgun fix" (changing multiple things hoping one works). One hypothesis, one fix, one verification.

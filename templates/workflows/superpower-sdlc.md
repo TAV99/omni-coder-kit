@@ -9,3 +9,12 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 - **[>om:fix]:** Activates the Debugger Agent. Reads `test-report.md` or user-reported errors. Reproduces → Root cause analysis → Surgical fix → Verify. Never shotgun-fix. → See DEBUGGER AGENT WORKFLOW section.
 - **[>om:doc]:** Activates the Technical Writer Agent. Reads actual code + design-spec + test-report and generates README.md and API docs in Vietnamese. Documents only what was actually built. → See TECHNICAL WRITER WORKFLOW section.
 *Critical Note: Any attempt to bypass the planning steps (>om:brainstorm or >om:plan) to write code immediately MUST be rejected.*
+
+## AUTOMATED QUALITY PIPELINE
+When >om:cook is running, the system enforces **3 quality cycles** based on total task count:
+```
+>om:cook (1/3 tasks) → >om:check → [>om:fix ↔ >om:check loop] → >om:cook (1/3 tasks) → >om:check → [>om:fix ↔ >om:check loop] → >om:cook (1/3 tasks) → >om:check → [>om:fix ↔ >om:check loop] → >om:doc
+```
+- Checkpoint = ceil(total_tasks / 3). Quality gate triggers automatically at each checkpoint.
+- Fix/check loop runs up to 3 attempts per cycle. If unresolved, escalate to user.
+- After all 3 cycles pass, project is ready for >om:doc.

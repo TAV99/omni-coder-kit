@@ -20,6 +20,7 @@ After completing a task, report:
 ```
 ✅ [Task description] — Done
    Files changed: [list]
+   Progress: [completed]/[total] tasks (Cycle [1|2|3]/3)
    Next task: [next uncompleted task from todo.md]
 ```
 Then evaluate the result:
@@ -32,10 +33,28 @@ Then evaluate the result:
   - Dependency conflicts that affect multiple tasks
 - If user says stop at any point, summarize progress (X/Y tasks completed).
 
+**Step 4: Quality Gate — Auto Check/Fix Cycle**
+The project runs exactly **3 quality cycles**. Each cycle triggers after completing 1/3 of total tasks:
+1. On first launch, count total tasks (`- [ ]` + `- [x]`) in `todo.md` → compute `checkpoint = ceil(total / 3)`.
+2. Track `cycle` counter (1, 2, 3) across the session.
+3. After every `checkpoint` tasks completed in the current cycle:
+   ```
+   🔄 Quality Gate — Cycle [N]/3 reached ([X]/[total] tasks done)
+      Auto-triggering >om:check...
+   ```
+   - Automatically execute the [>om:check] workflow (inline, no user prompt needed).
+   - If >om:check finds errors → automatically execute [>om:fix] → re-run [>om:check]. Repeat until all blocking errors are resolved (max 3 fix attempts per cycle).
+   - Once >om:check passes (or max fix attempts reached), resume >om:cook for the next batch.
+4. After cycle 3 completes and >om:check passes:
+   ```
+   ✅ All 3 quality cycles complete. [total] tasks done.
+      Project ready for >om:doc.
+   ```
+
 **Rules:**
 - ONE task at a time. Do not batch multiple tasks unless the user explicitly asks.
 - Follow the tech stack rules from `design-spec.md` and any installed skills.
 - If a task is blocked (depends on something not yet built), SKIP it and move to the next non-blocked task. Note the skip reason.
 - If a task is ambiguous, ASK before implementing. Do not guess.
 - Do NOT refactor, optimize, or "improve" code beyond what the task specifies.
-- After every 5 completed tasks, suggest running `>om:check` for a quality gate.
+- Quality gate cycles are mandatory — do NOT skip them even if all tasks look correct.
