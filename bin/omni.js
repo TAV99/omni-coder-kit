@@ -172,6 +172,64 @@ function findSkillConflict(manifest, skillName) {
     return null;
 }
 
+// ========== OVERLAY SYSTEM ==========
+
+function getOverlayDir(ide) {
+    const overlayMap = { claudecode: 'claude-code', dual: 'claude-code' };
+    const overlayName = overlayMap[ide];
+    if (!overlayName) return null;
+    const dir = path.join(__dirname, '..', 'templates', 'overlays', overlayName);
+    return fs.existsSync(dir) ? dir : null;
+}
+
+function buildWorkflows(ide) {
+    const templatesDir = path.join(__dirname, '..', 'templates');
+    const baseDir = path.join(templatesDir, 'workflows');
+    const files = {};
+
+    for (const f of fs.readdirSync(baseDir).filter(f => f.endsWith('.md'))) {
+        files[f] = path.join(baseDir, f);
+    }
+
+    const overlayDir = getOverlayDir(ide);
+    if (overlayDir) {
+        const overlayWorkflowDir = path.join(overlayDir, 'workflows');
+        if (fs.existsSync(overlayWorkflowDir)) {
+            for (const f of fs.readdirSync(overlayWorkflowDir).filter(f => f.endsWith('.md'))) {
+                files[f] = path.join(overlayWorkflowDir, f);
+            }
+        }
+    }
+
+    return files;
+}
+
+function buildCommands(ide) {
+    const overlayDir = getOverlayDir(ide);
+    if (!overlayDir) return null;
+
+    const commandsDir = path.join(overlayDir, 'commands');
+    if (!fs.existsSync(commandsDir)) return null;
+
+    const files = {};
+    for (const f of fs.readdirSync(commandsDir).filter(f => f.endsWith('.md'))) {
+        files[f] = path.join(commandsDir, f);
+    }
+
+    return Object.keys(files).length > 0 ? files : null;
+}
+
+function buildSettings(ide, advanced) {
+    if (!advanced) return null;
+    const overlayDir = getOverlayDir(ide);
+    if (!overlayDir) return null;
+
+    const templatePath = path.join(overlayDir, 'settings.template.json');
+    if (!fs.existsSync(templatePath)) return null;
+
+    return fs.readFileSync(templatePath, 'utf-8');
+}
+
 // ========== CLI COMMANDS ==========
 
 program
