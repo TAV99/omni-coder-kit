@@ -1,15 +1,16 @@
 # Omni-Coder Kit
 
-**Omni-Coder Kit** là công cụ CLI quản lý hệ tư tưởng (mindset + workflow + skills) cho các AI coding agent. Đảm bảo AI hoạt động với kỷ luật Senior Engineer, tuân thủ SDLC nghiêm ngặt và sử dụng mẫu thiết kế tối ưu.
+**Omni-Coder Kit** là công cụ CLI inject mindset, SDLC workflow và skills vào các AI coding agent. Đảm bảo AI hoạt động với kỷ luật Senior Engineer, tuân thủ SDLC nghiêm ngặt và sử dụng mẫu thiết kế tối ưu.
 
 ## Tính năng chính
 
 - **Đa IDE:** Claude Code, Codex CLI, Cursor, Windsurf, Antigravity, Cross-tool, Generic — mỗi IDE sinh file cấu hình riêng
 - **Dual-Agent:** Tạo cả `CLAUDE.md` + `AGENTS.md` cùng lúc cho dự án dùng nhiều AI tool
 - **Karpathy Mindset:** 4 nguyên tắc — Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution
-- **Socratic Gate:** Bắt buộc AI hỏi tối thiểu 3 câu trước khi code — không có ngoại lệ
-- **Phỏng vấn 6 dimensions:** Business Goal, User Persona, Functional, Non-Functional, Edge Cases, Tech Stack — kèm phỏng vấn thiết kế cho dự án có UI
-- **Universal Skills:** 6 skills mặc định cho mọi dự án (find-skills, karpathy, debugging, TDD, code review, git worktrees)
+- **Socratic Gate:** Bắt buộc AI hỏi tối thiểu 3 câu trước khi code (kèm ví dụ mẫu cho từng loại câu hỏi) — không có ngoại lệ
+- **Personal Rules:** Phỏng vấn có hướng dẫn khi `omni init` — ngôn ngữ giao tiếp, coding style, forbidden patterns, custom rules — kèm ví dụ theo scenario (React, Node.js, Python)
+- **Phỏng vấn kiến trúc:** `>om:brainstorm` phỏng vấn 6 dimensions (Goal, Users, Features, Constraints, Edge Cases, UI) — mỗi câu hỏi AI đặt ra đều có mô tả, gợi ý, và ví dụ cụ thể
+- **Universal Skills:** 6 skills mặc định (find-skills, karpathy-guidelines, systematic-debugging, test-driven-development, requesting-code-review, using-git-worktrees)
 - **Dynamic Skill Discovery:** `>om:equip` dùng `find-skills` search skills.sh theo tech stack — không giới hạn framework
 - **IDE-Aware Skills:** `auto-equip` chỉ cài skill cho IDE/CLI đã chọn (không cài tất cả), dùng `--agent` flag của skills.sh
 - **Skill-Tagged Tasks:** `>om:plan` gắn `@skill:name` cho từng task trong `todo.md`, `>om:cook` tự động load skill tương ứng khi thực thi
@@ -17,6 +18,7 @@
 - **Lazy Loading & Token Optimization:** Config file chỉ ~5KB (core rules + registry table), workflows lazy-loaded khi cần — tiết kiệm ~85% token so với inline
 - **Anti-Hallucination (Paranoid Mode):** Grounding rules, self-verification checklist, no phantom imports/APIs
 - **Antigravity:** Dùng `AGENTS.md` + `.agents/` directory (rules, skills, workflows)
+- **Claude Code Overlay:** Slash commands `/om:*`, permissions allowlist, quality gate hooks — cài tự động khi chọn Claude Code
 - **Validation Pipeline:** Security → Lint → Build → Tests → Bundle analysis — blocking tự động
 - **Skills.sh:** Tích hợp skills.sh ecosystem — conflict detection, manifest tracking
 
@@ -69,6 +71,7 @@ omni update
 | `omni init` | Khởi tạo DNA và workflow cho dự án mới |
 | `omni equip <source>` | Tải kỹ năng ngoài từ skills.sh (cài cho IDE đã chọn) |
 | `omni auto-equip` | Cài universal skills (6 skills mặc định cho mọi dự án) |
+| `omni rules [action]` | Quản lý personal rules (xem/sửa/sync/reset) |
 | `omni status` | Xem trạng thái skills đã cài đặt |
 | `omni commands` | Hiển thị danh sách lệnh `>om:` dùng trong chat AI |
 | `omni update` | Kiểm tra và cập nhật lên phiên bản mới nhất |
@@ -85,6 +88,111 @@ omni update
 | Windsurf | `.windsurfrules` | Mở Windsurf trong thư mục dự án |
 | Cross-tool | `AGENTS.md` | Tool-agnostic |
 | Generic | `SYSTEM_PROMPT.md` | — |
+
+### Claude Code Overlay (tính năng nâng cao)
+
+Khi chọn **Claude Code**, `omni init` tự động cài thêm:
+
+- **Slash commands `/om:*`** — 7 lệnh tương ứng với `>om:*`, gõ trực tiếp trong Claude Code
+- **Permissions allowlist** — `.claude/settings.json` với các lệnh build/test/git được allow sẵn, deny các lệnh nguy hiểm (`rm -rf`, `git push --force`, `git reset --hard`)
+- **Quality gate hooks** — Tự động nhắc AI kiểm tra chất lượng khi file thay đổi
+
+Khi được hỏi `"🔧 Cài đặt Claude Code nâng cao?"`, chọn **Yes** để kích hoạt permissions + hooks.
+
+---
+
+## Hướng dẫn sử dụng chi tiết
+
+### 1. Khởi tạo dự án
+
+```bash
+cd your-project
+omni init
+```
+
+CLI sẽ hỏi 3 bước:
+
+**Bước 1 — Chọn IDE/Tool:**
+Chọn AI IDE bạn đang dùng (Claude Code, Cursor, Windsurf, ...). Mỗi IDE sẽ sinh file cấu hình riêng phù hợp.
+
+**Bước 2 — Mức kỷ luật:**
+- **Hardcore** — Ép 100% SDLC, AI phải tuân thủ mọi quy trình
+- **Flexible** — Cho phép bỏ qua lỗi vặt, phù hợp khi prototyping
+
+**Bước 3 — Personal Rules:**
+4 câu hỏi cá nhân hóa, mỗi câu kèm mô tả và ví dụ theo scenario:
+
+| Câu hỏi | Ví dụ trả lời |
+|----------|---------------|
+| Ngôn ngữ giao tiếp | `"Tiếng Việt, technical terms giữ English"` |
+| Coding style / conventions | `"camelCase, 2-space indent, prefer FC + hooks, no class components"` |
+| Forbidden patterns | `"không dùng any, không console.log trong production, không SQL thô"` |
+| Custom rules | `"commit message tiếng Việt; mỗi PR tối đa 300 dòng; luôn viết test trước"` |
+
+Nhấn **Enter** để bỏ qua bất kỳ câu nào. Sửa lại sau bằng `omni rules edit`.
+
+### 2. Cài đặt skills
+
+```bash
+# Cài 6 universal skills (mặc định cho mọi dự án)
+omni auto-equip
+
+# Cài thêm skill từ skills.sh (chỉ cho IDE đã chọn)
+omni equip vercel-labs/agent-skills
+```
+
+### 3. Sử dụng workflow trong chat AI
+
+Sau khi init xong, mở IDE và gõ các lệnh `>om:` (hoặc `/om:` nếu dùng Claude Code):
+
+```
+Bạn: >om:brainstorm Làm app quản lý task cho team
+
+AI: 📋 Tôi đã hiểu:
+   • Mục tiêu: App quản lý task
+   • Người dùng: [chưa rõ]
+   • Tính năng: [chưa rõ]
+   ...
+   ❓ Ai sẽ dùng sản phẩm này? Mỗi role có quyền khác nhau không?
+      VD blog: "admin (CRUD bài viết), reader (đọc, comment)"
+      VD SaaS: "owner (billing), member (dùng features), guest (view only)"
+
+Bạn: admin (CRUD tasks, quản lý team), member (tạo/sửa task, comment)
+
+AI: ... [tiếp tục phỏng vấn cho đến khi đủ thông tin] ...
+   ✅ Đã tạo design-spec.md
+
+Bạn: >om:equip
+AI: [Cài skills phù hợp cho tech stack đã chọn]
+
+Bạn: >om:plan
+AI: [Tạo todo.md với micro-tasks, mỗi task gắn @skill:name]
+
+Bạn: >om:cook
+AI: [Bắt đầu code, tự động quality gate mỗi 1/3 tasks]
+```
+
+### 4. Quản lý Personal Rules
+
+```bash
+# Menu tương tác — xem, sửa, sync, reset
+omni rules
+
+# Hoặc dùng trực tiếp
+omni rules view     # Xem rules hiện tại
+omni rules edit     # Sửa rules (kèm inline hint ví dụ)
+omni rules sync     # Sync rules vào file config (CLAUDE.md, .cursorrules, ...)
+omni rules reset    # Xóa rules
+```
+
+Rules được lưu tại `.omni-rules.md` và tự động sync vào file config của IDE.
+
+### 5. Kiểm tra trạng thái
+
+```bash
+omni status     # IDE, skills đã cài, config file
+omni commands   # Danh sách lệnh >om: có sẵn
+```
 
 ---
 
@@ -161,10 +269,15 @@ P0–P3 fail → dừng ngay, auto-trigger `>om:fix`, loop cho đến khi pass.
 
 ```
 omni-coder-kit/                  # Package (npm)
-├── bin/omni.js                  # CLI chính (7 commands)
+├── bin/omni.js                  # CLI chính (8 commands)
 ├── templates/
 │   ├── core/                    # Karpathy mindset + anti-hallucination (Paranoid)
-│   └── workflows/               # SDLC workflows (10 files)
+│   ├── workflows/               # SDLC workflows (10 files)
+│   └── overlays/
+│       └── claude-code/         # Claude Code overlay
+│           ├── commands/        # 7 slash commands (/om:*)
+│           ├── workflows/       # Enhanced workflows
+│           └── settings.template.json  # Permissions + hooks
 ├── package.json
 └── .omni-manifest.json          # Tracking: IDE, skills, config file
 ```
