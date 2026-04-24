@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build)",
+      "Bash(npm run lint)",
+      "Bash(npm test)",
+      "Bash(npx vitest*)",
+      "Bash(npx jest*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(find *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)"
+    ]
+  },
+  "hooks": {
+    "postToolCall": [
+      {
+        "matcher": "Write|Edit",
+        "command": "echo '[omni] File changed — remember quality gate at checkpoint'"
+      }
+    ]
+  }
+}
