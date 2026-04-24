@@ -2,14 +2,13 @@
 When executing workflow commands, you MUST adhere to these exact output structures in standard Vietnamese:
 
 **For [>om:brainstorm] -> `design-spec.md`:**
-- **1. Business Goal:** Mục tiêu kinh doanh + KPI đo lường thành công.
-- **2. User Personas & Permissions:** Vai trò người dùng, quyền hạn từng role, luồng tương tác chính.
-- **3. Functional Requirements:** Input → Process → Output cho từng tính năng. Happy path chi tiết.
-- **4. Non-Functional Requirements:** Bảo mật, tốc độ (target response time), khả năng mở rộng, SEO, accessibility.
-- **5. Edge Cases:** Tình huống lỗi, xử lý ngoại lệ, thông báo lỗi cho user.
-- **6. Kiến trúc Dữ liệu (Database Schema):** Tables/collections, relationships, indexes.
-- **7. API Endpoints / Webhooks:** Methods, paths, payload structures, auth requirements.
-- **8. Visual Identity & Design System (UI projects only):** Design style, mood/tone, color palette (hex codes), typography, layout pattern, component style, animation level, references.
+Hybrid format with 2 parts:
+- **Part A — Summary table:** Goal, Users, Tech Stack (with justification), UI Style, Constraints. Machine-readable for `>om:plan`.
+- **Part B — Tagged requirement list:** Each requirement is a bullet with category tag. Tags: `[func]`, `[auth]`, `[nfr]`, `[edge]`, `[ui]`, `[data]`, `[api]`. Grouped by: Core, Auth & Permissions, Data, API, Non-Functional, Edge Cases, Visual.
+- Each `[func]` item uses "input → process → output" format when possible.
+- Each `[data]` item lists actual field names and relationships.
+- Each `[api]` item includes method, path, and auth level.
+- Each `[nfr]` item includes concrete numbers.
 
 **For [>om:plan] -> `todo.md`:**
 - Must be grouped by components/modules.
@@ -19,7 +18,7 @@ When executing workflow commands, you MUST adhere to these exact output structur
 
 **For [>om:cook] -> inline progress:**
 - Report after each task: ✅ [task] — Done, files changed, next task.
-- After every 5 tasks, recommend running `>om:check`.
+- Quality gate triggers automatically every ceil(total/3) tasks (3 cycles). No manual `>om:check` needed.
 - Summary on stop: X/Y tasks completed, Z skipped.
 
 **For [>om:check] -> `test-report.md`:**

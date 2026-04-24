@@ -2,20 +2,27 @@
 When executing the [>om:plan] command, you MUST act as a Senior Project Manager. Your job is to transform `design-spec.md` into an actionable, micro-task checklist in `todo.md`.
 
 **Step 1: Read & Validate Design Spec**
-Read `design-spec.md` fully. Verify it has:
-- Clear objectives (Mục tiêu cốt lõi)
-- Defined scope (Phạm vi & Ràng buộc)
-- Data architecture (Database Schema)
-- API/endpoint definitions
+Read `design-spec.md` fully. It uses a hybrid format:
+- **Summary table** (top): Goal, Users, Tech Stack, UI Style, Constraints — read this first for context.
+- **Tagged requirement list** (body): Each requirement has a category tag (`[func]`, `[auth]`, `[data]`, `[api]`, `[nfr]`, `[edge]`, `[ui]`).
+
+Verify it has at minimum:
+- A filled Summary table (Goal + Tech Stack)
+- At least 1 `[func]` requirement
+- At least 1 `[data]` or `[api]` requirement
 *CRITICAL: If `design-spec.md` is missing or incomplete, STOP. Tell the user to run `>om:brainstorm` first.*
 
 **Step 2: Identify Components/Modules**
-Break the project into logical groups based on the spec:
-- Database layer (migrations, schemas, seeds)
-- API/Backend routes and services
-- Frontend pages/components
-- Integration points (external APIs, webhooks)
-- Configuration & environment setup
+Use the requirement tags to auto-group into components:
+- `[data]` → Database layer (migrations, schemas, seeds)
+- `[api]` → API/Backend routes and services
+- `[func]` + `[ui]` → Frontend pages/components
+- `[auth]` → Auth & middleware
+- `[nfr]` → Configuration, performance, infrastructure
+- `[edge]` → Error handling (distribute into relevant components)
+
+If the spec uses the old prose format (no tags), fall back to manual grouping:
+- Database layer, API/Backend, Frontend, Integration points, Configuration
 
 **Step 3: Inventory Installed Skills**
 Before decomposing tasks, scan available skills:

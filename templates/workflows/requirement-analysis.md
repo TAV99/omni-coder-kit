@@ -1,74 +1,138 @@
-## AI-FIRST ARCHITECT WORKFLOW (DEEP INTERVIEW & TECH STACK PROPOSAL)
-When executing the [>om:brainstorm] command, you MUST act as a Chief Solutions Architect. You are FORBIDDEN from writing the final `design-spec.md` immediately. You must follow this strict interactive process:
+## ADAPTIVE ARCHITECT WORKFLOW (EXTRACT → INTERVIEW → SPEC)
+When executing the [>om:brainstorm] command, you MUST act as a Chief Solutions Architect. Follow this 2-phase process strictly.
 
-**Phase 1: The Deep Interview (Socratic Probing)**
-You MUST cover ALL of the following requirement dimensions. Ask 3-7 targeted questions grouped by priority:
+**Phase 1: Extract, Classify & Interview**
 
-| # | Dimension | What to Ask | Acceptance Signal |
-|---|-----------|-------------|-------------------|
-| 1 | **Business Goal** | Mục tiêu kinh doanh cụ thể? Đo lường thành công bằng gì? (KPI, revenue, user count...) | User states a measurable goal |
-| 2 | **User Persona** | Ai sử dụng? (Admin, Học viên, Giáo viên, Khách...) Mỗi vai trò có quyền gì? | Roles and permissions are clear |
-| 3 | **Functional Req** | Logic xử lý: Input → Process → Output? Happy path từ đầu đến cuối? | User can describe the main flow step by step |
-| 4 | **Non-Functional** | Bảo mật (auth, roles)? Tốc độ (target response time)? Khả năng mở rộng? SEO? Accessibility? | Concrete numbers or constraints (e.g., <2s load time) |
-| 5 | **Edge Cases** | Tình huống lỗi? Nhập sai data thì sao? Mất mạng? Concurrent edits? | User acknowledges or adds edge cases |
-| 6 | **Tech Stack** | Đã có tech stack sẵn? Constraints (hosting, budget, team skill)? Hoặc để AI đề xuất? | Clear if constrained or open |
+### Step 1: Extract & Classify (AI-internal — no questions yet)
+Parse the user's prompt and extract info into 6 slots:
 
-**How to ask:** Do NOT dump all 6 dimensions at once. Group into 2 rounds:
-- **Round 1 (Must-have):** Business Goal + User Persona + Functional Req — these block everything else.
-- **Round 2 (Refinement):** Non-Functional + Edge Cases + Tech Stack — ask after Round 1 is answered.
+| Slot | What to extract |
+|------|----------------|
+| `goal` | Business objective, what the project does |
+| `users` | Roles/personas and their permissions |
+| `features` | Core functionality, main flows |
+| `constraints` | Tech stack, budget, timeline, hosting, team skills |
+| `edge_cases` | Error scenarios, limits, concurrency issues |
+| `ui_hint` | "dashboard", "landing page", "mobile app", "API only", etc. |
 
-*CRITICAL: You must wait for the user to answer EACH round before proceeding. If answers are vague ("làm app quản lý"), probe deeper: "Quản lý cái gì? Cho ai? Bao nhiêu người dùng?"*
+Classify complexity based on extracted info:
 
-**Socratic Gate Enforcement:**
-- You MUST ask a MINIMUM of 3 questions in Round 1 and 2 questions in Round 2. No exceptions.
-- Even after the user answers, ask at least 2 follow-up "edge case" questions before moving to Phase 2:
-  - "Nếu [tình huống bất thường] xảy ra thì sao?" (What if [unusual scenario] happens?)
-  - "Có giới hạn nào về [resource/thời gian/budget] không?" (Any limits on [resource/time/budget]?)
-- **REJECT premature requests:** If the user says "bỏ qua phỏng vấn, code luôn" or "skip questions", respond: "Tôi hiểu bạn muốn nhanh, nhưng bỏ qua phỏng vấn sẽ dẫn đến code sai. Hãy trả lời 3 câu hỏi này trước."
-- **Self-check before Phase 2:** Before proposing tech stacks, verify you can answer ALL of these:
-  - [ ] Mục tiêu kinh doanh rõ ràng?
-  - [ ] Biết ai là người dùng và quyền hạn?
-  - [ ] Hiểu luồng xử lý chính (happy path)?
-  - [ ] Biết ít nhất 2 edge cases?
-  If any checkbox is unchecked, ask more questions — do NOT proceed.
+| Complexity | Indicators | Max questions |
+|------------|-----------|---------------|
+| **Small** | <=2 features, <=2 roles, no integrations | 1 |
+| **Medium** | 3-5 features, DB + API + UI | 3 |
+| **Large** | 6+ features or multi-service | 5 + auto-decompose |
 
-**Phase 1.5: Design & Visual Identity Interview (for UI/Frontend projects)**
-If the project involves a user-facing interface (web app, mobile app, landing page, dashboard, website, e-commerce...), you MUST conduct a dedicated design interview BEFORE proposing tech stacks. Ask 3-5 questions covering:
-
-- **Design Style:** Minimalist, glassmorphism, brutalist, editorial, flat, material design? Show 2-3 options.
-- **Mood & Tone:** Professional, playful, luxury, friendly, futuristic, warm? Pick adjectives.
-- **Color Palette:** Primary brand color? Color family (earth tones, pastels, vibrant, monochrome, dark mode)? Colors to AVOID?
-- **Typography & Layout:** Serif vs sans-serif? Dense vs spacious? Card vs list? Sidebar vs top nav?
-- **References:** 2-3 websites/apps the user admires visually — what specifically they like.
-- **Target Audience:** Age range, tech savviness, mobile-first vs desktop-first.
-- **Animation:** Static/minimal vs rich? Micro-interactions? Scroll-triggered?
-
-*If unsure, propose 2-3 visual directions ("Modern Minimal" vs "Bold Creative" vs "Corporate Clean") and let them pick.*
-*Record all design decisions in design-spec.md under "Visual Identity" section.*
-
-**Phase 2: Tech Stack Proposal**
-Based on the user's answers, propose 2 to 3 distinct Tech Stack combinations. For each option, provide:
-- Name of the Option (e.g., Option A: "The Scalable Enterprise", Option B: "The Lean MVP").
-- Specific recommendations for Frontend, Backend, Database, and Deployment/DevOps.
-- For UI projects: recommend UI framework/component library that matches the chosen design style (e.g., shadcn/ui for minimal, Chakra UI for playful, Ant Design for corporate).
-- Pros and Cons specific to the user's business context.
-*CRITICAL: Ask the user to select one option (A, B, or C) and wait for their decision.*
-
-**Phase 3: Design Spec Generation**
-ONLY AFTER the user explicitly selects a tech stack, generate the final `design-spec.md` incorporating the chosen stack and the gathered requirements, following the defined Output Format Standards.
-
-For UI/Frontend projects, the design-spec MUST include an additional section:
+Display extraction result to user:
 ```
-## 6. Visual Identity & Design System
-- **Design Style:** [chosen style]
-- **Mood & Tone:** [adjectives describing the vibe]
-- **Color Palette:** Primary: [hex], Secondary: [hex], Accent: [hex], Background: [hex], Text: [hex]
-- **Typography:** Headings: [font], Body: [font], Mono: [font]
-- **Layout Pattern:** [description — e.g., responsive grid, sidebar + content, full-width sections]
-- **Component Style:** [rounded corners, shadows, borders, glassmorphism, etc.]
-- **Animation Level:** [none / subtle / moderate / rich]
-- **References:** [links the user provided]
+📋 Tôi đã hiểu:
+   • Mục tiêu: [goal]
+   • Người dùng: [users]
+   • Tính năng: [features]
+   • Ràng buộc: [constraints]
+   • Quy mô: [small/medium/large]
+
+❓ Còn thiếu: [list empty/ambiguous slots]
 ```
 
-**Phase 4: Skills Auto-Equip**
-IMMEDIATELY after generating `design-spec.md`, propose installing expert skills from skills.sh that match the chosen tech stack. Ask the user: "Bạn có muốn tôi tự động cài đặt các skills chuyên sâu cho stack này không?" If confirmed, execute: `omni auto-equip --stacks <detected-stacks>` or `omni auto-equip --design-spec design-spec.md`.
+### Step 2: Adaptive Questions (only ask what's missing)
+- Each question targets 1 empty or ambiguous slot.
+- Prefer multiple-choice format when possible.
+- If project has UI (`ui_hint` is not "API only"), merge 1 visual direction question into this flow:
+  "Style hướng nào? (a) Modern minimal (b) Bold/creative (c) Corporate/clean (d) Để tôi chọn theo context"
+- **Soft gate:** Always ask at least 1 question, even if all slots are filled — use it for edge case probing or scope confirmation.
+- After each answer, re-evaluate: enough info to write spec? If yes → proceed to Phase 2.
+
+**Tech stack handling (merged — no dedicated phase):**
+- **User specified stack:** Use it. No alternatives proposed.
+- **User says "AI chọn" or doesn't mention:** Pick the best fit, write 1-line justification in Summary table. Do not ask.
+- **Clear trade-off exists** (e.g., realtime vs ecosystem): Ask 1 multiple-choice question merged into adaptive flow.
+
+### Step 3: Auto-decompose (Large projects only)
+If complexity = Large:
+```
+⚠️ Dự án này có [N] tính năng lớn. Đề xuất tách:
+   1. [Sub-project A] — [short description]
+   2. [Sub-project B] — [short description]
+   3. [Sub-project C] — [short description]
+
+Bắt đầu từ đâu? (1/2/3)
+```
+Each sub-project runs through Steps 1-2 independently and generates its own `design-spec.md` (named `design-spec-[subproject].md`). The first sub-project uses `design-spec.md` as filename.
+
+### Self-check before Phase 2
+Before generating spec, verify you can fill ALL of these:
+- [ ] Goal rõ ràng (1 câu mô tả được)?
+- [ ] Biết ai dùng (ít nhất 1 role)?
+- [ ] Hiểu ít nhất 1 core feature flow?
+- [ ] Biết tech stack (user chọn hoặc AI chọn)?
+If any is unchecked → ask 1 more targeted question. Do NOT proceed.
+
+**Phase 2: Generate `design-spec.md`**
+
+### Part A: Structured Summary
+```markdown
+# Design Spec — [Project Name]
+> Generated: [date] | Complexity: [small/medium/large]
+
+## Summary
+| Field | Value |
+|-------|-------|
+| Goal | [1 sentence] |
+| Users | [role1, role2, ...] |
+| Tech Stack | [frontend], [backend], [db], [deploy] ([1-line justification]) |
+| UI Style | [style] or "API only" |
+| Constraints | [list] |
+```
+
+### Part B: Tagged Requirement List
+Each requirement is a bullet with a category tag. Available tags: `[func]`, `[auth]`, `[nfr]`, `[edge]`, `[ui]`, `[data]`, `[api]`
+
+```markdown
+## Requirements
+
+### Core
+- [func] Feature description (specific: input → process → output)
+- [func] Another feature
+
+### Auth & Permissions
+- [auth] Role: permissions description
+
+### Data
+- [data] Table/collection name — fields, relationships, indexes
+
+### API
+- [api] METHOD /path — description, auth requirement
+
+### Non-Functional
+- [nfr] Performance/security/scaling requirement (with concrete numbers)
+
+### Edge Cases
+- [edge] Error scenario → expected behavior
+
+### Visual (UI projects only)
+- [ui] Design style, color palette, typography, layout pattern
+```
+
+**Rules for requirements:**
+- Each bullet should be specific enough to become 1-3 tasks in `todo.md`.
+- Use "input → process → output" format for `[func]` items when possible.
+- Include concrete numbers for `[nfr]` items (e.g., "<2s response time", "support 1000 concurrent users").
+- `[data]` items should list actual field names, not just "user table".
+- `[api]` items should include method, path, and auth level.
+
+### After spec generation
+Display non-blocking next steps:
+```
+✅ Đã tạo design-spec.md ([complexity], [N] requirements)
+
+💡 Bước tiếp theo:
+   1. >om:equip — cài skills chuyên sâu cho [detected stack]
+   2. >om:plan — tạo task list từ spec
+```
+
+**Rules:**
+- Do NOT write code. Your only output is `design-spec.md`.
+- Do NOT skip Phase 1 even if the user says "code luôn". Respond: "Trả lời 1 câu này trước để tôi hiểu đúng yêu cầu."
+- If the user's prompt is a single vague sentence ("làm app quản lý"), probe deeper: "Quản lý cái gì? Cho ai? Quy mô bao nhiêu người dùng?"
+- Keep total interview under 5 questions for medium projects, 1 for simple.

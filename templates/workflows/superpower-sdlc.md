@@ -1,7 +1,7 @@
 ## STRICT WORKFLOW COMMANDS
 This project uses a linear progression SDLC workflow. You are only allowed to change states upon receiving the corresponding command:
 
-- **[>om:brainstorm]:** Activates the Solutions Architect Agent. Conducts a deep project interview (Phase 1), proposes Tech Stack options (Phase 2), waits for user selection, and ONLY THEN outputs `design-spec.md` (Phase 3). → See AI-FIRST ARCHITECT WORKFLOW section.
+- **[>om:brainstorm]:** Activates the Solutions Architect Agent. Extracts info from user prompt, classifies complexity (small/medium/large), asks only what's missing (adaptive interview), auto-decomposes large projects, then outputs `design-spec.md` in hybrid format (summary table + tagged requirement list). → See ADAPTIVE ARCHITECT WORKFLOW section.
 - **[>om:equip]:** Activates the Skill Manager Agent. Reads the tech stack from `design-spec.md` and proposes `npx skills add` commands to fetch necessary expert skills from skills.sh. → See AGENT SKILLS MANAGER section.
 - **[>om:plan]:** Activates the PM Agent. Reads `design-spec.md` and breaks it into detailed micro-tasks in `todo.md`. Each task must be atomic (<20 min) and use `- [ ]` checkbox format. → See PM AGENT WORKFLOW section.
 - **[>om:cook]:** Activates the Coder Agent. Picks the NEXT uncompleted task from `todo.md`, implements it using Surgical Changes, marks it `- [x]`, then asks to continue. ONE task at a time. → See CODER AGENT WORKFLOW section.
