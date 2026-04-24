@@ -105,7 +105,7 @@ function loadManifest() {
 }
 
 function createManifest() {
-    return { version: '1.0.0', configFile: null, skills: { external: [] } };
+    return { version: '2.1.0', configFile: null, skills: { external: [] } };
 }
 
 function saveManifest(manifest) {
@@ -315,13 +315,39 @@ program
 
         const omniWorkflowsDir = path.join(process.cwd(), '.omni', 'workflows');
         fs.mkdirSync(omniWorkflowsDir, { recursive: true });
-        const workflowSrcDir = path.join(templatesDir, 'workflows');
-        const workflowFiles = fs.readdirSync(workflowSrcDir).filter(f => f.endsWith('.md'));
+        const mergedWorkflows = buildWorkflows(response.ide);
+        const workflowFiles = Object.keys(mergedWorkflows);
         for (const wf of workflowFiles) {
-            fs.copyFileSync(path.join(workflowSrcDir, wf), path.join(omniWorkflowsDir, wf));
+            fs.copyFileSync(mergedWorkflows[wf], path.join(omniWorkflowsDir, wf));
         }
 
-        const commandRegistry = [
+        const isClaudeCode = response.ide === 'claudecode' || response.ide === 'dual';
+
+        const commandRegistry = isClaudeCode ? [
+            '## WORKFLOW COMMANDS',
+            '> Claude Code: dùng `/om:*` slash commands (auto-complete) hoặc `>om:*` trong chat.',
+            '',
+            'When the user invokes a `>om:` command or `/om:` slash command, read the corresponding workflow file and follow its instructions.',
+            '',
+            '| Command | Slash | Agent Strategy | Workflow File |',
+            '|---------|-------|---------------|---------------|',
+            '| `>om:brainstorm` | `/om:brainstorm` | Main session | `.omni/workflows/requirement-analysis.md` |',
+            '| `>om:equip` | `/om:equip` | Main session | `.omni/workflows/skill-manager.md` |',
+            '| `>om:plan` | `/om:plan` | Main session | `.omni/workflows/task-planning.md` |',
+            '| `>om:cook` | `/om:cook` | Main → sub-agents (parallel) | `.omni/workflows/coder-execution.md` |',
+            '| `>om:check` | `/om:check` | Main session | `.omni/workflows/qa-testing.md` |',
+            '| `>om:fix` | `/om:fix` | Main session | `.omni/workflows/debugger-workflow.md` |',
+            '| `>om:doc` | `/om:doc` | Main session | `.omni/workflows/documentation-writer.md` |',
+            '',
+            'Supporting files (referenced by workflows as needed):',
+            '- `.omni/workflows/pm-templates.md` — Output format standards',
+            '- `.omni/workflows/validation-scripts.md` — P0–P4 validation pipeline scripts',
+            '- `.omni/workflows/superpower-sdlc.md` — Full SDLC overview and pipeline diagram',
+            '',
+            '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
+            '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook → check → fix). See coder-execution.md.',
+            '**Fallback:** If `.omni/workflows/` not found, read from `node_modules/omni-coder-kit/templates/workflows/`.',
+        ].join('\n') : [
             '## WORKFLOW COMMANDS',
             'When the user invokes a `>om:` command, read the corresponding workflow file and follow its instructions.',
             '',
@@ -364,7 +390,12 @@ program
         switch (response.ide) {
             case 'claudecode':
                 fileName = 'CLAUDE.md';
-                finalRules += `- **Claude/OpenCode CLI Safety:** DO NOT execute destructive terminal commands (e.g., rm -rf) without explicit user permission.\n`;
+                finalRules += `### Claude Code Integration\n`;
+                finalRules += `- **Native Commands:** Dùng \`/om:brainstorm\`, \`/om:cook\`, ... (auto-complete) hoặc gõ \`>om:brainstorm\`, \`>om:cook\` trong chat — cả hai đều hoạt động.\n`;
+                finalRules += `- **Sub-Agent Execution:** Khi \`/om:cook\` chạy, phân tích dependency graph trong \`todo.md\` và spawn parallel agents (worktree isolation) cho tasks độc lập. Xem chi tiết: \`.omni/workflows/coder-execution.md\`\n`;
+                finalRules += `- **Task Tracking:** Dùng TaskCreate/TaskUpdate để track progress khi thực thi tasks, thay vì chỉ dựa vào \`todo.md\` checkboxes.\n`;
+                finalRules += `- **Safety:** KHÔNG thực thi destructive commands (rm -rf, git push --force, git reset --hard) mà không có permission user.\n`;
+                finalRules += `- **Workflow Files:** Tất cả logic nằm trong \`.omni/workflows/\`. Khi nhận lệnh \`>om:*\` hoặc \`/om:*\`, đọc file tương ứng rồi thực thi.\n`;
                 break;
             case 'codex':
                 fileName = 'AGENTS.md';
@@ -374,7 +405,12 @@ program
                 break;
             case 'dual':
                 fileName = 'CLAUDE.md';
-                finalRules += `- **Claude/OpenCode CLI Safety:** DO NOT execute destructive terminal commands (e.g., rm -rf) without explicit user permission.\n`;
+                finalRules += `### Claude Code Integration\n`;
+                finalRules += `- **Native Commands:** Dùng \`/om:brainstorm\`, \`/om:cook\`, ... (auto-complete) hoặc gõ \`>om:brainstorm\`, \`>om:cook\` trong chat — cả hai đều hoạt động.\n`;
+                finalRules += `- **Sub-Agent Execution:** Khi \`/om:cook\` chạy, phân tích dependency graph trong \`todo.md\` và spawn parallel agents (worktree isolation) cho tasks độc lập. Xem chi tiết: \`.omni/workflows/coder-execution.md\`\n`;
+                finalRules += `- **Task Tracking:** Dùng TaskCreate/TaskUpdate để track progress khi thực thi tasks, thay vì chỉ dựa vào \`todo.md\` checkboxes.\n`;
+                finalRules += `- **Safety:** KHÔNG thực thi destructive commands (rm -rf, git push --force, git reset --hard) mà không có permission user.\n`;
+                finalRules += `- **Workflow Files:** Tất cả logic nằm trong \`.omni/workflows/\`. Khi nhận lệnh \`>om:*\` hoặc \`/om:*\`, đọc file tương ứng rồi thực thi.\n`;
                 break;
             case 'antigravity':
                 fileName = '.antigravityrules';
@@ -462,6 +498,54 @@ program
 
         console.log(chalk.gray(`   Đã tạo manifest: ${MANIFEST_FILE}`));
         console.log(chalk.gray(`   Workflows: .omni/workflows/ (${workflowFiles.length} files — lazy-loaded)`));
+
+        // Claude Code: generate slash commands
+        const slashCommands = buildCommands(response.ide);
+        if (slashCommands) {
+            const claudeCommandsDir = path.join(process.cwd(), '.claude', 'commands');
+            fs.mkdirSync(claudeCommandsDir, { recursive: true });
+            for (const [name, srcPath] of Object.entries(slashCommands)) {
+                fs.copyFileSync(srcPath, path.join(claudeCommandsDir, name));
+            }
+            manifest.commands = Object.keys(slashCommands).map(f => f.replace('.md', ''));
+            saveManifest(manifest);
+            console.log(chalk.gray(`   Commands: .claude/commands/ (${Object.keys(slashCommands).length} slash commands)`));
+        }
+
+        // Claude Code: progressive advanced setup
+        if (slashCommands) {
+            const { advanced } = await prompts({
+                type: 'confirm',
+                name: 'advanced',
+                message: '🔧 Cài đặt Claude Code nâng cao? (permissions allowlist, quality gate hooks)',
+                initial: false
+            });
+
+            const settingsContent = buildSettings(response.ide, advanced);
+            if (settingsContent) {
+                const claudeDir = path.join(process.cwd(), '.claude');
+                fs.mkdirSync(claudeDir, { recursive: true });
+                const settingsPath = path.join(claudeDir, 'settings.json');
+                let writeSettings = true;
+                if (fs.existsSync(settingsPath)) {
+                    const { overwriteSettings } = await prompts({
+                        type: 'confirm',
+                        name: 'overwriteSettings',
+                        message: '⚠️  File ".claude/settings.json" đã tồn tại. Ghi đè?',
+                        initial: false
+                    });
+                    writeSettings = !!overwriteSettings;
+                }
+                if (writeSettings) {
+                    writeFileSafe(settingsPath, settingsContent);
+                    console.log(chalk.green(`   ✅ .claude/settings.json (permissions + hooks)`));
+                }
+            }
+
+            manifest.overlay = true;
+            manifest.advanced = !!advanced;
+            saveManifest(manifest);
+        }
 
         // Auto-install find-skills (tìm kiếm & cài skills tự động)
         const findSkillsAgentFlags = getAgentFlags(manifest);
