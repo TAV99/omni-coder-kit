@@ -76,7 +76,7 @@ Cài tất cả? Gõ số để loại bỏ (vd: "loại 3"), hoặc Enter để
 ### Step 6: Install
 - **Universal skills:** `omni auto-equip -y`
 - **Discovered skills:** `omni equip <source> --name <short-name>` for each approved skill
-- **Antigravity:** Commands sẽ sinh `install-skills.sh` — hướng dẫn user chạy `bash install-skills.sh`
+- **Antigravity:** Dùng `AGENTS.md` + `.agents/` directory — cài skills bình thường qua `omni equip`
 
 ### Step 7: Context Absorption
 After installation, read the newly added skill files (in `.agents/skills/` or `.claude/skills/`) and apply those rules to the current session immediately.

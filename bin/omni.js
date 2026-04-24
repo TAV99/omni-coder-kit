@@ -35,7 +35,7 @@ const UNIVERSAL_SKILLS = [
 // ========== HELPERS ==========
 
 function findConfigFile() {
-    const files = ['.cursorrules', '.windsurfrules', 'CLAUDE.md', '.antigravityrules', 'AGENTS.md', 'SYSTEM_PROMPT.md'];
+    const files = ['.cursorrules', '.windsurfrules', 'CLAUDE.md', 'AGENTS.md', 'SYSTEM_PROMPT.md'];
     for (const file of files) {
         if (fs.existsSync(path.join(process.cwd(), file))) return file;
     }
@@ -413,11 +413,12 @@ program
                 finalRules += `- **Workflow Files:** Tất cả logic nằm trong \`.omni/workflows/\`. Khi nhận lệnh \`>om:*\` hoặc \`/om:*\`, đọc file tương ứng rồi thực thi.\n`;
                 break;
             case 'antigravity':
-                fileName = '.antigravityrules';
+                fileName = 'AGENTS.md';
+                finalRules += `- **AGENTS.md Discovery:** Antigravity auto-discovers this file from project root. Rules, skills, and workflows go in \`.agents/\` directory.\n`;
                 finalRules += `- **Knowledge Items:** Persist architecture decisions, debugging solutions, and implementation patterns as Knowledge Items (KIs) — they survive across sessions unlike chat history.\n`;
                 finalRules += `- **Multi-Agent (Manager View):** For complex tasks, spawn specialized agents from Manager View (\`Cmd+E\` / \`Ctrl+E\`). Each agent gets its own isolated workspace.\n`;
                 finalRules += `- **Browser Testing:** Use the integrated browser to visually verify UI changes before confirming completion. Agents can take screenshots and detect visual regressions.\n`;
-                finalRules += `- **Workflows:** Place reusable workflows in \`.agent/workflows/\` and trigger via \`/workflow-name\` in chat.\n`;
+                finalRules += `- **Workflows:** Place reusable workflows in \`.agents/workflows/\` and trigger via \`/workflow-name\` in chat.\n`;
                 finalRules += `- **Confirmation Policy:** ALWAYS require explicit confirmation before destructive operations (database writes, deployments, \`rm -rf\`, force push).\n`;
                 break;
             case 'agents':
@@ -551,25 +552,21 @@ program
         const findSkillsAgentFlags = getAgentFlags(manifest);
         const findSkillsCmd = `npx skills add vercel-labs/skills${findSkillsAgentFlags ? ' ' + findSkillsAgentFlags : ''} --skill find-skills -y`;
 
-        if (response.ide === 'antigravity') {
-            console.log(chalk.gray(`   💡 Cài find-skills thủ công: ${findSkillsCmd}`));
-        } else {
-            try {
-                console.log(chalk.gray(`   Đang cài find-skills...`));
-                const initArgs = ['-y', 'skills', 'add', 'vercel-labs/skills'];
-                if (findSkillsAgentFlags) initArgs.push(...findSkillsAgentFlags.split(' '));
-                initArgs.push('--skill', 'find-skills', '-y');
-                execFileSync('npx', initArgs, { stdio: 'pipe', timeout: 30000 });
-                manifest.skills.external.push({
-                    name: 'find-skills',
-                    source: 'vercel-labs/skills',
-                    installedAt: new Date().toISOString()
-                });
-                saveManifest(manifest);
-                console.log(chalk.green(`   ✓ find-skills — AI có thể tìm & cài skills tự động`));
-            } catch {
-                console.log(chalk.yellow(`   ⚠️  Không cài được find-skills (sandbox/mạng). Cài sau: ${findSkillsCmd}`));
-            }
+        try {
+            console.log(chalk.gray(`   Đang cài find-skills...`));
+            const initArgs = ['-y', 'skills', 'add', 'vercel-labs/skills'];
+            if (findSkillsAgentFlags) initArgs.push(...findSkillsAgentFlags.split(' '));
+            initArgs.push('--skill', 'find-skills', '-y');
+            execFileSync('npx', initArgs, { stdio: 'pipe', timeout: 30000 });
+            manifest.skills.external.push({
+                name: 'find-skills',
+                source: 'vercel-labs/skills',
+                installedAt: new Date().toISOString()
+            });
+            saveManifest(manifest);
+            console.log(chalk.green(`   ✓ find-skills — AI có thể tìm & cài skills tự động`));
+        } catch {
+            console.log(chalk.yellow(`   ⚠️  Không cài được find-skills (sandbox/mạng). Cài sau: ${findSkillsCmd}`));
         }
 
         console.log(chalk.white(`\n💡 Gõ ${chalk.cyan.bold('>om:brainstorm')} để AI phỏng vấn và tư vấn kiến trúc.`));
@@ -607,7 +604,7 @@ program
             antigravity: {
                 name: 'Antigravity',
                 cmd: 'antigravity',
-                note: 'Không hỗ trợ auto-approve — skills sẽ được sinh ra dạng script (install-skills.sh)',
+                note: 'Dùng AGENTS.md + .agents/ directory. Gõ >om:brainstorm trong chat để bắt đầu.',
             },
             cursor: {
                 name: 'Cursor',
@@ -742,39 +739,6 @@ program
         console.log('');
 
         const agentFlags = getAgentFlags(manifest);
-        const isRestricted = configFile === '.antigravityrules';
-
-        if (isRestricted) {
-            const scriptName = 'install-skills.sh';
-            const scriptPath = path.join(process.cwd(), scriptName);
-            let script = '#!/bin/bash\n';
-            script += '# Generated by Omni-Coder Kit — auto-equip universal skills\n';
-            script += `# Target: ${agentFlags || '--all (generic)'}\n`;
-            script += `# Skills: ${toInstall.length}\n\n`;
-            script += 'set -e\n\n';
-
-            for (const skill of toInstall) {
-                const installCmd = agentFlags
-                    ? `npx -y skills add ${skill.source} ${agentFlags} --skill '*' -y`
-                    : `npx -y skills add ${skill.source} --all`;
-                script += `echo "🔧 Đang cài: ${skill.name} (${skill.source})..."\n`;
-                script += `${installCmd}\n`;
-                script += `echo "   ✓ ${skill.name}"\n\n`;
-            }
-
-            script += `echo ""\necho "✅ Hoàn tất! Đã cài ${toInstall.length} skills."\n`;
-            script += `echo "💡 Chạy 'omni status' để xem trạng thái."\n`;
-
-            if (!writeFileSafe(scriptPath, script)) return;
-            try { fs.chmodSync(scriptPath, '755'); } catch {}
-
-            console.log(chalk.green.bold(`\n✅ Đã tạo script: ${chalk.white(scriptName)}`));
-            console.log(chalk.gray(`   Môi trường ${chalk.white('Antigravity')} không hỗ trợ chạy shell tự động.`));
-            console.log(chalk.white(`\n   Chạy lệnh sau trong terminal:\n`));
-            console.log(chalk.cyan.bold(`   bash ${scriptName}\n`));
-            console.log(chalk.gray(`   Sau khi cài xong, chạy ${chalk.yellow('omni status')} để kiểm tra.\n`));
-            return;
-        }
 
         if (!options.yes) {
             const { confirmed } = await prompts({

@@ -16,7 +16,7 @@
 - **Automated Quality Pipeline:** 3 quality cycles bắt buộc — `cook → check → fix` loop tự động sau mỗi 1/3 tasks
 - **Lazy Loading & Token Optimization:** Config file chỉ ~5KB (core rules + registry table), workflows lazy-loaded khi cần — tiết kiệm ~85% token so với inline
 - **Anti-Hallucination (Paranoid Mode):** Grounding rules, self-verification checklist, no phantom imports/APIs
-- **Antigravity Fallback:** Sinh `install-skills.sh` thay vì chạy trực tiếp (do Antigravity không hỗ trợ auto-approve)
+- **Antigravity:** Dùng `AGENTS.md` + `.agents/` directory (rules, skills, workflows)
 - **Validation Pipeline:** Security → Lint → Build → Tests → Bundle analysis — blocking tự động
 - **Skills.sh:** Tích hợp skills.sh ecosystem — conflict detection, manifest tracking
 
@@ -80,7 +80,7 @@ omni update
 | Claude Code / OpenCode | `CLAUDE.md` | `claude --dangerously-skip-permissions` |
 | Codex CLI (OpenAI) | `AGENTS.md` | `codex --full-auto` |
 | Claude Code + Codex (dual) | `CLAUDE.md` + `AGENTS.md` | Cả 2 lệnh trên |
-| Antigravity | `.antigravityrules` | Skills sinh ra dạng script `install-skills.sh` |
+| Antigravity | `AGENTS.md` | Dùng `.agents/` directory cho rules, skills, workflows |
 | Cursor | `.cursorrules` | Mở Cursor trong thư mục dự án |
 | Windsurf | `.windsurfrules` | Mở Windsurf trong thư mục dự án |
 | Cross-tool | `AGENTS.md` | Tool-agnostic |
