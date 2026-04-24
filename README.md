@@ -9,6 +9,8 @@
 - **Karpathy Mindset:** 4 nguyên tắc — Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution
 - **Socratic Gate:** Bắt buộc AI hỏi tối thiểu 3 câu trước khi code — không có ngoại lệ
 - **Phỏng vấn 6 dimensions:** Business Goal, User Persona, Functional, Non-Functional, Edge Cases, Tech Stack — kèm phỏng vấn thiết kế cho dự án có UI
+- **Universal Skills:** 6 skills mặc định cho mọi dự án (find-skills, karpathy, debugging, TDD, code review, git worktrees)
+- **Dynamic Skill Discovery:** `>om:equip` dùng `find-skills` search skills.sh theo tech stack — không giới hạn framework
 - **IDE-Aware Skills:** `auto-equip` chỉ cài skill cho IDE/CLI đã chọn (không cài tất cả), dùng `--agent` flag của skills.sh
 - **Skill-Tagged Tasks:** `>om:plan` gắn `@skill:name` cho từng task trong `todo.md`, `>om:cook` tự động load skill tương ứng khi thực thi
 - **Automated Quality Pipeline:** 3 quality cycles bắt buộc — `cook → check → fix` loop tự động sau mỗi 1/3 tasks
@@ -16,8 +18,7 @@
 - **Anti-Hallucination (Paranoid Mode):** Grounding rules, self-verification checklist, no phantom imports/APIs
 - **Antigravity Fallback:** Sinh `install-skills.sh` thay vì chạy trực tiếp (do Antigravity không hỗ trợ auto-approve)
 - **Validation Pipeline:** Security → Lint → Build → Tests → Bundle analysis — blocking tự động
-- **Tech Stacks:** React/Next.js, Hono/PostgreSQL, Automation Bot, Payment Gateway
-- **Skills.sh:** Tích hợp skills.sh ecosystem — auto-equip theo tech stack, conflict detection, manifest tracking
+- **Skills.sh:** Tích hợp skills.sh ecosystem — conflict detection, manifest tracking
 
 ---
 
@@ -40,28 +41,22 @@ omni update
 ## Bắt đầu nhanh
 
 ```bash
-# 1. Khởi tạo — chọn IDE, mức kỷ luật, tech stack
+# 1. Khởi tạo — chọn IDE, mức kỷ luật, personal rules
 omni init
 
-# 2. Xem kỹ năng có sẵn
-omni list
+# 2. Cài universal skills (6 skills mặc định)
+omni auto-equip
 
-# 3. Thêm tech stack cục bộ
-omni add react-next
-
-# 4. Cài skill từ skills.sh (chỉ cho IDE đã chọn)
+# 3. Cài thêm skill từ skills.sh (chỉ cho IDE đã chọn)
 omni equip vercel-labs/agent-skills
 
-# 5. Auto-equip theo design-spec
-omni auto-equip --design-spec design-spec.md
-
-# 6. Xem trạng thái
+# 4. Xem trạng thái
 omni status
 
-# 7. Xem danh sách lệnh >om:
+# 5. Xem danh sách lệnh >om:
 omni commands
 
-# 8. Cập nhật lên phiên bản mới nhất
+# 6. Cập nhật lên phiên bản mới nhất
 omni update
 ```
 
@@ -74,7 +69,7 @@ omni update
 | `omni init` | Khởi tạo DNA và workflow cho dự án mới |
 | `omni add <skill>` | Bơm thêm kỹ năng cục bộ (local stack) vào file cấu hình |
 | `omni equip <source>` | Tải kỹ năng ngoài từ skills.sh (cài cho IDE đã chọn) |
-| `omni auto-equip` | Tự động cài tất cả skills theo tech stack |
+| `omni auto-equip` | Cài universal skills (6 skills mặc định cho mọi dự án) |
 | `omni status` | Xem trạng thái kỹ năng đã cài (local + external) |
 | `omni list` | Xem danh sách kỹ năng có sẵn trong kho |
 | `omni commands` | Hiển thị danh sách lệnh `>om:` dùng trong chat AI |
@@ -102,7 +97,7 @@ Sau khi khởi tạo, gõ các lệnh `>om:` trong chat với AI:
 | Lệnh | Agent | Mô tả |
 |-------|-------|-------|
 | `>om:brainstorm` | Architect | Phỏng vấn 2 vòng (6 dimensions + design), đề xuất tech stack, xuất `design-spec.md` |
-| `>om:equip` | Skill Manager | Đề xuất & cài skills từ skills.sh theo stack (chỉ cho IDE đã chọn) |
+| `>om:equip` | Skill Manager | Dùng find-skills search skills.sh dynamic + cài universal skills |
 | `>om:plan` | PM | Phân tích spec → micro-tasks trong `todo.md`, gắn `@skill:name` cho từng task |
 | `>om:cook` | Coder | Thực thi từng task, load skill theo `@skill:` tag, auto-continue, quality gate mỗi 1/3 |
 | `>om:check` | QA Tester | Validation pipeline (P0–P3 blocking) + feature verification → `test-report.md` |

@@ -21,73 +21,16 @@ const IDE_AGENT_MAP = {
     generic:     null,
 };
 
-// ========== SKILL REGISTRY (skills.sh) ==========
+// ========== UNIVERSAL SKILLS (skills.sh) ==========
 
-const SKILL_REGISTRY = {
-    'react-next': [
-        { source: 'vercel-labs/agent-skills', name: 'vercel-react-best-practices', desc: 'React best practices từ Vercel' },
-        { source: 'vercel-labs/agent-skills', name: 'web-design-guidelines', desc: 'Hướng dẫn thiết kế web' },
-        { source: 'anthropics/skills', name: 'frontend-design', desc: 'Thiết kế UI/UX chuyên sâu' },
-        { source: 'shadcn/ui', name: 'shadcn', desc: 'Component library shadcn/ui' },
-        { source: 'wshobson/agents', name: 'tailwind-design-system', desc: 'Design system với Tailwind CSS' },
-        { source: 'vercel-labs/agent-skills', name: 'deploy-to-vercel', desc: 'Deploy lên Vercel' },
-    ],
-    'hono-pg': [
-        { source: 'supabase/agent-skills', name: 'supabase-postgres-best-practices', desc: 'PostgreSQL optimization từ Supabase' },
-        { source: 'obra/superpowers', name: 'systematic-debugging', desc: 'Debugging có hệ thống' },
-        { source: 'obra/superpowers', name: 'test-driven-development', desc: 'Phát triển hướng test (TDD)' },
-    ],
-    'automation-bot': [
-        { source: 'obra/superpowers', name: 'systematic-debugging', desc: 'Debugging có hệ thống' },
-        { source: 'vercel-labs/agent-browser', name: 'agent-browser', desc: 'Tự động hóa trình duyệt' },
-    ],
-    'payment-gateway': [
-        { source: 'supabase/agent-skills', name: 'supabase-postgres-best-practices', desc: 'PostgreSQL optimization từ Supabase' },
-        { source: 'obra/superpowers', name: 'systematic-debugging', desc: 'Debugging có hệ thống' },
-        { source: 'obra/superpowers', name: 'test-driven-development', desc: 'Phát triển hướng test (TDD)' },
-    ],
-    '_common': [
-        { source: 'vercel-labs/skills', name: 'find-skills', desc: 'Tìm kiếm & cài đặt skills tự động từ skills.sh' },
-        { source: 'forrestchang/andrej-karpathy-skills', name: 'karpathy-guidelines', desc: 'Karpathy mindset: Think → Simplify → Surgical → Goal-Driven' },
-        { source: 'obra/superpowers', name: 'requesting-code-review', desc: 'Quy trình review code chuyên nghiệp' },
-        { source: 'obra/superpowers', name: 'using-git-worktrees', desc: 'Quản lý Git worktrees hiệu quả' },
-    ]
-};
-
-// Từ khóa trong design-spec.md → stack tương ứng
-const STACK_KEYWORDS = {
-    'react-next': ['react', 'next.js', 'nextjs', 'next js', 'vercel', 'tailwind', 'shadcn'],
-    'hono-pg': ['hono', 'postgresql', 'postgres', 'supabase', 'drizzle', 'prisma'],
-    'automation-bot': ['telegram', 'bot', 'automation', 'google sheets', 'webhook', 'cron', 'puppeteer', 'playwright'],
-    'payment-gateway': ['payment', 'vnpay', 'stripe', 'paypal', 'momo', 'zalopay', 'thanh toán'],
-};
-
-function detectStacksFromText(text) {
-    const lower = text.toLowerCase();
-    const detected = [];
-    for (const [stack, keywords] of Object.entries(STACK_KEYWORDS)) {
-        if (keywords.some(kw => lower.includes(kw))) {
-            detected.push(stack);
-        }
-    }
-    return detected;
-}
-
-function resolveSkills(stacks) {
-    const seen = new Set();
-    const skills = [];
-    const allStacks = [...stacks, '_common'];
-    for (const stack of allStacks) {
-        const entries = SKILL_REGISTRY[stack] || [];
-        for (const entry of entries) {
-            if (!seen.has(entry.name)) {
-                seen.add(entry.name);
-                skills.push(entry);
-            }
-        }
-    }
-    return skills;
-}
+const UNIVERSAL_SKILLS = [
+    { source: 'vercel-labs/skills', name: 'find-skills', desc: 'Tìm kiếm & cài đặt skills tự động từ skills.sh' },
+    { source: 'forrestchang/andrej-karpathy-skills', name: 'karpathy-guidelines', desc: 'Karpathy mindset: Think → Simplify → Surgical → Goal-Driven' },
+    { source: 'obra/superpowers', name: 'systematic-debugging', desc: 'Debugging có hệ thống' },
+    { source: 'obra/superpowers', name: 'test-driven-development', desc: 'Phát triển hướng test (TDD)' },
+    { source: 'obra/superpowers', name: 'requesting-code-review', desc: 'Quy trình review code chuyên nghiệp' },
+    { source: 'obra/superpowers', name: 'using-git-worktrees', desc: 'Quản lý Git worktrees hiệu quả' },
+];
 
 // ========== HELPERS ==========
 
@@ -550,7 +493,7 @@ program
         }
 
         console.log(chalk.white(`\n💡 Gõ ${chalk.cyan.bold('>om:brainstorm')} để AI phỏng vấn và tư vấn kiến trúc.`));
-        console.log(chalk.gray(`   Thêm tech stack: ${chalk.yellow('omni add <tên>')} hoặc ${chalk.yellow('omni equip <source>')}`));
+        console.log(chalk.gray(`   Thêm skill: ${chalk.yellow('omni equip <source>')} hoặc ${chalk.yellow('omni auto-equip')}`));
         if (rulesContent) {
             console.log(chalk.gray(`   Sửa rules: ${chalk.yellow('omni rules')}`));
         } else {
@@ -764,9 +707,7 @@ program
 // ---------- AUTO-EQUIP ----------
 program
     .command('auto-equip')
-    .description('Tự động cài đặt tất cả skills từ skills.sh dựa trên tech stack')
-    .option('-s, --stacks <stacks>', 'Danh sách stack (cách nhau bởi dấu phẩy), ví dụ: react-next,hono-pg')
-    .option('-d, --design-spec <path>', 'Đường dẫn đến design-spec.md (tự phát hiện stack)')
+    .description('Cài đặt universal skills (skill chuyên sâu do AI đề xuất qua >om:equip + find-skills)')
     .option('-y, --yes', 'Tự động cài đặt không cần xác nhận')
     .action(async (options) => {
         const configFile = findConfigFile();
@@ -776,54 +717,8 @@ program
         }
 
         const manifest = loadManifest();
-        let stacks = [];
-
-        if (options.stacks) {
-            stacks = options.stacks.split(',').map(s => s.trim()).filter(Boolean);
-        } else if (options.designSpec) {
-            const specPath = path.resolve(process.cwd(), options.designSpec);
-            if (!fs.existsSync(specPath)) {
-                console.log(chalk.red.bold(`\n❌ Không tìm thấy file: ${options.designSpec}\n`));
-                return;
-            }
-            const specContent = fs.readFileSync(specPath, 'utf-8');
-            stacks = detectStacksFromText(specContent);
-            if (stacks.length === 0) {
-                console.log(chalk.yellow('\n⚠️  Không phát hiện tech stack nào trong design-spec. Dùng --stacks để chỉ định thủ công.\n'));
-                return;
-            }
-            console.log(chalk.cyan(`\n🔍 Phát hiện từ design-spec: ${chalk.white(stacks.join(', '))}\n`));
-        } else if (manifest.skills.local.length > 0) {
-            stacks = [...manifest.skills.local];
-            console.log(chalk.cyan(`\n🔍 Đọc từ manifest: ${chalk.white(stacks.join(', '))}\n`));
-        } else {
-            const specPath = path.join(process.cwd(), 'design-spec.md');
-            if (fs.existsSync(specPath)) {
-                const specContent = fs.readFileSync(specPath, 'utf-8');
-                stacks = detectStacksFromText(specContent);
-                if (stacks.length > 0) {
-                    console.log(chalk.cyan(`\n🔍 Phát hiện từ design-spec.md: ${chalk.white(stacks.join(', '))}\n`));
-                }
-            }
-            if (stacks.length === 0) {
-                console.log(chalk.red.bold('\n❌ Không xác định được tech stack.'));
-                console.log(chalk.white(`   Dùng: ${chalk.cyan('omni auto-equip --stacks react-next,hono-pg')}`));
-                console.log(chalk.white(`   Hoặc: ${chalk.cyan('omni auto-equip --design-spec design-spec.md')}\n`));
-                return;
-            }
-        }
-
-        const invalidStacks = stacks.filter(s => !SKILL_REGISTRY[s]);
-        if (invalidStacks.length > 0) {
-            console.log(chalk.yellow(`\n⚠️  Không nhận diện stack: ${invalidStacks.join(', ')}`));
-            console.log(chalk.white(`   Stack hợp lệ: ${Object.keys(SKILL_REGISTRY).filter(k => k !== '_common').join(', ')}\n`));
-            stacks = stacks.filter(s => SKILL_REGISTRY[s]);
-            if (stacks.length === 0) return;
-        }
-
-        const skills = resolveSkills(stacks);
         const alreadyInstalled = manifest.skills.external.map(s => s.name);
-        const toInstall = skills.filter(s => !alreadyInstalled.includes(s.name));
+        const toInstall = UNIVERSAL_SKILLS.filter(s => !alreadyInstalled.includes(s.name));
 
         if (toInstall.length === 0) {
             console.log(chalk.green.bold('\n✅ Tất cả skills đã được cài đặt rồi! Dùng "omni status" để xem chi tiết.\n'));
@@ -845,8 +740,7 @@ program
             const scriptName = 'install-skills.sh';
             const scriptPath = path.join(process.cwd(), scriptName);
             let script = '#!/bin/bash\n';
-            script += '# Generated by Omni-Coder Kit — auto-equip skills\n';
-            script += `# Stacks: ${stacks.join(', ')}\n`;
+            script += '# Generated by Omni-Coder Kit — auto-equip universal skills\n';
             script += `# Target: ${agentFlags || '--all (generic)'}\n`;
             script += `# Skills: ${toInstall.length}\n\n`;
             script += 'set -e\n\n';

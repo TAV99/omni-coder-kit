@@ -1,7 +1,10 @@
 ## AGENT SKILLS MANAGER (SKILLS.SH DYNAMIC EQUIP)
-You are authorized to use the `skills.sh` ecosystem to extend your capabilities. Use a **two-tier strategy**: built-in registry for known stacks + dynamic discovery via `find-skills` for everything else.
+You are authorized to use the `skills.sh` ecosystem to extend your capabilities. Universal skills are auto-installed, project-specific skills are discovered dynamically via `find-skills`.
 
-### Step 1: Analyze Tech Stack
+### Step 1: Ensure Universal Skills
+Run `omni auto-equip -y` to install the 6 universal skills (find-skills, karpathy-guidelines, systematic-debugging, test-driven-development, requesting-code-review, using-git-worktrees). These apply to ALL projects regardless of tech stack.
+
+### Step 2: Analyze Tech Stack
 Read `design-spec.md` and extract ALL technologies:
 - Languages: TypeScript, Python, Go, Rust, etc.
 - Frameworks: Next.js, Hono, Django, Express, SvelteKit, etc.
@@ -9,39 +12,35 @@ Read `design-spec.md` and extract ALL technologies:
 - Services: Supabase, Vercel, AWS, Stripe, Firebase, etc.
 - Patterns: API, CLI tool, bot, automation, real-time, monorepo, etc.
 
-### Step 2: Tier 1 — Built-in Registry
-Run `omni auto-equip --design-spec design-spec.md` to install skills matching the hardcoded registry (react-next, hono-pg, automation-bot, payment-gateway, _common). This handles known stacks instantly.
-
-### Step 3: Tier 2 — Dynamic Discovery (find-skills)
+### Step 3: Dynamic Discovery (find-skills)
 Check if `find-skills` is installed (look in `.agents/skills/` or `.claude/skills/`). If available:
 
-1. For each technology from Step 1 that is NOT already covered by Tier 1, use find-skills to search skills.sh.
+1. For each technology from Step 2, use find-skills to search skills.sh for specialized skills.
 2. Evaluate each discovered skill against the **Selection Criteria** below.
 3. Collect qualified skills into a proposal list.
 
-If `find-skills` is NOT installed, skip this step and inform the user:
+If `find-skills` is NOT installed, inform the user:
 ```
-⚠️ find-skills chưa được cài. Chỉ dùng registry mặc định.
-   Cài thêm: npx skills add vercel-labs/skills --skill find-skills -y
+⚠️ find-skills chưa được cài. Chạy: omni auto-equip
 ```
 
-### Step 4: Present Combined Proposal
+### Step 4: Present Proposal
 ```
 Dựa trên tech stack trong design-spec.md:
 
-📦 Registry (đã cài / sẽ cài qua auto-equip):
-1. skill-name — Mô tả (source)
-...
+✅ Universal skills (đã cài / sẽ cài qua auto-equip):
+   find-skills, karpathy-guidelines, systematic-debugging,
+   test-driven-development, requesting-code-review, using-git-worktrees
 
-🔍 Tìm thêm từ skills.sh (find-skills):
-N. skill-name — Mô tả (source) — Lý do đề xuất
-...
+🔍 Skill chuyên sâu tìm từ skills.sh (find-skills):
+1. skill-name — Mô tả (source) — Lý do đề xuất
+2. ...
 
-Tổng: X skills. Cài tất cả? (y/n)
+Tổng: N skills mới. Cài tất cả? (y/n)
 ```
 
 ### Step 5: Install
-- **Registry skills:** `omni auto-equip --stacks <stack1>,<stack2> -y`
+- **Universal skills:** `omni auto-equip -y`
 - **Discovered skills:** `omni equip <source> --name <short-name>` for each
 - **Antigravity:** Commands sẽ sinh `install-skills.sh` — hướng dẫn user chạy `bash install-skills.sh`
 
