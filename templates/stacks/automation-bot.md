@@ -1,5 +1,0 @@
-## AUTOMATION & BOT EXPERTISE (TELEGRAM / GOOGLE SHEETS / WEBHOOKS)
-- **Telegram Bots:** Always implement graceful error handling to prevent the bot from crashing silently. Handle Telegram's `429 Too Many Requests` (Rate Limiting) explicitly using queuing or retry delays.
-- **Google Sheets Integration:** Optimize API calls by batching reads/writes. Prefer `getValues()` and `setValues()` over individual cell operations to minimize execution time.
-- **Webhook Security:** When writing webhook receivers, always validate the incoming payload signature or use a secret token to verify the request origin.
-- **Logging & Notifications:** Format notification messages beautifully using HTML/Markdown parses for Telegram. Include clear timestamps and error stack traces when reporting system failures to admin groups.

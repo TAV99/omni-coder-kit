@@ -5,7 +5,7 @@ const path = require('path');
 const prompts = require('prompts');
 const chalk = require('chalk');
 const { program } = require('commander');
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 
 const MANIFEST_FILE = '.omni-manifest.json';
 const PKG = require(path.join(__dirname, '..', 'package.json'));
@@ -105,7 +105,7 @@ function loadManifest() {
 }
 
 function createManifest() {
-    return { version: '1.0.0', configFile: null, skills: { local: [], external: [] } };
+    return { version: '1.0.0', configFile: null, skills: { external: [] } };
 }
 
 function saveManifest(manifest) {
@@ -164,69 +164,12 @@ function syncRulesToConfig() {
     return writeFileSafe(configPath, config);
 }
 
-// Tìm xung đột: kiểm tra skill đã tồn tại trong manifest chưa (cả local và external)
 function findSkillConflict(manifest, skillName) {
-    if (manifest.skills.local.includes(skillName)) {
-        return { type: 'local', name: skillName };
-    }
     const ext = manifest.skills.external.find(s => s.name === skillName);
     if (ext) {
         return { type: 'external', name: ext.name, source: ext.source };
     }
     return null;
-}
-
-// Mapping domain tags để phát hiện xung đột chéo giữa local và external
-const SKILL_DOMAIN_MAP = {
-    'react-next': ['react', 'nextjs', 'frontend'],
-    'hono-pg': ['hono', 'postgresql', 'backend', 'api'],
-    'automation-bot': ['telegram', 'bot', 'automation', 'google-sheets'],
-    'payment-gateway': ['payment', 'vnpay', 'stripe', 'paypal']
-};
-
-function findDomainConflict(manifest, skillName, incomingType) {
-    const newDomains = SKILL_DOMAIN_MAP[skillName] || [skillName];
-    // Kiểm tra nguồn đối lập (local kiểm tra external và ngược lại)
-    const others = incomingType === 'local'
-        ? manifest.skills.external.map(s => s.name)
-        : manifest.skills.local;
-
-    for (const existingName of others) {
-        const existingDomains = SKILL_DOMAIN_MAP[existingName] || [existingName];
-        const overlap = newDomains.filter(d => existingDomains.includes(d));
-        if (overlap.length > 0) {
-            return { name: existingName, overlapping: overlap };
-        }
-    }
-    return null;
-}
-
-// ========== CONFIG FILE SKILL MARKERS ==========
-
-function getMarkers(skillName) {
-    return {
-        start: `<!-- omni:skill:${skillName} -->`,
-        end: `<!-- /omni:skill:${skillName} -->`
-    };
-}
-
-function isSkillInConfigFile(configPath, skillName) {
-    if (!fs.existsSync(configPath)) return false;
-    const content = fs.readFileSync(configPath, 'utf-8');
-    return content.includes(getMarkers(skillName).start);
-}
-
-function appendSkillToConfig(configPath, skillName, skillContent) {
-    const { start, end } = getMarkers(skillName);
-    const wrapped = `\n\n${start}\n${skillContent}\n${end}\n`;
-    try {
-        fs.appendFileSync(configPath, wrapped, 'utf-8');
-        return true;
-    } catch (err) {
-        console.log(chalk.red.bold(`\n❌ Lỗi khi ghi vào config file`));
-        console.log(chalk.red(`   Chi tiết: ${err.message}\n`));
-        return false;
-    }
 }
 
 // ========== CLI COMMANDS ==========
@@ -401,10 +344,6 @@ program
                 finalRules += `- **General AI Rules:** Adhere strictly to the defined workflow.\n`;
         }
 
-        if (response.strictness === 'flexible') {
-            finalRules += `\n## FAST-TRACK MODE\n- **[>om:hotfix]:** Use to bypass PM/Architect planning for minor fixes. Add note in \`tech-debt.md\`.\n`;
-        }
-
         // Xác nhận trước khi ghi đè
         const targetPath = path.join(process.cwd(), fileName);
         if (fs.existsSync(targetPath)) {
@@ -434,10 +373,6 @@ program
             agentsRules += `- **Codex CLI Agent Mode:** This file is auto-discovered by Codex CLI walking from project root to cwd. Keep total content under 32 KiB.\n`;
             agentsRules += `- **Sandbox Awareness:** Codex runs in a network-disabled sandbox by default. Do NOT attempt network calls during execution unless sandbox is explicitly configured otherwise.\n`;
             agentsRules += `- **Cross-Tool Compatibility:** This file is also read by Antigravity, Gemini CLI, and other AGENTS.md-compatible tools.\n`;
-
-            if (response.strictness === 'flexible') {
-                agentsRules += `\n## FAST-TRACK MODE\n- **[>om:hotfix]:** Use to bypass PM/Architect planning for minor fixes. Add note in \`tech-debt.md\`.\n`;
-            }
 
             const agentsPath = path.join(process.cwd(), 'AGENTS.md');
             let writeAgents = true;
@@ -479,7 +414,10 @@ program
         } else {
             try {
                 console.log(chalk.gray(`   Đang cài find-skills...`));
-                execSync(`npx -y skills add vercel-labs/skills${findSkillsAgentFlags ? ' ' + findSkillsAgentFlags : ''} --skill find-skills -y`, { stdio: 'pipe', timeout: 30000 });
+                const initArgs = ['-y', 'skills', 'add', 'vercel-labs/skills'];
+                if (findSkillsAgentFlags) initArgs.push(...findSkillsAgentFlags.split(' '));
+                initArgs.push('--skill', 'find-skills', '-y');
+                execFileSync('npx', initArgs, { stdio: 'pipe', timeout: 30000 });
                 manifest.skills.external.push({
                     name: 'find-skills',
                     source: 'vercel-labs/skills',
@@ -557,72 +495,6 @@ program
         console.log('');
     });
 
-// ---------- ADD (local stacks) ----------
-program
-    .command('add <skill>')
-    .description('Bơm thêm kỹ năng cục bộ (local stack) vào file cấu hình')
-    .action((skill) => {
-        if (!isValidSkillName(skill)) {
-            console.log(chalk.red.bold('\n❌ Tên kỹ năng không hợp lệ. Chỉ chấp nhận chữ thường (a-z), số (0-9), và dấu gạch ngang (-).\n'));
-            return;
-        }
-
-        const configFile = findConfigFile();
-        if (!configFile) {
-            console.log(chalk.red.bold('\n❌ Không tìm thấy file Omni. Hãy chạy "omni init" trước.\n'));
-            return;
-        }
-
-        const manifest = loadManifest();
-
-        // Kiểm tra trùng lặp chính xác
-        const conflict = findSkillConflict(manifest, skill);
-        if (conflict) {
-            const via = conflict.type === 'local' ? 'omni add' : 'omni equip';
-            console.log(chalk.yellow.bold(`\n⚠️  Kỹ năng "${skill}" đã được cài đặt trước đó (qua ${via}).`));
-            console.log(chalk.yellow(`   Bỏ qua để tránh trùng lặp. Dùng ${chalk.cyan('omni status')} để xem chi tiết.\n`));
-            return;
-        }
-
-        // Kiểm tra xung đột domain với external skills
-        const domainConflict = findDomainConflict(manifest, skill, 'local');
-        if (domainConflict) {
-            console.log(chalk.yellow(`\n⚠️  Cảnh báo: "${skill}" có thể xung đột với kỹ năng external "${domainConflict.name}" (lĩnh vực trùng: ${domainConflict.overlapping.join(', ')}).`));
-            console.log(chalk.yellow(`   Tiếp tục thêm nhưng hãy kiểm tra lại nếu có luật mâu thuẫn.\n`));
-        }
-
-        const skillPath = path.join(__dirname, '..', 'templates', 'stacks', `${skill}.md`);
-        if (!fs.existsSync(skillPath)) {
-            console.log(chalk.red.bold(`\n❌ Kỹ năng "${skill}" không tồn tại. Dùng ${chalk.cyan('omni list')} để xem danh sách.\n`));
-            return;
-        }
-
-        const configPath = path.join(process.cwd(), configFile);
-
-        // Kiểm tra markers trong config file (phòng trường hợp manifest bị mất)
-        if (isSkillInConfigFile(configPath, skill)) {
-            console.log(chalk.yellow.bold(`\n⚠️  Kỹ năng "${skill}" đã có trong file ${configFile}. Bỏ qua.\n`));
-            if (!manifest.skills.local.includes(skill)) {
-                manifest.skills.local.push(skill);
-                manifest.configFile = configFile;
-                saveManifest(manifest);
-                console.log(chalk.gray(`   Đã đồng bộ lại manifest.\n`));
-            }
-            return;
-        }
-
-        const skillContent = readTemplate(skillPath);
-        if (!appendSkillToConfig(configPath, skill, skillContent)) return;
-
-        // Cập nhật manifest
-        manifest.skills.local.push(skill);
-        manifest.configFile = configFile;
-        saveManifest(manifest);
-
-        console.log(chalk.green.bold(`\n✅ Đã bơm kỹ năng [${skill}] vào file ${configFile} thành công!`));
-        console.log(chalk.gray(`   Đã đồng bộ manifest (${MANIFEST_FILE})\n`));
-    });
-
 // ---------- EQUIP (external skills from skills.sh) ----------
 program
     .command('equip <source>')
@@ -655,17 +527,9 @@ program
         // Kiểm tra trùng lặp
         const conflict = findSkillConflict(manifest, skillName);
         if (conflict && !options.force) {
-            const via = conflict.type === 'local' ? 'omni add' : 'omni equip';
+            const via = 'omni equip';
             console.log(chalk.yellow.bold(`\n⚠️  Kỹ năng "${skillName}" đã được cài đặt trước đó (qua ${via}).`));
             console.log(chalk.yellow(`   Dùng thêm cờ ${chalk.cyan('--force')} nếu bạn muốn ghi đè.\n`));
-            return;
-        }
-
-        // Kiểm tra xung đột domain
-        const domainConflict = findDomainConflict(manifest, skillName, 'external');
-        if (domainConflict && !options.force) {
-            console.log(chalk.yellow(`\n⚠️  Cảnh báo: "${skillName}" có thể xung đột với kỹ năng "${domainConflict.name}" (lĩnh vực trùng: ${domainConflict.overlapping.join(', ')}).`));
-            console.log(chalk.yellow(`   Dùng thêm cờ ${chalk.cyan('--force')} để bỏ qua cảnh báo này.\n`));
             return;
         }
 
@@ -675,7 +539,9 @@ program
         console.log('');
 
         try {
-            execSync(`npx skills add ${parsedSource} ${agentFlags}`.trim(), { stdio: 'inherit' });
+            const args = ['skills', 'add', parsedSource];
+            if (agentFlags) args.push(...agentFlags.split(' '));
+            execFileSync('npx', args, { stdio: 'inherit' });
         } catch (err) {
             console.log(chalk.red.bold(`\n❌ Quá trình cài đặt thất bại. Vui lòng kiểm tra lại source hoặc mạng.\n`));
             return;
@@ -794,10 +660,13 @@ program
         for (const skill of toInstall) {
             console.log(chalk.cyan(`\n🔧 [${installed + failed + 1}/${toInstall.length}] Đang cài: ${chalk.white(skill.name)}...`));
             try {
-                const skillFlags = agentFlags
-                    ? `${agentFlags} --skill '*' -y`
-                    : (options.yes ? '--all' : '');
-                execSync(`npx -y skills add ${skill.source} ${skillFlags}`.trim(), { stdio: 'inherit', timeout: 60000 });
+                const skillArgs = ['-y', 'skills', 'add', skill.source];
+                if (agentFlags) {
+                    skillArgs.push(...agentFlags.split(' '), '--skill', '*', '-y');
+                } else if (options.yes) {
+                    skillArgs.push('--all');
+                }
+                execFileSync('npx', skillArgs, { stdio: 'inherit', timeout: 60000 });
                 manifest.skills.external.push({
                     name: skill.name,
                     source: skill.source,
@@ -855,7 +724,7 @@ program
 // ---------- STATUS ----------
 program
     .command('status')
-    .description('Xem trạng thái tất cả kỹ năng đã cài đặt (local + external)')
+    .description('Xem trạng thái skills đã cài đặt')
     .action(() => {
         const manifest = loadManifest();
         const configFile = findConfigFile();
@@ -864,18 +733,8 @@ program
         console.log(chalk.white(`   Config file : ${configFile || chalk.red('(chưa init)')}`));
         console.log(chalk.white(`   Manifest    : ${fs.existsSync(path.join(process.cwd(), MANIFEST_FILE)) ? chalk.green('✓ có') : chalk.yellow('✗ chưa tạo')}\n`));
 
-        // Local skills
-        console.log(chalk.cyan.bold('   📦 Kỹ năng cục bộ (omni add):'));
-        if (manifest.skills.local.length === 0) {
-            console.log(chalk.gray('      (chưa có)'));
-        } else {
-            manifest.skills.local.forEach(s => {
-                console.log(chalk.green(`      ✓ ${s}`));
-            });
-        }
-
-        // External skills
-        console.log(chalk.cyan.bold('\n   🌐 Kỹ năng ngoài (omni equip):'));
+        // Skills (external via omni equip / auto-equip)
+        console.log(chalk.cyan.bold('   🌐 Skills đã cài (omni equip / auto-equip):'));
         if (manifest.skills.external.length === 0) {
             console.log(chalk.gray('      (chưa có)'));
         } else {
@@ -885,46 +744,8 @@ program
             });
         }
 
-        const total = manifest.skills.local.length + manifest.skills.external.length;
-        console.log(chalk.white(`\n   Tổng: ${total} kỹ năng đã cài đặt.\n`));
-    });
-
-// ---------- LIST ----------
-program
-    .command('list')
-    .description('Xem danh sách các kỹ năng (skills) đang có sẵn trong kho')
-    .action(() => {
-        const stacksDir = path.join(__dirname, '..', 'templates', 'stacks');
-        if (!fs.existsSync(stacksDir)) {
-            console.log(chalk.red('\n❌ Không tìm thấy thư mục templates/stacks.\n'));
-            return;
-        }
-
-        let files;
-        try {
-            files = fs.readdirSync(stacksDir).filter(f => f.endsWith('.md'));
-        } catch (err) {
-            console.log(chalk.red.bold('\n❌ Lỗi khi đọc danh sách kỹ năng.'));
-            console.log(chalk.red(`   Chi tiết: ${err.message}\n`));
-            return;
-        }
-
-        const manifest = loadManifest();
-
-        console.log(chalk.cyan.bold('\n📦 Danh sách kỹ năng cục bộ có sẵn:\n'));
-
-        if (files.length === 0) {
-            console.log(chalk.yellow('  (Chưa có kỹ năng nào được tạo)'));
-        } else {
-            files.forEach(file => {
-                const skillName = file.replace('.md', '');
-                const installed = manifest.skills.local.includes(skillName);
-                const marker = installed ? chalk.green('✓') : chalk.gray('○');
-                console.log(`  ${marker} ${installed ? chalk.green(skillName) : chalk.white(skillName)}`);
-            });
-        }
-        console.log(chalk.white(`\n💡 Dùng ${chalk.yellow('omni add <tên>')} để bơm kỹ năng cục bộ.`));
-        console.log(chalk.white(`💡 Dùng ${chalk.yellow('omni equip <source>')} để tải kỹ năng ngoài từ skills.sh.\n`));
+        const total = manifest.skills.external.length;
+        console.log(chalk.white(`\n   Tổng: ${total} skills đã cài đặt.\n`));
     });
 
 // ---------- COMMANDS (>om: workflow reference) ----------
@@ -936,7 +757,7 @@ program
 
         const commands = [
             { cmd: '>om:brainstorm', role: 'Architect',  desc: 'Phỏng vấn yêu cầu → đề xuất Tech Stack → xuất design-spec.md' },
-            { cmd: '>om:equip',      role: 'Skill Mgr',  desc: 'Đề xuất & cài skills chuyên sâu từ skills.sh theo stack đã chọn' },
+            { cmd: '>om:equip',      role: 'Skill Mgr',  desc: 'Cài universal skills + tìm & đề xuất skills từ skills.sh theo design-spec' },
             { cmd: '>om:plan',       role: 'PM',          desc: 'Phân tích design-spec → micro-tasks trong todo.md (<20 phút/task)' },
             { cmd: '>om:cook',       role: 'Coder',       desc: 'Thực thi từng task trong todo.md, surgical changes, 1 task/lần' },
             { cmd: '>om:check',      role: 'QA Tester',   desc: 'Validation pipeline: security → lint → build → test → feature verify' },

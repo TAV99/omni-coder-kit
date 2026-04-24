@@ -67,11 +67,9 @@ omni update
 | Lệnh | Mô tả |
 |-------|-------|
 | `omni init` | Khởi tạo DNA và workflow cho dự án mới |
-| `omni add <skill>` | Bơm thêm kỹ năng cục bộ (local stack) vào file cấu hình |
 | `omni equip <source>` | Tải kỹ năng ngoài từ skills.sh (cài cho IDE đã chọn) |
 | `omni auto-equip` | Cài universal skills (6 skills mặc định cho mọi dự án) |
-| `omni status` | Xem trạng thái kỹ năng đã cài (local + external) |
-| `omni list` | Xem danh sách kỹ năng có sẵn trong kho |
+| `omni status` | Xem trạng thái skills đã cài đặt |
 | `omni commands` | Hiển thị danh sách lệnh `>om:` dùng trong chat AI |
 | `omni update` | Kiểm tra và cập nhật lên phiên bản mới nhất |
 
@@ -163,10 +161,9 @@ P0–P3 fail → dừng ngay, auto-trigger `>om:fix`, loop cho đến khi pass.
 
 ```
 omni-coder-kit/                  # Package (npm)
-├── bin/omni.js                  # CLI chính (9 commands)
+├── bin/omni.js                  # CLI chính (7 commands)
 ├── templates/
 │   ├── core/                    # Karpathy mindset + anti-hallucination (Paranoid)
-│   ├── stacks/                  # Tech stack rules (react-next, hono-pg, ...)
 │   └── workflows/               # SDLC workflows (10 files)
 ├── package.json
 └── .omni-manifest.json          # Tracking: IDE, skills, config file
