@@ -199,9 +199,9 @@ your-project/
 ## Nguồn cảm hứng
 
 Dự án được tham khảo và lấy ý tưởng từ nhiều nguồn:
-- [antigravity-kit](https://github.com/anthropics/antigravity-kit)
+- [antigravity-kit](https://github.com/vudovn/antigravity-kit)
 - [karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills)
-- [Claudekit](https://github.com/anthropics/claudekit) (dù chưa được xài :D)
+- Claudekit (dù chưa được xài :D)
 
 ---
 
