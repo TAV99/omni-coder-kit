@@ -982,10 +982,10 @@ program
             }
 
             const rp = await prompts([
-                { type: 'text', name: 'language', message: 'Ngôn ngữ giao tiếp?', initial: existing.language },
-                { type: 'text', name: 'codingStyle', message: 'Coding style / conventions?', initial: existing.codingStyle },
-                { type: 'text', name: 'forbidden', message: 'Forbidden patterns?', initial: existing.forbidden },
-                { type: 'text', name: 'custom', message: 'Custom rules (phân cách bằng ;)?', initial: existing.custom },
+                { type: 'text', name: 'language', message: 'Ngôn ngữ giao tiếp? (VD: "Tiếng Việt", "English only")', initial: existing.language },
+                { type: 'text', name: 'codingStyle', message: 'Coding style / conventions? (VD: "camelCase, 2-space indent, prefer const")', initial: existing.codingStyle },
+                { type: 'text', name: 'forbidden', message: 'Forbidden patterns? (VD: "không dùng any, không inline styles")', initial: existing.forbidden },
+                { type: 'text', name: 'custom', message: 'Custom rules (phân cách bằng ;)? (VD: "commit message tiếng Việt; luôn viết test")', initial: existing.custom },
             ]);
 
             const content = buildRulesContent(rp);
