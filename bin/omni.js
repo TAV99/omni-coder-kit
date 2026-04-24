@@ -281,32 +281,37 @@ program
         // Personal Rules (guided + free-text)
         console.log(chalk.cyan(`\n${q(3, 3, 'Personal Rules')} ${chalk.gray('(Enter để bỏ qua từng mục)')}\n`));
 
-        const rulesPrompt = await prompts([
-            {
-                type: 'text',
-                name: 'language',
-                message: 'Ngôn ngữ giao tiếp (AI trả lời bằng ngôn ngữ nào)?',
-                initial: '',
-            },
-            {
-                type: 'text',
-                name: 'codingStyle',
-                message: 'Coding style / conventions?',
-                initial: '',
-            },
-            {
-                type: 'text',
-                name: 'forbidden',
-                message: 'Forbidden patterns (những gì KHÔNG được làm)?',
-                initial: '',
-            },
-            {
-                type: 'text',
-                name: 'custom',
-                message: 'Custom rules (tùy ý, phân cách bằng dấu ;)?',
-                initial: '',
-            },
-        ]);
+        console.log(chalk.gray('📝 Ngôn ngữ AI dùng để trả lời bạn. Có thể ghi nhiều ngôn ngữ.'));
+        console.log(chalk.dim('   VD React dev: "Tiếng Việt, technical terms giữ English"'));
+        console.log(chalk.dim('   VD Python team: "English only"'));
+        const rl = await prompts({ type: 'text', name: 'language', message: 'Ngôn ngữ giao tiếp (AI trả lời bằng ngôn ngữ nào)?', initial: '' });
+
+        console.log(chalk.gray('\n📝 Quy tắc viết code mà AI phải tuân theo trong dự án.'));
+        console.log(chalk.gray('   Bao gồm: naming convention, indent, format, patterns ưa thích.'));
+        console.log(chalk.dim('   VD React frontend: "camelCase, 2-space indent, prefer FC + hooks, no class components"'));
+        console.log(chalk.dim('   VD Node.js backend: "snake_case cho DB fields, camelCase cho JS, ESM imports, async/await"'));
+        console.log(chalk.dim('   VD Python ML: "PEP8, type hints bắt buộc, docstring Google style"'));
+        const rc = await prompts({ type: 'text', name: 'codingStyle', message: 'Coding style / conventions?', initial: '' });
+
+        console.log(chalk.gray('\n📝 Những patterns/thói quen mà AI KHÔNG ĐƯỢC sử dụng.'));
+        console.log(chalk.gray('   Ghi rõ cái gì bị cấm — AI sẽ tránh hoàn toàn.'));
+        console.log(chalk.dim('   VD React: "không dùng any, không dùng class component, không inline styles"'));
+        console.log(chalk.dim('   VD Backend: "không console.log trong production code, không dùng var, không SQL thô"'));
+        console.log(chalk.dim('   VD Chung: "không tự ý refactor code ngoài scope, không thêm comments thừa"'));
+        const rf = await prompts({ type: 'text', name: 'forbidden', message: 'Forbidden patterns (những gì KHÔNG được làm)?', initial: '' });
+
+        console.log(chalk.gray('\n📝 Các quy tắc riêng khác không thuộc mục trên. Phân cách bằng dấu ;'));
+        console.log(chalk.dim('   VD: "commit message bằng tiếng Việt; mỗi PR tối đa 300 dòng thay đổi"'));
+        console.log(chalk.dim('   VD: "luôn viết unit test trước khi code; dùng pnpm thay npm"'));
+        console.log(chalk.dim('   VD: "giải thích bằng ví dụ cụ thể; không dùng emoji trong code"'));
+        const ru = await prompts({ type: 'text', name: 'custom', message: 'Custom rules (tùy ý, phân cách bằng dấu ;)?', initial: '' });
+
+        const rulesPrompt = {
+            language: rl.language,
+            codingStyle: rc.codingStyle,
+            forbidden: rf.forbidden,
+            custom: ru.custom,
+        };
 
         const templatesDir = path.join(__dirname, '..', 'templates');
 
