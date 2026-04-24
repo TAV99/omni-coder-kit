@@ -47,6 +47,7 @@ const SKILL_REGISTRY = {
         { source: 'obra/superpowers', name: 'test-driven-development', desc: 'Phát triển hướng test (TDD)' },
     ],
     '_common': [
+        { source: 'vercel-labs/skills', name: 'find-skills', desc: 'Tìm kiếm & cài đặt skills tự động từ skills.sh' },
         { source: 'forrestchang/andrej-karpathy-skills', name: 'karpathy-guidelines', desc: 'Karpathy mindset: Think → Simplify → Surgical → Goal-Driven' },
         { source: 'obra/superpowers', name: 'requesting-code-review', desc: 'Quy trình review code chuyên nghiệp' },
         { source: 'obra/superpowers', name: 'using-git-worktrees', desc: 'Quản lý Git worktrees hiệu quả' },
@@ -525,6 +526,28 @@ program
 
         console.log(chalk.gray(`   Đã tạo manifest: ${MANIFEST_FILE}`));
         console.log(chalk.gray(`   Workflows: .omni/workflows/ (${workflowFiles.length} files — lazy-loaded)`));
+
+        // Auto-install find-skills (tìm kiếm & cài skills tự động)
+        const findSkillsAgentFlags = getAgentFlags(manifest);
+        const findSkillsCmd = `npx skills add vercel-labs/skills${findSkillsAgentFlags ? ' ' + findSkillsAgentFlags : ''} --skill find-skills -y`;
+
+        if (response.ide === 'antigravity') {
+            console.log(chalk.gray(`   💡 Cài find-skills thủ công: ${findSkillsCmd}`));
+        } else {
+            try {
+                console.log(chalk.gray(`   Đang cài find-skills...`));
+                execSync(`npx -y skills add vercel-labs/skills${findSkillsAgentFlags ? ' ' + findSkillsAgentFlags : ''} --skill find-skills -y`, { stdio: 'pipe', timeout: 30000 });
+                manifest.skills.external.push({
+                    name: 'find-skills',
+                    source: 'vercel-labs/skills',
+                    installedAt: new Date().toISOString()
+                });
+                saveManifest(manifest);
+                console.log(chalk.green(`   ✓ find-skills — AI có thể tìm & cài skills tự động`));
+            } catch {
+                console.log(chalk.yellow(`   ⚠️  Không cài được find-skills (sandbox/mạng). Cài sau: ${findSkillsCmd}`));
+            }
+        }
 
         console.log(chalk.white(`\n💡 Gõ ${chalk.cyan.bold('>om:brainstorm')} để AI phỏng vấn và tư vấn kiến trúc.`));
         console.log(chalk.gray(`   Thêm tech stack: ${chalk.yellow('omni add <tên>')} hoặc ${chalk.yellow('omni equip <source>')}`));
