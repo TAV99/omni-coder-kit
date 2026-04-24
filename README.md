@@ -12,6 +12,8 @@
 - **IDE-Aware Skills:** `auto-equip` chỉ cài skill cho IDE/CLI đã chọn (không cài tất cả), dùng `--agent` flag của skills.sh
 - **Skill-Tagged Tasks:** `>om:plan` gắn `@skill:name` cho từng task trong `todo.md`, `>om:cook` tự động load skill tương ứng khi thực thi
 - **Automated Quality Pipeline:** 3 quality cycles bắt buộc — `cook → check → fix` loop tự động sau mỗi 1/3 tasks
+- **Lazy Loading & Token Optimization:** Config file chỉ ~5KB (core rules + registry table), workflows lazy-loaded khi cần — tiết kiệm ~85% token so với inline
+- **Anti-Hallucination (Paranoid Mode):** Grounding rules, self-verification checklist, no phantom imports/APIs
 - **Antigravity Fallback:** Sinh `install-skills.sh` thay vì chạy trực tiếp (do Antigravity không hỗ trợ auto-approve)
 - **Validation Pipeline:** Security → Lint → Build → Tests → Bundle analysis — blocking tự động
 - **Tech Stacks:** React/Next.js, Hono/PostgreSQL, Automation Bot, Payment Gateway
@@ -165,25 +167,40 @@ P0–P3 fail → dừng ngay, auto-trigger `>om:fix`, loop cho đến khi pass.
 ## Cấu trúc dự án
 
 ```
-omni-coder-kit/
-├── bin/omni.js              # CLI chính (8 commands)
+omni-coder-kit/                  # Package (npm)
+├── bin/omni.js                  # CLI chính (9 commands)
 ├── templates/
-│   ├── core/                # Karpathy mindset + context hygiene
-│   ├── stacks/              # Tech stack rules (react-next, hono-pg, ...)
-│   └── workflows/           # SDLC workflows (10 files)
-│       ├── superpower-sdlc.md        # Workflow commands + quality pipeline
-│       ├── requirement-analysis.md   # >om:brainstorm (6 dimensions + design)
-│       ├── skill-manager.md          # >om:equip (IDE-aware)
-│       ├── task-planning.md          # >om:plan (@skill tags)
-│       ├── coder-execution.md        # >om:cook (auto-continue + 3 cycles)
-│       ├── qa-testing.md             # >om:check (auto fix/check loop)
-│       ├── validation-scripts.md     # P0–P4 pipeline scripts
-│       ├── debugger-workflow.md      # >om:fix (auto-loop aware)
-│       ├── documentation-writer.md   # >om:doc
-│       └── pm-templates.md           # Output format standards
+│   ├── core/                    # Karpathy mindset + anti-hallucination (Paranoid)
+│   ├── stacks/                  # Tech stack rules (react-next, hono-pg, ...)
+│   └── workflows/               # SDLC workflows (10 files)
 ├── package.json
-└── .omni-manifest.json      # Tracking: IDE, skills, config file
+└── .omni-manifest.json          # Tracking: IDE, skills, config file
 ```
+
+### Sau khi `omni init` — cấu trúc dự án người dùng
+
+```
+your-project/
+├── CLAUDE.md (hoặc AGENTS.md, .cursorrules, ...)  # Config nhẹ (~5KB)
+│   ├── Core rules (inline): Karpathy mindset + Anti-hallucination
+│   ├── Command registry table: >om: → workflow file mapping
+│   ├── IDE adapters
+│   └── Personal rules
+├── .omni/
+│   └── workflows/               # Lazy-loaded bởi AI khi cần
+│       ├── requirement-analysis.md   # >om:brainstorm
+│       ├── skill-manager.md          # >om:equip
+│       ├── task-planning.md          # >om:plan
+│       ├── coder-execution.md        # >om:cook
+│       ├── qa-testing.md             # >om:check
+│       ├── debugger-workflow.md      # >om:fix
+│       ├── documentation-writer.md   # >om:doc
+│       └── ... (supporting files)
+├── .omni-manifest.json          # Tracking: IDE, skills
+└── .omni-rules.md               # Personal rules (nếu có)
+```
+
+**Token optimization:** Config file chỉ chứa core rules + bảng registry (~5KB thay vì ~36KB). AI chỉ đọc workflow file khi lệnh `>om:` tương ứng được gọi, tiết kiệm token đáng kể. Fallback: nếu `.omni/workflows/` không tồn tại → đọc từ `node_modules/omni-coder-kit/templates/workflows/`.
 
 ---
 
