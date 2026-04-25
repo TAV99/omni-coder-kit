@@ -30,10 +30,11 @@ You MUST complete this step and report the result BEFORE writing any code in Ste
 4. Only after printing one of the above lines may you proceed to Step 3.
 
 **Step 3: Execute ONE Task at a Time**
+Before editing: run `git diff --stat`. If uncommitted changes exist from a prior task, commit or stash first.
 For the current task:
-1. State what you will do and which files will be affected.
-2. Write the minimum code to complete the task. Follow the Simplicity First principle.
-3. Use Surgical Changes — touch only what the task requires.
+1. State what you will do and which files will be affected (scope declaration).
+2. Scope lock: only create/modify files declared in 3.1. Zero exceptions — no cleanup, no refactoring, no "improvements".
+3. Write the minimum code to complete the task. Follow the Simplicity First principle.
 4. After writing code, verify it works (compile check, quick test, or logical validation).
 5. Mark the task as done: change `- [ ]` to `- [x]` in `todo.md`.
 

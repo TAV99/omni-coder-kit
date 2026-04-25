@@ -23,7 +23,9 @@ You MUST complete this step and report the result BEFORE writing any code in Ste
 4. Only after printing one of the above lines may you proceed to Step 3.
 
 ### Step 3: Implementation
+Before editing: run `git diff --stat`. If uncommitted changes exist from a prior task, commit or stash first.
 - For the active task, use `tracker_update_task` to set status to `IN_PROGRESS`.
+- State which files will be affected (scope declaration). Only create/modify declared files — no cleanup, no refactoring.
 - **Surgical Context:** For files > 200 lines, use search tools to locate target code first. Read only the relevant section, not the entire file.
 - Follow the Surgical Changes mandate.
 - Apply rules from `@skill` tags.

@@ -84,7 +84,7 @@ For each batch:
      - The specific task description from `todo.md`
      - Relevant excerpt from `design-spec.md` (only the section relevant to this task)
      - Content of skill files referenced by `@skill:` tags (read and include inline)
-     - List of files to create/modify
+     - List of files to create/modify (scope lock — agent must NOT touch other files)
      - Clear success criteria
    - Launch all agents in the batch simultaneously (multiple Agent calls in one message).
 
@@ -101,10 +101,11 @@ For each batch:
 5. **Proceed to next batch** after current batch completes.
 
 **Step 6b: Sequential Execution (fallback)**
+Before editing: run `git diff --stat`. If uncommitted changes exist from a prior task, commit or stash first.
 Same as base workflow — execute ONE task at a time:
-1. State what you will do and which files will be affected.
-2. Write the minimum code to complete the task. Follow the Simplicity First principle.
-3. Use Surgical Changes — touch only what the task requires.
+1. State what you will do and which files will be affected (scope declaration).
+2. Scope lock: only create/modify files declared in 6b.1. Zero exceptions — no cleanup, no refactoring, no "improvements".
+3. Write the minimum code to complete the task. Follow the Simplicity First principle.
 4. After writing code, verify it works (compile check, quick test, or logical validation).
 5. Mark the task as done: change `- [ ]` to `- [x]` in `todo.md`.
 

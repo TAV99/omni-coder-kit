@@ -134,3 +134,68 @@ describe('Circuit Breaker [BLOCKED] — gemini overlay', () => {
         assert.ok(content.includes('BLOCKED'));
     });
 });
+
+// ─── Surgical Scope (coder-execution — all variants) ────────────────────────
+
+describe('Surgical Scope — git clean check + scope lock', () => {
+    const variants = [
+        { name: 'base', path: path.join(TEMPLATES, 'workflows', 'coder-execution.md') },
+        { name: 'claude-code', path: path.join(TEMPLATES, 'overlays', 'claude-code', 'workflows', 'coder-execution.md') },
+        { name: 'codex', path: path.join(TEMPLATES, 'overlays', 'codex', 'workflows', 'coder-execution.md') },
+        { name: 'gemini', path: path.join(TEMPLATES, 'overlays', 'gemini', 'workflows', 'coder-execution.md') },
+    ];
+
+    for (const v of variants) {
+        const content = fs.readFileSync(v.path, 'utf-8');
+
+        it(`${v.name}: requires git diff --stat before editing`, () => {
+            assert.ok(content.includes('git diff --stat'));
+        });
+
+        it(`${v.name}: has scope lock — no refactoring`, () => {
+            assert.ok(
+                content.includes('no cleanup, no refactoring') || content.includes('No cleanup, no refactoring') ||
+                content.includes('Zero exceptions — no cleanup, no refactoring')
+            );
+        });
+    }
+});
+
+// ─── Hypotheses step (debugger-workflow.md) ──────────────────────────────────
+
+describe('Systematic Debugging — hypotheses step', () => {
+    const content = fs.readFileSync(
+        path.join(TEMPLATES, 'workflows', 'debugger-workflow.md'), 'utf-8'
+    );
+
+    it('has Step 3.5: Hypotheses as REQUIRED', () => {
+        assert.ok(content.includes('Step 3.5: Hypotheses (REQUIRED'));
+    });
+
+    it('requires listing 2-3 hypotheses before fixing', () => {
+        assert.ok(content.includes('list 2-3 possible root causes'));
+    });
+
+    it('has hypothesis output format', () => {
+        assert.ok(content.includes('🔍 Hypotheses:'));
+        assert.ok(content.includes('Testing: #'));
+    });
+
+    it('blocks fixing until hypotheses are written', () => {
+        assert.ok(content.includes('Do NOT fix anything until'));
+    });
+
+    it('Step 4 references chosen hypothesis', () => {
+        assert.ok(content.includes('identified in your chosen hypothesis'));
+    });
+
+    it('failed fix returns to hypotheses, not shotgun', () => {
+        assert.ok(content.includes('return to Step 3.5 and test the next hypothesis'));
+    });
+
+    it('hypotheses step appears BEFORE Step 4', () => {
+        const hypIndex = content.indexOf('Step 3.5: Hypotheses');
+        const fixIndex = content.indexOf('Step 4: Apply Surgical Fix');
+        assert.ok(hypIndex < fixIndex);
+    });
+});

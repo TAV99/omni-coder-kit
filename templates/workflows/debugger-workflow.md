@@ -22,10 +22,19 @@ Trace the error to its root cause:
 4. Check for common causes: typos, wrong imports, missing env vars, type mismatches, async/await issues.
 *Do NOT apply a fix until you can explain WHY the error happens.*
 
+**Step 3.5: Hypotheses (REQUIRED before fixing)**
+Before touching any code, list 2-3 possible root causes:
+```
+🔍 Hypotheses: 1) [X]  2) [Y]  3) [Z]
+   Testing: #[N] first.
+```
+Do NOT skip this step. Do NOT fix anything until you've written this list. Pick the most likely hypothesis and proceed to Step 4.
+
 **Step 4: Apply Surgical Fix**
-- Fix ONLY the root cause. Do not refactor adjacent code.
+- Fix ONLY the root cause identified in your chosen hypothesis. Do not refactor adjacent code.
 - If the fix requires changing the approach (not just patching), explain the tradeoff to the user first.
-- After applying the fix, re-run the failing command to verify.
+- After applying the fix, re-run the failing command from Step 2 to verify.
+- If the fix fails, return to Step 3.5 and test the next hypothesis. Do NOT change multiple things at once.
 
 **Step 5: Report**
 ```

@@ -38,13 +38,15 @@ You MUST complete this step and report the result BEFORE writing any code.
 
 ### Step 4: Execute One Task
 
+Before editing: run `git diff --stat`. If uncommitted changes exist from a prior task, commit or stash first.
 For the current task:
 
-1. State the task and likely files affected.
-2. Make the smallest code change that satisfies the task.
-3. Run the narrowest useful verification command.
-4. Mark the task done in `todo.md` by changing `- [ ]` to `- [x]`.
-5. Report files changed, verification result, and next task.
+1. State the task and which files will be affected (scope declaration).
+2. Scope lock: only create/modify files declared in 4.1. No cleanup, no refactoring, no "improvements".
+3. Make the smallest code change that satisfies the task.
+4. Run the narrowest useful verification command.
+5. Mark the task done in `todo.md` by changing `- [ ]` to `- [x]`.
+6. Report files changed, verification result, and next task.
 
 ### Step 5: Subagents
 
