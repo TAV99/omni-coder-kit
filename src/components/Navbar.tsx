@@ -11,6 +11,7 @@ const navLinks = [
   { label: "Cài đặt", href: "#pricing" },
   { label: "FAQ", href: "#faq" },
   { label: "Contact", href: "#contact" },
+  { label: "Docs", href: "/docs" },
 ];
 
 export function Navbar() {

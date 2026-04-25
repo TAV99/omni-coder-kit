@@ -25,17 +25,17 @@ export function Features() {
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
           Workflow <span className="gradient-text">hoàn chỉnh</span>
         </h2>
-        <p className="mt-4 text-lg text-gray-400">6 commands. Từ ý tưởng đến production.</p>
+        <p className="mt-4 text-lg text-gray-400">7 commands. Từ ý tưởng đến production.</p>
       </div>
       <motion.div
         variants={containerVariants}
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, margin: "-100px" }}
-        className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+        className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
       >
         {featuresData.map((feature) => (
-          <motion.div key={feature.id} variants={itemVariants}>
+          <motion.div key={feature.id} variants={itemVariants} className="h-full">
             <Card className="h-full">
               <span className="text-3xl">{feature.icon}</span>
               <h3 className="mt-3 font-mono text-lg font-semibold text-cyan-400">{feature.title}</h3>

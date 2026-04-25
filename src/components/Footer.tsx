@@ -7,7 +7,7 @@ const footerLinks = {
     { label: "FAQ", href: "#faq" },
   ],
   resources: [
-    { label: "Documentation", href: "#" },
+    { label: "Documentation", href: "/docs" },
     { label: "GitHub", href: siteConfig.github },
     { label: "Community", href: "#" },
   ],
