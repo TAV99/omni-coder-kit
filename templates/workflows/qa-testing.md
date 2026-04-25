@@ -10,12 +10,14 @@ Read `todo.md`. Collect all tasks marked `- [x]` (completed). Group them by type
 - **Integration:** External services connect properly?
 
 **Step 2: Validation Pipeline (P0 → P1 → P2 → P3 → P4)**
-Execute the full automated validation pipeline as defined in the VALIDATION SCRIPTS section. Run checks in strict priority order:
+Execute the full automated validation pipeline. Run checks in strict priority order:
 - **P0: Security Scan** (dependency audit, secrets detection, dangerous patterns, SQL injection) — BLOCKING
 - **P1: Lint & Typecheck** (ESLint/Biome, TypeScript, Python lint) — BLOCKING
 - **P2: Build** (compile/bundle the project) — BLOCKING
 - **P3: Automated Tests** (vitest/jest/pytest) — BLOCKING
 - **P4: Bundle Analysis** (size, unused deps) — ADVISORY
+
+**Evidence rule:** You MUST run a shell command for each P0-P3 check. "Code looks correct" is NOT verification. Use quiet flags to minimize output: `--silent`, `-q`, `--quiet`, `2>&1 | tail -5`. Only capture what's needed to determine PASS/FAIL.
 
 *If ANY blocking check (P0-P3) fails, STOP. Do NOT proceed to Feature Verification. Report failures and recommend `>om:fix`.*
 
@@ -35,44 +37,35 @@ For each task, record:
 - If FAIL: specific error or unexpected behavior
 
 **Step 4: Generate Test Report**
-Output `test-report.md` in this format:
+Output `test-report.md`. Keep it terse — 1 line per PASS, details only on FAIL.
 
 ```markdown
-# Test Report
-> Generated: [date] | Project: [name]
+# Test Report — [date]
 
-## P0: Security Scan
-- Dependencies: X vulnerabilities (Y critical, Z high) — PASS/FAIL
-- Secrets in code: PASS/FAIL
-- Dangerous patterns: PASS/WARN
-- SQL injection risk: PASS/WARN
-
-## P1: Lint & Typecheck
-- Lint: PASS/FAIL (X errors, Y warnings)
-- Typecheck: PASS/FAIL
-
-## P2: Build
-- Build: PASS/FAIL
-
-## P3: Automated Tests
-- Result: X/Y passed
-- Failures: [list if any]
+## Pipeline
+P0: PASS — ran: `npm audit --audit-level=high`
+P1: PASS — ran: `npm run lint --silent`
+P2: PASS — ran: `npm run build --silent`
+P3: PASS — ran: `npm test -- --silent` (12/12)
+P4: PASS — ran: `npx depcheck`
 
 ## Feature Verification
-| # | Task | Method | Result | Notes |
-|---|------|--------|--------|-------|
-| 1 | [task from todo] | [curl/browser/repl] | PASS/FAIL | [details] |
-| 2 | ... | ... | ... | ... |
+| # | Task | Method | Result |
+|---|------|--------|--------|
+| 1 | [task] | `curl -s localhost:3000/api/x` | PASS |
+| 2 | [task] | browser: clicked X, saw Y | PASS |
+| 3 | [task] | `node -e "..."` | FAIL: [1-line error] |
 
 ## Summary
-- Total: X tasks verified
-- Passed: Y | Failed: Z | Skipped: W
-- Blocking issues: [list any FAIL items that block release]
-
-## Next Steps
-- [If all PASS] Ready for >om:doc
-- [If FAIL exists] Fix with >om:fix, then re-run >om:check
+Passed: Y/Z | Failed: N | Blocked: M
+[If FAIL] → >om:fix | [If all PASS] → >om:doc
 ```
+
+**Report rules:**
+- Pipeline: each line MUST include the exact CLI command ran. No command = invalid PASS.
+- PASS lines: 1 line only. Do NOT paste command output.
+- FAIL lines: add 1-line error summary. Full stack traces go to terminal, NOT to the report.
+- Feature verification Method column: must be a concrete action (`curl`, `browser`, `node -e`), not "read code".
 
 **Step 5: Auto Fix/Check Loop**
 When >om:check is triggered automatically from >om:cook's quality gate:
@@ -80,17 +73,22 @@ When >om:check is triggered automatically from >om:cook's quality gate:
   1. Automatically execute [>om:fix] with the failures from `test-report.md`. No user prompt needed.
   2. After >om:fix completes, re-run >om:check from Step 2.
   3. Repeat until all checks PASS or **max 3 fix attempts** reached.
-  4. If max attempts reached and errors remain, STOP and escalate:
-     ```
-     ⚠️ Quality Gate — [N] fix attempts exhausted. Remaining errors:
-        - [list blocking failures]
-        Cần review thủ công. Chạy >om:fix để debug chi tiết.
-     ```
+  4. If max attempts reached and errors remain:
+     - Mark the failing task as `- [ ] [BLOCKED] ...` in `todo.md`.
+     - STOP and escalate:
+       ```
+       ⚠️ Quality Gate — 3 fix attempts exhausted.
+          [BLOCKED] task: [task description]
+          Tried: 1) [what you tried] 2) [what you tried] 3) [what you tried]
+          Cần review thủ công từ người dùng.
+       ```
 - If all checks PASS: return control to >om:cook for the next cycle (or finish if cycle 3).
 
 **Rules:**
-- Do NOT mark a feature as PASS without actually running/testing it. "The code looks correct" is NOT verification.
+- **No command = No PASS.** Every P0-P3 verdict requires a shell command with exit code. "Code looks correct" is NOT verification.
+- **Quiet execution.** Use `--silent`, `-q`, `--quiet`, `2>&1 | tail -n` to minimize terminal output in context. Only capture what determines PASS/FAIL.
 - If you cannot test something (e.g., needs real API key, hardware), mark SKIP with the reason.
 - If the project has no test framework set up, recommend one appropriate for the stack but do NOT install it without asking.
 - For UI: you MUST start the dev server and interact with the feature. Screenshots or browser tool output count as evidence.
-- Keep the report factual. No opinions, no suggestions for improvements — just what works and what doesn't.
+- Keep the report factual. No opinions, no suggestions — just what works and what doesn't.
+- **[BLOCKED] protocol:** If a task fails 3 fix attempts, mark it `[BLOCKED]` in todo.md with a summary of what was tried. Do NOT continue fixing it.

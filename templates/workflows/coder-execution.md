@@ -65,8 +65,9 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
       Auto-triggering >om:check...
    ```
    - Automatically execute the [>om:check] workflow (inline, no user prompt needed).
-   - If >om:check finds errors → automatically execute [>om:fix] → re-run [>om:check]. Repeat until all blocking errors are resolved (max 3 fix attempts per cycle).
-   - Once >om:check passes (or max fix attempts reached), resume >om:cook for the next batch.
+   - If >om:check finds errors → automatically execute [>om:fix] → re-run [>om:check]. Max 3 fix attempts per cycle.
+   - If max attempts reached: mark failing task `[BLOCKED]` in `todo.md`, escalate to user, then resume >om:cook for the next batch (skipping blocked tasks).
+   - Once >om:check passes, resume >om:cook for the next batch.
 4. After cycle 3 completes and >om:check passes:
    ```
    ✅ All 3 quality cycles complete. [total] tasks done.
@@ -77,7 +78,7 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
 - ONE task at a time. Do not batch multiple tasks unless the user explicitly asks.
 - **Surgical Context:** For files > 200 lines, use grep/search to locate target code first. Read only the relevant section (±20 lines around target), not the entire file.
 - Follow the tech stack rules from `design-spec.md` and any installed skills.
-- If a task is blocked (depends on something not yet built), SKIP it and move to the next non-blocked task. Note the skip reason.
+- If a task is blocked (depends on something not yet built) or marked `[BLOCKED]`, SKIP it and move to the next non-blocked task. Note the skip reason.
 - If a task is ambiguous, ASK before implementing. Do not guess.
 - Do NOT refactor, optimize, or "improve" code beyond what the task specifies.
 - Quality gate cycles are mandatory — do NOT skip them even if all tasks look correct.

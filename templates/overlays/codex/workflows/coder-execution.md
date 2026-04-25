@@ -65,7 +65,7 @@ The project runs exactly 3 quality cycles:
 2. Compute `checkpoint = ceil(total / 3)`.
 3. After each checkpoint, run `>om:check`.
 4. If blocking failures exist, run `>om:fix`, then rerun `>om:check`.
-5. Repeat fixes up to 3 times per cycle before escalating to the user.
+5. Max 3 fix attempts per cycle. If still failing: mark task `[BLOCKED]` in `todo.md`, escalate to user, skip and continue.
 
 ### Rules
 
@@ -73,4 +73,5 @@ The project runs exactly 3 quality cycles:
 - Keep edits surgical.
 - Do not refactor unrelated code.
 - Do not batch unrelated tasks.
+- Skip tasks marked `[BLOCKED]` — do not attempt to fix them.
 - Do not claim completion without fresh verification output.

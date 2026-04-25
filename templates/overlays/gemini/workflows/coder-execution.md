@@ -35,4 +35,5 @@ You MUST complete this step and report the result BEFORE writing any code in Ste
 
 ### Quality Gate triggers
 - Every 1/3 tasks (calculated from `save_memory` project data), automatically pause and run `>om:check`.
-- If `>om:check` fails, run `>om:fix`.
+- If `>om:check` fails, run `>om:fix`. Max 3 fix attempts per cycle.
+- If 3 attempts exhausted: mark task `[BLOCKED]` in `todo.md`, use `tracker_update_task` to set status `BLOCKED`, escalate to user, skip and continue.
