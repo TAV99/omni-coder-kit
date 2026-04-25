@@ -256,7 +256,7 @@ describe('buildCodexConfig', () => {
         assert.ok(config.includes('approval_policy'));
         assert.ok(config.includes('network_access = false'));
         assert.ok(config.includes('[profiles.omni_safe]'));
-        assert.ok(config.includes('[profiles.omni_full_auto]'));
+        assert.ok(config.includes('[profiles.omni_yolo]'));
         assert.ok(config.includes('[profiles.omni_review]'));
     });
 
@@ -391,7 +391,7 @@ describe('E2E: codex init', () => {
         assert.ok(configContent.includes('project_doc_max_bytes = 32768'));
         assert.ok(configContent.includes('network_access = false'));
         assert.ok(configContent.includes('[profiles.omni_safe]'));
-        assert.ok(configContent.includes('[profiles.omni_full_auto]'));
+        assert.ok(configContent.includes('[profiles.omni_yolo]'));
         assert.ok(configContent.includes('[profiles.omni_review]'));
         assert.ok(configContent.includes('codex_hooks = true'));
 

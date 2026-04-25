@@ -795,7 +795,7 @@ program
             },
             codex: {
                 name: 'Codex CLI',
-                cmd: 'codex --full-auto',
+                cmd: 'codex --yolo',
                 note: 'Tự động approve mọi thao tác (file, shell, network)',
             },
             dual: [
@@ -806,7 +806,7 @@ program
                 },
                 {
                     name: 'Codex CLI',
-                    cmd: 'codex --full-auto',
+                    cmd: 'codex --yolo',
                     note: 'Full auto mode',
                 },
             ],
