@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"console.log(JSON.stringify({systemMessage:'[omni] Files changed. Keep changes surgical and run the Omni quality gate at the next checkpoint.'}))\"",
+            "timeout": 10,
+            "statusMessage": "Omni file-change reminder"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"console.log(JSON.stringify({systemMessage:'[omni] If todo.md progress changed, verify the current quality cycle before claiming completion.'}))\"",
+            "timeout": 10,
+            "statusMessage": "Omni quality-cycle reminder"
+          }
+        ]
+      }
+    ]
+  }
+}

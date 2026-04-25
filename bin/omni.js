@@ -174,15 +174,26 @@ function findSkillConflict(manifest, skillName) {
 
 // ========== OVERLAY SYSTEM ==========
 
-function getOverlayDir(ide) {
-    const overlayMap = { claudecode: 'claude-code', dual: 'claude-code' };
-    const overlayName = overlayMap[ide];
+function getOverlayNameForTarget(ide, target) {
+    if (target === 'claude-code') {
+        return (ide === 'claudecode' || ide === 'dual') ? 'claude-code' : null;
+    }
+    if (target === 'codex') {
+        return (ide === 'codex' || ide === 'dual') ? 'codex' : null;
+    }
+    return null;
+}
+
+function getOverlayDir(ide, target = null) {
+    const overlayName = target
+        ? getOverlayNameForTarget(ide, target)
+        : ({ claudecode: 'claude-code', dual: 'claude-code' }[ide] || null);
     if (!overlayName) return null;
     const dir = path.join(__dirname, '..', 'templates', 'overlays', overlayName);
     return fs.existsSync(dir) ? dir : null;
 }
 
-function buildWorkflows(ide) {
+function buildWorkflows(ide, target = null) {
     const templatesDir = path.join(__dirname, '..', 'templates');
     const baseDir = path.join(templatesDir, 'workflows');
     const files = {};
@@ -191,7 +202,7 @@ function buildWorkflows(ide) {
         files[f] = path.join(baseDir, f);
     }
 
-    const overlayDir = getOverlayDir(ide);
+    const overlayDir = getOverlayDir(ide, target);
     if (overlayDir) {
         const overlayWorkflowDir = path.join(overlayDir, 'workflows');
         if (fs.existsSync(overlayWorkflowDir)) {
@@ -205,7 +216,8 @@ function buildWorkflows(ide) {
 }
 
 function buildCommands(ide) {
-    const overlayDir = getOverlayDir(ide);
+    if (!(ide === 'claudecode' || ide === 'dual')) return null;
+    const overlayDir = getOverlayDir(ide, 'claude-code');
     if (!overlayDir) return null;
 
     const commandsDir = path.join(overlayDir, 'commands');
@@ -228,6 +240,120 @@ function buildSettings(ide, advanced) {
     if (!fs.existsSync(templatePath)) return null;
 
     return fs.readFileSync(templatePath, 'utf-8');
+}
+
+function buildCodexConfig(ide, advanced) {
+    if (!advanced || !(ide === 'codex' || ide === 'dual')) return null;
+    const overlayDir = getOverlayDir(ide, 'codex');
+    if (!overlayDir) return null;
+
+    const templatePath = path.join(overlayDir, 'config.template.toml');
+    if (!fs.existsSync(templatePath)) return null;
+
+    return fs.readFileSync(templatePath, 'utf-8');
+}
+
+function buildCodexHooks(ide, advanced) {
+    if (!advanced || !(ide === 'codex' || ide === 'dual')) return null;
+    const overlayDir = getOverlayDir(ide, 'codex');
+    if (!overlayDir) return null;
+
+    const templatePath = path.join(overlayDir, 'hooks.template.json');
+    if (!fs.existsSync(templatePath)) return null;
+
+    return fs.readFileSync(templatePath, 'utf-8');
+}
+
+function buildCommandRegistry(ide) {
+    const isClaudeCode = ide === 'claudecode' || ide === 'dual';
+    const isCodex = ide === 'codex';
+
+    if (isClaudeCode) {
+        return [
+            '## WORKFLOW COMMANDS',
+            '> Claude Code: dung `/om:*` slash commands (auto-complete) hoac `>om:*` trong chat.',
+            '',
+            'When the user invokes a `>om:` command or `/om:` slash command, read the corresponding workflow file and follow its instructions.',
+            '',
+            '| Command | Slash | Agent Strategy | Workflow File |',
+            '|---------|-------|---------------|---------------|',
+            '| `>om:brainstorm` | `/om:brainstorm` | Main session | `.omni/workflows/requirement-analysis.md` |',
+            '| `>om:equip` | `/om:equip` | Main session | `.omni/workflows/skill-manager.md` |',
+            '| `>om:plan` | `/om:plan` | Main session | `.omni/workflows/task-planning.md` |',
+            '| `>om:cook` | `/om:cook` | Main -> sub-agents (parallel) | `.omni/workflows/coder-execution.md` |',
+            '| `>om:check` | `/om:check` | Main session | `.omni/workflows/qa-testing.md` |',
+            '| `>om:fix` | `/om:fix` | Main session | `.omni/workflows/debugger-workflow.md` |',
+            '| `>om:doc` | `/om:doc` | Main session | `.omni/workflows/documentation-writer.md` |',
+            '',
+            'Supporting files (referenced by workflows as needed):',
+            '- `.omni/workflows/pm-templates.md` - Output format standards',
+            '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
+            '- `.omni/workflows/superpower-sdlc.md` - Full SDLC overview and pipeline diagram',
+            '',
+            '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
+            '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
+            '**Fallback:** If `.omni/workflows/` not found, read from `node_modules/omni-coder-kit/templates/workflows/`.',
+        ].join('\n');
+    }
+
+    if (isCodex) {
+        return [
+            '## WORKFLOW COMMANDS',
+            '> Codex CLI: type `>om:*` as normal chat text. Codex custom project `/om:*` slash commands are not assumed in this setup.',
+            '',
+            'When the user invokes a `>om:` command, read the corresponding workflow file and follow its instructions.',
+            '',
+            '| Command | Workflow File | Role |',
+            '|---------|--------------|------|',
+            '| `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Architect |',
+            '| `>om:equip` | `.omni/workflows/skill-manager.md` | Skill Manager |',
+            '| `>om:plan` | `.omni/workflows/task-planning.md` | PM |',
+            '| `>om:cook` | `.omni/workflows/coder-execution.md` | Coder |',
+            '| `>om:check` | `.omni/workflows/qa-testing.md` | QA Tester |',
+            '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | Debugger |',
+            '| `>om:doc` | `.omni/workflows/documentation-writer.md` | Writer |',
+            '',
+            'Codex native helpers:',
+            '- Use `/plan` for Codex-native planning before edits.',
+            '- Use `/review` for Codex-native review of current changes.',
+            '- Use `/permissions` to inspect approval behavior.',
+            '- Use `/agent` only when the user explicitly asks for subagents.',
+            '- Use `/mcp` and `/plugins` to inspect connected tools.',
+            '',
+            'Supporting files (referenced by workflows as needed):',
+            '- `.omni/workflows/pm-templates.md` - Output format standards',
+            '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
+            '- `.omni/workflows/superpower-sdlc.md` - Codex-aware SDLC overview',
+            '',
+            '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
+            '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
+            '**Token Budget:** Keep `AGENTS.md` compact; long instructions belong in `.omni/workflows/`.',
+        ].join('\n');
+    }
+
+    return [
+        '## WORKFLOW COMMANDS',
+        'When the user invokes a `>om:` command, read the corresponding workflow file and follow its instructions.',
+        '',
+        '| Command | Workflow File | Role |',
+        '|---------|--------------|------|',
+        '| `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Architect |',
+        '| `>om:equip` | `.omni/workflows/skill-manager.md` | Skill Manager |',
+        '| `>om:plan` | `.omni/workflows/task-planning.md` | PM |',
+        '| `>om:cook` | `.omni/workflows/coder-execution.md` | Coder |',
+        '| `>om:check` | `.omni/workflows/qa-testing.md` | QA Tester |',
+        '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | Debugger |',
+        '| `>om:doc` | `.omni/workflows/documentation-writer.md` | Writer |',
+        '',
+        'Supporting files (referenced by workflows as needed):',
+        '- `.omni/workflows/pm-templates.md` - Output format standards',
+        '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
+        '- `.omni/workflows/superpower-sdlc.md` - Full SDLC overview and pipeline diagram',
+        '',
+        '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
+        '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
+        '**Fallback:** If `.omni/workflows/` not found, read from `node_modules/omni-coder-kit/templates/workflows/`.',
+    ].join('\n');
 }
 
 // ========== CLI COMMANDS ==========
@@ -320,61 +446,20 @@ program
 
         const omniWorkflowsDir = path.join(process.cwd(), '.omni', 'workflows');
         fs.mkdirSync(omniWorkflowsDir, { recursive: true });
-        const mergedWorkflows = buildWorkflows(response.ide);
+        const workflowTarget = response.ide === 'codex'
+            ? 'codex'
+            : response.ide === 'dual'
+                ? 'base'
+                : null;
+        const mergedWorkflows = buildWorkflows(response.ide, workflowTarget);
         const workflowFiles = Object.keys(mergedWorkflows);
         for (const wf of workflowFiles) {
             fs.copyFileSync(mergedWorkflows[wf], path.join(omniWorkflowsDir, wf));
         }
 
         const isClaudeCode = response.ide === 'claudecode' || response.ide === 'dual';
-
-        const commandRegistry = isClaudeCode ? [
-            '## WORKFLOW COMMANDS',
-            '> Claude Code: dùng `/om:*` slash commands (auto-complete) hoặc `>om:*` trong chat.',
-            '',
-            'When the user invokes a `>om:` command or `/om:` slash command, read the corresponding workflow file and follow its instructions.',
-            '',
-            '| Command | Slash | Agent Strategy | Workflow File |',
-            '|---------|-------|---------------|---------------|',
-            '| `>om:brainstorm` | `/om:brainstorm` | Main session | `.omni/workflows/requirement-analysis.md` |',
-            '| `>om:equip` | `/om:equip` | Main session | `.omni/workflows/skill-manager.md` |',
-            '| `>om:plan` | `/om:plan` | Main session | `.omni/workflows/task-planning.md` |',
-            '| `>om:cook` | `/om:cook` | Main → sub-agents (parallel) | `.omni/workflows/coder-execution.md` |',
-            '| `>om:check` | `/om:check` | Main session | `.omni/workflows/qa-testing.md` |',
-            '| `>om:fix` | `/om:fix` | Main session | `.omni/workflows/debugger-workflow.md` |',
-            '| `>om:doc` | `/om:doc` | Main session | `.omni/workflows/documentation-writer.md` |',
-            '',
-            'Supporting files (referenced by workflows as needed):',
-            '- `.omni/workflows/pm-templates.md` — Output format standards',
-            '- `.omni/workflows/validation-scripts.md` — P0–P4 validation pipeline scripts',
-            '- `.omni/workflows/superpower-sdlc.md` — Full SDLC overview and pipeline diagram',
-            '',
-            '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
-            '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook → check → fix). See coder-execution.md.',
-            '**Fallback:** If `.omni/workflows/` not found, read from `node_modules/omni-coder-kit/templates/workflows/`.',
-        ].join('\n') : [
-            '## WORKFLOW COMMANDS',
-            'When the user invokes a `>om:` command, read the corresponding workflow file and follow its instructions.',
-            '',
-            '| Command | Workflow File | Role |',
-            '|---------|--------------|------|',
-            '| `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Architect |',
-            '| `>om:equip` | `.omni/workflows/skill-manager.md` | Skill Manager |',
-            '| `>om:plan` | `.omni/workflows/task-planning.md` | PM |',
-            '| `>om:cook` | `.omni/workflows/coder-execution.md` | Coder |',
-            '| `>om:check` | `.omni/workflows/qa-testing.md` | QA Tester |',
-            '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | Debugger |',
-            '| `>om:doc` | `.omni/workflows/documentation-writer.md` | Writer |',
-            '',
-            'Supporting files (referenced by workflows as needed):',
-            '- `.omni/workflows/pm-templates.md` — Output format standards',
-            '- `.omni/workflows/validation-scripts.md` — P0–P4 validation pipeline scripts',
-            '- `.omni/workflows/superpower-sdlc.md` — Full SDLC overview and pipeline diagram',
-            '',
-            '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
-            '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook → check → fix). See coder-execution.md.',
-            '**Fallback:** If `.omni/workflows/` not found, read from `node_modules/omni-coder-kit/templates/workflows/`.',
-        ].join('\n');
+        const isCodex = response.ide === 'codex' || response.ide === 'dual';
+        const commandRegistry = buildCommandRegistry(response.ide);
 
         let finalRules = `> Generated by Omni-Coder Kit\n\n${mindset}\n\n${hygiene}\n\n${commandRegistry}\n\n`;
 
@@ -405,8 +490,11 @@ program
             case 'codex':
                 fileName = 'AGENTS.md';
                 finalRules += `- **Codex CLI Agent Mode:** This file is auto-discovered by Codex CLI walking from project root to cwd. Keep total content under 32 KiB.\n`;
-                finalRules += `- **Sandbox Awareness:** Codex runs in a network-disabled sandbox by default. Do NOT attempt network calls (npm install, curl, git push) during execution unless sandbox is explicitly configured otherwise.\n`;
-                finalRules += `- **Approval Policy:** Respect the configured approval mode (suggest/auto-edit/full-auto). In suggest mode, present changes for review rather than applying directly.\n`;
+                finalRules += `- **Stable Omni Commands:** Type \`>om:brainstorm\`, \`>om:plan\`, \`>om:cook\`, etc. as normal chat text. Do not rely on custom \`/om:*\` slash commands in Codex.\n`;
+                finalRules += `- **Native Codex Commands:** Use \`/plan\`, \`/review\`, \`/permissions\`, \`/agent\`, \`/mcp\`, and \`/plugins\` when they help the current workflow.\n`;
+                finalRules += `- **Sandbox Awareness:** Codex may run in read-only or workspace-write sandbox modes. Do not attempt network calls or external writes unless the active profile allows them.\n`;
+                finalRules += `- **Approval Policy:** Respect the configured approval mode. In stricter modes, present risky commands for review instead of forcing execution.\n`;
+                finalRules += `- **Workflow Files:** Long instructions live in \`.omni/workflows/\`; read them lazily only when needed.\n`;
                 break;
             case 'dual':
                 fileName = 'CLAUDE.md';
@@ -463,7 +551,8 @@ program
 
         // Handle dual-agent: viết thêm AGENTS.md cho Codex CLI
         if (response.ide === 'dual') {
-            let agentsRules = `> Generated by Omni-Coder Kit (Codex CLI / Cross-tool)\n\n${mindset}\n\n${hygiene}\n\n${commandRegistry}\n\n`;
+            const codexCommandRegistry = buildCommandRegistry('codex');
+            let agentsRules = `> Generated by Omni-Coder Kit (Codex CLI / Cross-tool)\n\n${mindset}\n\n${hygiene}\n\n${codexCommandRegistry}\n\n`;
 
             if (rulesContent) {
                 agentsRules += `\n<!-- omni:rules -->\n## PERSONAL RULES\n${extractRulesForInject(rulesPrompt)}\n<!-- /omni:rules -->\n\n`;
@@ -471,7 +560,9 @@ program
 
             agentsRules += `## IDE SPECIFIC ADAPTERS\n`;
             agentsRules += `- **Codex CLI Agent Mode:** This file is auto-discovered by Codex CLI walking from project root to cwd. Keep total content under 32 KiB.\n`;
-            agentsRules += `- **Sandbox Awareness:** Codex runs in a network-disabled sandbox by default. Do NOT attempt network calls during execution unless sandbox is explicitly configured otherwise.\n`;
+            agentsRules += `- **Stable Omni Commands:** Type \`>om:brainstorm\`, \`>om:plan\`, \`>om:cook\`, etc. as normal chat text. Do not rely on custom \`/om:*\` slash commands in Codex.\n`;
+            agentsRules += `- **Native Codex Commands:** Use \`/plan\`, \`/review\`, \`/permissions\`, \`/agent\`, \`/mcp\`, and \`/plugins\` when they help the current workflow.\n`;
+            agentsRules += `- **Sandbox Awareness:** Codex may run in read-only or workspace-write sandbox modes. Do not attempt network calls or external writes unless the active profile allows them.\n`;
             agentsRules += `- **Cross-Tool Compatibility:** This file is also read by Antigravity, Gemini CLI, and other AGENTS.md-compatible tools.\n`;
 
             const agentsPath = path.join(process.cwd(), 'AGENTS.md');
@@ -550,6 +641,64 @@ program
 
             manifest.overlay = true;
             manifest.advanced = !!advanced;
+            saveManifest(manifest);
+        }
+
+        // Codex CLI: progressive advanced setup
+        if (isCodex) {
+            const { codexAdvanced } = await prompts({
+                type: 'confirm',
+                name: 'codexAdvanced',
+                message: 'Codex CLI nang cao? (.codex/config.toml + hooks)',
+                initial: false
+            });
+
+            const codexConfig = buildCodexConfig(response.ide, codexAdvanced);
+            const codexHooks = buildCodexHooks(response.ide, codexAdvanced);
+
+            if (codexConfig || codexHooks) {
+                const codexDir = path.join(process.cwd(), '.codex');
+                fs.mkdirSync(codexDir, { recursive: true });
+
+                if (codexConfig) {
+                    const configPath = path.join(codexDir, 'config.toml');
+                    let writeConfig = true;
+                    if (fs.existsSync(configPath)) {
+                        const { overwriteCodexConfig } = await prompts({
+                            type: 'confirm',
+                            name: 'overwriteCodexConfig',
+                            message: 'File ".codex/config.toml" da ton tai. Ghi de?',
+                            initial: false
+                        });
+                        writeConfig = !!overwriteCodexConfig;
+                    }
+                    if (writeConfig) {
+                        writeFileSafe(configPath, codexConfig);
+                        console.log(chalk.green(`   ✓ .codex/config.toml (Codex profiles + hooks flag)`));
+                    }
+                }
+
+                if (codexHooks) {
+                    const hooksPath = path.join(codexDir, 'hooks.json');
+                    let writeHooks = true;
+                    if (fs.existsSync(hooksPath)) {
+                        const { overwriteCodexHooks } = await prompts({
+                            type: 'confirm',
+                            name: 'overwriteCodexHooks',
+                            message: 'File ".codex/hooks.json" da ton tai. Ghi de?',
+                            initial: false
+                        });
+                        writeHooks = !!overwriteCodexHooks;
+                    }
+                    if (writeHooks) {
+                        writeFileSafe(hooksPath, codexHooks);
+                        console.log(chalk.green(`   ✓ .codex/hooks.json (Codex hook reminders)`));
+                    }
+                }
+            }
+
+            manifest.codexOverlay = true;
+            manifest.codexAdvanced = !!codexAdvanced;
             saveManifest(manifest);
         }
 
