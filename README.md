@@ -19,6 +19,7 @@
 - **Anti-Hallucination (Paranoid Mode):** Grounding rules, self-verification checklist, no phantom imports/APIs
 - **Antigravity:** Dùng `AGENTS.md` + `.agents/` directory (rules, skills, workflows)
 - **Claude Code Overlay:** Slash commands `/om:*`, permissions allowlist, quality gate hooks — cài tự động khi chọn Claude Code
+- **Codex CLI Overlay:** `AGENTS.md` lean registry, optional `.codex/config.toml` + `.codex/hooks.json`, Codex-native guidance cho `/plan`, `/review`, `/permissions`, `/agent`, MCP/plugins
 - **Validation Pipeline:** Security → Lint → Build → Tests → Bundle analysis — blocking tự động
 - **Skills.sh:** Tích hợp skills.sh ecosystem — conflict detection, manifest tracking
 
@@ -81,7 +82,7 @@ omni update
 | Lựa chọn | File tạo ra | Gợi ý khởi động |
 |-----------|------------|-----------------|
 | Claude Code / OpenCode | `CLAUDE.md` | `claude --dangerously-skip-permissions` |
-| Codex CLI (OpenAI) | `AGENTS.md` | `codex --full-auto` |
+| Codex CLI (OpenAI) | `AGENTS.md` + optional `.codex/` | `codex` hoặc `codex --profile omni_safe` |
 | Claude Code + Codex (dual) | `CLAUDE.md` + `AGENTS.md` | Cả 2 lệnh trên |
 | Antigravity | `AGENTS.md` | Dùng `.agents/` directory cho rules, skills, workflows |
 | Cursor | `.cursorrules` | Mở Cursor trong thư mục dự án |
@@ -98,6 +99,35 @@ Khi chọn **Claude Code**, `omni init` tự động cài thêm:
 - **Quality gate hooks** — Tự động nhắc AI kiểm tra chất lượng khi file thay đổi
 
 Khi được hỏi `"🔧 Cài đặt Claude Code nâng cao?"`, chọn **Yes** để kích hoạt permissions + hooks.
+
+### Codex CLI Overlay (tính năng nâng cao)
+
+Khi chọn **Codex CLI**, `omni init` tạo `AGENTS.md` và `.omni/workflows/`. Nếu bật advanced setup, kit tạo thêm:
+
+- **`.codex/config.toml`** — profile `omni_safe`, `omni_full_auto`, `omni_review`, sandbox/approval defaults, `project_doc_max_bytes`
+- **`.codex/hooks.json`** — hook reminders cho file changes và quality-cycle checks
+
+Dùng trong Codex chat:
+
+```text
+>om:brainstorm
+>om:plan
+>om:cook
+>om:check
+```
+
+Codex CLI có các slash commands native như `/plan`, `/review`, `/permissions`, `/agent`, `/mcp`, `/plugins`. Phase này không cài custom `/om:*` slash commands cho Codex vì Codex chưa document cơ chế project-level custom command tương đương `.claude/commands/`.
+
+Khởi động gợi ý:
+
+```bash
+codex
+codex --profile omni_safe
+codex --profile omni_full_auto
+codex exec "Read AGENTS.md, then run >om:check against the current repository state."
+```
+
+`omni_full_auto` giảm approval prompts nhưng vẫn nên chỉ dùng trong repo/sandbox bạn tin tưởng.
 
 ---
 
