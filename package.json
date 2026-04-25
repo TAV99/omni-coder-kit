@@ -1,6 +1,6 @@
 {
   "name": "omni-coder-kit",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "CLI inject mindset + SDLC workflow + skills into AI coding agents — Claude Code, Codex CLI, Cursor, Windsurf, Antigravity",
   "main": "bin/omni.js",
   "bin": {

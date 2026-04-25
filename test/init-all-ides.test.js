@@ -89,6 +89,34 @@ function readTemplate(filePath) {
     return fs.readFileSync(filePath, 'utf-8');
 }
 
+const OMNI_GITIGNORE_PATTERNS = [
+    '.omni/',
+    '.omni-manifest.json',
+    '.omni-rules.md',
+    'design-spec.md',
+    'todo.md',
+    'test-report.md',
+];
+
+function ensureGitignore(ide, cwd) {
+    const gitignorePath = path.join(cwd, '.gitignore');
+    const patterns = [...OMNI_GITIGNORE_PATTERNS];
+    if (ide === 'claudecode' || ide === 'dual') patterns.push('.claude/');
+    if (ide === 'codex' || ide === 'dual') patterns.push('.codex/');
+
+    let existing = '';
+    if (fs.existsSync(gitignorePath)) {
+        existing = fs.readFileSync(gitignorePath, 'utf-8');
+    }
+    const existingLines = new Set(existing.split('\n').map(l => l.trim()));
+    const missing = patterns.filter(p => !existingLines.has(p));
+    if (missing.length === 0) return 0;
+
+    const block = `\n# Omni-Coder Kit (generated)\n${missing.join('\n')}\n`;
+    fs.writeFileSync(gitignorePath, existing.trimEnd() + '\n' + block, 'utf-8');
+    return missing.length;
+}
+
 // ─── Expected config file per IDE ────────────────────────────────────────────
 
 const IDE_CONFIG_MAP = {
@@ -185,6 +213,9 @@ function simulateInit(ide, opts = {}) {
     };
     fs.writeFileSync(path.join(tmpDir, '.omni-manifest.json'), JSON.stringify(manifest, null, 2));
     result.manifest = manifest;
+
+    // .gitignore
+    result.gitignoreCount = ensureGitignore(ide, tmpDir);
 
     return result;
 }
@@ -602,4 +633,90 @@ describe('Claude Code overlay template files exist', () => {
             assert.ok(fs.existsSync(path.join(TEMPLATES, file)));
         });
     }
+});
+
+// ─── .gitignore generation ──────────────────────────────────────────────────
+
+describe('.gitignore generation', () => {
+    it('creates .gitignore with base patterns for all IDEs', () => {
+        const result = simulateInit('cursor');
+        try {
+            const content = fs.readFileSync(path.join(result.tmpDir, '.gitignore'), 'utf-8');
+            for (const p of OMNI_GITIGNORE_PATTERNS) {
+                assert.ok(content.includes(p), `should contain ${p}`);
+            }
+        } finally {
+            fs.rmSync(result.tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('claudecode adds .claude/ pattern', () => {
+        const result = simulateInit('claudecode', { advanced: true });
+        try {
+            const content = fs.readFileSync(path.join(result.tmpDir, '.gitignore'), 'utf-8');
+            assert.ok(content.includes('.claude/'));
+            assert.ok(!content.includes('.codex/'));
+        } finally {
+            fs.rmSync(result.tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('codex adds .codex/ pattern', () => {
+        const result = simulateInit('codex', { advanced: true });
+        try {
+            const content = fs.readFileSync(path.join(result.tmpDir, '.gitignore'), 'utf-8');
+            assert.ok(content.includes('.codex/'));
+            assert.ok(!content.includes('.claude/'));
+        } finally {
+            fs.rmSync(result.tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('dual adds both .claude/ and .codex/', () => {
+        const result = simulateInit('dual', { advanced: true });
+        try {
+            const content = fs.readFileSync(path.join(result.tmpDir, '.gitignore'), 'utf-8');
+            assert.ok(content.includes('.claude/'));
+            assert.ok(content.includes('.codex/'));
+        } finally {
+            fs.rmSync(result.tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('merges with existing .gitignore without duplicates', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-gi-test-'));
+        try {
+            fs.writeFileSync(path.join(tmpDir, '.gitignore'), 'node_modules/\n.omni/\n');
+            ensureGitignore('cursor', tmpDir);
+            const content = fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf-8');
+            assert.ok(content.includes('node_modules/'));
+            const matches = content.match(/\.omni\//g);
+            assert.equal(matches.length, 1, '.omni/ should not be duplicated');
+            assert.ok(content.includes('design-spec.md'));
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('skips writing when all patterns already exist', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-gi-test-'));
+        try {
+            const allPatterns = [...OMNI_GITIGNORE_PATTERNS].join('\n') + '\n';
+            fs.writeFileSync(path.join(tmpDir, '.gitignore'), allPatterns);
+            const count = ensureGitignore('cursor', tmpDir);
+            assert.equal(count, 0);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('includes Omni-Coder Kit header comment', () => {
+        const result = simulateInit('generic');
+        try {
+            const content = fs.readFileSync(path.join(result.tmpDir, '.gitignore'), 'utf-8');
+            assert.ok(content.includes('# Omni-Coder Kit'));
+        } finally {
+            fs.rmSync(result.tmpDir, { recursive: true, force: true });
+        }
+    });
 });

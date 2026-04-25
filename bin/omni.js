@@ -53,6 +53,34 @@ function readTemplate(filePath) {
     }
 }
 
+const OMNI_GITIGNORE_PATTERNS = [
+    '.omni/',
+    '.omni-manifest.json',
+    '.omni-rules.md',
+    'design-spec.md',
+    'todo.md',
+    'test-report.md',
+];
+
+function ensureGitignore(ide) {
+    const gitignorePath = path.join(process.cwd(), '.gitignore');
+    const patterns = [...OMNI_GITIGNORE_PATTERNS];
+    if (ide === 'claudecode' || ide === 'dual') patterns.push('.claude/');
+    if (ide === 'codex' || ide === 'dual') patterns.push('.codex/');
+
+    let existing = '';
+    if (fs.existsSync(gitignorePath)) {
+        existing = fs.readFileSync(gitignorePath, 'utf-8');
+    }
+    const existingLines = new Set(existing.split('\n').map(l => l.trim()));
+    const missing = patterns.filter(p => !existingLines.has(p));
+    if (missing.length === 0) return 0;
+
+    const block = `\n# Omni-Coder Kit (generated)\n${missing.join('\n')}\n`;
+    fs.writeFileSync(gitignorePath, existing.trimEnd() + '\n' + block, 'utf-8');
+    return missing.length;
+}
+
 function writeFileSafe(filePath, content) {
     try {
         fs.writeFileSync(filePath, content, 'utf-8');
@@ -645,6 +673,11 @@ program
 
         console.log(chalk.gray(`   Đã tạo manifest: ${MANIFEST_FILE}`));
         console.log(chalk.gray(`   Workflows: .omni/workflows/ (${workflowFiles.length} files — lazy-loaded)`));
+
+        const gitignoreCount = ensureGitignore(response.ide);
+        if (gitignoreCount > 0) {
+            console.log(chalk.gray(`   .gitignore: ${gitignoreCount} patterns added`));
+        }
 
         // Claude Code: generate slash commands
         const slashCommands = buildCommands(response.ide);
