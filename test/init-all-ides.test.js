@@ -254,11 +254,11 @@ describe('E2E: claudecode init', () => {
         assert.equal(content, overlayContent);
     });
 
-    it('creates 7 slash commands in .claude/commands/', () => {
+    it('creates 8 slash commands in .claude/commands/', () => {
         const cmdsDir = path.join(result.tmpDir, '.claude', 'commands');
         assert.ok(fs.existsSync(cmdsDir));
         const cmds = fs.readdirSync(cmdsDir).filter(f => f.endsWith('.md'));
-        assert.equal(cmds.length, 7);
+        assert.equal(cmds.length, 8);
         assert.ok(cmds.includes('om:brainstorm.md'));
         assert.ok(cmds.includes('om:cook.md'));
         assert.ok(cmds.includes('om:plan.md'));
@@ -266,6 +266,7 @@ describe('E2E: claudecode init', () => {
         assert.ok(cmds.includes('om:fix.md'));
         assert.ok(cmds.includes('om:doc.md'));
         assert.ok(cmds.includes('om:equip.md'));
+        assert.ok(cmds.includes('om:learn.md'));
     });
 
     it('creates .claude/settings.json with advanced setup', () => {
@@ -319,7 +320,7 @@ describe('Claude Code overlay content integrity', () => {
         assert.ok(content.includes('/om:') || content.includes('>om:'));
     });
 
-    it('all 7 slash command files reference workflow paths', () => {
+    it('all 8 slash command files reference workflow paths', () => {
         const cmdsDir = path.join(TEMPLATES, 'overlays', 'claude-code', 'commands');
         const cmds = fs.readdirSync(cmdsDir).filter(f => f.endsWith('.md'));
         for (const cmd of cmds) {
@@ -355,7 +356,7 @@ describe('E2E: dual init', () => {
     it('creates Claude slash commands', () => {
         const cmdsDir = path.join(result.tmpDir, '.claude', 'commands');
         assert.ok(fs.existsSync(cmdsDir));
-        assert.equal(fs.readdirSync(cmdsDir).filter(f => f.endsWith('.md')).length, 7);
+        assert.equal(fs.readdirSync(cmdsDir).filter(f => f.endsWith('.md')).length, 8);
     });
 
     it('creates Claude settings', () => {

@@ -322,6 +322,7 @@ describe('Base workflow files exist', () => {
         'debugger-workflow.md',
         'documentation-writer.md',
         'interview-examples.md',
+        'knowledge-learn.md',
         'pm-templates.md',
         'qa-testing.md',
         'requirement-analysis.md',

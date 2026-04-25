@@ -199,3 +199,103 @@ describe('Systematic Debugging — hypotheses step', () => {
         assert.ok(hypIndex < fixIndex);
     });
 });
+
+// ─── Knowledge Base (>om:learn) ─────────────────────────────────────────────
+
+describe('Knowledge Base — knowledge-learn.md workflow', () => {
+    const content = fs.readFileSync(
+        path.join(TEMPLATES, 'workflows', 'knowledge-learn.md'), 'utf-8'
+    );
+
+    it('analyzes git diff for recent fix', () => {
+        assert.ok(content.includes('git diff'));
+    });
+
+    it('evaluates if fix is worth recording', () => {
+        assert.ok(content.includes('trivial'));
+        assert.ok(content.includes('Skip recording'));
+    });
+
+    it('has entry format with Scope, Pattern, Fix', () => {
+        assert.ok(content.includes('**Scope:**'));
+        assert.ok(content.includes('**Pattern:**'));
+        assert.ok(content.includes('**Fix:**'));
+    });
+
+    it('enforces max 20 entries', () => {
+        assert.ok(content.includes('Max 20'));
+        assert.ok(content.includes('remove the oldest'));
+    });
+
+    it('creates knowledge-base.md if not exists', () => {
+        assert.ok(content.includes('does not exist, create it'));
+    });
+});
+
+describe('Knowledge Base — auto-trigger from >om:fix', () => {
+    const content = fs.readFileSync(
+        path.join(TEMPLATES, 'workflows', 'debugger-workflow.md'), 'utf-8'
+    );
+
+    it('has Step 6: Auto-Learn after verified fix', () => {
+        assert.ok(content.includes('Step 6: Auto-Learn'));
+    });
+
+    it('triggers >om:learn workflow automatically', () => {
+        assert.ok(content.includes('execute the [>om:learn] workflow'));
+    });
+
+    it('only triggers on PASS (not on failed fix)', () => {
+        assert.ok(content.includes('no learn — nothing to record yet'));
+    });
+});
+
+describe('Knowledge Base — read in cook and fix', () => {
+    const cook = fs.readFileSync(
+        path.join(TEMPLATES, 'workflows', 'coder-execution.md'), 'utf-8'
+    );
+    const fix = fs.readFileSync(
+        path.join(TEMPLATES, 'workflows', 'debugger-workflow.md'), 'utf-8'
+    );
+
+    it('cook Step 1 reads knowledge-base.md', () => {
+        assert.ok(cook.includes('knowledge-base.md'));
+        assert.ok(cook.includes('scan it for entries matching'));
+    });
+
+    it('fix Step 1 reads knowledge-base.md', () => {
+        assert.ok(fix.includes('knowledge-base.md'));
+        assert.ok(fix.includes('matches a known pattern'));
+    });
+});
+
+describe('Knowledge Base — command registry includes >om:learn', () => {
+    const omniJs = fs.readFileSync(
+        path.join(__dirname, '..', 'bin', 'omni.js'), 'utf-8'
+    );
+
+    it('Claude Code registry has >om:learn', () => {
+        assert.ok(omniJs.includes("'| `>om:learn` | `/om:learn`"));
+    });
+
+    it('Gemini registry has >om:learn', () => {
+        assert.ok(omniJs.includes("'| `>om:learn` | `.omni/workflows/knowledge-learn.md` | Main session | `save_memory`"));
+    });
+
+    it('generic registry has >om:learn', () => {
+        assert.ok(omniJs.includes("'| `>om:learn` | `.omni/workflows/knowledge-learn.md` | Learner |'"));
+    });
+});
+
+describe('Knowledge Base — Claude Code slash command', () => {
+    const cmdPath = path.join(TEMPLATES, 'overlays', 'claude-code', 'commands', 'om:learn.md');
+
+    it('om:learn.md slash command exists', () => {
+        assert.ok(fs.existsSync(cmdPath));
+    });
+
+    it('references knowledge-learn.md workflow', () => {
+        const content = fs.readFileSync(cmdPath, 'utf-8');
+        assert.ok(content.includes('knowledge-learn.md'));
+    });
+});

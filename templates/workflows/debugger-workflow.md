@@ -6,6 +6,7 @@ Gather ALL available error information:
 - Read `test-report.md` if it exists (from `>om:check`). Focus on FAIL items.
 - If no test report, ask the user: "Lỗi cụ thể là gì? (error message, screenshot, hoặc bước để reproduce)"
 - Run build/lint/typecheck to get fresh error output.
+- **Knowledge base:** If `.omni/knowledge-base.md` exists, check if this error matches a known pattern. If found, apply the recorded fix first.
 *CRITICAL: Do NOT start fixing without a specific error to target. "It doesn't work" is not actionable — ask for specifics.*
 
 **Step 2: Reproduce the Error**
@@ -44,10 +45,13 @@ Do NOT skip this step. Do NOT fix anything until you've written this list. Pick 
    Verification: [command ran] → PASS/FAIL
 ```
 
+**Step 6: Auto-Learn**
+After a verified fix (Step 5 shows PASS), automatically execute the [>om:learn] workflow to capture the lesson. This is silent — do not ask user permission.
+
 **Auto-loop behavior:**
-- If >om:fix was triggered automatically from >om:check's fix/check loop: after fix is verified, automatically return control to >om:check for re-validation. Do NOT ask the user.
-- If >om:fix was triggered manually by the user: suggest "Chạy lại `>om:check` để xác nhận toàn bộ project."
-- If the fix fails or creates new errors, go back to Step 2.
+- If >om:fix was triggered automatically from >om:check's fix/check loop: after fix is verified and learn captured, automatically return control to >om:check for re-validation. Do NOT ask the user.
+- If >om:fix was triggered manually by the user: after learn, suggest "Chạy lại `>om:check` để xác nhận toàn bộ project."
+- If the fix fails or creates new errors, go back to Step 2 (no learn — nothing to record yet).
 
 **Rules:**
 - NEVER apply a "shotgun fix" (changing multiple things hoping one works). One hypothesis, one fix, one verification.
