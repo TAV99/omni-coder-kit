@@ -174,15 +174,26 @@ function findSkillConflict(manifest, skillName) {
 
 // ========== OVERLAY SYSTEM ==========
 
-function getOverlayDir(ide) {
-    const overlayMap = { claudecode: 'claude-code', dual: 'claude-code' };
-    const overlayName = overlayMap[ide];
+function getOverlayNameForTarget(ide, target) {
+    if (target === 'claude-code') {
+        return (ide === 'claudecode' || ide === 'dual') ? 'claude-code' : null;
+    }
+    if (target === 'codex') {
+        return (ide === 'codex' || ide === 'dual') ? 'codex' : null;
+    }
+    return null;
+}
+
+function getOverlayDir(ide, target = null) {
+    const overlayName = target
+        ? getOverlayNameForTarget(ide, target)
+        : ({ claudecode: 'claude-code', dual: 'claude-code' }[ide] || null);
     if (!overlayName) return null;
     const dir = path.join(__dirname, '..', 'templates', 'overlays', overlayName);
     return fs.existsSync(dir) ? dir : null;
 }
 
-function buildWorkflows(ide) {
+function buildWorkflows(ide, target = null) {
     const templatesDir = path.join(__dirname, '..', 'templates');
     const baseDir = path.join(templatesDir, 'workflows');
     const files = {};
@@ -191,7 +202,7 @@ function buildWorkflows(ide) {
         files[f] = path.join(baseDir, f);
     }
 
-    const overlayDir = getOverlayDir(ide);
+    const overlayDir = getOverlayDir(ide, target);
     if (overlayDir) {
         const overlayWorkflowDir = path.join(overlayDir, 'workflows');
         if (fs.existsSync(overlayWorkflowDir)) {
@@ -205,7 +216,8 @@ function buildWorkflows(ide) {
 }
 
 function buildCommands(ide) {
-    const overlayDir = getOverlayDir(ide);
+    if (!(ide === 'claudecode' || ide === 'dual')) return null;
+    const overlayDir = getOverlayDir(ide, 'claude-code');
     if (!overlayDir) return null;
 
     const commandsDir = path.join(overlayDir, 'commands');
@@ -225,6 +237,28 @@ function buildSettings(ide, advanced) {
     if (!overlayDir) return null;
 
     const templatePath = path.join(overlayDir, 'settings.template.json');
+    if (!fs.existsSync(templatePath)) return null;
+
+    return fs.readFileSync(templatePath, 'utf-8');
+}
+
+function buildCodexConfig(ide, advanced) {
+    if (!advanced || !(ide === 'codex' || ide === 'dual')) return null;
+    const overlayDir = getOverlayDir(ide, 'codex');
+    if (!overlayDir) return null;
+
+    const templatePath = path.join(overlayDir, 'config.template.toml');
+    if (!fs.existsSync(templatePath)) return null;
+
+    return fs.readFileSync(templatePath, 'utf-8');
+}
+
+function buildCodexHooks(ide, advanced) {
+    if (!advanced || !(ide === 'codex' || ide === 'dual')) return null;
+    const overlayDir = getOverlayDir(ide, 'codex');
+    if (!overlayDir) return null;
+
+    const templatePath = path.join(overlayDir, 'hooks.template.json');
     if (!fs.existsSync(templatePath)) return null;
 
     return fs.readFileSync(templatePath, 'utf-8');
