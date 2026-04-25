@@ -12,6 +12,7 @@ const PKG = require(path.join(__dirname, '..', 'package.json'));
 
 const IDE_AGENT_MAP = {
     claudecode:  ['claude-code'],
+    gemini:      ['gemini'],
     codex:       ['codex'],
     dual:        ['claude-code', 'codex'],
     antigravity: ['antigravity'],
@@ -35,7 +36,7 @@ const UNIVERSAL_SKILLS = [
 // ========== HELPERS ==========
 
 function findConfigFile() {
-    const files = ['.cursorrules', '.windsurfrules', 'CLAUDE.md', 'AGENTS.md', 'SYSTEM_PROMPT.md'];
+    const files = ['.cursorrules', '.windsurfrules', 'CLAUDE.md', 'GEMINI.md', 'AGENTS.md', 'SYSTEM_PROMPT.md'];
     for (const file of files) {
         if (fs.existsSync(path.join(process.cwd(), file))) return file;
     }
@@ -267,6 +268,7 @@ function buildCodexHooks(ide, advanced) {
 function buildCommandRegistry(ide) {
     const isClaudeCode = ide === 'claudecode' || ide === 'dual';
     const isCodex = ide === 'codex';
+    const isGemini = ide === 'gemini';
 
     if (isClaudeCode) {
         return [
@@ -289,6 +291,34 @@ function buildCommandRegistry(ide) {
             '- `.omni/workflows/pm-templates.md` - Output format standards',
             '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
             '- `.omni/workflows/superpower-sdlc.md` - Full SDLC overview and pipeline diagram',
+            '',
+            '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
+            '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
+            '**Fallback:** If `.omni/workflows/` not found, read from `node_modules/omni-coder-kit/templates/workflows/`.',
+        ].join('\n');
+    }
+
+    if (isGemini) {
+        return [
+            '## WORKFLOW COMMANDS',
+            '> Gemini CLI: type `>om:*` as normal chat text.',
+            '',
+            'When the user invokes a `>om:` command, read the corresponding workflow file and follow its instructions.',
+            '',
+            '| Command | Workflow File | Agent Strategy | Gemini Tools |',
+            '|---------|--------------|----------------|--------------|',
+            '| `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Main session | `ask_user`, `save_memory` |',
+            '| `>om:equip` | `.omni/workflows/skill-manager.md` | Main session | `google_web_search` |',
+            '| `>om:plan` | `.omni/workflows/task-planning.md` | Main session | `tracker_create_task` |',
+            '| `>om:cook` | `.omni/workflows/coder-execution.md` | Main session | `tracker_update_task`, `enter_plan_mode` |',
+            '| `>om:check` | `.omni/workflows/qa-testing.md` | Main session | `run_shell_command` |',
+            '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | Main session | `systematic-debugging` |',
+            '| `>om:doc` | `.omni/workflows/documentation-writer.md` | Main session | `read_file` |',
+            '',
+            'Supporting files (referenced by workflows as needed):',
+            '- `.omni/workflows/pm-templates.md` - Output format standards',
+            '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
+            '- `.omni/workflows/superpower-sdlc.md` - Gemini-aware SDLC overview',
             '',
             '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
             '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
@@ -379,6 +409,7 @@ program
                 message: q(1, 3, 'Bạn đang sử dụng AI IDE/Công cụ nào?'),
                 choices: [
                     { title: 'Claude Code (CLI) / OpenCode', value: 'claudecode' },
+                    { title: 'Gemini CLI (Google)', value: 'gemini' },
                     { title: 'Antigravity', value: 'antigravity' },
                     { title: 'Cursor', value: 'cursor' },
                     { title: 'Windsurf', value: 'windsurf' },
@@ -448,9 +479,11 @@ program
         fs.mkdirSync(omniWorkflowsDir, { recursive: true });
         const workflowTarget = response.ide === 'codex'
             ? 'codex'
-            : response.ide === 'dual'
-                ? 'base'
-                : null;
+            : response.ide === 'gemini'
+                ? 'gemini'
+                : response.ide === 'dual'
+                    ? 'base'
+                    : null;
         const mergedWorkflows = buildWorkflows(response.ide, workflowTarget);
         const workflowFiles = Object.keys(mergedWorkflows);
         for (const wf of workflowFiles) {
@@ -486,6 +519,16 @@ program
                 finalRules += `- **Task Tracking:** Dùng TaskCreate/TaskUpdate để track progress khi thực thi tasks, thay vì chỉ dựa vào \`todo.md\` checkboxes.\n`;
                 finalRules += `- **Safety:** KHÔNG thực thi destructive commands (rm -rf, git push --force, git reset --hard) mà không có permission user.\n`;
                 finalRules += `- **Workflow Files:** Tất cả logic nằm trong \`.omni/workflows/\`. Khi nhận lệnh \`>om:*\` hoặc \`/om:*\`, đọc file tương ứng rồi thực thi.\n`;
+                break;
+            case 'gemini':
+                fileName = 'GEMINI.md';
+                finalRules += `### Gemini CLI Integration\n`;
+                finalRules += `- **Workflow Interaction:** Type \`>om:brainstorm\`, \`>om:plan\`, \`>om:cook\`, etc. as normal chat text.\n`;
+                finalRules += `- **Plan Mode:** Use \`enter_plan_mode\` for research and \`exit_plan_mode\` to return to execution.\n`;
+                finalRules += `- **Task Tracking:** Use \`tracker_create_task\` and \`tracker_update_task\` tools to manage progress. This is the primary source of truth for task status.\n`;
+                finalRules += `- **Context Efficiency:** Use \`save_memory\` (project scope) for long-term project facts to keep the main context lean.\n`;
+                finalRules += `- **Interactive Tools:** Use \`ask_user\` for making decisions and \`google_web_search\` for documentation search.\n`;
+                finalRules += `- **Workflow Files:** All logic is in \`.omni/workflows/\`. Read corresponding files when receiving \`>om:*\` commands.\n`;
                 break;
             case 'codex':
                 fileName = 'AGENTS.md';
@@ -737,6 +780,11 @@ program
                 name: 'Claude Code',
                 cmd: 'claude --dangerously-skip-permissions',
                 note: 'Bỏ qua tất cả permission prompts (chỉ dùng khi tin tưởng prompt)',
+            },
+            gemini: {
+                name: 'Gemini CLI',
+                cmd: 'gemini',
+                note: 'Tự động tối ưu hóa dựa trên GEMINI.md. Gõ >om:brainstorm để bắt đầu.',
             },
             codex: {
                 name: 'Codex CLI',
