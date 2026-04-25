@@ -10,22 +10,24 @@ When executing `>om:cook` in Codex CLI, act as a Senior Developer. Implement tas
 - If the task has `@skill:name` tags, load the installed skill instructions before coding.
 - If `todo.md` does not exist, stop and tell the user to run `>om:plan` first.
 
-### Step 2: Dev Server Preflight
-
-If the project has a runnable UI, start the dev server before coding so the user can observe changes in real time.
-
-1. Check if a dev server command exists:
-   - `package.json`: look for `dev`, `start`, or `serve` scripts (prefer in that order).
-   - `docker-compose.yml`: look for a web/app service with exposed ports.
-   - `Makefile`: look for a `dev` or `serve` target.
-   - `manage.py` (Django): use `python manage.py runserver`.
-   - If none found, skip this step silently.
-2. If dependencies are missing (e.g. `node_modules/` absent), install them first.
-3. Run the dev server as a background process.
-4. Wait up to 5 seconds for the server to print a URL.
-5. Inform the user: "Dev server running at <URL>. You can open it in your browser to watch changes live."
-6. If the sandbox blocks the server (network or port restriction), inform the user and skip this step.
-7. Do not monitor or restart the server after this point. Continue with task execution.
+### Step 2: Dev Server Preflight (MANDATORY CHECKPOINT)
+You MUST complete this step and report the result BEFORE writing any code.
+1. Detect dev command:
+   - `package.json` → scripts `dev`, `start`, or `serve` (prefer in that order)
+   - `docker-compose.yml` → web/app service with exposed ports
+   - `Makefile` → target `dev` or `serve`
+   - `manage.py` → `python manage.py runserver`
+2. If a command is found:
+   a. Install dependencies if missing (e.g. `node_modules/` absent).
+   b. Run the dev server as a background process.
+   c. Wait up to 5 seconds for the server to print a URL.
+   d. If the sandbox blocks the server (network or port restriction), report and skip.
+3. Report to user (REQUIRED — pick one):
+   - `🟢 Dev server: <command> → <URL>` (running)
+   - `🟡 Dev server: skipped — no dev command found` (no UI project)
+   - `🟡 Dev server: skipped — sandbox restriction` (Codex sandbox blocked)
+   - `🔴 Dev server: <command> failed — <reason>` (error, continue anyway)
+4. Only after printing one of the above lines may you proceed to Step 3.
 
 ### Step 3: Codex Safety Preflight
 

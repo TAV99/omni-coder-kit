@@ -35,16 +35,20 @@ describe('Dev Server Preflight — base workflow', () => {
         assert.ok(content.includes('background process'));
     });
 
-    it('mentions informing the user', () => {
-        assert.ok(content.includes('watch changes live'));
+    it('is a MANDATORY CHECKPOINT', () => {
+        assert.ok(content.includes('MANDATORY CHECKPOINT'));
+        assert.ok(content.includes('MUST complete this step'));
     });
 
-    it('mentions skip if not found', () => {
-        assert.ok(content.includes('skip this step silently'));
+    it('requires status report before proceeding', () => {
+        assert.ok(content.includes('Report to user (REQUIRED'));
+        assert.ok(content.includes('🟢 Dev server:'));
+        assert.ok(content.includes('🟡 Dev server: skipped'));
+        assert.ok(content.includes('🔴 Dev server:'));
     });
 
-    it('mentions dependency install', () => {
-        assert.ok(content.includes('dependencies are missing'));
+    it('gates Step 3 on report completion', () => {
+        assert.ok(content.includes('Only after printing one of the above lines may you proceed'));
     });
 
     it('Dev Server Preflight appears BEFORE Execute', () => {
@@ -59,12 +63,17 @@ describe('Dev Server Preflight — Claude Code overlay', () => {
         path.join(TEMPLATES, 'overlays', 'claude-code', 'workflows', 'coder-execution.md'), 'utf-8'
     );
 
-    it('contains Dev Server Preflight step', () => {
-        assert.ok(content.includes('Dev Server Preflight'));
+    it('is a MANDATORY CHECKPOINT', () => {
+        assert.ok(content.includes('MANDATORY CHECKPOINT'));
     });
 
     it('specifies Bash(run_in_background)', () => {
         assert.ok(content.includes('Bash(run_in_background)'));
+    });
+
+    it('requires status report with gate', () => {
+        assert.ok(content.includes('Report to user (REQUIRED'));
+        assert.ok(content.includes('Only after printing one of the above'));
     });
 
     it('Dev Server Preflight appears BEFORE Dependency Graph', () => {
@@ -79,12 +88,17 @@ describe('Dev Server Preflight — Codex overlay', () => {
         path.join(TEMPLATES, 'overlays', 'codex', 'workflows', 'coder-execution.md'), 'utf-8'
     );
 
-    it('contains Dev Server Preflight step', () => {
-        assert.ok(content.includes('Dev Server Preflight'));
+    it('is a MANDATORY CHECKPOINT', () => {
+        assert.ok(content.includes('MANDATORY CHECKPOINT'));
     });
 
-    it('mentions sandbox restriction', () => {
-        assert.ok(content.includes('sandbox'));
+    it('mentions sandbox restriction in report options', () => {
+        assert.ok(content.includes('sandbox restriction'));
+    });
+
+    it('requires status report with gate', () => {
+        assert.ok(content.includes('Report to user (REQUIRED'));
+        assert.ok(content.includes('Only after printing one of the above'));
     });
 
     it('Dev Server Preflight appears BEFORE Codex Safety Preflight', () => {
@@ -99,12 +113,17 @@ describe('Dev Server Preflight — Gemini overlay', () => {
         path.join(TEMPLATES, 'overlays', 'gemini', 'workflows', 'coder-execution.md'), 'utf-8'
     );
 
-    it('contains Dev Server Preflight step', () => {
-        assert.ok(content.includes('Dev Server Preflight'));
+    it('is a MANDATORY CHECKPOINT', () => {
+        assert.ok(content.includes('MANDATORY CHECKPOINT'));
     });
 
     it('specifies shell background execution', () => {
         assert.ok(content.includes('shell background execution'));
+    });
+
+    it('requires status report with gate', () => {
+        assert.ok(content.includes('Report to user (REQUIRED'));
+        assert.ok(content.includes('Only after printing one of the above'));
     });
 
     it('Dev Server Preflight appears BEFORE Implementation', () => {

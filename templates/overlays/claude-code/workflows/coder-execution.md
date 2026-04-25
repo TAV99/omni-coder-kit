@@ -12,20 +12,22 @@ When executing the [>om:cook] command, you MUST act as a Senior Developer and Or
   - If all checks pass or `setup.sh` does not exist → proceed normally.
 *CRITICAL: If `todo.md` does not exist, STOP. Tell the user to run `/om:plan` first.*
 
-**Step 2: Dev Server Preflight**
-If the project has a runnable UI, start the dev server before coding so the user can observe changes in real time.
-1. Check if a dev server command exists:
-   - `package.json`: look for `dev`, `start`, or `serve` scripts (prefer in that order).
-   - `docker-compose.yml`: look for a web/app service with exposed ports.
-   - `Makefile`: look for a `dev` or `serve` target.
-   - `manage.py` (Django): use `python manage.py runserver`.
-   - If none found, skip this step silently.
-2. If dependencies are missing (e.g. `node_modules/` absent), install them first.
-3. Use `Bash(run_in_background)` to start the dev server.
-4. Wait up to 5 seconds for the server to print a URL.
-5. Inform the user: "Dev server running at <URL>. You can open it in your browser to watch changes live."
-6. If the server fails to start, inform briefly and move on. Do not block the workflow.
-7. Do not monitor or restart the server after this point. Continue with task execution.
+**Step 2: Dev Server Preflight (MANDATORY CHECKPOINT)**
+You MUST complete this step and report the result BEFORE writing any code in Step 3.
+1. Detect dev command:
+   - `package.json` → scripts `dev`, `start`, or `serve` (prefer in that order)
+   - `docker-compose.yml` → web/app service with exposed ports
+   - `Makefile` → target `dev` or `serve`
+   - `manage.py` → `python manage.py runserver`
+2. If a command is found:
+   a. Install dependencies if missing (e.g. `node_modules/` absent).
+   b. Use `Bash(run_in_background)` to start the dev server.
+   c. Wait up to 5 seconds for the server to print a URL.
+3. Report to user (REQUIRED — pick one):
+   - `🟢 Dev server: <command> → <URL>` (running)
+   - `🟡 Dev server: skipped — no dev command found` (no UI project)
+   - `🔴 Dev server: <command> failed — <reason>` (error, continue anyway)
+4. Only after printing one of the above lines may you proceed to Step 3.
 
 **Step 3: Dependency Graph Analysis**
 Analyze all uncompleted tasks and build a dependency graph:
