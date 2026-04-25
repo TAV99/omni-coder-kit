@@ -67,6 +67,7 @@ The project runs exactly 3 quality cycles:
 
 ### Rules
 
+- **Surgical Context:** For files > 200 lines, use grep/search to locate target code first. Read only the relevant section, not the entire file.
 - Keep edits surgical.
 - Do not refactor unrelated code.
 - Do not batch unrelated tasks.

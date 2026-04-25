@@ -143,6 +143,7 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
    ```
 
 **Rules:**
+- **Surgical Context:** For files > 200 lines, use grep/search to locate target code first. Read only the relevant section (±20 lines around target), not the entire file. Include this rule in sub-agent prompts.
 - Follow the tech stack rules from `design-spec.md` and any installed skills.
 - If a task is blocked (depends on something not yet built), move it to a later batch. Note the skip reason.
 - If a task is ambiguous, ASK before implementing. Do not guess.

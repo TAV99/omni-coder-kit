@@ -45,26 +45,33 @@ describe('Backend Complexity — requirement-analysis DNA', () => {
     });
 });
 
-// ─── requirement-analysis.md: Backend-Aware Probing ─────────────────────────
+// ─── interview-examples.md: Backend-Aware Probing ───────────────────────────
 
-describe('Backend Complexity — requirement-analysis probing', () => {
-    const content = fs.readFileSync(
+describe('Backend Complexity — interview-examples probing', () => {
+    const examples = fs.readFileSync(
+        path.join(TEMPLATES, 'workflows', 'interview-examples.md'), 'utf-8'
+    );
+    const mainContent = fs.readFileSync(
         path.join(TEMPLATES, 'workflows', 'requirement-analysis.md'), 'utf-8'
     );
 
+    it('main workflow references interview-examples.md', () => {
+        assert.ok(mainContent.includes('interview-examples.md'));
+    });
+
     it('features slot has backend probe guidance', () => {
-        assert.ok(content.includes('backendComplexity ≥ moderate'), 'should reference backendComplexity threshold');
-        assert.ok(content.includes('realtime') && content.includes('background'));
+        assert.ok(examples.includes('backendComplexity ≥ moderate'), 'should reference backendComplexity threshold');
+        assert.ok(examples.includes('realtime') && examples.includes('background'));
     });
 
     it('constraints slot has backend probe guidance', () => {
-        assert.ok(content.includes('data consistency'));
-        assert.ok(content.includes('concurrent connections'));
+        assert.ok(examples.includes('data consistency'));
+        assert.ok(examples.includes('concurrent connections'));
     });
 
     it('edge_cases slot has backend probe guidance', () => {
-        assert.ok(content.includes('dead letter queue'));
-        assert.ok(content.includes('migration strategy') || content.includes('Data migration strategy'));
+        assert.ok(examples.includes('dead letter queue'));
+        assert.ok(examples.includes('migration strategy') || examples.includes('Data migration strategy'));
     });
 });
 

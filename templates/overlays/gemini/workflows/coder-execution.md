@@ -22,6 +22,7 @@ If the project has a runnable UI, start the dev server before coding so the user
 
 ### Step 3: Implementation
 - For the active task, use `tracker_update_task` to set status to `IN_PROGRESS`.
+- **Surgical Context:** For files > 200 lines, use search tools to locate target code first. Read only the relevant section, not the entire file.
 - Follow the Surgical Changes mandate.
 - Apply rules from `@skill` tags.
 

@@ -19,8 +19,16 @@ Before submitting ANY code change, verify:
 
 ### Token Discipline
 - **Lazy Workflow Loading:** Only read workflow files when the corresponding `>om:` command is invoked. Do NOT pre-load all workflows into context.
+- **Lazy Examples:** Only read example/template files (like `interview-examples.md`) when you actively need to formulate a question or reference a format. Do not pre-load.
 - **Read Once:** If you've already read a file in this session, don't re-read unless it may have changed.
 - **Concise Output:** Use bullet points over paragraphs. State conclusions directly.
+
+### Context-Aware Verbosity
+Adjust output verbosity based on the active command:
+- **`>om:cook` (coding):** Terse. Report only: task done, files changed, next task. No explanations of what you're about to do. Do not echo file contents after editing — use tools to write directly.
+- **`>om:check` (QA):** Terse on PASS — just print "PASS" per check. Verbose on FAIL — print full error details, stack traces, and reproduction steps.
+- **`>om:brainstorm` / `>om:plan`:** Verbose. Explain reasoning, present options, ask clarifying questions.
+- **On errors:** Always verbose — explain what went wrong, what you tried, and what you recommend.
 
 ### Language Constraints
 - Internal reasoning and planning: Use English for optimal logical capability.

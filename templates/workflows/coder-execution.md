@@ -73,6 +73,7 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
 
 **Rules:**
 - ONE task at a time. Do not batch multiple tasks unless the user explicitly asks.
+- **Surgical Context:** For files > 200 lines, use grep/search to locate target code first. Read only the relevant section (±20 lines around target), not the entire file.
 - Follow the tech stack rules from `design-spec.md` and any installed skills.
 - If a task is blocked (depends on something not yet built), SKIP it and move to the next non-blocked task. Note the skip reason.
 - If a task is ambiguous, ASK before implementing. Do not guess.
