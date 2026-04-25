@@ -4,7 +4,7 @@ When executing the [>om:plan] command, you MUST act as a Senior Project Manager.
 **Step 1: Read & Validate Design Spec**
 Read `design-spec.md` fully. It uses a hybrid format:
 - **Summary table** (top): Goal, Users, Tech Stack, UI Style, Constraints — read this first for context.
-- **Tagged requirement list** (body): Each requirement has a category tag (`[func]`, `[auth]`, `[data]`, `[api]`, `[nfr]`, `[edge]`, `[ui]`).
+- **Tagged requirement list** (body): Each requirement has a category tag (`[func]`, `[auth]`, `[data]`, `[api]`, `[nfr]`, `[edge]`, `[ui]`, `[infra]`).
 
 Verify it has at minimum:
 - A filled Summary table (Goal + Tech Stack)
@@ -19,6 +19,7 @@ Use the requirement tags to auto-group into components:
 - `[func]` + `[ui]` → Frontend pages/components
 - `[auth]` → Auth & middleware
 - `[nfr]` → Configuration, performance, infrastructure
+- `[infra]` → Infrastructure layer (services, workers, queues, cache config)
 - `[edge]` → Error handling (distribute into relevant components)
 
 If the spec uses the old prose format (no tags), fall back to manual grouping:
@@ -34,7 +35,7 @@ Before decomposing tasks, scan available skills:
 For EACH component, create tasks that are:
 - **Atomic:** One task = one clear deliverable (a file, a function, a migration)
 - **Estimable:** Each task should take < 20 minutes of coding
-- **Ordered:** Dependencies first (DB before API, API before UI)
+- **Ordered:** Dependencies first. Extended ordering: DB → Cache → Queue/Worker → API → Realtime → UI. Specifics: cache layer before API endpoints (API may use cache), queue/worker before features that send async tasks, realtime setup before UI components that consume realtime data.
 - **Testable:** Each task has an implicit verification (compiles, returns expected data, renders)
 - **Skill-tagged:** Each task MUST specify which installed skill(s) the agent should apply during execution
 
@@ -42,6 +43,7 @@ For EACH component, create tasks that are:
 For each task, determine if it is **infra** (run once, no code to write) or **code** (needs implementation):
 - **Infra:** package install, docker-compose, DB migration/seed, .env setup, prisma generate, mkdir, chmod, tool install, config file generation — anything that is "run a command once and it's done".
 - **Code:** create files, write functions, implement endpoints, build components, write tests — anything that requires writing or modifying source code.
+- **`[infra]` tag tasks** are classified flexibly: pure config (Redis setup, queue connection, WebSocket server init) → `setup.sh`. Tasks requiring code (worker logic, event handlers, cache invalidation logic) → `todo.md` with `@skill:` tags. Classify based on task nature, not hardcoded rules.
 
 If infra tasks exist, generate `setup.sh` — a single bash script that executes all infra tasks in order with built-in verification:
 ```bash

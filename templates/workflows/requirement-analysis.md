@@ -23,6 +23,24 @@ Classify complexity based on extracted info:
 | **Medium** | 3-5 features, DB + API + UI | 3 |
 | **Large** | 6+ features or multi-service | 5 + auto-decompose |
 
+Classify project DNA (AI-internal — use extracted slots, no user prompt):
+
+```
+DNA Profile:
+  hasUI              = ui_hint ≠ "API only" AND features mention UI
+  hasBackend         = features mention DB/API/server/processing
+  hasAPI             = endpoint descriptions or API mentions present
+  backendComplexity  = "simple" | "moderate" | "complex"
+```
+
+| backendComplexity | Signals |
+|-------------------|---------|
+| **simple** | CRUD, basic REST, single DB, no special patterns |
+| **moderate** | Complex auth, file processing, 3rd-party integrations, full-text search, multi-table joins |
+| **complex** | Any of: realtime/websocket, queue/worker, cron/scheduler, microservices, caching layer, rate limiting, DB replication/sharding, event-driven, streaming |
+
+AI reads `goal`, `features`, `constraints`, and `edge_cases` to detect signals. The pattern list is open-ended — use judgment to classify any backend pattern, not just those listed above.
+
 Display extraction result to user:
 ```
 📋 Tôi đã hiểu:
@@ -31,6 +49,7 @@ Display extraction result to user:
    • Tính năng: [features]
    • Ràng buộc: [constraints]
    • Quy mô: [small/medium/large]
+   • DNA: [hasUI?] + [Backend simple/moderate/complex]
 
 ❓ Còn thiếu: [list empty/ambiguous slots]
 ```
@@ -41,6 +60,13 @@ Display extraction result to user:
 - If project has UI (`ui_hint` is not "API only"), merge 1 visual direction question into this flow:
   "Style hướng nào? (a) Modern minimal (b) Bold/creative (c) Corporate/clean (d) Để tôi chọn theo context"
 - **Soft gate:** Always ask at least 1 question, even if all slots are filled — use it for edge case probing or scope confirmation.
+- **Backend complexity probe:** If `backendComplexity` from DNA is ambiguous (some signals but unclear severity), use 1 question slot:
+  > "Tôi thấy dự án có [detected signals]. Backend cần xử lý phức tạp đến mức nào?"
+  > (a) CRUD cơ bản — đọc/ghi DB, REST API
+  > (b) Trung bình — auth phức tạp, file processing, integrations
+  > (c) Phức tạp — realtime, queues, caching, multiple services
+  If already clear (landing page → simple, or user said "realtime chat" → complex), skip this probe.
+  This probe counts toward the existing max questions budget (1/3/5) — no extra budget.
 - After each answer, re-evaluate: enough info to write spec? If yes → proceed to Phase 2.
 - **Question Format Rule:** Mỗi câu hỏi AI đặt ra cho user PHẢI có đủ 3 phần:
   1. **Mô tả ngắn** — giải thích tại sao cần thông tin này (1 câu)
@@ -67,6 +93,13 @@ Display extraction result to user:
   > Liệt kê theo dạng: hành động → kết quả mong muốn.
   > VD task app: "tạo task với deadline → hiện trên calendar; kéo thả để đổi trạng thái"
   > VD API: "POST /upload nhận file CSV → parse và lưu DB; GET /report trả JSON tổng hợp"
+  >
+  > **Nếu `backendComplexity ≥ moderate`, probe thêm:**
+  > - Luồng dữ liệu nào cần realtime? (push notification, live update, chat)
+  > - Có tác vụ nào chạy nền không? (gửi email, xử lý file, sync data)
+  > - Các service có cần giao tiếp với nhau không? (API-to-API, event bus)
+  > VD: "Order service tạo event → Payment service xử lý → Notification service gửi email"
+  > VD: "Upload ảnh → background worker resize 3 sizes → lưu S3"
 
   **constraints (ràng buộc):**
   > Có ràng buộc kỹ thuật nào cần biết trước không?
@@ -74,12 +107,24 @@ Display extraction result to user:
   > VD: "phải dùng Next.js + Supabase, deploy Vercel, budget $0, solo dev"
   > VD: "Python FastAPI, cần chạy trên server nội bộ, không được dùng cloud"
   > Nếu không có ràng buộc, ghi "AI tự chọn" — tôi sẽ đề xuất stack phù hợp nhất.
+  >
+  > **Nếu `backendComplexity ≥ moderate`, probe thêm:**
+  > - Yêu cầu về data consistency? (eventual vs strong)
+  > - Cần xử lý bao nhiêu concurrent connections?
+  > - Có cần offline/retry mechanism không?
+  > VD: "eventual consistency OK cho notifications, strong consistency cho payments"
+  > VD: "peak 500 concurrent websocket connections"
 
   **edge_cases (trường hợp biên):**
   > Có tình huống lỗi hoặc giới hạn nào cần xử lý đặc biệt?
   > Nghĩ về: dữ liệu sai, số lượng lớn, mất kết nối, concurrent access.
   > VD: "file upload > 100MB thì reject; 2 user edit cùng lúc thì last-write-wins"
   > VD: "offline mode cho mobile; API rate limit 100 req/phút"
+  >
+  > **Nếu `backendComplexity ≥ moderate`, probe thêm:**
+  > - Khi service/worker fail thì xử lý thế nào? (retry, dead letter queue, alert)
+  > - Data migration strategy? (zero-downtime, maintenance window)
+  > VD: "failed jobs retry 3 lần, sau đó vào dead letter queue + alert Slack"
 
 **Tech stack handling (merged — no dedicated phase):**
 - **User specified stack:** Use it. No alternatives proposed.
@@ -147,11 +192,12 @@ Wait for user to pick an approach before proceeding to Phase 2. If user agrees w
 | Users | [role1, role2, ...] |
 | Tech Stack | [frontend], [backend], [db], [deploy] ([1-line justification]) |
 | UI Style | [style] or "API only" |
+| Backend DNA | [simple/moderate/complex] — [detected patterns] (omit if simple) |
 | Constraints | [list] |
 ```
 
 ### Part B: Tagged Requirement List
-Each requirement is a bullet with a category tag. Available tags: `[func]`, `[auth]`, `[nfr]`, `[edge]`, `[ui]`, `[data]`, `[api]`
+Each requirement is a bullet with a category tag. Available tags: `[func]`, `[auth]`, `[nfr]`, `[edge]`, `[ui]`, `[data]`, `[api]`, `[infra]`
 
 ```markdown
 ## Requirements
@@ -175,6 +221,13 @@ Each requirement is a bullet with a category tag. Available tags: `[func]`, `[au
 ### Edge Cases
 - [edge] Error scenario → expected behavior
 
+### Infrastructure (when backendComplexity ≥ moderate)
+- [infra] Backend pattern — technology, configuration, scaling behavior
+  Examples:
+  - [infra] WebSocket server for live chat — Socket.IO, fallback long-polling, max 500 connections
+  - [infra] Job queue for email — BullMQ + Redis, retry 3x exponential backoff, dead letter queue
+  - [infra] Cache layer — Redis for session + API response, TTL 5min listings, TTL 1hr static config
+
 ### Visual (UI projects only)
 - [ui] Design style, color palette, typography, layout pattern
 ```
@@ -185,6 +238,7 @@ Each requirement is a bullet with a category tag. Available tags: `[func]`, `[au
 - Include concrete numbers for `[nfr]` items (e.g., "<2s response time", "support 1000 concurrent users").
 - `[data]` items should list actual field names, not just "user table".
 - `[api]` items should include method, path, and auth level.
+- `[infra]` items should specify the pattern, technology choice, and concrete scaling/failure behavior.
 
 ### Spec Self-Review (AI-internal — no user prompt needed)
 After writing `design-spec.md`, review it with fresh eyes before presenting to the user:
@@ -192,6 +246,7 @@ After writing `design-spec.md`, review it with fresh eyes before presenting to t
 2. **Internal consistency:** Does the tech stack match the requirements? Do API endpoints match the data model? Do auth roles match the permissions described in features?
 3. **Ambiguity check:** Could any requirement be interpreted two different ways? If so, pick the most likely interpretation and make it explicit.
 4. **Completeness:** Does every `[func]` requirement have a clear input → process → output? Does every `[data]` item have actual field names?
+5. **Backend coherence** (when `backendComplexity ≥ moderate`): Do `[infra]` requirements match the tech stack in Summary? Do patterns conflict? (e.g., "serverless" but needs persistent WebSocket)
 
 Fix any issues inline in the spec file. Do not ask the user — just fix and move on.
 
