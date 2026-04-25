@@ -790,8 +790,8 @@ program
             },
             gemini: {
                 name: 'Gemini CLI',
-                cmd: 'gemini',
-                note: 'Tự động tối ưu hóa dựa trên GEMINI.md. Gõ >om:brainstorm để bắt đầu.',
+                cmd: 'gemini --yolo',
+                note: 'Tự động approve mọi thao tác. Gõ >om:brainstorm để bắt đầu.',
             },
             codex: {
                 name: 'Codex CLI',
