@@ -1,3 +1,5 @@
 node_modules/
 .omni-manifest.json
 *.tgz
+doc/
+docs/
