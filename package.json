@@ -13,7 +13,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node -c bin/omni.js"
+    "test": "node -c bin/omni.js && node --test test/codex-smoke.test.js"
   },
   "keywords": [
     "ai",
