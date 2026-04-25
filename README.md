@@ -4,24 +4,21 @@
 
 ## Tính năng chính
 
-- **Đa IDE:** Claude Code, Codex CLI, Cursor, Windsurf, Antigravity, Cross-tool, Generic — mỗi IDE sinh file cấu hình riêng
+- **Đa IDE:** Claude Code, Gemini CLI, Codex CLI, Cursor, Windsurf, Antigravity, Cross-tool, Generic — mỗi IDE sinh file cấu hình riêng
 - **Dual-Agent:** Tạo cả `CLAUDE.md` + `AGENTS.md` cùng lúc cho dự án dùng nhiều AI tool
 - **Karpathy Mindset:** 4 nguyên tắc — Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution
-- **Socratic Gate:** Bắt buộc AI hỏi tối thiểu 3 câu trước khi code (kèm ví dụ mẫu cho từng loại câu hỏi) — không có ngoại lệ
-- **Personal Rules:** Phỏng vấn có hướng dẫn khi `omni init` — ngôn ngữ giao tiếp, coding style, forbidden patterns, custom rules — kèm ví dụ theo scenario (React, Node.js, Python)
-- **Phỏng vấn kiến trúc:** `>om:brainstorm` phỏng vấn 6 dimensions (Goal, Users, Features, Constraints, Edge Cases, UI) — mỗi câu hỏi AI đặt ra đều có mô tả, gợi ý, và ví dụ cụ thể
+- **Socratic Gate:** Bắt buộc AI phỏng vấn trước khi code — số lượng câu hỏi tự động theo độ phức tạp (1 câu cho Small, 3 cho Medium, 5 cho Large) — không có ngoại lệ
+- **Project DNA Detection:** AI tự động nhận diện `hasUI`, `hasBackend`, `hasAPI`, `backendComplexity` (simple/moderate/complex) từ prompt của user — điều chỉnh quy trình theo độ phức tạp thật sự
+- **Conditional Skill Groups:** 3 nhóm skill động: Best Practices (luôn có), UI/UX (khi hasUI), Backend/Infrastructure (khi backendComplexity >= moderate)
+- **Personal Rules:** Phỏng vấn có hướng dẫn khi `omni init` — ngôn ngữ giao tiếp, coding style, forbidden patterns, custom rules — kèm ví dụ theo scenario
 - **Universal Skills:** 6 skills mặc định (find-skills, karpathy-guidelines, systematic-debugging, test-driven-development, requesting-code-review, using-git-worktrees)
 - **Dynamic Skill Discovery:** `>om:equip` dùng `find-skills` search skills.sh theo tech stack — không giới hạn framework
-- **IDE-Aware Skills:** `auto-equip` chỉ cài skill cho IDE/CLI đã chọn (không cài tất cả), dùng `--agent` flag của skills.sh
+- **IDE-Aware Skills:** `auto-equip` chỉ cài skill cho IDE/CLI đã chọn, dùng `--agent` flag của skills.sh
 - **Skill-Tagged Tasks:** `>om:plan` gắn `@skill:name` cho từng task trong `todo.md`, `>om:cook` tự động load skill tương ứng khi thực thi
 - **Automated Quality Pipeline:** 3 quality cycles bắt buộc — `cook → check → fix` loop tự động sau mỗi 1/3 tasks
-- **Lazy Loading & Token Optimization:** Config file chỉ ~5KB (core rules + registry table), workflows lazy-loaded khi cần — tiết kiệm ~85% token so với inline
+- **Token Optimization:** Config file chỉ ~5KB, workflows lazy-loaded khi cần, examples lazy-loaded khi cần, surgical context rule (grep trước khi đọc file lớn), context-aware verbosity theo lệnh >om:
 - **Anti-Hallucination (Paranoid Mode):** Grounding rules, self-verification checklist, no phantom imports/APIs
-- **Antigravity:** Dùng `AGENTS.md` + `.agents/` directory (rules, skills, workflows)
-- **Claude Code Overlay:** Slash commands `/om:*`, permissions allowlist, quality gate hooks — cài tự động khi chọn Claude Code
-- **Codex CLI Overlay:** `AGENTS.md` lean registry, optional `.codex/config.toml` + `.codex/hooks.json`, Codex-native guidance cho `/plan`, `/review`, `/permissions`, `/agent`, MCP/plugins
 - **Validation Pipeline:** Security → Lint → Build → Tests → Bundle analysis — blocking tự động
-- **Skills.sh:** Tích hợp skills.sh ecosystem — conflict detection, manifest tracking
 
 ---
 
@@ -82,6 +79,7 @@ omni update
 | Lựa chọn | File tạo ra | Gợi ý khởi động |
 |-----------|------------|-----------------|
 | Claude Code / OpenCode | `CLAUDE.md` | `claude --dangerously-skip-permissions` |
+| Gemini CLI (Google) | `GEMINI.md` | `gemini --yolo` |
 | Codex CLI (OpenAI) | `AGENTS.md` + optional `.codex/` | `codex` hoặc `codex --profile omni_safe` |
 | Claude Code + Codex (dual) | `CLAUDE.md` + `AGENTS.md` | Cả 2 lệnh trên |
 | Antigravity | `AGENTS.md` | Dùng `.agents/` directory cho rules, skills, workflows |
@@ -97,6 +95,7 @@ Khi chọn **Claude Code**, `omni init` tự động cài thêm:
 - **Slash commands `/om:*`** — 7 lệnh tương ứng với `>om:*`, gõ trực tiếp trong Claude Code
 - **Permissions allowlist** — `.claude/settings.json` với các lệnh build/test/git được allow sẵn, deny các lệnh nguy hiểm (`rm -rf`, `git push --force`, `git reset --hard`)
 - **Quality gate hooks** — Tự động nhắc AI kiểm tra chất lượng khi file thay đổi
+- **Enhanced coder-execution** — Thêm sub-agent prompting rules, surgical context rule
 
 Khi được hỏi `"🔧 Cài đặt Claude Code nâng cao?"`, chọn **Yes** để kích hoạt permissions + hooks.
 
@@ -129,6 +128,24 @@ codex exec "Read AGENTS.md, then run >om:check against the current repository st
 
 `omni_yolo` giảm approval prompts nhưng vẫn nên chỉ dùng trong repo/sandbox bạn tin tưởng.
 
+### Gemini CLI Overlay (tính năng nâng cao)
+
+Khi chọn **Gemini CLI**, `omni init` tạo `GEMINI.md` và `.omni/workflows/` với các workflow được tối ưu cho Gemini:
+
+- **requirement-analysis.md** — Phỏng vấn Socratic với DNA detection
+- **task-planning.md** — Backend-aware ordering
+- **coder-execution.md** — Surgical context rule cho Gemini tools
+- **qa-testing.md** — QA pipeline
+- **superpower-sdlc.md** — SDLC orchestration
+
+Khởi động gợi ý:
+
+```bash
+gemini --yolo
+```
+
+`--yolo` tự động approve mọi thao tác. Gõ `>om:brainstorm` để bắt đầu.
+
 ---
 
 ## Hướng dẫn sử dụng chi tiết
@@ -143,7 +160,7 @@ omni init
 CLI sẽ hỏi 3 bước:
 
 **Bước 1 — Chọn IDE/Tool:**
-Chọn AI IDE bạn đang dùng (Claude Code, Cursor, Windsurf, ...). Mỗi IDE sẽ sinh file cấu hình riêng phù hợp.
+Chọn AI IDE bạn đang dùng (Claude Code, Gemini CLI, Codex CLI, Cursor, Windsurf, ...). Mỗi IDE sẽ sinh file cấu hình riêng phù hợp.
 
 **Bước 2 — Mức kỷ luật:**
 - **Hardcore** — Ép 100% SDLC, AI phải tuân thủ mọi quy trình
@@ -182,6 +199,7 @@ AI: 📋 Tôi đã hiểu:
    • Mục tiêu: App quản lý task
    • Người dùng: [chưa rõ]
    • Tính năng: [chưa rõ]
+   • DNA: [hasUI] + [Backend simple]
    ...
    ❓ Ai sẽ dùng sản phẩm này? Mỗi role có quyền khác nhau không?
       VD blog: "admin (CRUD bài viết), reader (đọc, comment)"
@@ -232,13 +250,42 @@ Sau khi khởi tạo, gõ các lệnh `>om:` trong chat với AI:
 
 | Lệnh | Agent | Mô tả |
 |-------|-------|-------|
-| `>om:brainstorm` | Architect | Phỏng vấn 2 vòng (6 dimensions + design), đề xuất tech stack, xuất `design-spec.md` |
-| `>om:equip` | Skill Manager | Dùng find-skills search skills.sh dynamic + cài universal skills |
-| `>om:plan` | PM | Phân tích spec → micro-tasks trong `todo.md`, gắn `@skill:name` cho từng task |
-| `>om:cook` | Coder | Thực thi từng task, load skill theo `@skill:` tag, auto-continue, quality gate mỗi 1/3 |
+| `>om:brainstorm` | Architect | Phỏng vấn adaptive (1–5 câu theo độ phức tạp) + DNA detection, đề xuất tech stack, xuất `design-spec.md` |
+| `>om:equip` | Skill Manager | Dùng find-skills search skills.sh dynamic + conditional skill groups theo DNA |
+| `>om:plan` | PM | Phân tích spec → micro-tasks trong `todo.md`, gắn `@skill:name`, backend-aware ordering với `[infra]` tag |
+| `>om:cook` | Coder | Thực thi từng task, dev server preflight, surgical context, auto-continue, quality gate mỗi 1/3 |
 | `>om:check` | QA Tester | Validation pipeline (P0–P3 blocking) + feature verification → `test-report.md` |
 | `>om:fix` | Debugger | Reproduce → root cause → surgical fix → verify. Không shotgun-fix |
-| `>om:doc` | Writer | Đọc code thực tế → sinh README.md + API docs bằng tiếng Việt |
+| `>om:doc` | Writer | Đọc code thực tế → sinh README.md + API docs |
+
+### Project DNA Detection (v2.2.0)
+
+Khi chạy `>om:brainstorm`, AI tự động phân tích prompt để xác định DNA của dự án:
+
+```
+DNA Profile:
+  hasUI              = true/false
+  hasBackend         = true/false
+  hasAPI             = true/false
+  backendComplexity  = simple | moderate | complex
+```
+
+| backendComplexity | Signals |
+|-------------------|---------|
+| **simple** | CRUD, basic REST, single DB |
+| **moderate** | Complex auth, file processing, 3rd-party integrations, full-text search |
+| **complex** | Realtime/WebSocket, queue/worker, caching layer, microservices, event-driven |
+
+DNA ảnh hưởng đến toàn bộ quy trình:
+- **`>om:brainstorm`:** Thêm backend complexity probe nếu cần, thêm `[infra]` tag và Infrastructure section trong spec
+- **`>om:equip`:** Kích hoạt nhóm Backend/Infrastructure skill khi `backendComplexity >= moderate`
+- **`>om:plan`:** Backend-aware ordering (`DB → Cache → Queue/Worker → API → Realtime → UI`), `[infra]` task classification
+
+### Token Optimization (v2.2.0)
+
+- **Lazy-loaded examples:** Interview question templates tách riêng thành `interview-examples.md`, chỉ đọc khi AI cần tham khảo
+- **Surgical context rule:** Với file > 200 dòng, AI dùng grep/search trước để tìm code cần thiết, chỉ đọc ±20 dòng xung quanh — không đọc toàn bộ file
+- **Context-aware verbosity:** `>om:cook` terse (chỉ báo task done, files changed), `>om:check` terse on PASS / verbose on FAIL, `>om:brainstorm`/`>om:plan` verbose
 
 ### Automated Quality Pipeline
 
@@ -260,6 +307,7 @@ om:cook (1/3 tasks)
 - **Checkpoint** = `ceil(total_tasks / 3)` — quality gate trigger tự động
 - **Fix loop** tối đa 3 lần/cycle — nếu vẫn lỗi, escalate cho user
 - **Auto-continue**: `>om:cook` tự động chạy task tiếp, chỉ dừng khi lỗi nghiêm trọng (build fail, breaking changes, security)
+- **Dev Server Preflight**: `>om:cook` tự động khởi động dev server trước khi code task đầu tiên (nếu dự án có UI)
 
 ### Skill-Tagged Tasks
 
@@ -298,35 +346,54 @@ P0–P3 fail → dừng ngay, auto-trigger `>om:fix`, loop cho đến khi pass.
 ## Cấu trúc dự án
 
 ```
-omni-coder-kit/                  # Package (npm)
-├── bin/omni.js                  # CLI chính (8 commands)
+omni-coder-kit/                    # Package (npm)
+├── bin/omni.js                    # CLI chính (8 commands)
 ├── templates/
-│   ├── core/                    # Karpathy mindset + anti-hallucination (Paranoid)
-│   ├── workflows/               # SDLC workflows (10 files)
+│   ├── core/                      # Karpathy mindset + anti-hallucination (Paranoid)
+│   ├── workflows/                 # SDLC workflows (11 files)
+│   │   ├── requirement-analysis.md    # Brainstorm + DNA detection
+│   │   ├── interview-examples.md      # Lazy-loaded question templates
+│   │   ├── skill-manager.md           # Conditional skill groups
+│   │   ├── task-planning.md           # Backend-aware ordering + [infra]
+│   │   ├── coder-execution.md         # Surgical context rule
+│   │   ├── qa-testing.md
+│   │   ├── debugger-workflow.md
+│   │   ├── documentation-writer.md
+│   │   ├── superpower-sdlc.md
+│   │   ├── pm-templates.md
+│   │   └── validation-scripts.md
 │   └── overlays/
-│       └── claude-code/         # Claude Code overlay
-│           ├── commands/        # 7 slash commands (/om:*)
-│           ├── workflows/       # Enhanced workflows
-│           └── settings.template.json  # Permissions + hooks
-├── package.json
-└── .omni-manifest.json          # Tracking: IDE, skills, config file
+│       ├── claude-code/           # Claude Code overlay
+│       │   ├── commands/          # 7 slash commands (/om:*)
+│       │   ├── workflows/         # Enhanced workflows
+│       │   └── settings.template.json
+│       ├── codex/                 # Codex CLI overlay
+│       │   ├── config.template.toml   # Profiles: omni_safe, omni_yolo, omni_review
+│       │   ├── hooks.template.json
+│       │   ├── docs/
+│       │   └── workflows/
+│       └── gemini/                # Gemini CLI overlay
+│           └── workflows/         # Gemini-optimized workflows
+├── test/                          # 217 tests (node:test)
+└── package.json
 ```
 
 ### Sau khi `omni init` — cấu trúc dự án người dùng
 
 ```
 your-project/
-├── CLAUDE.md (hoặc AGENTS.md, .cursorrules, ...)  # Config nhẹ (~5KB)
+├── CLAUDE.md (hoặc GEMINI.md, AGENTS.md, .cursorrules, ...)  # Config nhẹ (~5KB)
 │   ├── Core rules (inline): Karpathy mindset + Anti-hallucination
 │   ├── Command registry table: >om: → workflow file mapping
 │   ├── IDE adapters
 │   └── Personal rules
 ├── .omni/
 │   └── workflows/               # Lazy-loaded bởi AI khi cần
-│       ├── requirement-analysis.md   # >om:brainstorm
-│       ├── skill-manager.md          # >om:equip
-│       ├── task-planning.md          # >om:plan
-│       ├── coder-execution.md        # >om:cook
+│       ├── requirement-analysis.md   # >om:brainstorm (DNA detection)
+│       ├── interview-examples.md     # Lazy-loaded question templates
+│       ├── skill-manager.md          # >om:equip (conditional groups)
+│       ├── task-planning.md          # >om:plan ([infra] tag)
+│       ├── coder-execution.md        # >om:cook (surgical context)
 │       ├── qa-testing.md             # >om:check
 │       ├── debugger-workflow.md      # >om:fix
 │       ├── documentation-writer.md   # >om:doc
@@ -335,7 +402,7 @@ your-project/
 └── .omni-rules.md               # Personal rules (nếu có)
 ```
 
-**Token optimization:** Config file chỉ chứa core rules + bảng registry (~5KB thay vì ~36KB). AI chỉ đọc workflow file khi lệnh `>om:` tương ứng được gọi, tiết kiệm token đáng kể. Fallback: nếu `.omni/workflows/` không tồn tại → đọc từ `node_modules/omni-coder-kit/templates/workflows/`.
+**Token optimization:** Config file chỉ chứa core rules + bảng registry (~5KB thay vì ~36KB). AI chỉ đọc workflow file khi lệnh `>om:` tương ứng được gọi, và chỉ đọc example files khi cần tham khảo. Fallback: nếu `.omni/workflows/` không tồn tại → đọc từ `node_modules/omni-coder-kit/templates/workflows/`.
 
 ---
 
@@ -344,7 +411,7 @@ your-project/
 Dự án được tham khảo và lấy ý tưởng từ nhiều nguồn:
 - [antigravity-kit](https://github.com/vudovn/antigravity-kit)
 - [karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills)
-- Claudekit (dù chưa được xài :D)
+- Claudekit
 
 ---
 
