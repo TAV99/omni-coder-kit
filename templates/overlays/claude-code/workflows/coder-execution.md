@@ -12,7 +12,22 @@ When executing the [>om:cook] command, you MUST act as a Senior Developer and Or
   - If all checks pass or `setup.sh` does not exist → proceed normally.
 *CRITICAL: If `todo.md` does not exist, STOP. Tell the user to run `/om:plan` first.*
 
-**Step 2: Dependency Graph Analysis**
+**Step 2: Dev Server Preflight**
+If the project has a runnable UI, start the dev server before coding so the user can observe changes in real time.
+1. Check if a dev server command exists:
+   - `package.json`: look for `dev`, `start`, or `serve` scripts (prefer in that order).
+   - `docker-compose.yml`: look for a web/app service with exposed ports.
+   - `Makefile`: look for a `dev` or `serve` target.
+   - `manage.py` (Django): use `python manage.py runserver`.
+   - If none found, skip this step silently.
+2. If dependencies are missing (e.g. `node_modules/` absent), install them first.
+3. Use `Bash(run_in_background)` to start the dev server.
+4. Wait up to 5 seconds for the server to print a URL.
+5. Inform the user: "Dev server running at <URL>. You can open it in your browser to watch changes live."
+6. If the server fails to start, inform briefly and move on. Do not block the workflow.
+7. Do not monitor or restart the server after this point. Continue with task execution.
+
+**Step 3: Dependency Graph Analysis**
 Analyze all uncompleted tasks and build a dependency graph:
 
 1. **Parse tasks** — group by component/module section in `todo.md`.
@@ -24,7 +39,7 @@ Analyze all uncompleted tasks and build a dependency graph:
 3. **Group into batches** — each batch contains tasks that can run simultaneously.
 4. **Cap at 4 agents per batch** — to keep resource usage reasonable.
 
-**Step 3: Present Execution Plan**
+**Step 4: Present Execution Plan**
 Before starting, show the user the plan:
 ```
 📊 Dependency Analysis — [N] tasks total
@@ -46,7 +61,7 @@ Tiến hành? (y/n)
 
 Wait for user confirmation before proceeding.
 
-**Step 4: Decide Execution Strategy**
+**Step 5: Decide Execution Strategy**
 Choose strategy based on conditions:
 
 | Condition | Strategy |
@@ -56,7 +71,7 @@ Choose strategy based on conditions:
 | Independent tasks exist across files | Parallel (worktree isolation) |
 | User says "tuần tự" / "sequential" | Sequential — respect user choice |
 
-**Step 5a: Parallel Execution (when applicable)**
+**Step 6a: Parallel Execution (when applicable)**
 For each batch:
 
 1. **Spawn sub-agents** — Use the Agent tool with `isolation: "worktree"` for each task in the batch:
@@ -83,7 +98,7 @@ For each batch:
 
 5. **Proceed to next batch** after current batch completes.
 
-**Step 5b: Sequential Execution (fallback)**
+**Step 6b: Sequential Execution (fallback)**
 Same as base workflow — execute ONE task at a time:
 1. State what you will do and which files will be affected.
 2. Write the minimum code to complete the task. Follow the Simplicity First principle.
@@ -91,7 +106,7 @@ Same as base workflow — execute ONE task at a time:
 4. After writing code, verify it works (compile check, quick test, or logical validation).
 5. Mark the task as done: change `- [ ]` to `- [x]` in `todo.md`.
 
-**Step 6: Report & Continue**
+**Step 7: Report & Continue**
 After completing each batch (parallel) or task (sequential), report:
 ```
 ✅ Batch [N] complete — [tasks done] tasks
@@ -109,7 +124,7 @@ Evaluate whether to continue:
   - Security vulnerabilities introduced
   - Task ambiguity that could lead the project in the wrong direction
 
-**Step 7: Quality Gate — Auto Check/Fix Cycle**
+**Step 8: Quality Gate — Auto Check/Fix Cycle**
 The project runs exactly **3 quality cycles**. Each cycle triggers after completing 1/3 of total tasks:
 1. On first launch, count total tasks (`- [ ]` + `- [x]`) in `todo.md` → compute `checkpoint = ceil(total / 3)`.
 2. Track `cycle` counter (1, 2, 3) across the session.

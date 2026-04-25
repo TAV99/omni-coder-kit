@@ -12,7 +12,22 @@ When executing the [>om:cook] command, you MUST act as a Senior Developer. Your 
   - If all checks pass or `setup.sh` does not exist → proceed normally.
 *CRITICAL: If `todo.md` does not exist, STOP. Tell the user to run `>om:plan` first.*
 
-**Step 2: Execute ONE Task at a Time**
+**Step 2: Dev Server Preflight**
+If the project has a runnable UI, start the dev server before coding so the user can observe changes in real time.
+1. Check if a dev server command exists:
+   - `package.json`: look for `dev`, `start`, or `serve` scripts (prefer in that order).
+   - `docker-compose.yml`: look for a web/app service with exposed ports.
+   - `Makefile`: look for a `dev` or `serve` target.
+   - `manage.py` (Django): use `python manage.py runserver`.
+   - If none found, skip this step silently.
+2. If dependencies are missing (e.g. `node_modules/` absent), install them first.
+3. Run the dev server as a background process.
+4. Wait up to 5 seconds for the server to print a URL.
+5. Inform the user: "Dev server running at <URL>. You can open it in your browser to watch changes live."
+6. If the server fails to start, inform briefly and move on. Do not block the workflow.
+7. Do not monitor or restart the server after this point. Continue with task execution.
+
+**Step 3: Execute ONE Task at a Time**
 For the current task:
 1. State what you will do and which files will be affected.
 2. Write the minimum code to complete the task. Follow the Simplicity First principle.
@@ -20,7 +35,7 @@ For the current task:
 4. After writing code, verify it works (compile check, quick test, or logical validation).
 5. Mark the task as done: change `- [ ]` to `- [x]` in `todo.md`.
 
-**Step 3: Report & Auto-Continue**
+**Step 4: Report & Auto-Continue**
 After completing a task, report:
 ```
 ✅ [Task description] — Done
@@ -38,7 +53,7 @@ Then evaluate the result:
   - Dependency conflicts that affect multiple tasks
 - If user says stop at any point, summarize progress (X/Y tasks completed).
 
-**Step 4: Quality Gate — Auto Check/Fix Cycle**
+**Step 5: Quality Gate — Auto Check/Fix Cycle**
 The project runs exactly **3 quality cycles**. Each cycle triggers after completing 1/3 of total tasks:
 1. On first launch, count total tasks (`- [ ]` + `- [x]`) in `todo.md` → compute `checkpoint = ceil(total / 3)`.
 2. Track `cycle` counter (1, 2, 3) across the session.
