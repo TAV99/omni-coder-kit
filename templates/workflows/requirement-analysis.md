@@ -106,6 +106,33 @@ Before generating spec, verify you can fill ALL of these:
 - [ ] Biết tech stack (user chọn hoặc AI chọn)?
 If any is unchecked → ask 1 more targeted question. Do NOT proceed.
 
+### Step 4: Propose Approaches (before writing spec)
+Present 2-3 architectural approaches with trade-offs. For each approach:
+1. **Name** — a short label (e.g., "Monolith + SSR", "API-first + SPA", "Serverless")
+2. **How it works** — 2-3 sentences describing the architecture
+3. **Pros** — 2-3 bullet points
+4. **Cons** — 2-3 bullet points
+
+Lead with your recommended approach and explain why. Format:
+```
+🏗️ Đề xuất kiến trúc:
+
+**A. [Recommended] — [Name]**
+   [How it works]
+   ✅ [Pro 1]  ✅ [Pro 2]
+   ⚠️ [Con 1]  ⚠️ [Con 2]
+
+**B. [Name]**
+   [How it works]
+   ✅ [Pro 1]  ✅ [Pro 2]
+   ⚠️ [Con 1]  ⚠️ [Con 2]
+
+Tôi khuyên chọn A vì [1-line justification]. Bạn chọn hướng nào?
+```
+Wait for user to pick an approach before proceeding to Phase 2. If user agrees with your recommendation, proceed. If user picks another, adapt the spec accordingly.
+
+**Skip rule:** For **Small** complexity projects with an obvious single approach (e.g., a CLI tool, a static site), briefly state the approach in 1-2 sentences and ask for confirmation instead of proposing alternatives.
+
 **Phase 2: Generate `design-spec.md`**
 
 ### Part A: Structured Summary
@@ -158,6 +185,15 @@ Each requirement is a bullet with a category tag. Available tags: `[func]`, `[au
 - Include concrete numbers for `[nfr]` items (e.g., "<2s response time", "support 1000 concurrent users").
 - `[data]` items should list actual field names, not just "user table".
 - `[api]` items should include method, path, and auth level.
+
+### Spec Self-Review (AI-internal — no user prompt needed)
+After writing `design-spec.md`, review it with fresh eyes before presenting to the user:
+1. **Placeholder scan:** Any "TBD", "TODO", empty sections, or vague requirements like "handle errors appropriately"? Fix them with concrete content.
+2. **Internal consistency:** Does the tech stack match the requirements? Do API endpoints match the data model? Do auth roles match the permissions described in features?
+3. **Ambiguity check:** Could any requirement be interpreted two different ways? If so, pick the most likely interpretation and make it explicit.
+4. **Completeness:** Does every `[func]` requirement have a clear input → process → output? Does every `[data]` item have actual field names?
+
+Fix any issues inline in the spec file. Do not ask the user — just fix and move on.
 
 ### After spec generation
 Display non-blocking next steps:
