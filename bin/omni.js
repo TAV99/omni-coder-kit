@@ -313,6 +313,33 @@ function detectDNA(projectDir) {
     };
 }
 
+function buildCursorMcp(projectDir) {
+    const servers = {};
+    servers.context7 = { command: 'npx', args: ['-y', '@upstash/context7-mcp'] };
+
+    let pkg = {};
+    try {
+        pkg = JSON.parse(fs.readFileSync(path.join(projectDir, 'package.json'), 'utf-8'));
+    } catch {}
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    const hasDep = (name) => name in allDeps;
+
+    if (hasDep('@supabase/supabase-js'))
+        servers.supabase = { command: 'npx', args: ['-y', 'supabase-mcp-server'] };
+    if (hasDep('prisma') || fs.existsSync(path.join(projectDir, 'prisma', 'schema.prisma')))
+        servers.prisma = { command: 'npx', args: ['-y', '@anthropic/mcp-prisma'] };
+    if (hasDep('next'))
+        servers.vercel = { command: 'npx', args: ['-y', '@vercel/mcp'] };
+    if (hasDep('firebase') || hasDep('firebase-admin'))
+        servers.firebase = { command: 'npx', args: ['-y', '@anthropic/mcp-firebase'] };
+    if (fs.existsSync(path.join(projectDir, 'Dockerfile')) || fs.existsSync(path.join(projectDir, 'docker-compose.yml')))
+        servers.docker = { command: 'npx', args: ['-y', '@anthropic/mcp-docker'] };
+    if (fs.existsSync(path.join(projectDir, '.git')))
+        servers.github = { command: 'npx', args: ['-y', '@anthropic/mcp-github'] };
+
+    return JSON.stringify({ mcpServers: servers }, null, 2);
+}
+
 function buildCommandRegistry(ide) {
     const isClaudeCode = ide === 'claudecode' || ide === 'dual';
     const isCodex = ide === 'codex';
