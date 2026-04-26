@@ -296,6 +296,23 @@ function buildCodexHooks(ide, advanced) {
     return fs.readFileSync(templatePath, 'utf-8');
 }
 
+function detectDNA(projectDir) {
+    let pkg = {};
+    try {
+        pkg = JSON.parse(fs.readFileSync(path.join(projectDir, 'package.json'), 'utf-8'));
+    } catch {}
+
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    const hasDep = (name) => name in allDeps;
+    const dirExists = (name) => fs.existsSync(path.join(projectDir, name));
+
+    return {
+        hasUI: hasDep('react') || hasDep('vue') || hasDep('svelte') || hasDep('next') || hasDep('@angular/core'),
+        hasBackend: hasDep('express') || hasDep('fastify') || hasDep('hono') || hasDep('prisma') || hasDep('@supabase/supabase-js') || dirExists('server') || dirExists('api'),
+        hasAPI: hasDep('express') || hasDep('fastify') || hasDep('hono') || dirExists('routes') || dirExists('controllers'),
+    };
+}
+
 function buildCommandRegistry(ide) {
     const isClaudeCode = ide === 'claudecode' || ide === 'dual';
     const isCodex = ide === 'codex';

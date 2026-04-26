@@ -2,6 +2,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const TEMPLATES = path.join(__dirname, '..', 'templates');
 
@@ -370,4 +371,103 @@ describe('Base workflow files exist', () => {
             assert.ok(fs.existsSync(path.join(TEMPLATES, 'workflows', wf)));
         });
     }
+});
+
+// ─── detectDNA ──────────────────────────────────────────────────────────────
+
+function detectDNA(projectDir) {
+    let pkg = {};
+    try {
+        pkg = JSON.parse(fs.readFileSync(path.join(projectDir, 'package.json'), 'utf-8'));
+    } catch {}
+
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    const hasDep = (name) => name in allDeps;
+    const dirExists = (name) => fs.existsSync(path.join(projectDir, name));
+
+    return {
+        hasUI: hasDep('react') || hasDep('vue') || hasDep('svelte') || hasDep('next') || hasDep('@angular/core'),
+        hasBackend: hasDep('express') || hasDep('fastify') || hasDep('hono') || hasDep('prisma') || hasDep('@supabase/supabase-js') || dirExists('server') || dirExists('api'),
+        hasAPI: hasDep('express') || hasDep('fastify') || hasDep('hono') || dirExists('routes') || dirExists('controllers'),
+    };
+}
+
+describe('detectDNA', () => {
+    it('returns all false for empty project', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dna-test-'));
+        try {
+            const dna = detectDNA(tmpDir);
+            assert.equal(dna.hasUI, false);
+            assert.equal(dna.hasBackend, false);
+            assert.equal(dna.hasAPI, false);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('detects hasUI from React dependency', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dna-test-'));
+        try {
+            fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({
+                dependencies: { react: '^18.0.0', 'react-dom': '^18.0.0' }
+            }));
+            const dna = detectDNA(tmpDir);
+            assert.equal(dna.hasUI, true);
+            assert.equal(dna.hasBackend, false);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('detects hasBackend from Express dependency', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dna-test-'));
+        try {
+            fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({
+                dependencies: { express: '^4.18.0' }
+            }));
+            const dna = detectDNA(tmpDir);
+            assert.equal(dna.hasBackend, true);
+            assert.equal(dna.hasAPI, true);
+            assert.equal(dna.hasUI, false);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('detects hasBackend from server directory', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dna-test-'));
+        try {
+            fs.mkdirSync(path.join(tmpDir, 'server'));
+            const dna = detectDNA(tmpDir);
+            assert.equal(dna.hasBackend, true);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('detects hasAPI from routes directory', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dna-test-'));
+        try {
+            fs.mkdirSync(path.join(tmpDir, 'routes'));
+            const dna = detectDNA(tmpDir);
+            assert.equal(dna.hasAPI, true);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('detects fullstack project (React + Express)', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dna-test-'));
+        try {
+            fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({
+                dependencies: { react: '^18.0.0', express: '^4.18.0' }
+            }));
+            const dna = detectDNA(tmpDir);
+            assert.equal(dna.hasUI, true);
+            assert.equal(dna.hasBackend, true);
+            assert.equal(dna.hasAPI, true);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
 });
