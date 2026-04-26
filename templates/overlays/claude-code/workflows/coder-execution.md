@@ -6,6 +6,7 @@ When executing the [>om:cook] command, you MUST act as a Senior Developer and Or
 - Read `design-spec.md` for architectural context (schema, endpoints, tech stack).
 - Read existing project files to understand current state. Do NOT assume file structure.
 - **Load skills:** For tasks with `@skill:skill-name` tag(s), note which skill files need to be passed to sub-agents.
+- **Content source:** If `content-source.md` exists, read it. Include relevant facts in sub-agent prompts for tasks that generate user-facing text (UI copy, README, landing pages). Pass `## Forbidden Content` rules to ALL sub-agents.
 - **Infra pre-check:** If `setup.sh` exists in the project root, verify infrastructure is ready before coding:
   - Check: Docker running? DB accessible? `.env` exists? Dependencies installed?
   - If any check fails → STOP. Tell the user: "Chạy `bash setup.sh` trước khi tiếp tục /om:cook."
