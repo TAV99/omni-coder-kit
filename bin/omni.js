@@ -472,6 +472,22 @@ program
     .action(async () => {
         console.log(chalk.cyan.bold('\n🚀 Khởi tạo Omni-Coder Kit!\n'));
 
+        // Detect existing project for Project Map generation
+        let pendingMapGeneration = null;
+        const detected = detectExistingProject(process.cwd());
+        if (detected.detected) {
+            const { generateMap } = await prompts({
+                type: 'confirm',
+                name: 'generateMap',
+                message: `📁 Phát hiện project có sẵn (${detected.stats.files} files, ${detected.lang}). Tạo Project Map?`,
+                initial: true,
+            });
+            if (generateMap) {
+                console.log(chalk.gray('   Sẽ tạo Project Map sau khi init hoàn tất...\n'));
+                pendingMapGeneration = true;
+            }
+        }
+
         const q = (n, total, text) => `${chalk.whiteBright.bold(`[${n}/${total}]`)} ${text}`;
 
         const response = await prompts([
@@ -915,6 +931,21 @@ program
                     console.log(`   ${chalk.green(h.name)}: ${chalk.gray(h.note)}`);
                 }
             }
+        }
+        // Generate Project Map if user opted in
+        if (pendingMapGeneration) {
+            console.log(chalk.cyan.bold('🔍 Đang tạo Project Map...'));
+            const scan = scanProject(process.cwd());
+            const projectName = path.basename(process.cwd());
+            const skeleton = generateMapSkeleton(scan, projectName);
+            const omniDir = path.join(process.cwd(), '.omni');
+            fs.mkdirSync(omniDir, { recursive: true });
+            writeFileSafe(path.join(omniDir, 'project-map.md'), skeleton);
+            manifest.projectMap = true;
+            manifest.mapGeneratedAt = new Date().toISOString();
+            saveManifest(manifest);
+            console.log(chalk.green('📁 Project Map: .omni/project-map.md'));
+            console.log(chalk.gray('   Chạy >om:map trong chat AI để AI điền mô tả chi tiết.\n'));
         }
         console.log('');
     });
