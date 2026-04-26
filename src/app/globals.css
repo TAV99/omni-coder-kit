@@ -1,18 +1,80 @@
 @import "tailwindcss";
 
+/* ── Theme Variables ── */
 :root {
-  --background: #0a0a0b;
-  --foreground: #f5f5f5;
+  --surface: #eef0f2;
+  --surface-elevated: #f5f6f8;
+  --surface-code: #e8eaed;
+  --content: #1a1a1b;
+  --content-secondary: #374151;
+  --content-muted: #6b7280;
+  --content-faint: #9ca3af;
+  --outline: rgba(0, 0, 0, 0.12);
+  --outline-subtle: rgba(0, 0, 0, 0.06);
+  --outline-strong: rgba(0, 0, 0, 0.18);
+  --hover: rgba(0, 0, 0, 0.04);
+  --highlight: rgba(0, 0, 0, 0.04);
+  --highlight-strong: rgba(0, 0, 0, 0.08);
+  --nav-bg: rgba(238, 240, 242, 0.85);
+  --glass-bg: rgba(245, 246, 248, 0.8);
+  --card-gradient: linear-gradient(135deg, rgba(251,146,60,0.15), rgba(250,204,21,0.15));
+  --orb-orange: rgba(251, 146, 60, 0.08);
+  --orb-yellow: rgba(250, 204, 21, 0.08);
+  --gradient-from: #ea580c;
+  --gradient-to: #ca8a04;
+  --accent: #ea580c;
+  --accent-alt: #a16207;
+  --accent-bg: rgba(234, 88, 12, 0.08);
+  --accent-border: rgba(234, 88, 12, 0.15);
+}
+
+html.dark {
+  --surface: #121214;
+  --surface-elevated: #1c1c1e;
+  --surface-code: #18181a;
+  --content: #f5f5f5;
+  --content-secondary: #d1d5db;
+  --content-muted: #9ca3af;
+  --content-faint: #6b7280;
+  --outline: rgba(255, 255, 255, 0.1);
+  --outline-subtle: rgba(255, 255, 255, 0.05);
+  --outline-strong: rgba(255, 255, 255, 0.2);
+  --hover: rgba(255, 255, 255, 0.05);
+  --highlight: rgba(255, 255, 255, 0.05);
+  --highlight-strong: rgba(255, 255, 255, 0.1);
+  --nav-bg: rgba(18, 18, 20, 0.8);
+  --glass-bg: rgba(28, 28, 30, 0.8);
+  --card-gradient: linear-gradient(135deg, rgba(251,146,60,0.3), rgba(250,204,21,0.3));
+  --orb-orange: rgba(251, 146, 60, 0.2);
+  --orb-yellow: rgba(250, 204, 21, 0.2);
+  --gradient-from: #fb923c;
+  --gradient-to: #facc15;
+  --accent: #fdba74;
+  --accent-alt: #fde047;
+  --accent-bg: rgba(251, 146, 60, 0.1);
+  --accent-border: rgba(251, 146, 60, 0.2);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-cyan-accent: #06b6d4;
-  --color-violet-accent: #8b5cf6;
-  --color-dark-bg: #0a0a0b;
-  --color-dark-card: #141415;
-  --color-dark-border: #262627;
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-code: var(--surface-code);
+  --color-content: var(--content);
+  --color-content-secondary: var(--content-secondary);
+  --color-content-muted: var(--content-muted);
+  --color-content-faint: var(--content-faint);
+  --color-outline: var(--outline);
+  --color-outline-subtle: var(--outline-subtle);
+  --color-outline-strong: var(--outline-strong);
+  --color-hover: var(--hover);
+  --color-highlight: var(--highlight);
+  --color-highlight-strong: var(--highlight-strong);
+  --color-accent: var(--accent);
+  --color-accent-alt: var(--accent-alt);
+  --color-accent-bg: var(--accent-bg);
+  --color-accent-border: var(--accent-border);
+  --color-background: var(--surface);
+  --color-foreground: var(--content);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -22,30 +84,30 @@ html {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--surface);
+  color: var(--content);
   font-family: var(--font-geist-sans), sans-serif;
 }
 
 .gradient-text {
-  background: linear-gradient(to right, #06b6d4, #8b5cf6);
+  background: linear-gradient(to right, var(--gradient-from), var(--gradient-to));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .glass-card {
-  background: rgba(20, 20, 21, 0.8);
+  background: var(--glass-bg);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--outline);
 }
 
-.glow-cyan {
-  box-shadow: 0 0 30px rgba(6, 182, 212, 0.3);
+.glow-orange {
+  box-shadow: 0 0 30px rgba(251, 146, 60, 0.3);
 }
 
-.glow-violet {
-  box-shadow: 0 0 30px rgba(139, 92, 246, 0.3);
+.glow-yellow {
+  box-shadow: 0 0 30px rgba(250, 204, 21, 0.3);
 }
 
 .scrollbar-thin {

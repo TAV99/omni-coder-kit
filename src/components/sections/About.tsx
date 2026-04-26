@@ -22,8 +22,8 @@ export function About() {
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: i * 0.15 }}
               >
-                <h3 className="text-lg font-semibold text-cyan-400">{point.title}</h3>
-                <p className="mt-2 text-gray-400 leading-relaxed">{point.description}</p>
+                <h3 className="text-lg font-semibold text-accent">{point.title}</h3>
+                <p className="mt-2 text-content-muted leading-relaxed">{point.description}</p>
               </motion.div>
             ))}
           </div>
@@ -47,15 +47,15 @@ export function About() {
                 transition={{ duration: 0.4, delay: 0.3 + i * 0.1 }}
                 className="flex items-center gap-3 mb-3"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500/20 to-violet-500/20 border border-white/10 text-sm font-mono text-cyan-400">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-orange-400/20 to-yellow-400/20 border border-outline text-sm font-mono text-accent">
                   {i + 1}
                 </div>
-                <div className="flex-1 rounded-lg border border-white/10 bg-[#141415] px-4 py-2.5">
-                  <span className="font-mono text-sm text-violet-400">{item.command}</span>
-                  <span className="ml-2 text-xs text-gray-500">{item.agent}</span>
+                <div className="flex-1 rounded-lg border border-outline bg-surface-elevated px-4 py-2.5">
+                  <span className="font-mono text-sm text-accent-alt">{item.command}</span>
+                  <span className="ml-2 text-xs text-content-faint">{item.agent}</span>
                 </div>
                 {i < aboutData.workflow.length - 1 && (
-                  <div className="absolute left-5 mt-12 h-3 w-px bg-white/10" />
+                  <div className="absolute left-5 mt-12 h-3 w-px bg-highlight-strong" />
                 )}
               </motion.div>
             ))}

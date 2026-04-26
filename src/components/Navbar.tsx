@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, useScroll, useMotionValueEvent, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button } from "./ui/Button";
+import { ThemeToggle } from "./ThemeToggle";
 
 const navLinks = [
   { label: "About", href: "#about" },
@@ -42,7 +43,7 @@ export function Navbar() {
       variants={{ visible: { y: 0 }, hidden: { y: "-100%" } }}
       animate={hidden && !mobileOpen ? "hidden" : "visible"}
       transition={{ duration: 0.35, ease: "easeInOut" }}
-      className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0b]/80 backdrop-blur-xl"
+      className="fixed top-0 left-0 right-0 z-50 border-b border-outline-subtle bg-[var(--nav-bg)] backdrop-blur-xl"
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
         <a href="#" className="text-xl font-bold gradient-text">Omni-Coder Kit</a>
@@ -51,11 +52,11 @@ export function Navbar() {
         <div className="hidden items-center gap-6 md:flex">
           {navLinks.map((link) =>
             link.href.startsWith("/") ? (
-              <Link key={link.href} href={link.href} className="text-sm text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded">
+              <Link key={link.href} href={link.href} className="text-sm text-content-muted transition-colors hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 rounded">
                 {link.label}
               </Link>
             ) : (
-              <a key={link.href} href={link.href} className="text-sm text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded">
+              <a key={link.href} href={link.href} className="text-sm text-content-muted transition-colors hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 rounded">
                 {link.label}
               </a>
             )
@@ -63,6 +64,7 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           <Button variant="primary" href="#installation" className="hidden md:inline-flex text-sm px-4 py-2">
             Bắt đầu ngay
           </Button>
@@ -71,7 +73,7 @@ export function Navbar() {
           <button
             type="button"
             onClick={() => setMobileOpen((prev) => !prev)}
-            className="inline-flex items-center justify-center rounded-lg p-2 text-gray-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 md:hidden"
+            className="inline-flex items-center justify-center rounded-lg p-2 text-content-muted hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 md:hidden"
             aria-expanded={mobileOpen}
             aria-controls="mobile-menu"
             aria-label={mobileOpen ? "Đóng menu" : "Mở menu"}
@@ -96,7 +98,7 @@ export function Navbar() {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.25, ease: "easeInOut" }}
-            className="overflow-hidden border-t border-white/5 md:hidden"
+            className="overflow-hidden border-t border-outline-subtle md:hidden"
           >
             <div className="space-y-1 px-4 pb-4 pt-2">
               {navLinks.map((link) =>
@@ -105,7 +107,7 @@ export function Navbar() {
                     key={link.href}
                     href={link.href}
                     onClick={() => setMobileOpen(false)}
-                    className="block rounded-lg px-3 py-2.5 text-base text-gray-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                    className="block rounded-lg px-3 py-2.5 text-base text-content-secondary transition-colors hover:bg-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
                   >
                     {link.label}
                   </Link>
@@ -114,7 +116,7 @@ export function Navbar() {
                     key={link.href}
                     href={link.href}
                     onClick={() => setMobileOpen(false)}
-                    className="block rounded-lg px-3 py-2.5 text-base text-gray-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                    className="block rounded-lg px-3 py-2.5 text-base text-content-secondary transition-colors hover:bg-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
                   >
                     {link.label}
                   </a>

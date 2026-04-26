@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DocsSidebar } from "@/components/docs/DocsSidebar";
 import { DocsContent } from "@/components/docs/DocsContent";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const metadata: Metadata = {
   title: "Documentation — Omni-Coder Kit",
@@ -10,22 +11,23 @@ export const metadata: Metadata = {
 
 export default function DocsPage() {
   return (
-    <div className="min-h-screen bg-[#0a0a0b]">
+    <div className="min-h-screen bg-surface">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0a0a0b]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-outline-subtle bg-[var(--nav-bg)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-6">
             <Link href="/" className="text-xl font-bold gradient-text">Omni-Coder Kit</Link>
-            <span className="hidden text-sm text-gray-500 sm:inline">/</span>
-            <span className="hidden text-sm text-gray-300 sm:inline">Docs</span>
+            <span className="hidden text-sm text-content-faint sm:inline">/</span>
+            <span className="hidden text-sm text-content-secondary sm:inline">Docs</span>
           </div>
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-sm text-gray-400 hover:text-white transition-colors">Home</Link>
+            <ThemeToggle />
+            <Link href="/" className="text-sm text-content-muted hover:text-content transition-colors">Home</Link>
             <a
               href="https://github.com/TAV99/omni-coder-kit"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-gray-400 hover:text-white transition-colors"
+              className="text-sm text-content-muted hover:text-content transition-colors"
             >
               GitHub
             </a>

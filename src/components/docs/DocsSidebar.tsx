@@ -34,7 +34,7 @@ export function DocsSidebar() {
     <nav className="space-y-6">
       {docGroups.map((group) => (
         <div key={group.name}>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-content-faint">
             {group.name}
           </h4>
           <ul className="space-y-1">
@@ -44,8 +44,8 @@ export function DocsSidebar() {
                   onClick={() => handleClick(section.id)}
                   className={`block w-full text-left rounded-md px-3 py-1.5 text-sm transition-colors ${
                     activeId === section.id
-                      ? "bg-cyan-500/10 text-cyan-400 font-medium"
-                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                      ? "bg-accent-bg text-accent font-medium"
+                      : "text-content-muted hover:text-content hover:bg-hover"
                   }`}
                 >
                   {section.title}
@@ -61,10 +61,10 @@ export function DocsSidebar() {
   return (
     <>
       {/* Mobile toggle */}
-      <div className="sticky top-16 z-30 border-b border-white/5 bg-[#0a0a0b]/95 backdrop-blur-xl p-3 lg:hidden">
+      <div className="sticky top-16 z-30 border-b border-outline-subtle bg-[var(--nav-bg)] backdrop-blur-xl p-3 lg:hidden">
         <button
           onClick={() => setMobileOpen((v) => !v)}
-          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-gray-300 hover:bg-white/5"
+          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-content-secondary hover:bg-hover"
         >
           <span>Menu</span>
           <svg className={`h-4 w-4 transition-transform ${mobileOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

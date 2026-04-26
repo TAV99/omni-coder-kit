@@ -11,10 +11,10 @@ interface ButtonProps {
 }
 
 export function Button({ variant = "primary", href, onClick, children, className = "" }: ButtonProps) {
-  const base = "inline-flex items-center justify-center rounded-xl px-6 py-3 font-medium transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]";
+  const base = "inline-flex items-center justify-center rounded-xl px-6 py-3 font-medium transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
   const styles = {
-    primary: `${base} bg-gradient-to-r from-cyan-500 to-violet-500 text-white hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] ${className}`,
-    secondary: `${base} border border-white/20 text-white hover:border-white/40 ${className}`,
+    primary: `${base} bg-gradient-to-r from-orange-400 to-yellow-400 text-white hover:shadow-[0_0_30px_rgba(251,146,60,0.4)] ${className}`,
+    secondary: `${base} border border-outline-strong text-content hover:border-outline-strong ${className}`,
   };
 
   const motionProps = {

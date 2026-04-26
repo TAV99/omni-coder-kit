@@ -6,8 +6,8 @@ interface BadgeProps {
 
 export function Badge({ children, variant = "default", className = "" }: BadgeProps) {
   const styles = {
-    default: "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20",
-    highlighted: "bg-gradient-to-r from-cyan-500/20 to-violet-500/20 text-white border border-white/20",
+    default: "bg-accent-bg text-accent border border-accent-border",
+    highlighted: "bg-gradient-to-r from-orange-400/20 to-yellow-400/20 text-content border border-outline-strong",
   };
 
   return (

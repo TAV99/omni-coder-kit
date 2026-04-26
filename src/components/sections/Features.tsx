@@ -25,7 +25,7 @@ export function Features() {
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
           Workflow <span className="gradient-text">hoàn chỉnh</span>
         </h2>
-        <p className="mt-4 text-lg text-gray-400">8 commands. Từ ý tưởng đến production.</p>
+        <p className="mt-4 text-lg text-content-muted">8 commands. Từ ý tưởng đến production.</p>
       </div>
       <motion.div
         variants={containerVariants}
@@ -38,8 +38,8 @@ export function Features() {
           <motion.div key={feature.id} variants={itemVariants} className="h-full">
             <Card className="h-full">
               <span className="text-3xl">{feature.icon}</span>
-              <h3 className="mt-3 font-mono text-lg font-semibold text-cyan-400">{feature.title}</h3>
-              <p className="mt-2 text-sm text-gray-400 leading-relaxed">{feature.description}</p>
+              <h3 className="mt-3 font-mono text-lg font-semibold text-accent">{feature.title}</h3>
+              <p className="mt-2 text-sm text-content-muted leading-relaxed">{feature.description}</p>
             </Card>
           </motion.div>
         ))}

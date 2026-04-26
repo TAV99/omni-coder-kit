@@ -8,11 +8,11 @@ import {
 
 function CodeBlock({ children, title }: { children: string; title?: string }) {
   return (
-    <div className="my-4 rounded-lg border border-white/10 bg-[#111112] overflow-hidden">
+    <div className="my-4 rounded-lg border border-outline bg-surface-code overflow-hidden">
       {title && (
-        <div className="border-b border-white/10 px-4 py-2 text-xs text-gray-500">{title}</div>
+        <div className="border-b border-outline px-4 py-2 text-xs text-content-faint">{title}</div>
       )}
-      <pre className="overflow-x-auto p-4 text-sm text-gray-300 font-mono leading-relaxed">
+      <pre className="overflow-x-auto p-4 text-sm text-content-secondary font-mono leading-relaxed">
         <code>{children}</code>
       </pre>
     </div>
@@ -21,32 +21,32 @@ function CodeBlock({ children, title }: { children: string; title?: string }) {
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
-    <section id={id} className="scroll-mt-24 pb-12 border-b border-white/5 last:border-0">
+    <section id={id} className="scroll-mt-24 pb-12 border-b border-outline-subtle last:border-0">
       <h2 className="text-2xl font-bold tracking-tight mb-4">
         <span className="gradient-text">{title}</span>
       </h2>
-      <div className="prose-docs space-y-4 text-gray-300 leading-relaxed">{children}</div>
+      <div className="prose-docs space-y-4 text-content-secondary leading-relaxed">{children}</div>
     </section>
   );
 }
 
 function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
   return (
-    <div className="my-4 overflow-x-auto rounded-lg border border-white/10">
+    <div className="my-4 overflow-x-auto rounded-lg border border-outline">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-white/10 bg-white/5">
+          <tr className="border-b border-outline bg-highlight">
             {headers.map((h) => (
-              <th key={h} className="px-4 py-2.5 text-left font-semibold text-gray-200">{h}</th>
+              <th key={h} className="px-4 py-2.5 text-left font-semibold text-content-secondary">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} className="border-b border-white/5 last:border-0">
+            <tr key={i} className="border-b border-outline-subtle last:border-0">
               {row.map((cell, j) => (
-                <td key={j} className="px-4 py-2.5 text-gray-400">
-                  <code className="text-xs bg-white/5 px-1.5 py-0.5 rounded">{cell}</code>
+                <td key={j} className="px-4 py-2.5 text-content-muted">
+                  <code className="text-xs bg-highlight px-1.5 py-0.5 rounded">{cell}</code>
                 </td>
               ))}
             </tr>
@@ -58,7 +58,7 @@ function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
 }
 
 function Tag({ children }: { children: string }) {
-  return <code className="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-sm">{children}</code>;
+  return <code className="text-accent bg-accent-bg px-1.5 py-0.5 rounded text-sm">{children}</code>;
 }
 
 export function DocsContent() {
@@ -76,9 +76,9 @@ export function DocsContent() {
             { num: "8", label: "SDLC Workflows" },
             { num: "6", label: "Universal Skills" },
           ].map((s) => (
-            <div key={s.label} className="rounded-xl border border-white/10 bg-white/5 p-4 text-center">
+            <div key={s.label} className="rounded-xl border border-outline bg-highlight p-4 text-center">
               <div className="text-3xl font-bold gradient-text">{s.num}</div>
-              <div className="mt-1 text-sm text-gray-400">{s.label}</div>
+              <div className="mt-1 text-sm text-content-muted">{s.label}</div>
             </div>
           ))}
         </div>
@@ -113,9 +113,9 @@ omni status        # Kiểm tra trạng thái`}</CodeBlock>
             { title: "Surgical Changes", desc: "Chỉ sửa những gì cần thiết. Không 'improve' code xung quanh. Match existing style." },
             { title: "Goal-Driven Execution", desc: "Biến task mơ hồ thành mục tiêu có thể verify. Loop cho đến khi đạt success criteria." },
           ].map((p) => (
-            <div key={p.title} className="rounded-lg border border-white/10 bg-white/5 p-4">
-              <h4 className="font-semibold text-white">{p.title}</h4>
-              <p className="mt-1 text-sm text-gray-400">{p.desc}</p>
+            <div key={p.title} className="rounded-lg border border-outline bg-highlight p-4">
+              <h4 className="font-semibold text-content">{p.title}</h4>
+              <p className="mt-1 text-sm text-content-muted">{p.desc}</p>
             </div>
           ))}
         </div>
@@ -139,23 +139,23 @@ omni status        # Kiểm tra trạng thái`}</CodeBlock>
       <Section id="skills-system" title="Skills System">
         <p>Omni-Coder Kit tích hợp hệ sinh thái <strong>skills.sh</strong> với 3 cơ chế:</p>
         <div className="space-y-3 my-4">
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <h4 className="font-semibold text-white">Universal Skills</h4>
-            <p className="mt-1 text-sm text-gray-400">
+          <div className="rounded-lg border border-outline bg-highlight p-4">
+            <h4 className="font-semibold text-content">Universal Skills</h4>
+            <p className="mt-1 text-sm text-content-muted">
               6 skills mặc định cho mọi dự án: find-skills, karpathy-guidelines, systematic-debugging,
               test-driven-development, requesting-code-review, using-git-worktrees. Cài bằng <Tag>omni auto-equip</Tag>.
             </p>
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <h4 className="font-semibold text-white">Dynamic Skill Discovery</h4>
-            <p className="mt-1 text-sm text-gray-400">
+          <div className="rounded-lg border border-outline bg-highlight p-4">
+            <h4 className="font-semibold text-content">Dynamic Skill Discovery</h4>
+            <p className="mt-1 text-sm text-content-muted">
               <Tag>om:equip</Tag> dùng find-skills search skills.sh theo tech stack — không giới hạn framework.
               IDE-aware: chỉ cài skill cho IDE/CLI đã chọn.
             </p>
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <h4 className="font-semibold text-white">Conditional Skill Groups</h4>
-            <p className="mt-1 text-sm text-gray-400">
+          <div className="rounded-lg border border-outline bg-highlight p-4">
+            <h4 className="font-semibold text-content">Conditional Skill Groups</h4>
+            <p className="mt-1 text-sm text-content-muted">
               3 nhóm skill động theo Project DNA: Best Practices (luôn có), UI/UX (khi hasUI),
               Backend/Infrastructure (khi backendComplexity &gt;= moderate).
             </p>
@@ -194,9 +194,9 @@ omni status        # Kiểm tra trạng thái`}</CodeBlock>
           <Tag>om:learn</Tag> tự động ghi lại vào <Tag>.omni/knowledge-base.md</Tag>.
         </p>
         <div className="space-y-3 my-4">
-          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4">
-            <h4 className="font-semibold text-cyan-400">Cách hoạt động</h4>
-            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-400">
+          <div className="rounded-lg border border-accent-border bg-orange-400/5 p-4">
+            <h4 className="font-semibold text-accent">Cách hoạt động</h4>
+            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-content-muted">
               <li><Tag>om:fix</Tag> sửa bug thành công → <Tag>om:learn</Tag> auto-trigger</li>
               <li>Ghi lại: file đã thay đổi, root cause, fix pattern, ngày</li>
               <li><Tag>om:cook</Tag> trước khi sửa file → check knowledge base cho bài học liên quan</li>
@@ -218,9 +218,9 @@ omni status        # Kiểm tra trạng thái`}</CodeBlock>
           main session extract <strong>~500 tokens</strong> thành một context brief gọn.
         </p>
         <div className="space-y-3 my-4">
-          <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-4">
-            <h4 className="font-semibold text-violet-400">Brief bao gồm</h4>
-            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-400">
+          <div className="rounded-lg border border-yellow-400/20 bg-yellow-400/5 p-4">
+            <h4 className="font-semibold text-accent-alt">Brief bao gồm</h4>
+            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-content-muted">
               <li><strong>Project summary</strong> — goal, tech stack, DNA profile</li>
               <li><strong>Architecture decisions</strong> — patterns đã chọn, constraints</li>
               <li><strong>Shared interfaces</strong> — types/contracts các agents cần biết</li>

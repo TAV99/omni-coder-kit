@@ -10,7 +10,7 @@ export function FAQ() {
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
             Câu hỏi <span className="gradient-text">thường gặp</span>
           </h2>
-          <p className="mt-4 text-lg text-gray-400">Mọi thứ bạn cần biết về Omni-Coder Kit.</p>
+          <p className="mt-4 text-lg text-content-muted">Mọi thứ bạn cần biết về Omni-Coder Kit.</p>
         </div>
         <div className="mt-12">
           {faqData.map((item, i) => (
