@@ -73,7 +73,7 @@ export function DocsContent() {
         <div className="grid gap-4 sm:grid-cols-3 my-6">
           {[
             { num: "8+", label: "IDE hỗ trợ" },
-            { num: "7", label: "SDLC Workflows" },
+            { num: "8", label: "SDLC Workflows" },
             { num: "6", label: "Universal Skills" },
           ].map((s) => (
             <div key={s.label} className="rounded-xl border border-white/10 bg-white/5 p-4 text-center">
@@ -188,16 +188,86 @@ omni status        # Kiểm tra trạng thái`}</CodeBlock>
         </p>
       </Section>
 
-      <Section id="workflows-overview" title="7 SDLC Workflows">
+      <Section id="knowledge-base" title="Knowledge Base (om:learn)">
+        <p>
+          Hệ thống tự tích lũy bài học — AI không lặp lại cùng một lỗi. Sau mỗi <Tag>om:fix</Tag> thành công,
+          <Tag>om:learn</Tag> tự động ghi lại vào <Tag>.omni/knowledge-base.md</Tag>.
+        </p>
+        <div className="space-y-3 my-4">
+          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4">
+            <h4 className="font-semibold text-cyan-400">Cách hoạt động</h4>
+            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-400">
+              <li><Tag>om:fix</Tag> sửa bug thành công → <Tag>om:learn</Tag> auto-trigger</li>
+              <li>Ghi lại: file đã thay đổi, root cause, fix pattern, ngày</li>
+              <li><Tag>om:cook</Tag> trước khi sửa file → check knowledge base cho bài học liên quan</li>
+              <li>Tối đa 20 entries — auto-prune entry cũ nhất khi vượt limit</li>
+            </ul>
+          </div>
+        </div>
+        <CodeBlock title=".omni/knowledge-base.md">{`## Lesson #1 — 2025-01-15
+**Files:** src/api/auth.ts, src/middleware/jwt.ts
+**Root cause:** JWT token refresh race condition khi 2 request đồng thời
+**Fix pattern:** Mutex lock trên refresh endpoint, queue pending requests
+**Tags:** auth, jwt, race-condition`}</CodeBlock>
+      </Section>
+
+      <Section id="shared-context-brief" title="Shared Context Brief">
+        <p>
+          Khi <Tag>om:cook</Tag> spawn nhiều sub-agents chạy <strong>parallel</strong> (worktree isolation),
+          mỗi agent cần hiểu context dự án. Thay vì mỗi agent re-read toàn bộ design-spec.md + shared files,
+          main session extract <strong>~500 tokens</strong> thành một context brief gọn.
+        </p>
+        <div className="space-y-3 my-4">
+          <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-4">
+            <h4 className="font-semibold text-violet-400">Brief bao gồm</h4>
+            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-400">
+              <li><strong>Project summary</strong> — goal, tech stack, DNA profile</li>
+              <li><strong>Architecture decisions</strong> — patterns đã chọn, constraints</li>
+              <li><strong>Shared interfaces</strong> — types/contracts các agents cần biết</li>
+              <li><strong>Knowledge base entries</strong> — bài học liên quan đến files agent sẽ sửa</li>
+            </ul>
+          </div>
+        </div>
+        <p>
+          <strong>Lợi ích:</strong> Tiết kiệm token (mỗi agent không cần đọc full context),
+          đồng bộ quyết định kiến trúc giữa các agents, giảm conflict khi merge.
+        </p>
+      </Section>
+
+      <Section id="content-source" title="Content Source-of-Truth">
+        <p>
+          Khi <Tag>om:brainstorm</Tag> phát hiện dự án có UI (<strong>hasUI = true</strong>),
+          tự động sinh file <Tag>content-source.md</Tag> — nguồn sự thật duy nhất cho mọi nội dung hiển thị trên UI.
+        </p>
+        <CodeBlock title="content-source.md">{`## Facts
+- Tên sản phẩm: "Omni-Coder Kit" (không viết tắt)
+- Giá: Miễn phí mãi mãi (ISC License)
+- IDE hỗ trợ: 8+ (liệt kê đầy đủ)
+
+## Tone
+- Chuyên nghiệp nhưng thân thiện
+- Kỹ thuật chính xác, không marketing quá mức
+
+## Forbidden Content
+- Không claim "AI thay thế developer"
+- Không so sánh trực tiếp với competitor`}</CodeBlock>
+        <p>
+          <strong>P5 Content Validation</strong> trong <Tag>om:check</Tag> đối chiếu mọi text trên UI
+          với content-source.md — đảm bảo nội dung chính xác, nhất quán, không sai lệch.
+        </p>
+      </Section>
+
+      <Section id="workflows-overview" title="8 SDLC Workflows">
         <Table
           headers={["Lệnh", "Agent", "Mô tả"]}
           rows={[
             ["om:brainstorm", "Architect", "Phỏng vấn adaptive + DNA detection → design-spec.md"],
             ["om:equip", "Skill Manager", "Search skills.sh + conditional groups theo DNA"],
             ["om:plan", "PM", "Spec → micro-tasks todo.md, @skill:name tags"],
-            ["om:cook", "Coder", "Thực thi tasks, auto-continue, quality gate mỗi 1/3"],
-            ["om:check", "QA Tester", "Validation pipeline P0–P3 → test-report.md"],
+            ["om:cook", "Coder", "Thực thi tasks, Shared Context Brief, quality gate mỗi 1/3"],
+            ["om:check", "QA Tester", "Validation pipeline P0–P5 → test-report.md"],
             ["om:fix", "Debugger", "Reproduce → root cause → surgical fix → verify"],
+            ["om:learn", "Knowledge", "Auto-record lessons sau fix → knowledge-base.md"],
             ["om:doc", "Writer", "Đọc code thực tế → sinh README + API docs"],
           ]}
         />
@@ -280,6 +350,8 @@ omni equip vercel-labs/agent-skills
         </p>
         <ul className="list-disc list-inside space-y-1 ml-2">
           <li><strong>Dependency graph:</strong> phân tích tasks, nhóm thành batches chạy parallel</li>
+          <li><strong>Shared Context Brief:</strong> extract ~500 tokens từ design-spec.md + shared files, gửi cho mỗi parallel agent thay vì re-read toàn bộ</li>
+          <li><strong>Knowledge Base lookup:</strong> trước khi sửa file, check .omni/knowledge-base.md cho bài học liên quan</li>
           <li><strong>Auto-continue:</strong> tự động chạy task tiếp, chỉ dừng khi lỗi nghiêm trọng</li>
           <li><strong>Surgical context:</strong> file &gt;200 dòng → grep trước, chỉ đọc ±20 dòng xung quanh</li>
           <li><strong>Dev server preflight:</strong> tự khởi động dev server trước task đầu tiên (nếu có UI)</li>
@@ -288,10 +360,11 @@ omni equip vercel-labs/agent-skills
         <CodeBlock>{`om:cook (1/3 tasks)
   → om:check
     → [om:fix ↔ om:check loop, tối đa 3 lần]
+    → om:learn (ghi bài học nếu có fix)
   → om:cook (1/3 tasks)
-    → om:check → [fix loop]
+    → om:check → [fix loop] → om:learn
   → om:cook (1/3 tasks)
-    → om:check → [fix loop]
+    → om:check → [fix loop] → om:learn
   → om:doc`}</CodeBlock>
       </Section>
 
@@ -307,10 +380,12 @@ omni equip vercel-labs/agent-skills
             ["P2", "Build: compile/bundle project", "Yes"],
             ["P3", "Tests: vitest/jest/pytest", "Yes"],
             ["P4", "Bundle: unused deps, bundle size", "No (advisory)"],
+            ["P5", "Content: đối chiếu UI text với content-source.md", "Yes (khi hasUI)"],
           ]}
         />
         <p>
-          P0–P3 fail → dừng ngay, auto-trigger <Tag>om:fix</Tag>. Loop cho đến khi pass (tối đa 3 lần/cycle).
+          P0–P3 fail → dừng ngay, auto-trigger <Tag>om:fix</Tag>. P5 Content Validation blocking khi dự án có UI —
+          đảm bảo mọi text trên UI khớp với content-source.md. Loop tối đa 3 lần/cycle.
         </p>
       </Section>
 
@@ -326,6 +401,28 @@ omni equip vercel-labs/agent-skills
         </ul>
         <p>
           Không bao giờ &quot;thử đại&quot; — AI phải hiểu root cause trước khi sửa.
+        </p>
+      </Section>
+
+      <Section id="om-learn" title="om:learn — Knowledge Base">
+        <p>
+          AI đóng vai <strong>Knowledge Engineer</strong>. Tự động ghi lại bài học sau mỗi fix thành công.
+        </p>
+        <ul className="list-disc list-inside space-y-1 ml-2">
+          <li><strong>Auto-trigger:</strong> chạy tự động sau <Tag>om:fix</Tag> thành công trong quality cycle</li>
+          <li><strong>Manual:</strong> gõ <Tag>om:learn</Tag> để ghi bài học thủ công</li>
+          <li><strong>Storage:</strong> <Tag>.omni/knowledge-base.md</Tag> — max 20 entries, FIFO prune</li>
+          <li><strong>Lookup:</strong> <Tag>om:cook</Tag> check knowledge base trước khi sửa mỗi file</li>
+        </ul>
+        <p><strong>Entry format:</strong></p>
+        <CodeBlock>{`## Lesson #N — YYYY-MM-DD
+**Files:** danh sách files đã fix
+**Root cause:** mô tả nguyên nhân gốc
+**Fix pattern:** cách fix đã áp dụng
+**Tags:** keywords để lookup sau này`}</CodeBlock>
+        <p>
+          Knowledge base giúp AI không lặp lại lỗi cũ — đặc biệt hiệu quả cho dự án dài hạn
+          với nhiều quality cycles.
         </p>
       </Section>
 
@@ -355,10 +452,11 @@ omni auto-equip        # Cài 6 universal skills`}</CodeBlock>
             <p><strong>Advanced setup (Overlay):</strong></p>
             <p>Khi được hỏi &quot;Cài đặt Claude Code nâng cao?&quot;, chọn <strong>Yes</strong> để kích hoạt:</p>
             <ul className="list-disc list-inside space-y-1 ml-2">
-              <li><strong>Slash commands</strong> — 7 lệnh <Tag>/om:*</Tag> gõ trực tiếp trong Claude Code (auto-complete)</li>
+              <li><strong>Slash commands</strong> — 8 lệnh <Tag>/om:*</Tag> gõ trực tiếp trong Claude Code (auto-complete), bao gồm <Tag>/om:learn</Tag> mới</li>
               <li><strong>Permissions allowlist</strong> — <Tag>.claude/settings.json</Tag> cho phép build/test/git, deny rm -rf, force push</li>
               <li><strong>Quality gate hooks</strong> — tự động nhắc kiểm tra chất lượng khi file thay đổi</li>
-              <li><strong>Enhanced coder-execution</strong> — sub-agent prompting rules, surgical context rule</li>
+              <li><strong>Shared Context Brief</strong> — extract ~500 tokens từ design-spec.md, gửi cho parallel sub-agents thay vì re-read toàn bộ</li>
+              <li><strong>Knowledge Base integration</strong> — <Tag>om:cook</Tag> tự check .omni/knowledge-base.md trước khi sửa file</li>
             </ul>
             <p><strong>Sử dụng workflows:</strong></p>
             <CodeBlock title="Trong Claude Code">{`# Dùng slash commands (auto-complete)
@@ -366,7 +464,8 @@ omni auto-equip        # Cài 6 universal skills`}</CodeBlock>
 
 # Hoặc gõ trực tiếp trong chat
 > om:plan
-> om:cook`}</CodeBlock>
+> om:cook
+> om:learn    # Ghi bài học thủ công`}</CodeBlock>
             <p><strong>Gợi ý khởi động:</strong></p>
             <CodeBlock title="Terminal">{`claude                               # Chế độ bình thường
 claude --dangerously-skip-permissions  # Bỏ qua permission prompts (cẩn thận)`}</CodeBlock>
@@ -421,7 +520,7 @@ codex exec "Read AGENTS.md, then run >om:check"  # One-shot command`}</CodeBlock
           </DocsAccordion>
 
           <DocsAccordion title="Cursor" icon={<CursorIcon />}>
-            <p><strong>File config:</strong> <Tag>.cursorrules</Tag></p>
+            <p><strong>File config:</strong> <Tag>.cursorrules</Tag> + <Tag>.cursor/rules/*.mdc</Tag> (v2.3.0+)</p>
             <p><strong>Khởi tạo:</strong></p>
             <CodeBlock title="Terminal">{`cd your-project
 omni init              # Chọn "Cursor"
@@ -432,11 +531,18 @@ omni auto-equip        # Cài 6 universal skills`}</CodeBlock>
               <li>Cursor tự động đọc file này khi mở dự án</li>
               <li>Workflows <Tag>.omni/workflows/</Tag> được lazy-load khi AI cần</li>
             </ul>
+            <p><strong>Cursor Overlay (v2.3.0+):</strong></p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li><strong>7 MDC rules</strong> trong <Tag>.cursor/rules/</Tag> — modular, Cursor Rules format</li>
+              <li><strong>DNA-based MCP config</strong> — auto-detect tools cần thiết</li>
+              <li><strong>YOLO guardrails</strong> — 3 tiers (safe/balanced/yolo) cho Agent Mode</li>
+              <li><strong>Agent Mode protocol</strong> — structured execution cho Cursor Agent</li>
+            </ul>
             <p><strong>Sử dụng workflows:</strong></p>
             <CodeBlock title="Trong Cursor Chat">{`> om:brainstorm Thêm feature authentication
 > om:plan
 > om:cook`}</CodeBlock>
-            <p><strong>Gợi ý:</strong> Mở Cursor trong thư mục dự án sau khi <Tag>omni init</Tag>. Cursor sẽ tự đọc <Tag>.cursorrules</Tag>.</p>
+            <p><strong>Gợi ý:</strong> Mở Cursor trong thư mục dự án sau khi <Tag>omni init</Tag>. Cursor sẽ tự đọc <Tag>.cursorrules</Tag> và <Tag>.cursor/rules/*.mdc</Tag>.</p>
           </DocsAccordion>
 
           <DocsAccordion title="Windsurf" icon={<WindsurfIcon />}>

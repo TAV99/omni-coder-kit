@@ -10,8 +10,8 @@ export const aboutData = {
       description: "Bắt buộc AI hỏi tối thiểu 3 câu trước khi viết code: xác nhận scope, edge case chưa nghĩ tới, và trade-off kỹ thuật. Không ngoại lệ.",
     },
     {
-      title: "7 SDLC Workflows + DNA Detection",
-      description: "Từ brainstorm → equip → plan → cook → check → fix → doc. AI tự nhận diện Project DNA (hasUI, hasBackend, backendComplexity) để điều chỉnh quy trình. Skill-tagged tasks và automated quality pipeline với 3 quality cycles.",
+      title: "8 SDLC Workflows + DNA Detection",
+      description: "Từ brainstorm → equip → plan → cook → check → fix → learn → doc. AI tự nhận diện Project DNA (hasUI, hasBackend, backendComplexity) để điều chỉnh quy trình. Knowledge Base tự tích lũy bài học. Skill-tagged tasks và automated quality pipeline với 3 quality cycles.",
     },
   ],
   workflow: [
@@ -21,6 +21,7 @@ export const aboutData = {
     { command: "om:cook", label: "Thực thi code", agent: "Coder" },
     { command: "om:check", label: "QA Testing", agent: "QA Tester" },
     { command: "om:fix", label: "Debug & Fix", agent: "Debugger" },
+    { command: "om:learn", label: "Knowledge Base", agent: "Knowledge" },
     { command: "om:doc", label: "Documentation", agent: "Writer" },
   ],
 };

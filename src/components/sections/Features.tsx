@@ -25,7 +25,7 @@ export function Features() {
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
           Workflow <span className="gradient-text">hoàn chỉnh</span>
         </h2>
-        <p className="mt-4 text-lg text-gray-400">7 commands. Từ ý tưởng đến production.</p>
+        <p className="mt-4 text-lg text-gray-400">8 commands. Từ ý tưởng đến production.</p>
       </div>
       <motion.div
         variants={containerVariants}
