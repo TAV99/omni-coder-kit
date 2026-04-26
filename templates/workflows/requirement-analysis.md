@@ -39,6 +39,8 @@ DNA Profile:
 | **moderate** | Complex auth, file processing, 3rd-party integrations, full-text search, multi-table joins |
 | **complex** | Any of: realtime/websocket, queue/worker, cron/scheduler, microservices, caching layer, rate limiting, DB replication/sharding, event-driven, streaming |
 
+**Existing project shortcut:** If `.omni/project-map.md` exists, skip DNA classification — read ## Tech Stack and ## Structure from the map directly. This is more accurate than inference from user prompt.
+
 AI reads `goal`, `features`, `constraints`, and `edge_cases` to detect signals. The pattern list is open-ended — use judgment to classify any backend pattern, not just those listed above.
 
 Display extraction result to user:

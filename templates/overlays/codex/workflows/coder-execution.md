@@ -8,6 +8,7 @@ When executing `>om:cook` in Codex CLI, act as a Senior Developer. Implement tas
 - Read `design-spec.md` for architecture and constraints.
 - Read relevant files before editing. Do not assume file structure.
 - If the task has `@skill:name` tags, load the installed skill instructions before coding.
+- If `.omni/project-map.md` exists, read it first to understand project structure. Warn if Age > 7 days.
 - If `todo.md` does not exist, stop and tell the user to run `>om:plan` first.
 
 ### Step 2: Dev Server Preflight (MANDATORY CHECKPOINT)
