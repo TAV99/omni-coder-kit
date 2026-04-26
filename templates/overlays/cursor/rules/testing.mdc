@@ -1,0 +1,23 @@
+---
+description: Testing rules — structure, coverage. Activates for test files.
+globs: "**/*.test.*, **/*.spec.*, **/__tests__/**, **/test/**"
+alwaysApply: false
+---
+
+# Testing Rules
+
+## Test Structure
+- Follow Arrange-Act-Assert pattern.
+- One logical assertion per test. Test name describes the expected behavior.
+- Keep tests independent — no shared mutable state between tests.
+
+## Coverage
+- Every new feature needs at least one happy-path test and one error-case test.
+- Bug fixes must include a regression test that reproduces the original bug.
+
+## Mocking
+- Mock at the boundary (network, filesystem, time), not internal modules.
+- Prefer dependency injection over monkey-patching.
+
+## Reminder
+When you finish editing test files, suggest: "Run `>om:check` to validate the full test suite."

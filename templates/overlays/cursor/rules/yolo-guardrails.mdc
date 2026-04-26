@@ -1,0 +1,29 @@
+---
+description: YOLO mode safety guardrails — warns before destructive operations. Always active.
+alwaysApply: true
+---
+
+# YOLO Mode Guardrails
+
+Even when running in YOLO mode (auto-approve commands), you MUST print a clear warning before executing any of these destructive operations:
+
+## Always Warn Before
+- `rm -rf` or `rm -r` on directories
+- `git push --force` or `git push -f`
+- `git reset --hard`
+- `DROP TABLE`, `DROP DATABASE`
+- `DELETE FROM` without WHERE clause
+- `TRUNCATE TABLE`
+- Database migrations without rollback scripts
+
+## Safe to Auto-Run
+- `npm run lint`, `npm run test`, `npm run build`
+- `git status`, `git diff`, `git log`
+- `npx tsc --noEmit` (type checking)
+- Dev server start/stop
+
+## Warning Format
+```
+DESTRUCTIVE: [command]
+This will [consequence]. Proceed? (y/n)
+```

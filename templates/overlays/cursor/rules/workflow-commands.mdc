@@ -1,0 +1,29 @@
+---
+description: Omni-Coder Kit workflow command registry. Maps >om:* commands to workflow files. Always active.
+alwaysApply: true
+---
+
+# Workflow Commands
+
+When the user types a `>om:` command, use @Files to read the corresponding workflow file, then follow its instructions.
+
+| Command | Workflow File | Context Hints |
+|---------|--------------|---------------|
+| `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | @Codebase for project scan |
+| `>om:equip` | `.omni/workflows/skill-manager.md` | @Web for skill discovery |
+| `>om:plan` | `.omni/workflows/task-planning.md` | @Git for recent changes |
+| `>om:cook` | `.omni/workflows/coder-execution.md` | @Files for scope, Agent mode |
+| `>om:check` | `.omni/workflows/qa-testing.md` | @Git for diff review |
+| `>om:fix` | `.omni/workflows/debugger-workflow.md` | @Web for error research |
+| `>om:doc` | `.omni/workflows/documentation-writer.md` | @Codebase for API surface |
+| `>om:learn` | `.omni/workflows/knowledge-learn.md` | @Git for fix history |
+
+Supporting files (referenced by workflows):
+- `.omni/workflows/pm-templates.md` — Output format standards
+- `.omni/workflows/validation-scripts.md` — P0-P4 validation pipeline
+- `.omni/workflows/superpower-sdlc.md` — Cursor-aware SDLC overview
+- `.omni/knowledge-base.md` — Project lessons learned
+
+**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.
+**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.
+**Fallback:** If `.omni/workflows/` not found, read from `node_modules/omni-coder-kit/templates/workflows/`.
