@@ -16,10 +16,34 @@ Execute the full automated validation pipeline. Run checks in strict priority or
 - **P2: Build** (compile/bundle the project) — BLOCKING
 - **P3: Automated Tests** (vitest/jest/pytest) — BLOCKING
 - **P4: Bundle Analysis** (size, unused deps) — ADVISORY
+- **P5: Content Validation** (cross-check against content-source.md) — ADVISORY
 
 **Evidence rule:** You MUST run a shell command for each P0-P3 check. "Code looks correct" is NOT verification. Use quiet flags to minimize output: `--silent`, `-q`, `--quiet`, `2>&1 | tail -5`. Only capture what's needed to determine PASS/FAIL.
 
 *If ANY blocking check (P0-P3) fails, STOP. Do NOT proceed to Feature Verification. Report failures and recommend `>om:fix`.*
+
+**P5: Content Validation (ADVISORY — runs after P0-P3 pass)**
+If `content-source.md` exists in the project root:
+1. Read `content-source.md` — extract `## Facts` and `## Forbidden Content`.
+2. Scan all user-facing files (HTML, JSX/TSX, markdown, data files with UI text) for violations:
+   - **Fact check:** Does any generated text contradict a fact? (e.g., "pricing" when facts say "open-source, no pricing")
+   - **Forbidden check:** Does any content match a forbidden pattern? (e.g., fake testimonials, placeholder text, lorem ipsum)
+   - **Placeholder check:** Search for common placeholder patterns: "Lorem ipsum", "John Doe", "example@email.com", "[Your Name]", "TBD", "Coming soon" (when not intentional)
+3. Report findings in `test-report.md` under a `## Content Validation` section:
+   ```
+   ## Content Validation
+   Source: content-source.md
+   | # | File | Issue | Severity |
+   |---|------|-------|----------|
+   | 1 | src/data/pricing.ts | Contains pricing tiers — forbidden (open-source project) | HIGH |
+   | 2 | src/data/testimonials.ts | Fake testimonials with fictional names | MEDIUM |
+   | 3 | src/components/Footer.tsx | Placeholder "Your Company" text | LOW |
+
+   Content issues: 3 (2 HIGH/MEDIUM, 1 LOW)
+   ```
+4. Content validation is ADVISORY — it does NOT block the pipeline. But HIGH severity issues should be prominently flagged.
+
+If `content-source.md` does not exist, skip P5 silently.
 
 **Step 3: Feature Verification (per completed task)**
 For EACH completed `- [x]` task in `todo.md`, verify it works:
