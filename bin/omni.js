@@ -67,6 +67,7 @@ function ensureGitignore(ide) {
     const patterns = [...OMNI_GITIGNORE_PATTERNS];
     if (ide === 'claudecode' || ide === 'dual') patterns.push('.claude/');
     if (ide === 'codex' || ide === 'dual') patterns.push('.codex/');
+    if (ide === 'cursor') patterns.push('.cursor/');
 
     let existing = '';
     if (fs.existsSync(gitignorePath)) {
@@ -734,7 +735,10 @@ program
                 break;
             case 'cursor':
                 fileName = '.cursorrules';
-                finalRules += `- **Context Gathering:** ALWAYS use \`@Files\` and \`@Codebase\` to verify context before generating code.\n`;
+                finalRules += `- **Context Gathering:** Use @Codebase, @Files, @Git, @Docs, @Web for context before generating code.\n`;
+                finalRules += `- **Agent Mode:** In Agent mode, auto-run lint/test after every 1/3 tasks. See coder-execution.md.\n`;
+                finalRules += `- **YOLO Safety:** Even in YOLO mode, warn before destructive operations (rm -rf, force push, DROP TABLE).\n`;
+                finalRules += `- **Workflow Files:** All logic in \`.omni/workflows/\`. When user types \`>om:*\`, use @Files to read the workflow file.\n`;
                 break;
             case 'windsurf':
                 fileName = '.windsurfrules';
@@ -920,6 +924,51 @@ program
             saveManifest(manifest);
         }
 
+        // Cursor: progressive advanced setup
+        if (response.ide === 'cursor') {
+            const { cursorAdvanced } = await prompts({
+                type: 'confirm',
+                name: 'cursorAdvanced',
+                message: '🔧 Cài đặt Cursor nâng cao? (MDC rules, MCP config, YOLO guardrails)',
+                initial: false
+            });
+
+            if (cursorAdvanced) {
+                const dnaProfile = detectDNA(process.cwd());
+
+                const mdcRules = buildCursorRules(dnaProfile);
+                if (mdcRules) {
+                    const cursorRulesDir = path.join(process.cwd(), '.cursor', 'rules');
+                    fs.mkdirSync(cursorRulesDir, { recursive: true });
+                    for (const rule of mdcRules) {
+                        fs.copyFileSync(rule.src, path.join(cursorRulesDir, rule.name));
+                    }
+                    console.log(chalk.green(`   ✅ .cursor/rules/ (${mdcRules.length} MDC rules)`));
+                }
+
+                const mcpConfig = buildCursorMcp(process.cwd());
+                if (mcpConfig) {
+                    const cursorDir = path.join(process.cwd(), '.cursor');
+                    fs.mkdirSync(cursorDir, { recursive: true });
+                    const mcpPath = path.join(cursorDir, 'mcp.json');
+                    writeFileSafe(mcpPath, mcpConfig);
+                    const serverCount = Object.keys(JSON.parse(mcpConfig).mcpServers).length;
+                    console.log(chalk.green(`   ✅ .cursor/mcp.json (${serverCount} MCP servers)`));
+                }
+
+                const personalRulesBlock = rulesContent
+                    ? `\n<!-- omni:rules -->\n## PERSONAL RULES\n${extractRulesForInject(rulesPrompt)}\n<!-- /omni:rules -->\n`
+                    : '';
+                const bootstrapRules = buildCursorBootstrapRules(finalRules, strictnessBlock, personalRulesBlock);
+                writeFileSafe(targetPath, bootstrapRules);
+                console.log(chalk.green(`   ✅ .cursorrules (bootstrap mode — rules in .cursor/rules/)`));
+            }
+
+            manifest.overlay = true;
+            manifest.advanced = !!cursorAdvanced;
+            saveManifest(manifest);
+        }
+
         // Auto-install find-skills (tìm kiếm & cài skills tự động)
         const findSkillsAgentFlags = getAgentFlags(manifest);
         const findSkillsCmd = `npx skills add vercel-labs/skills${findSkillsAgentFlags ? ' ' + findSkillsAgentFlags : ''} --skill find-skills -y`;
@@ -986,7 +1035,7 @@ program
             cursor: {
                 name: 'Cursor',
                 cmd: null,
-                note: 'Mở Cursor trong thư mục dự án, file .cursorrules sẽ tự động được đọc',
+                note: 'Mở Cursor trong thư mục dự án. MDC rules tự động activate theo file context.',
             },
             windsurf: {
                 name: 'Windsurf',

@@ -106,6 +106,7 @@ function ensureGitignore(ide, cwd) {
     const patterns = [...OMNI_GITIGNORE_PATTERNS];
     if (ide === 'claudecode' || ide === 'dual') patterns.push('.claude/');
     if (ide === 'codex' || ide === 'dual') patterns.push('.codex/');
+    if (ide === 'cursor') patterns.push('.cursor/');
 
     let existing = '';
     if (fs.existsSync(gitignorePath)) {
@@ -198,6 +199,37 @@ function simulateInit(ide, opts = {}) {
             result.files.codexConfig = !!codexConfig;
             result.files.codexHooks = !!codexHooks;
         }
+    }
+
+    // Cursor advanced
+    if (ide === 'cursor' && opts.advanced) {
+        const cursorRulesDir = path.join(tmpDir, '.cursor', 'rules');
+        fs.mkdirSync(cursorRulesDir, { recursive: true });
+
+        const overlayRulesDir = path.join(TEMPLATES, 'overlays', 'cursor', 'rules');
+        if (fs.existsSync(overlayRulesDir)) {
+            const dna = opts.dna || { hasUI: true, hasBackend: true };
+            const alwaysInclude = ['core-mindset.mdc', 'workflow-commands.mdc', 'yolo-guardrails.mdc', 'agent-mode.mdc'];
+            const conditionalMap = { 'frontend.mdc': dna.hasUI, 'backend.mdc': dna.hasBackend, 'testing.mdc': true };
+
+            for (const f of alwaysInclude) {
+                const src = path.join(overlayRulesDir, f);
+                if (fs.existsSync(src)) fs.copyFileSync(src, path.join(cursorRulesDir, f));
+            }
+            for (const [f, include] of Object.entries(conditionalMap)) {
+                if (include) {
+                    const src = path.join(overlayRulesDir, f);
+                    if (fs.existsSync(src)) fs.copyFileSync(src, path.join(cursorRulesDir, f));
+                }
+            }
+        }
+
+        result.files.cursorRules = fs.readdirSync(cursorRulesDir);
+
+        const cursorDir = path.join(tmpDir, '.cursor');
+        const mcpConfig = { mcpServers: { context7: { command: 'npx', args: ['-y', '@upstash/context7-mcp'] } } };
+        fs.writeFileSync(path.join(cursorDir, 'mcp.json'), JSON.stringify(mcpConfig, null, 2));
+        result.files.mcpConfig = true;
     }
 
     // Dual mode: AGENTS.md
@@ -475,6 +507,111 @@ describe('E2E: cursor init', () => {
     });
 });
 
+// ─── Cursor advanced init ───────────────────────────────────────────────────
+
+describe('E2E: cursor advanced init', () => {
+    let result;
+
+    beforeEach(() => { result = simulateInit('cursor', { advanced: true }); });
+    afterEach(() => { fs.rmSync(result.tmpDir, { recursive: true, force: true }); });
+
+    it('creates .cursor/rules/ with MDC files', () => {
+        const rulesDir = path.join(result.tmpDir, '.cursor', 'rules');
+        assert.ok(fs.existsSync(rulesDir));
+        const files = fs.readdirSync(rulesDir);
+        assert.ok(files.includes('core-mindset.mdc'));
+        assert.ok(files.includes('workflow-commands.mdc'));
+        assert.ok(files.includes('yolo-guardrails.mdc'));
+        assert.ok(files.includes('agent-mode.mdc'));
+        assert.ok(files.includes('testing.mdc'));
+    });
+
+    it('creates .cursor/mcp.json', () => {
+        const mcpPath = path.join(result.tmpDir, '.cursor', 'mcp.json');
+        assert.ok(fs.existsSync(mcpPath));
+        const config = JSON.parse(fs.readFileSync(mcpPath, 'utf-8'));
+        assert.ok(config.mcpServers);
+        assert.ok(config.mcpServers.context7);
+    });
+
+    it('includes frontend.mdc and backend.mdc with fullstack DNA', () => {
+        const rulesDir = path.join(result.tmpDir, '.cursor', 'rules');
+        const files = fs.readdirSync(rulesDir);
+        assert.ok(files.includes('frontend.mdc'));
+        assert.ok(files.includes('backend.mdc'));
+    });
+
+    it('excludes frontend.mdc when hasUI=false', () => {
+        fs.rmSync(result.tmpDir, { recursive: true, force: true });
+        result = simulateInit('cursor', { advanced: true, dna: { hasUI: false, hasBackend: true } });
+        const files = fs.readdirSync(path.join(result.tmpDir, '.cursor', 'rules'));
+        assert.ok(!files.includes('frontend.mdc'));
+        assert.ok(files.includes('backend.mdc'));
+    });
+
+    it('does NOT create .claude/ or .codex/', () => {
+        assert.ok(!fs.existsSync(path.join(result.tmpDir, '.claude')));
+        assert.ok(!fs.existsSync(path.join(result.tmpDir, '.codex')));
+    });
+
+    it('manifest records cursor IDE', () => {
+        const manifest = JSON.parse(
+            fs.readFileSync(path.join(result.tmpDir, '.omni-manifest.json'), 'utf-8')
+        );
+        assert.equal(manifest.ide, 'cursor');
+        assert.equal(manifest.configFile, '.cursorrules');
+    });
+});
+
+// ─── Cursor overlay content integrity ───────────────────────────────────────
+
+describe('Cursor overlay content integrity', () => {
+    it('coder-execution.md references YOLO mode', () => {
+        const content = fs.readFileSync(
+            path.join(TEMPLATES, 'overlays', 'cursor', 'workflows', 'coder-execution.md'), 'utf-8'
+        );
+        assert.ok(content.includes('YOLO'));
+    });
+
+    it('coder-execution.md references @Files context gathering', () => {
+        const content = fs.readFileSync(
+            path.join(TEMPLATES, 'overlays', 'cursor', 'workflows', 'coder-execution.md'), 'utf-8'
+        );
+        assert.ok(content.includes('@Files') || content.includes('@Codebase'));
+    });
+
+    it('superpower-sdlc.md references Cursor native tools', () => {
+        const content = fs.readFileSync(
+            path.join(TEMPLATES, 'overlays', 'cursor', 'workflows', 'superpower-sdlc.md'), 'utf-8'
+        );
+        assert.ok(content.includes('@Codebase'));
+        assert.ok(content.includes('@Files'));
+        assert.ok(content.includes('Agent mode'));
+    });
+});
+
+// ─── Cursor overlay template files exist ────────────────────────────────────
+
+describe('Cursor overlay template files exist', () => {
+    const requiredFiles = [
+        'overlays/cursor/rules/core-mindset.mdc',
+        'overlays/cursor/rules/workflow-commands.mdc',
+        'overlays/cursor/rules/backend.mdc',
+        'overlays/cursor/rules/frontend.mdc',
+        'overlays/cursor/rules/testing.mdc',
+        'overlays/cursor/rules/yolo-guardrails.mdc',
+        'overlays/cursor/rules/agent-mode.mdc',
+        'overlays/cursor/workflows/coder-execution.md',
+        'overlays/cursor/workflows/superpower-sdlc.md',
+    ];
+
+    for (const file of requiredFiles) {
+        it(`${file} exists`, () => {
+            assert.ok(fs.existsSync(path.join(TEMPLATES, file)));
+        });
+    }
+});
+
 // ─── Windsurf init ───────────────────────────────────────────────────────────
 
 describe('E2E: windsurf init', () => {
@@ -687,6 +824,18 @@ describe('.gitignore generation', () => {
         }
     });
 
+    it('cursor adds .cursor/ pattern', () => {
+        const result = simulateInit('cursor', { advanced: true });
+        try {
+            const content = fs.readFileSync(path.join(result.tmpDir, '.gitignore'), 'utf-8');
+            assert.ok(content.includes('.cursor/'));
+            assert.ok(!content.includes('.claude/'));
+            assert.ok(!content.includes('.codex/'));
+        } finally {
+            fs.rmSync(result.tmpDir, { recursive: true, force: true });
+        }
+    });
+
     it('merges with existing .gitignore without duplicates', () => {
         const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-gi-test-'));
         try {
@@ -705,7 +854,7 @@ describe('.gitignore generation', () => {
     it('skips writing when all patterns already exist', () => {
         const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-gi-test-'));
         try {
-            const allPatterns = [...OMNI_GITIGNORE_PATTERNS].join('\n') + '\n';
+            const allPatterns = [...OMNI_GITIGNORE_PATTERNS, '.cursor/'].join('\n') + '\n';
             fs.writeFileSync(path.join(tmpDir, '.gitignore'), allPatterns);
             const count = ensureGitignore('cursor', tmpDir);
             assert.equal(count, 0);
