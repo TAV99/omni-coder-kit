@@ -223,6 +223,7 @@ Content that MUST NOT appear in the final product:
 - Populate `## Forbidden Content` from edge cases, constraints, and the project type. If the project is open-source, automatically add "No pricing tiers" and "No fake testimonials".
 - Keep it short — aim for 15-30 lines total. This file is read by cook and check, so brevity saves tokens.
 - If the project is "API only" (no UI), skip this file entirely — content validation is not applicable.
+- **Minimum facts gate:** `## Facts` MUST contain at least 3 verified facts (project name + project type + at least 1 domain-specific fact). If fewer than 3 facts can be extracted from the user's input, ask 1 targeted question: "Tôi cần thêm thông tin để đảm bảo nội dung chính xác: [specific gap]. Ví dụ: dự án này là open-source hay commercial? Có tên chính thức chưa?" Do NOT generate `content-source.md` with fewer than 3 facts.
 
 ### Spec Self-Review (AI-internal — no user prompt needed)
 After writing `design-spec.md`, review it with fresh eyes before presenting to the user:

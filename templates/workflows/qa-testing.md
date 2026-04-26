@@ -16,7 +16,7 @@ Execute the full automated validation pipeline. Run checks in strict priority or
 - **P2: Build** (compile/bundle the project) — BLOCKING
 - **P3: Automated Tests** (vitest/jest/pytest) — BLOCKING
 - **P4: Bundle Analysis** (size, unused deps) — ADVISORY
-- **P5: Content Validation** (cross-check against content-source.md) — ADVISORY
+- **P5: Content Validation** (cross-check against content-source.md) — HIGH=BLOCKING, LOW/MEDIUM=ADVISORY
 
 **Evidence rule:** You MUST run a shell command for each P0-P3 check. "Code looks correct" is NOT verification. Use quiet flags to minimize output: `--silent`, `-q`, `--quiet`, `2>&1 | tail -5`. Only capture what's needed to determine PASS/FAIL.
 
@@ -41,7 +41,10 @@ If `content-source.md` exists in the project root:
 
    Content issues: 3 (2 HIGH/MEDIUM, 1 LOW)
    ```
-4. Content validation is ADVISORY — it does NOT block the pipeline. But HIGH severity issues should be prominently flagged.
+4. **Severity enforcement:**
+   - **HIGH** (contradicts a Fact or matches Forbidden Content) → **BLOCKING.** Treat like a P0-P3 failure: STOP, report, recommend `>om:fix`.
+   - **MEDIUM** (fake/placeholder data not explicitly forbidden) → ADVISORY. Flag prominently but do not block.
+   - **LOW** (minor placeholder like "Coming soon") → ADVISORY.
 
 If `content-source.md` does not exist, skip P5 silently.
 

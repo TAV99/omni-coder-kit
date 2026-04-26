@@ -7,7 +7,7 @@ When executing the [>om:cook] command, you MUST act as a Senior Developer. Your 
 - Read existing project files to understand current state. Do NOT assume file structure.
 - **Load skill:** If the task has `@skill:skill-name` tag(s), read the corresponding skill file(s) and apply those rules during implementation.
 - **Knowledge base:** If `.omni/knowledge-base.md` exists, scan it for entries matching the current task's files. Apply relevant lessons.
-- **Content source:** If `content-source.md` exists, read it with @Files. Use `## Facts` as ground truth for any user-facing text. Check `## Forbidden Content` before writing copy. Do NOT generate content that contradicts these facts.
+- **Content source:** If `content-source.md` exists, read it with @Files. Use `## Facts` as ground truth for any user-facing text. Check `## Forbidden Content` before writing copy. Do NOT generate content that contradicts these facts. If the project has UI files but `content-source.md` is missing, warn: "⚠️ UI project without content-source.md — run `>om:brainstorm` to generate it."
 - **Infra pre-check:** If `setup.sh` exists in the project root, verify infrastructure is ready before coding:
   - Check: Docker running? DB accessible? `.env` exists? Dependencies installed?
   - If any check fails → STOP. Tell the user: "Run `bash setup.sh` before continuing >om:cook."
