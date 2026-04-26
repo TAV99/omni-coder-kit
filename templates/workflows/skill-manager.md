@@ -4,6 +4,13 @@ You are authorized to use the `skills.sh` ecosystem to extend your capabilities.
 ### Step 1: Ensure Universal Skills
 Run `omni auto-equip -y` to install the 6 universal skills (find-skills, karpathy-guidelines, systematic-debugging, test-driven-development, requesting-code-review, using-git-worktrees). These apply to ALL projects regardless of tech stack.
 
+**Sandbox fallback:** If the shell command fails (sandbox/network restriction — common in Gemini CLI `--yolo`, Codex sandbox), do NOT retry. Instead output the commands for the user to run manually in their terminal:
+```
+⚠️ Không cài được skills (sandbox/mạng). Chạy trong terminal:
+   omni auto-equip
+```
+Then skip to Step 2 — proceed with whatever skills are already installed. Do NOT block the workflow.
+
 ### Step 2: Analyze Tech Stack, DNA & Assess Project Scale
 Read `design-spec.md` and extract:
 - **Technologies:** Languages, frameworks, databases, services, patterns
@@ -86,6 +93,16 @@ Cài tất cả? Gõ số để loại bỏ (vd: "loại 3"), hoặc Enter để
 - **Universal skills:** `omni auto-equip -y`
 - **Discovered skills:** `omni equip <source> --name <short-name>` for each approved skill
 - **Antigravity:** Dùng `AGENTS.md` + `.agents/` directory — cài skills bình thường qua `omni equip`
+
+**Sandbox fallback:** If ANY install command fails due to sandbox/network restrictions, collect ALL failed commands and output them as a single copy-paste block:
+```
+⚠️ Không cài được [N] skills (sandbox/mạng). Chạy trong terminal:
+
+omni auto-equip
+omni equip <source1> --name <name1>
+omni equip <source2> --name <name2>
+```
+Mark the skills as "pending install" and continue to Step 7 with whatever skills ARE available.
 
 ### Step 7: Context Absorption
 After installation, read the newly added skill files (in `.agents/skills/` or `.claude/skills/`) and apply those rules to the current session immediately.
