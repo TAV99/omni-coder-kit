@@ -865,3 +865,36 @@ describe('.gitignore generation', () => {
         }
     });
 });
+
+// ─── Project Map — init integration ─────────────────────────────────────
+
+describe('Project Map — init integration', () => {
+    const { detectExistingProject, scanProject, generateMapSkeleton } = require(path.join(__dirname, '..', 'lib', 'scanner'));
+
+    it('detectExistingProject returns true for this project', () => {
+        const result = detectExistingProject(path.join(__dirname, '..'));
+        assert.equal(result.detected, true);
+        assert.ok(result.lang.includes('Node.js'));
+    });
+
+    it('scanProject returns valid structure for this project', () => {
+        const result = scanProject(path.join(__dirname, '..'));
+        assert.ok(result.stats.files > 10);
+        assert.ok(result.structure.length > 0);
+        assert.equal(result.techStack.runtime, 'Node.js');
+    });
+
+    it('generateMapSkeleton produces valid markdown', () => {
+        const scan = scanProject(path.join(__dirname, '..'));
+        const md = generateMapSkeleton(scan, 'omni-coder-kit');
+        assert.ok(md.startsWith('# Project Map'));
+        assert.ok(md.includes('## Tech Stack'));
+        assert.ok(md.includes('## Structure'));
+        assert.ok(md.includes('[PENDING]'));
+    });
+
+    it('base project-map.md workflow exists', () => {
+        const baseWorkflow = path.join(__dirname, '..', 'templates', 'workflows', 'project-map.md');
+        assert.ok(fs.existsSync(baseWorkflow), 'Base project-map.md workflow should exist');
+    });
+});
