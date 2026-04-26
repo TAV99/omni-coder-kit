@@ -320,6 +320,7 @@ function buildCommandRegistry(ide) {
             '| `>om:fix` | `/om:fix` | Main session | `.omni/workflows/debugger-workflow.md` |',
             '| `>om:doc` | `/om:doc` | Main session | `.omni/workflows/documentation-writer.md` |',
             '| `>om:learn` | `/om:learn` | Main session | `.omni/workflows/knowledge-learn.md` |',
+            '| `>om:map` | `/om:map` | Architect | `.omni/workflows/project-map.md` |',
             '',
             'Supporting files (referenced by workflows as needed):',
             '- `.omni/workflows/pm-templates.md` - Output format standards',
@@ -350,6 +351,7 @@ function buildCommandRegistry(ide) {
             '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | Main session | `systematic-debugging` |',
             '| `>om:doc` | `.omni/workflows/documentation-writer.md` | Main session | `read_file` |',
             '| `>om:learn` | `.omni/workflows/knowledge-learn.md` | Main session | `save_memory` |',
+            '| `>om:map` | `.omni/workflows/project-map.md` | Architect | `read_file`, `save_memory` |',
             '',
             'Supporting files (referenced by workflows as needed):',
             '- `.omni/workflows/pm-templates.md` - Output format standards',
@@ -380,6 +382,7 @@ function buildCommandRegistry(ide) {
             '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | Debugger |',
             '| `>om:doc` | `.omni/workflows/documentation-writer.md` | Writer |',
             '| `>om:learn` | `.omni/workflows/knowledge-learn.md` | Learner |',
+            '| `>om:map` | `.omni/workflows/project-map.md` | Architect |',
             '',
             'Codex native helpers:',
             '- Use `/plan` for Codex-native planning before edits.',
@@ -418,6 +421,7 @@ function buildCommandRegistry(ide) {
             '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | @Web for error research |',
             '| `>om:doc` | `.omni/workflows/documentation-writer.md` | @Codebase for API surface |',
             '| `>om:learn` | `.omni/workflows/knowledge-learn.md` | @Git for fix history |',
+            '| `>om:map` | `.omni/workflows/project-map.md` | @Codebase for structure scan |',
             '',
             'Supporting files (referenced by workflows as needed):',
             '- `.omni/workflows/pm-templates.md` - Output format standards',
@@ -445,6 +449,7 @@ function buildCommandRegistry(ide) {
         '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | Debugger |',
         '| `>om:doc` | `.omni/workflows/documentation-writer.md` | Writer |',
         '| `>om:learn` | `.omni/workflows/knowledge-learn.md` | Learner |',
+        '| `>om:map` | `.omni/workflows/project-map.md` | Architect |',
         '',
         'Supporting files (referenced by workflows as needed):',
         '- `.omni/workflows/pm-templates.md` - Output format standards',
@@ -1186,6 +1191,7 @@ program
             { cmd: '>om:fix',        slash: '/om:fix',          role: 'Debugger',    desc: 'Reproduce → root cause → surgical fix → verify (không shotgun-fix)' },
             { cmd: '>om:doc',        slash: '/om:doc',          role: 'Writer',      desc: 'Đọc code thực tế → sinh README.md + API docs bằng tiếng Việt' },
             { cmd: '>om:learn',      slash: '/om:learn',        role: 'Learner',     desc: 'Đúc kết bài học từ bug fix → ghi vào knowledge-base.md (auto sau >om:fix)' },
+            { cmd: '>om:map',        slash: '/om:map',          role: 'Architect',   desc: 'Quét codebase → sinh bản đồ dự án (.omni/project-map.md)' },
         ];
 
         const maxCmd   = Math.max(...commands.map(c => c.cmd.length));
