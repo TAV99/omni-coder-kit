@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, useScroll, useMotionValueEvent, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 import { Button } from "./ui/Button";
 
 const navLinks = [
@@ -48,11 +49,17 @@ export function Navbar() {
 
         {/* Desktop nav links */}
         <div className="hidden items-center gap-6 md:flex">
-          {navLinks.map((link) => (
-            <a key={link.href} href={link.href} className="text-sm text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded">
-              {link.label}
-            </a>
-          ))}
+          {navLinks.map((link) =>
+            link.href.startsWith("/") ? (
+              <Link key={link.href} href={link.href} className="text-sm text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded">
+                {link.label}
+              </Link>
+            ) : (
+              <a key={link.href} href={link.href} className="text-sm text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded">
+                {link.label}
+              </a>
+            )
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -92,16 +99,27 @@ export function Navbar() {
             className="overflow-hidden border-t border-white/5 md:hidden"
           >
             <div className="space-y-1 px-4 pb-4 pt-2">
-              {navLinks.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileOpen(false)}
-                  className="block rounded-lg px-3 py-2.5 text-base text-gray-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
-                >
-                  {link.label}
-                </a>
-              ))}
+              {navLinks.map((link) =>
+                link.href.startsWith("/") ? (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    className="block rounded-lg px-3 py-2.5 text-base text-gray-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                  >
+                    {link.label}
+                  </Link>
+                ) : (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    className="block rounded-lg px-3 py-2.5 text-base text-gray-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                  >
+                    {link.label}
+                  </a>
+                )
+              )}
               <div className="pt-2">
                 <Button variant="primary" href="#pricing" className="w-full text-sm" onClick={() => setMobileOpen(false)}>
                   Bắt đầu ngay

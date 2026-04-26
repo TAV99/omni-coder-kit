@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { siteConfig } from "@/data/site";
 
 const footerLinks = {
@@ -42,7 +43,13 @@ export function Footer() {
             <h3 className="text-sm font-semibold text-white">Resources</h3>
             <ul className="mt-3 space-y-2">
               {footerLinks.resources.map((link) => (
-                <li key={link.label}><a href={link.href} className="text-sm text-gray-400 transition-colors hover:text-white">{link.label}</a></li>
+                <li key={link.label}>
+                  {link.href.startsWith("/") ? (
+                    <Link href={link.href} className="text-sm text-gray-400 transition-colors hover:text-white">{link.label}</Link>
+                  ) : (
+                    <a href={link.href} className="text-sm text-gray-400 transition-colors hover:text-white">{link.label}</a>
+                  )}
+                </li>
               ))}
             </ul>
           </div>

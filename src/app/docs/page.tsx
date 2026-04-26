@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { DocsSidebar } from "@/components/docs/DocsSidebar";
 import { DocsContent } from "@/components/docs/DocsContent";
 
@@ -14,12 +15,12 @@ export default function DocsPage() {
       <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0a0a0b]/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-6">
-            <a href="/" className="text-xl font-bold gradient-text">Omni-Coder Kit</a>
+            <Link href="/" className="text-xl font-bold gradient-text">Omni-Coder Kit</Link>
             <span className="hidden text-sm text-gray-500 sm:inline">/</span>
             <span className="hidden text-sm text-gray-300 sm:inline">Docs</span>
           </div>
           <div className="flex items-center gap-4">
-            <a href="/" className="text-sm text-gray-400 hover:text-white transition-colors">Home</a>
+            <Link href="/" className="text-sm text-gray-400 hover:text-white transition-colors">Home</Link>
             <a
               href="https://github.com/TAV99/omni-coder-kit"
               target="_blank"
