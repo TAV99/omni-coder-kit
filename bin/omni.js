@@ -14,6 +14,9 @@ const {
     buildRulesContent, extractRulesForInject, createManifest,
     getAgentFlags, getOverlayNameForTarget, detectDNA,
 } = require(path.join(__dirname, '..', 'lib', 'helpers'));
+const {
+    detectExistingProject, scanProject, generateMapSkeleton, refreshMap,
+} = require(path.join(__dirname, '..', 'lib', 'scanner'));
 
 // ========== UNIVERSAL SKILLS (skills.sh) ==========
 
@@ -1170,6 +1173,55 @@ program
         console.log(chalk.gray('\n  Lưu ý: Các lệnh >om: được gõ trực tiếp trong chat AI (Claude, Codex, Cursor...),'));
         console.log(chalk.gray('  không phải lệnh terminal. Claude Code users: dùng /om:* (auto-complete).'));
         console.log(chalk.gray('  Chạy ') + chalk.yellow('omni init') + chalk.gray(' trước để tạo file luật cho AI.\n'));
+    });
+
+// ---------- MAP (project mapping) ----------
+program
+    .command('map')
+    .description('Quét codebase và tạo/cập nhật Project Map cho AI navigation')
+    .option('--refresh', 'Cập nhật cấu trúc mà không cần AI (0 token)')
+    .action((options) => {
+        if (options.refresh) {
+            const result = refreshMap(process.cwd());
+            if (!result) {
+                console.log(chalk.red.bold('\n❌ Không tìm thấy .omni/project-map.md. Chạy "omni map" hoặc "omni init" trước.\n'));
+                return;
+            }
+            fs.mkdirSync(path.join(process.cwd(), '.omni'), { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), '.omni', 'project-map.md'), result, 'utf-8');
+            console.log(chalk.green.bold('\n🔄 Project Map refreshed: .omni/project-map.md'));
+            console.log(chalk.gray('   Các thay đổi cấu trúc đã được đánh dấu [NEW]/[DELETED].'));
+            console.log(chalk.gray('   Chạy >om:map để AI cập nhật mô tả.\n'));
+            return;
+        }
+
+        const detected = detectExistingProject(process.cwd());
+        if (!detected.detected) {
+            console.log(chalk.yellow.bold('\n⚠️  Không phát hiện project (thiếu package.json, pyproject.toml, go.mod...).'));
+            console.log(chalk.gray('   Chạy lệnh này trong thư mục gốc của dự án.\n'));
+            return;
+        }
+
+        console.log(chalk.cyan.bold(`\n🔍 Đang quét project... (${detected.lang})`));
+        const scan = scanProject(process.cwd());
+        const projectName = path.basename(process.cwd());
+        const skeleton = generateMapSkeleton(scan, projectName);
+
+        fs.mkdirSync(path.join(process.cwd(), '.omni'), { recursive: true });
+        fs.writeFileSync(path.join(process.cwd(), '.omni', 'project-map.md'), skeleton, 'utf-8');
+
+        // Update manifest
+        const manifest = loadManifest();
+        manifest.projectMap = true;
+        manifest.mapGeneratedAt = new Date().toISOString();
+        saveManifest(manifest);
+
+        console.log(chalk.green.bold('\n📁 Project Map skeleton: .omni/project-map.md'));
+        console.log(chalk.white(`   ${scan.stats.files} files | ${scan.stats.dirs} dirs | ~${scan.stats.loc} LOC`));
+        console.log(chalk.white(`   ${scan.structure.filter(s => s.depth <= 2).length} directories mapped`));
+        console.log(chalk.white(`   ${scan.entryPoints.length} entry points detected`));
+        console.log(chalk.white(`   ${scan.landmines.length} landmines found`));
+        console.log(chalk.cyan('\n   Chạy >om:map trong chat AI để điền mô tả chi tiết.\n'));
     });
 
 // ---------- UPDATE ----------
