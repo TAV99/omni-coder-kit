@@ -1,0 +1,1 @@
+- **General AI Rules:** Adhere strictly to the defined workflow.

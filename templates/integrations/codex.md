@@ -1,0 +1,6 @@
+- **Codex CLI Agent Mode:** This file is auto-discovered by Codex CLI walking from project root to cwd. Keep total content under 32 KiB.
+- **Stable Omni Commands:** Type `>om:brainstorm`, `>om:plan`, `>om:cook`, etc. as normal chat text. Do not rely on custom `/om:*` slash commands in Codex.
+- **Native Codex Commands:** Use `/plan`, `/review`, `/permissions`, `/agent`, `/mcp`, and `/plugins` when they help the current workflow.
+- **Sandbox Awareness:** Codex may run in read-only or workspace-write sandbox modes. Do not attempt network calls or external writes unless the active profile allows them.
+- **Approval Policy:** Respect the configured approval mode. In stricter modes, present risky commands for review instead of forcing execution.
+- **Workflow Files:** Long instructions live in `.omni/workflows/`; read them lazily only when needed.

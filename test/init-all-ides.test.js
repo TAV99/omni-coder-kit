@@ -123,16 +123,7 @@ function ensureGitignore(ide, cwd) {
 
 // ─── Expected config file per IDE ────────────────────────────────────────────
 
-const IDE_CONFIG_MAP = {
-    claudecode: 'CLAUDE.md',
-    codex: 'AGENTS.md',
-    dual: 'CLAUDE.md',
-    antigravity: 'AGENTS.md',
-    cursor: '.cursorrules',
-    windsurf: '.windsurfrules',
-    agents: 'AGENTS.md',
-    generic: 'SYSTEM_PROMPT.md',
-};
+const { IDE_CONFIG_FILE: IDE_CONFIG_MAP } = require(path.join(__dirname, '..', 'lib', 'helpers'));
 
 // ─── Temp dir helper ─────────────────────────────────────────────────────────
 

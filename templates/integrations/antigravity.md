@@ -1,0 +1,6 @@
+- **AGENTS.md Discovery:** Antigravity auto-discovers this file from project root. Rules, skills, and workflows go in `.agents/` directory.
+- **Knowledge Items:** Persist architecture decisions, debugging solutions, and implementation patterns as Knowledge Items (KIs) — they survive across sessions unlike chat history.
+- **Multi-Agent (Manager View):** For complex tasks, spawn specialized agents from Manager View (`Cmd+E` / `Ctrl+E`). Each agent gets its own isolated workspace.
+- **Browser Testing:** Use the integrated browser to visually verify UI changes before confirming completion. Agents can take screenshots and detect visual regressions.
+- **Workflows:** Place reusable workflows in `.agents/workflows/` and trigger via `/workflow-name` in chat.
+- **Confirmation Policy:** ALWAYS require explicit confirmation before destructive operations (database writes, deployments, `rm -rf`, force push).
