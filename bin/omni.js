@@ -43,9 +43,7 @@ function readTemplate(filePath) {
     try {
         return fs.readFileSync(filePath, 'utf-8');
     } catch (err) {
-        console.log(chalk.red.bold(`\n❌ Lỗi khi đọc file template: ${path.basename(filePath)}`));
-        console.log(chalk.red(`   Chi tiết: ${err.message}\n`));
-        process.exit(1);
+        throw new Error(`Không đọc được template ${path.basename(filePath)}: ${err.message}`);
     }
 }
 
