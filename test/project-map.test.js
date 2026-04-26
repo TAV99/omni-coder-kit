@@ -251,3 +251,54 @@ describe('scanProject', () => {
         }
     });
 });
+
+// ─── generateMapSkeleton ────────────────────────────────────────────────────
+
+describe('generateMapSkeleton', () => {
+    const { scanProject, generateMapSkeleton } = require(path.join(__dirname, '..', 'lib', 'scanner'));
+
+    it('generates markdown with all required sections', () => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-skel-'));
+        try {
+            fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({
+                name: 'test-project',
+                scripts: { start: 'node src/index.js' },
+                dependencies: { express: '^4.18.0' }
+            }));
+            fs.mkdirSync(path.join(tmp, 'src'));
+            fs.writeFileSync(path.join(tmp, 'src', 'index.js'), '// TODO: setup server\nconst app = require("express")();\n');
+            fs.writeFileSync(path.join(tmp, 'README.md'), '# Test\n');
+
+            const scan = scanProject(tmp);
+            const md = generateMapSkeleton(scan, 'test-project');
+
+            assert.ok(md.includes('# Project Map'));
+            assert.ok(md.includes('## Tech Stack'));
+            assert.ok(md.includes('## Structure'));
+            assert.ok(md.includes('## Entry Points'));
+            assert.ok(md.includes('## Conventions'));
+            assert.ok(md.includes('## Key Patterns'));
+            assert.ok(md.includes('[PENDING]'));
+            assert.ok(md.includes('## Landmines'));
+            assert.ok(md.includes('## Existing Docs'));
+        } finally {
+            fs.rmSync(tmp, { recursive: true, force: true });
+        }
+    });
+
+    it('includes tech stack info in output', () => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-skel-'));
+        try {
+            fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({
+                dependencies: { react: '^18.0.0', next: '^14.0.0' },
+                devDependencies: { jest: '^29.0.0' }
+            }));
+            const scan = scanProject(tmp);
+            const md = generateMapSkeleton(scan, 'my-app');
+            assert.ok(md.includes('React'));
+            assert.ok(md.includes('Next.js'));
+        } finally {
+            fs.rmSync(tmp, { recursive: true, force: true });
+        }
+    });
+});
