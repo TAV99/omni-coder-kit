@@ -3,18 +3,22 @@
 import { motion } from "framer-motion";
 import { SectionWrapper } from "@/components/ui/SectionWrapper";
 import { aboutData } from "@/data/about";
+import { useLang } from "@/components/LangProvider";
 
 export function About() {
+  const { lang } = useLang();
+  const d = aboutData[lang];
+
   return (
     <SectionWrapper id="about">
       <div className="grid gap-12 lg:grid-cols-2 lg:gap-16 items-start">
         {/* Phần nội dung chữ */}
         <div>
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            {aboutData.title}
+            {d.title}
           </h2>
           <div className="mt-8 space-y-6">
-            {aboutData.points.map((point, i) => (
+            {d.points.map((point, i) => (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, x: -20 }}
@@ -38,7 +42,7 @@ export function About() {
           className="flex items-center justify-center"
         >
           <div className="relative w-full max-w-sm">
-            {aboutData.workflow.map((item, i) => (
+            {d.workflow.map((item, i) => (
               <motion.div
                 key={item.command}
                 initial={{ opacity: 0, y: 20 }}
@@ -54,7 +58,7 @@ export function About() {
                   <span className="font-mono text-sm text-accent-alt">{item.command}</span>
                   <span className="ml-2 text-xs text-content-faint">{item.agent}</span>
                 </div>
-                {i < aboutData.workflow.length - 1 && (
+                {i < d.workflow.length - 1 && (
                   <div className="absolute left-5 mt-12 h-3 w-px bg-highlight-strong" />
                 )}
               </motion.div>

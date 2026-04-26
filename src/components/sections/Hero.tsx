@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CodeSnippet } from "@/components/ui/CodeSnippet";
 import { heroData } from "@/data/hero";
+import { useLang } from "@/components/LangProvider";
 
 function CopyInstall({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
@@ -36,6 +37,9 @@ function CopyInstall({ command }: { command: string }) {
 }
 
 export function Hero() {
+  const { lang } = useLang();
+  const d = heroData[lang];
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
       {/* Hiệu ứng gradient orb trang trí */}
@@ -49,22 +53,22 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            <Badge variant="highlighted">{heroData.badge}</Badge>
+            <Badge variant="highlighted">{d.badge}</Badge>
             <h1 className="mt-4 text-5xl font-bold tracking-tight md:text-7xl">
-              <span className="gradient-text">{heroData.headline}</span>
+              <span className="gradient-text">{d.headline}</span>
             </h1>
             <p className="mt-6 max-w-lg text-xl text-content-muted leading-relaxed">
-              {heroData.tagline}
+              {d.tagline}
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
-              <Button variant="primary" href={heroData.cta.primary.href}>
-                {heroData.cta.primary.label}
+              <Button variant="primary" href={d.cta.primary.href}>
+                {d.cta.primary.label}
               </Button>
-              <Button variant="secondary" href={heroData.cta.secondary.href}>
-                {heroData.cta.secondary.label}
+              <Button variant="secondary" href={d.cta.secondary.href}>
+                {d.cta.secondary.label}
               </Button>
             </div>
-            <CopyInstall command={heroData.install} />
+            <CopyInstall command={d.install} />
           </motion.div>
 
           <motion.div

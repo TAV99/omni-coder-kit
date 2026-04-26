@@ -3,6 +3,7 @@ import Link from "next/link";
 import { DocsSidebar } from "@/components/docs/DocsSidebar";
 import { DocsContent } from "@/components/docs/DocsContent";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LangToggle } from "@/components/LangToggle";
 
 export const metadata: Metadata = {
   title: "Documentation — Omni-Coder Kit",
@@ -21,6 +22,7 @@ export default function DocsPage() {
             <span className="hidden text-sm text-content-secondary sm:inline">Docs</span>
           </div>
           <div className="flex items-center gap-4">
+            <LangToggle />
             <ThemeToggle />
             <Link href="/" className="text-sm text-content-muted hover:text-content transition-colors">Home</Link>
             <a

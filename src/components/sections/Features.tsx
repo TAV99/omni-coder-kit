@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { SectionWrapper } from "@/components/ui/SectionWrapper";
 import { Card } from "@/components/ui/Card";
 import { featuresData } from "@/data/features";
+import { useLang } from "@/components/LangProvider";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -19,13 +20,22 @@ const itemVariants = {
 };
 
 export function Features() {
+  const { lang } = useLang();
+  const features = featuresData[lang];
+
   return (
     <SectionWrapper id="features">
       <div className="text-center">
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-          Workflow <span className="gradient-text">hoàn chỉnh</span>
+          {lang === "vi" ? (
+            <>Workflow <span className="gradient-text">hoàn chỉnh</span></>
+          ) : (
+            <>A <span className="gradient-text">complete</span> workflow</>
+          )}
         </h2>
-        <p className="mt-4 text-lg text-content-muted">8 commands. Từ ý tưởng đến production.</p>
+        <p className="mt-4 text-lg text-content-muted">
+          {lang === "vi" ? "8 commands. Từ ý tưởng đến production." : "8 commands. From idea to production."}
+        </p>
       </div>
       <motion.div
         variants={containerVariants}
@@ -34,7 +44,7 @@ export function Features() {
         viewport={{ once: true, margin: "-100px" }}
         className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
       >
-        {featuresData.map((feature) => (
+        {features.map((feature) => (
           <motion.div key={feature.id} variants={itemVariants} className="h-full">
             <Card className="h-full">
               <span className="text-3xl">{feature.icon}</span>

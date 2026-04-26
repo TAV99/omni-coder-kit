@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { docGroups } from "@/data/docs";
+import { useLang } from "@/components/LangProvider";
 
 export function DocsSidebar() {
+  const { lang } = useLang();
   const [activeId, setActiveId] = useState("introduction");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const groups = docGroups[lang];
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -16,14 +19,14 @@ export function DocsSidebar() {
       { rootMargin: "-80px 0px -60% 0px", threshold: 0.1 }
     );
 
-    docGroups.forEach((g) =>
+    groups.forEach((g) =>
       g.sections.forEach((s) => {
         const el = document.getElementById(s.id);
         if (el) observer.observe(el);
       })
     );
     return () => observer.disconnect();
-  }, []);
+  }, [groups]);
 
   const handleClick = (id: string) => {
     setMobileOpen(false);
@@ -32,7 +35,7 @@ export function DocsSidebar() {
 
   const nav = (
     <nav className="space-y-6">
-      {docGroups.map((group) => (
+      {groups.map((group) => (
         <div key={group.name}>
           <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-content-faint">
             {group.name}
@@ -48,7 +51,7 @@ export function DocsSidebar() {
                       : "text-content-muted hover:text-content hover:bg-hover"
                   }`}
                 >
-                  {section.title}
+                  {section.title[lang]}
                 </button>
               </li>
             ))}

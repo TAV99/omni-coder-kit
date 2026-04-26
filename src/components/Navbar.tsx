@@ -5,21 +5,24 @@ import { motion, useScroll, useMotionValueEvent, AnimatePresence } from "framer-
 import Link from "next/link";
 import { Button } from "./ui/Button";
 import { ThemeToggle } from "./ThemeToggle";
+import { LangToggle } from "./LangToggle";
+import { useLang } from "./LangProvider";
 
 const navLinks = [
-  { label: "About", href: "#about" },
-  { label: "Features", href: "#features" },
-  { label: "Testimonials", href: "#testimonials" },
-  { label: "Installation", href: "#installation" },
-  { label: "FAQ", href: "#faq" },
-  { label: "Contact", href: "#contact" },
-  { label: "Docs", href: "/docs" },
+  { label: { vi: "Giới thiệu", en: "About" }, href: "#about" },
+  { label: { vi: "Tính năng", en: "Features" }, href: "#features" },
+  { label: { vi: "Nhận xét", en: "Testimonials" }, href: "#testimonials" },
+  { label: { vi: "Cài đặt", en: "Installation" }, href: "#installation" },
+  { label: { vi: "FAQ", en: "FAQ" }, href: "#faq" },
+  { label: { vi: "Liên hệ", en: "Contact" }, href: "#contact" },
+  { label: { vi: "Docs", en: "Docs" }, href: "/docs" },
 ];
 
 export function Navbar() {
   const [hidden, setHidden] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { scrollY } = useScroll();
+  const { lang } = useLang();
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     const previous = scrollY.getPrevious() ?? 0;
@@ -53,20 +56,21 @@ export function Navbar() {
           {navLinks.map((link) =>
             link.href.startsWith("/") ? (
               <Link key={link.href} href={link.href} className="text-sm text-content-muted transition-colors hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 rounded">
-                {link.label}
+                {link.label[lang]}
               </Link>
             ) : (
               <a key={link.href} href={link.href} className="text-sm text-content-muted transition-colors hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 rounded">
-                {link.label}
+                {link.label[lang]}
               </a>
             )
           )}
         </div>
 
         <div className="flex items-center gap-3">
+          <LangToggle />
           <ThemeToggle />
           <Button variant="primary" href="#installation" className="hidden md:inline-flex text-sm px-4 py-2">
-            Bắt đầu ngay
+            {lang === "vi" ? "Bắt đầu ngay" : "Get Started"}
           </Button>
 
           {/* Nút hamburger cho mobile */}
@@ -109,7 +113,7 @@ export function Navbar() {
                     onClick={() => setMobileOpen(false)}
                     className="block rounded-lg px-3 py-2.5 text-base text-content-secondary transition-colors hover:bg-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
                   >
-                    {link.label}
+                    {link.label[lang]}
                   </Link>
                 ) : (
                   <a
@@ -118,13 +122,13 @@ export function Navbar() {
                     onClick={() => setMobileOpen(false)}
                     className="block rounded-lg px-3 py-2.5 text-base text-content-secondary transition-colors hover:bg-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
                   >
-                    {link.label}
+                    {link.label[lang]}
                   </a>
                 )
               )}
               <div className="pt-2">
                 <Button variant="primary" href="#installation" className="w-full text-sm" onClick={() => setMobileOpen(false)}>
-                  Bắt đầu ngay
+                  {lang === "vi" ? "Bắt đầu ngay" : "Get Started"}
                 </Button>
               </div>
             </div>

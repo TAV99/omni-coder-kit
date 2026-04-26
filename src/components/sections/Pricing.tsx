@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { SectionWrapper } from "@/components/ui/SectionWrapper";
 import { Card } from "@/components/ui/Card";
 import { ideSupportData, installSteps } from "@/data/pricing";
+import { useLang } from "@/components/LangProvider";
 import {
   ClaudeIcon, GeminiIcon, OpenAIIcon, CursorIcon,
   WindsurfIcon, AntigravityIcon, CrossToolIcon, GenericIcon,
@@ -21,14 +22,23 @@ const ideIconMap: Record<string, React.ReactNode> = {
 };
 
 export function Pricing() {
+  const { lang } = useLang();
+  const steps = installSteps[lang];
+
   return (
     <SectionWrapper id="installation">
       {/* IDE Support */}
       <div className="text-center">
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-          Hoạt động với <span className="gradient-text">mọi AI agent</span>
+          {lang === "vi" ? (
+            <>Hoạt động với <span className="gradient-text">mọi AI agent</span></>
+          ) : (
+            <>Works with <span className="gradient-text">every AI agent</span></>
+          )}
         </h2>
-        <p className="mt-4 text-lg text-content-muted">Chọn IDE khi omni init — config tự động phù hợp.</p>
+        <p className="mt-4 text-lg text-content-muted">
+          {lang === "vi" ? "Chọn IDE khi omni init — config tự động phù hợp." : "Choose IDE during omni init — config auto-adapts."}
+        </p>
       </div>
       <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {ideSupportData.map((ide, i) => (
@@ -51,12 +61,18 @@ export function Pricing() {
       {/* Getting Started */}
       <div className="mt-20 text-center">
         <h3 className="text-2xl font-bold tracking-tight md:text-3xl">
-          Bắt đầu trong <span className="gradient-text">30 giây</span>
+          {lang === "vi" ? (
+            <>Bắt đầu trong <span className="gradient-text">30 giây</span></>
+          ) : (
+            <>Get started in <span className="gradient-text">30 seconds</span></>
+          )}
         </h3>
-        <p className="mt-4 text-lg text-content-muted">Open source, miễn phí mãi mãi. ISC License.</p>
+        <p className="mt-4 text-lg text-content-muted">
+          {lang === "vi" ? "Open source, miễn phí mãi mãi. ISC License." : "Open source, free forever. ISC License."}
+        </p>
       </div>
       <div className="mx-auto mt-12 max-w-2xl space-y-4">
-        {installSteps.map((item, i) => (
+        {steps.map((item, i) => (
           <motion.div
             key={item.step}
             initial={{ opacity: 0, x: -20 }}

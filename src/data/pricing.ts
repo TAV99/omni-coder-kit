@@ -22,9 +22,17 @@ export const ideSupportData: IDESupport[] = [
   { name: "Generic", icon: "📄", configFile: "SYSTEM_PROMPT.md", command: "generic" },
 ];
 
-export const installSteps: InstallStep[] = [
-  { step: 1, command: "npm install -g omni-coder-kit", description: "Cài đặt CLI toàn cục từ npm" },
-  { step: 2, command: "omni init", description: "Chọn IDE, mức kỷ luật, personal rules" },
-  { step: 3, command: "omni auto-equip", description: "Cài 6 universal skills mặc định" },
-  { step: 4, command: ">om:brainstorm", description: "Bắt đầu brainstorm tính năng đầu tiên" },
-];
+export const installSteps = {
+  vi: [
+    { step: 1, command: "npm install -g omni-coder-kit", description: "Cài đặt CLI toàn cục từ npm" },
+    { step: 2, command: "omni init", description: "Chọn IDE, mức kỷ luật, personal rules" },
+    { step: 3, command: "omni auto-equip", description: "Cài 6 universal skills mặc định" },
+    { step: 4, command: ">om:brainstorm", description: "Bắt đầu brainstorm tính năng đầu tiên" },
+  ] as InstallStep[],
+  en: [
+    { step: 1, command: "npm install -g omni-coder-kit", description: "Install CLI globally from npm" },
+    { step: 2, command: "omni init", description: "Choose IDE, discipline level, personal rules" },
+    { step: 3, command: "omni auto-equip", description: "Install 6 default universal skills" },
+    { step: 4, command: ">om:brainstorm", description: "Start brainstorming your first feature" },
+  ] as InstallStep[],
+};

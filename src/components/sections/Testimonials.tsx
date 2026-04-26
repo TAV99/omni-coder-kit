@@ -4,18 +4,28 @@ import { motion } from "framer-motion";
 import { SectionWrapper } from "@/components/ui/SectionWrapper";
 import { Card } from "@/components/ui/Card";
 import { testimonialsData } from "@/data/testimonials";
+import { useLang } from "@/components/LangProvider";
 
 export function Testimonials() {
+  const { lang } = useLang();
+  const testimonials = testimonialsData[lang];
+
   return (
     <SectionWrapper id="testimonials">
       <div className="text-center">
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-          Developers <span className="gradient-text">yêu thích</span>
+          {lang === "vi" ? (
+            <>Developers <span className="gradient-text">yêu thích</span></>
+          ) : (
+            <>Loved by <span className="gradient-text">developers</span></>
+          )}
         </h2>
-        <p className="mt-4 text-lg text-content-muted">Những người đã thay đổi cách làm việc với AI.</p>
+        <p className="mt-4 text-lg text-content-muted">
+          {lang === "vi" ? "Những người đã thay đổi cách làm việc với AI." : "People who changed the way they work with AI."}
+        </p>
       </div>
       <div className="mt-12 grid gap-6 sm:grid-cols-2">
-        {testimonialsData.map((testimonial, i) => (
+        {testimonials.map((testimonial, i) => (
           <motion.div
             key={i}
             initial={{ opacity: 0, y: 20 }}
