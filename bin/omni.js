@@ -969,25 +969,40 @@ program
             saveManifest(manifest);
         }
 
-        // Auto-install find-skills (tìm kiếm & cài skills tự động)
+        // Auto-install find-skills — skip nếu không có mạng (Gemini sandbox, offline)
         const findSkillsAgentFlags = getAgentFlags(manifest);
-        const findSkillsCmd = `npx skills add vercel-labs/skills${findSkillsAgentFlags ? ' ' + findSkillsAgentFlags : ''} --skill find-skills -y`;
+        const canReachNetwork = (() => {
+            try {
+                execFileSync('node', ['-e',
+                    "const s=require('net').connect(443,'registry.npmjs.org');" +
+                    "s.on('connect',()=>{s.destroy();process.exit(0)});" +
+                    "s.on('error',()=>process.exit(1));" +
+                    "s.setTimeout(3000,()=>{s.destroy();process.exit(1)})"
+                ], { stdio: 'pipe', timeout: 5000 });
+                return true;
+            } catch { return false; }
+        })();
 
-        try {
-            console.log(chalk.gray(`   Đang cài find-skills...`));
-            const initArgs = ['-y', 'skills', 'add', 'vercel-labs/skills'];
-            if (findSkillsAgentFlags) initArgs.push(...findSkillsAgentFlags.split(' '));
-            initArgs.push('--skill', 'find-skills', '-y');
-            execFileSync('npx', initArgs, { stdio: 'pipe', timeout: 30000 });
-            manifest.skills.external.push({
-                name: 'find-skills',
-                source: 'vercel-labs/skills',
-                installedAt: new Date().toISOString()
-            });
-            saveManifest(manifest);
-            console.log(chalk.green(`   ✓ find-skills — AI có thể tìm & cài skills tự động`));
-        } catch {
-            console.log(chalk.yellow(`   ⚠️  Không cài được find-skills (sandbox/mạng). Cài sau: ${findSkillsCmd}`));
+        if (canReachNetwork) {
+            try {
+                console.log(chalk.gray(`   Đang cài find-skills...`));
+                const initArgs = ['-y', 'skills', 'add', 'vercel-labs/skills'];
+                if (findSkillsAgentFlags) initArgs.push(...findSkillsAgentFlags.split(' '));
+                initArgs.push('--skill', 'find-skills', '-y');
+                execFileSync('npx', initArgs, { stdio: 'pipe', timeout: 30000 });
+                manifest.skills.external.push({
+                    name: 'find-skills',
+                    source: 'vercel-labs/skills',
+                    installedAt: new Date().toISOString()
+                });
+                saveManifest(manifest);
+                console.log(chalk.green(`   ✓ find-skills — AI có thể tìm & cài skills tự động`));
+            } catch {
+                console.log(chalk.yellow(`   ⚠️  Không cài được find-skills. Cài sau: ${chalk.cyan('omni auto-equip')}`));
+            }
+        } else {
+            console.log(chalk.gray(`   ⏭  Bỏ qua cài find-skills (không có mạng/sandbox)`));
+            console.log(chalk.gray(`      Cài sau khi có mạng: ${chalk.cyan('omni auto-equip')}`));
         }
 
         console.log(chalk.white(`\n💡 Gõ ${chalk.cyan.bold('>om:brainstorm')} để AI phỏng vấn và tư vấn kiến trúc.`));
