@@ -210,13 +210,16 @@ function getOverlayNameForTarget(ide, target) {
     if (target === 'codex') {
         return (ide === 'codex' || ide === 'dual') ? 'codex' : null;
     }
+    if (target === 'cursor') {
+        return (ide === 'cursor') ? 'cursor' : null;
+    }
     return null;
 }
 
 function getOverlayDir(ide, target = null) {
     const overlayName = target
         ? getOverlayNameForTarget(ide, target)
-        : ({ claudecode: 'claude-code', dual: 'claude-code' }[ide] || null);
+        : ({ claudecode: 'claude-code', dual: 'claude-code', cursor: 'cursor' }[ide] || null);
     if (!overlayName) return null;
     const dir = path.join(__dirname, '..', 'templates', 'overlays', overlayName);
     return fs.existsSync(dir) ? dir : null;
@@ -395,6 +398,37 @@ function buildCommandRegistry(ide) {
         ].join('\n');
     }
 
+    const isCursor = ide === 'cursor';
+    if (isCursor) {
+        return [
+            '## WORKFLOW COMMANDS',
+            '> Cursor: type `>om:*` in chat. Use @Files to read workflow files.',
+            '',
+            'When the user types a `>om:` command, use @Files to read the corresponding workflow file, then follow its instructions.',
+            '',
+            '| Command | Workflow File | Context Hints |',
+            '|---------|--------------|---------------|',
+            '| `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | @Codebase for project scan |',
+            '| `>om:equip` | `.omni/workflows/skill-manager.md` | @Web for skill discovery |',
+            '| `>om:plan` | `.omni/workflows/task-planning.md` | @Git for recent changes |',
+            '| `>om:cook` | `.omni/workflows/coder-execution.md` | @Files for scope, Agent mode |',
+            '| `>om:check` | `.omni/workflows/qa-testing.md` | @Git for diff review |',
+            '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | @Web for error research |',
+            '| `>om:doc` | `.omni/workflows/documentation-writer.md` | @Codebase for API surface |',
+            '| `>om:learn` | `.omni/workflows/knowledge-learn.md` | @Git for fix history |',
+            '',
+            'Supporting files (referenced by workflows as needed):',
+            '- `.omni/workflows/pm-templates.md` - Output format standards',
+            '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
+            '- `.omni/workflows/superpower-sdlc.md` - Cursor-aware SDLC overview',
+            '- `.omni/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
+            '',
+            '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
+            '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
+            '**Fallback:** If `.omni/workflows/` not found, read from `node_modules/omni-coder-kit/templates/workflows/`.',
+        ].join('\n');
+    }
+
     return [
         '## WORKFLOW COMMANDS',
         'When the user invokes a `>om:` command, read the corresponding workflow file and follow its instructions.',
@@ -517,9 +551,11 @@ program
             ? 'codex'
             : response.ide === 'gemini'
                 ? 'gemini'
-                : response.ide === 'dual'
-                    ? 'base'
-                    : null;
+                : response.ide === 'cursor'
+                    ? 'cursor'
+                    : response.ide === 'dual'
+                        ? 'base'
+                        : null;
         const mergedWorkflows = buildWorkflows(response.ide, workflowTarget);
         const workflowFiles = Object.keys(mergedWorkflows);
         for (const wf of workflowFiles) {

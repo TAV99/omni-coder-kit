@@ -15,13 +15,16 @@ function getOverlayNameForTarget(ide, target) {
     if (target === 'codex') {
         return (ide === 'codex' || ide === 'dual') ? 'codex' : null;
     }
+    if (target === 'cursor') {
+        return (ide === 'cursor') ? 'cursor' : null;
+    }
     return null;
 }
 
 function getOverlayDir(ide, target = null) {
     const overlayName = target
         ? getOverlayNameForTarget(ide, target)
-        : ({ claudecode: 'claude-code', dual: 'claude-code' }[ide] || null);
+        : ({ claudecode: 'claude-code', dual: 'claude-code', cursor: 'cursor' }[ide] || null);
     if (!overlayName) return null;
     const dir = path.join(TEMPLATES, 'overlays', overlayName);
     return fs.existsSync(dir) ? dir : null;
@@ -149,7 +152,7 @@ function simulateInit(ide, opts = {}) {
     const workflowsDir = path.join(tmpDir, '.omni', 'workflows');
     fs.mkdirSync(workflowsDir, { recursive: true });
 
-    const workflowTarget = ide === 'codex' ? 'codex' : ide === 'dual' ? 'base' : null;
+    const workflowTarget = ide === 'codex' ? 'codex' : ide === 'gemini' ? 'gemini' : ide === 'cursor' ? 'cursor' : ide === 'dual' ? 'base' : null;
     const mergedWorkflows = buildWorkflows(ide, workflowTarget);
     for (const [name, srcPath] of Object.entries(mergedWorkflows)) {
         fs.copyFileSync(srcPath, path.join(workflowsDir, name));
@@ -559,7 +562,7 @@ describe('E2E: generic init', () => {
 // ─── Cross-IDE: no overlay contamination ─────────────────────────────────────
 
 describe('Cross-IDE isolation', () => {
-    const nonOverlayIDEs = ['antigravity', 'cursor', 'windsurf', 'agents', 'generic'];
+    const nonOverlayIDEs = ['antigravity', 'windsurf', 'agents', 'generic'];
 
     for (const ide of nonOverlayIDEs) {
         it(`${ide}: workflows are all base (no overlay)`, () => {

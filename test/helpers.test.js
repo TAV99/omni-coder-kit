@@ -296,6 +296,39 @@ describe('getAgentFlags', () => {
     });
 });
 
+// ─── getOverlayNameForTarget — cursor ────────────────────────────────────────
+
+function getOverlayNameForTarget(ide, target) {
+    if (target === 'claude-code') {
+        return (ide === 'claudecode' || ide === 'dual') ? 'claude-code' : null;
+    }
+    if (target === 'codex') {
+        return (ide === 'codex' || ide === 'dual') ? 'codex' : null;
+    }
+    if (target === 'cursor') {
+        return (ide === 'cursor') ? 'cursor' : null;
+    }
+    return null;
+}
+
+describe('getOverlayNameForTarget — cursor', () => {
+    it('returns "cursor" for ide=cursor, target=cursor', () => {
+        assert.equal(getOverlayNameForTarget('cursor', 'cursor'), 'cursor');
+    });
+
+    it('returns null for ide=claudecode, target=cursor', () => {
+        assert.equal(getOverlayNameForTarget('claudecode', 'cursor'), null);
+    });
+
+    it('returns null for ide=cursor, target=claude-code', () => {
+        assert.equal(getOverlayNameForTarget('cursor', 'claude-code'), null);
+    });
+
+    it('returns null for ide=codex, target=cursor', () => {
+        assert.equal(getOverlayNameForTarget('codex', 'cursor'), null);
+    });
+});
+
 // ─── Core template files exist ───────────────────────────────────────────────
 
 describe('Core template files exist', () => {
