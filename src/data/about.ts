@@ -11,8 +11,8 @@ export const aboutData = {
         description: "Bắt buộc AI hỏi tối thiểu 3 câu trước khi viết code: xác nhận scope, edge case chưa nghĩ tới, và trade-off kỹ thuật. Không ngoại lệ.",
       },
       {
-        title: "8 SDLC Workflows + DNA Detection",
-        description: "Từ brainstorm → equip → plan → cook → check → fix → learn → doc. AI tự nhận diện Project DNA (hasUI, hasBackend, backendComplexity) để điều chỉnh quy trình. Knowledge Base tự tích lũy bài học. Skill-tagged tasks và automated quality pipeline với 3 quality cycles.",
+        title: "9 SDLC Workflows + DNA Detection",
+        description: "Từ brainstorm → equip → plan → cook → check → fix → map → learn → doc. AI tự nhận diện Project DNA (hasUI, hasBackend, backendComplexity) để điều chỉnh quy trình. Project Map cho codebase intelligence. Knowledge Base tự tích lũy bài học. Automated quality pipeline với 3 quality cycles.",
       },
     ],
     workflow: [
@@ -22,6 +22,7 @@ export const aboutData = {
       { command: "om:cook", label: "Thực thi code", agent: "Coder" },
       { command: "om:check", label: "QA Testing", agent: "QA Tester" },
       { command: "om:fix", label: "Debug & Fix", agent: "Debugger" },
+      { command: "om:map", label: "Project Map", agent: "Architect" },
       { command: "om:learn", label: "Knowledge Base", agent: "Knowledge" },
       { command: "om:doc", label: "Documentation", agent: "Writer" },
     ],
@@ -38,8 +39,8 @@ export const aboutData = {
         description: "Forces AI to ask at least 3 questions before writing code: scope confirmation, unconsidered edge cases, and technical trade-offs. No exceptions.",
       },
       {
-        title: "8 SDLC Workflows + DNA Detection",
-        description: "From brainstorm → equip → plan → cook → check → fix → learn → doc. AI auto-detects Project DNA (hasUI, hasBackend, backendComplexity) to adapt the workflow. Knowledge Base accumulates lessons learned. Skill-tagged tasks and automated quality pipeline with 3 quality cycles.",
+        title: "9 SDLC Workflows + DNA Detection",
+        description: "From brainstorm → equip → plan → cook → check → fix → map → learn → doc. AI auto-detects Project DNA (hasUI, hasBackend, backendComplexity) to adapt the workflow. Project Map for codebase intelligence. Knowledge Base accumulates lessons. Automated quality pipeline with 3 quality cycles.",
       },
     ],
     workflow: [
@@ -49,6 +50,7 @@ export const aboutData = {
       { command: "om:cook", label: "Code Execution", agent: "Coder" },
       { command: "om:check", label: "QA Testing", agent: "QA Tester" },
       { command: "om:fix", label: "Debug & Fix", agent: "Debugger" },
+      { command: "om:map", label: "Project Map", agent: "Architect" },
       { command: "om:learn", label: "Knowledge Base", agent: "Knowledge" },
       { command: "om:doc", label: "Documentation", agent: "Writer" },
     ],

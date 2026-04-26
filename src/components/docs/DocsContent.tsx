@@ -70,7 +70,7 @@ const t = {
     introP1: "là công cụ CLI inject mindset, SDLC workflow và skills vào các AI coding agent. Đảm bảo AI hoạt động với kỷ luật Senior Engineer, tuân thủ SDLC nghiêm ngặt và sử dụng mẫu thiết kế tối ưu.",
     introStats: [
       { num: "8+", label: "IDE hỗ trợ" },
-      { num: "8", label: "SDLC Workflows" },
+      { num: "9", label: "SDLC Workflows" },
       { num: "6", label: "Universal Skills" },
     ],
     introP2: "Hỗ trợ Claude Code, Gemini CLI, Codex CLI, Cursor, Windsurf, Antigravity, Cross-tool và Generic. Dual-agent mode cho phép tạo config cho nhiều AI tool đồng thời.",
@@ -131,7 +131,26 @@ const t = {
     csP: "phát hiện dự án có UI, tự động sinh file",
     csP2: "— nguồn sự thật duy nhất cho mọi nội dung hiển thị trên UI.",
     csValidation: "trong om:check đối chiếu mọi text trên UI với content-source.md — đảm bảo nội dung chính xác, nhất quán, không sai lệch.",
-    wfTitle: "8 SDLC Workflows",
+    pmTitle: "Project Map — Codebase Intelligence",
+    pmP: "Khi tham gia dự án lớn đã có code, AI cần hiểu codebase mà không phải scan hàng trăm file mỗi session.",
+    pmHow: "Cách hoạt động",
+    pmItems: [
+      "omni map quét codebase → sinh .omni/project-map.md skeleton (0 token, instant)",
+      "om:map trong chat AI → điền mô tả semantic cho từng module",
+      "omni map --refresh → diff cấu trúc, đánh dấu [NEW]/[DELETED], giữ nguyên mô tả AI",
+      "Workflows tự động cảnh báo khi map > 7 ngày",
+    ],
+    pmLangs: "Multi-language: Node.js/TypeScript, Python, Go, Rust, Java/Kotlin, Ruby, PHP",
+    pmDeep: "Deep scan bao gồm: Tech stack, directory tree (max depth 4), entry points, CI/CD configs, conventions (linter, formatter), landmines (TODO/FIXME/HACK). Zero dependencies, zero network calls.",
+    mapTitle: "om:map — Project Map",
+    mapP: "AI đóng vai Architect. Điền mô tả semantic vào .omni/project-map.md đã được omni map sinh sẵn.",
+    mapItems: [
+      "Đọc skeleton từ .omni/project-map.md",
+      "Phân tích từng module/directory → điền mô tả chức năng, patterns, dependencies",
+      "Điền Key Patterns: auth strategy, error handling, DB patterns...",
+      "Đánh dấu [NEW] modules cần mô tả, bỏ qua [DELETED]",
+    ],
+    wfTitle: "9 SDLC Workflows",
     wfHeaders: ["Lệnh", "Agent", "Mô tả"],
     wfRows: [
       ["om:brainstorm", "Architect", "Phỏng vấn adaptive + DNA detection → design-spec.md"],
@@ -140,6 +159,7 @@ const t = {
       ["om:cook", "Coder", "Thực thi tasks, Shared Context Brief, quality gate mỗi 1/3"],
       ["om:check", "QA Tester", "Validation pipeline P0–P5 → test-report.md"],
       ["om:fix", "Debugger", "Reproduce → root cause → surgical fix → verify"],
+      ["om:map", "Architect", "Quét codebase → Project Map cho AI navigation"],
       ["om:learn", "Knowledge", "Auto-record lessons sau fix → knowledge-base.md"],
       ["om:doc", "Writer", "Đọc code thực tế → sinh README + API docs"],
     ],
@@ -218,7 +238,9 @@ const t = {
     cliTitle: "CLI Commands",
     cliHeaders: ["Lệnh", "Mô tả"],
     cliRows: [
-      ["omni init", "Khởi tạo DNA và workflow cho dự án mới"],
+      ["omni init", "Khởi tạo DNA và workflow cho dự án mới (auto-detect existing project)"],
+      ["omni map", "Quét codebase → sinh Project Map cho AI navigation"],
+      ["omni map --refresh", "Cập nhật cấu trúc map (đánh dấu [NEW]/[DELETED])"],
       ["omni equip <source>", "Tải kỹ năng ngoài từ skills.sh"],
       ["omni auto-equip", "Cài 6 universal skills mặc định"],
       ["omni rules [action]", "Quản lý personal rules (view/edit/sync/reset)"],
@@ -235,7 +257,7 @@ const t = {
     introP1: "is a CLI tool that injects mindset, SDLC workflows, and skills into AI coding agents. Ensures AI operates with Senior Engineer discipline, follows strict SDLC, and uses optimal design patterns.",
     introStats: [
       { num: "8+", label: "IDEs supported" },
-      { num: "8", label: "SDLC Workflows" },
+      { num: "9", label: "SDLC Workflows" },
       { num: "6", label: "Universal Skills" },
     ],
     introP2: "Supports Claude Code, Gemini CLI, Codex CLI, Cursor, Windsurf, Antigravity, Cross-tool, and Generic. Dual-agent mode allows generating configs for multiple AI tools simultaneously.",
@@ -296,7 +318,26 @@ const t = {
     csP: "detects a UI project, auto-generates",
     csP2: "— the single source of truth for all content displayed on the UI.",
     csValidation: "in om:check cross-references all UI text against content-source.md — ensuring accurate, consistent content.",
-    wfTitle: "8 SDLC Workflows",
+    pmTitle: "Project Map — Codebase Intelligence",
+    pmP: "When joining a large existing project, AI needs to understand the codebase without scanning hundreds of files every session.",
+    pmHow: "How it works",
+    pmItems: [
+      "omni map scans codebase → generates .omni/project-map.md skeleton (0 tokens, instant)",
+      "om:map in AI chat → fills semantic descriptions for each module",
+      "omni map --refresh → diffs structure, marks [NEW]/[DELETED], preserves AI descriptions",
+      "Workflows auto-warn when map is > 7 days old",
+    ],
+    pmLangs: "Multi-language: Node.js/TypeScript, Python, Go, Rust, Java/Kotlin, Ruby, PHP",
+    pmDeep: "Deep scan includes: Tech stack, directory tree (max depth 4), entry points, CI/CD configs, conventions (linter, formatter), landmines (TODO/FIXME/HACK). Zero dependencies, zero network calls.",
+    mapTitle: "om:map — Project Map",
+    mapP: "AI acts as Architect. Fills semantic descriptions into .omni/project-map.md generated by omni map.",
+    mapItems: [
+      "Reads skeleton from .omni/project-map.md",
+      "Analyzes each module/directory → fills functional descriptions, patterns, dependencies",
+      "Fills Key Patterns: auth strategy, error handling, DB patterns...",
+      "Marks [NEW] modules needing descriptions, skips [DELETED]",
+    ],
+    wfTitle: "9 SDLC Workflows",
     wfHeaders: ["Command", "Agent", "Description"],
     wfRows: [
       ["om:brainstorm", "Architect", "Adaptive interview + DNA detection → design-spec.md"],
@@ -305,6 +346,7 @@ const t = {
       ["om:cook", "Coder", "Execute tasks, Shared Context Brief, quality gate every 1/3"],
       ["om:check", "QA Tester", "Validation pipeline P0–P5 → test-report.md"],
       ["om:fix", "Debugger", "Reproduce → root cause → surgical fix → verify"],
+      ["om:map", "Architect", "Scan codebase → Project Map for AI navigation"],
       ["om:learn", "Knowledge", "Auto-record lessons after fix → knowledge-base.md"],
       ["om:doc", "Writer", "Read actual code → generate README + API docs"],
     ],
@@ -383,7 +425,9 @@ const t = {
     cliTitle: "CLI Commands",
     cliHeaders: ["Command", "Description"],
     cliRows: [
-      ["omni init", "Initialize DNA and workflows for a new project"],
+      ["omni init", "Initialize DNA and workflows for a new project (auto-detects existing projects)"],
+      ["omni map", "Scan codebase → generate Project Map for AI navigation"],
+      ["omni map --refresh", "Update map structure (marks [NEW]/[DELETED])"],
       ["omni equip <source>", "Install external skills from skills.sh"],
       ["omni auto-equip", "Install 6 default universal skills"],
       ["omni rules [action]", "Manage personal rules (view/edit/sync/reset)"],
@@ -657,6 +701,52 @@ omni status        # ${lang === "vi" ? "Kiểm tra trạng thái" : "Check statu
         <p><strong>P5 Content Validation</strong> {l.csValidation}</p>
       </Section>
 
+      <Section id="project-map" title={l.pmTitle}>
+        <p>{l.pmP}</p>
+        <CodeBlock title="Terminal">{`# CLI scans codebase (0 tokens, instant)
+omni map
+
+# Or auto-triggered during init for existing projects
+omni init    # → "Existing project detected. Create Project Map?"
+
+# Refresh structure (0 tokens)
+omni map --refresh`}</CodeBlock>
+        <p><strong>Output:</strong> <Tag>.omni/project-map.md</Tag></p>
+        <CodeBlock title=".omni/project-map.md">{`# Project Map — my-app
+> Generated by omni map | 2026-04-27 | 98 files, 12 dirs, ~5400 LOC
+
+## Tech Stack
+Runtime: Node.js | Lang: TypeScript | Framework: Express | DB: Prisma | Test: Jest
+
+## Structure
+- \`src/modules/auth/\`      (12 files) [PENDING]
+- \`src/modules/orders/\`    (18 files) [PENDING]
+- \`src/utils/\`             (5 files)  [PENDING]
+
+## Key Patterns
+[PENDING — AI fills this when running >om:map]`}</CodeBlock>
+        <div className="space-y-3 my-4">
+          <div className="rounded-lg border border-accent-border bg-orange-400/5 p-4">
+            <h4 className="font-semibold text-accent">{l.pmHow}</h4>
+            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-content-muted">
+              {l.pmItems.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </div>
+        </div>
+        <p><strong>{l.pmLangs}</strong></p>
+        <p className="text-sm text-content-muted">{l.pmDeep}</p>
+        <p>{lang === "vi" ? "Sau khi chạy" : "After running"} <Tag>om:map</Tag> {lang === "vi" ? "trong chat AI:" : "in AI chat:"}</p>
+        <CodeBlock title=".omni/project-map.md">{`## Structure
+- \`src/modules/auth/\`      (12 files) → JWT login, OAuth2, 2FA, refresh rotation
+- \`src/modules/orders/\`    (18 files) → Order state machine: draft→paid→shipped→done
+- \`src/utils/\`             (5 files)  → Logger (pino), date/currency formatters
+
+## Key Patterns
+- Auth: JWT access (15m) + refresh (7d) rotation, Passport guards
+- Error: Global exception filter → { code, message, details }
+- DB: Prisma service with soft-delete middleware, repository pattern`}</CodeBlock>
+      </Section>
+
       <Section id="workflows-overview" title={l.wfTitle}>
         <Table headers={l.wfHeaders} rows={l.wfRows} />
         <p><strong>{l.wfNote}</strong></p>
@@ -735,6 +825,21 @@ omni equip vercel-labs/agent-skills
           {l.fixItems.map((item) => <li key={item.label}><strong>{item.label}</strong> {item.desc}</li>)}
         </ul>
         <p>{l.fixNote}</p>
+      </Section>
+
+      <Section id="om-map" title={l.mapTitle}>
+        <p>{l.mapP}</p>
+        <ul className="list-disc list-inside space-y-1 ml-2">
+          {l.mapItems.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+        <CodeBlock title={lang === "vi" ? "Trong chat AI" : "In AI chat"}>{`> om:map
+
+🗺️ ${lang === "vi" ? "Đang phân tích codebase từ Project Map..." : "Analyzing codebase from Project Map..."}
+  ✓ src/modules/auth/ → JWT login, OAuth2, 2FA, refresh rotation
+  ✓ src/modules/orders/ → Order state machine: draft→paid→shipped→done
+  ✓ Key Patterns: 3 patterns ${lang === "vi" ? "đã nhận diện" : "identified"}
+
+✅ Project Map ${lang === "vi" ? "đã cập nhật" : "updated"} (.omni/project-map.md)`}</CodeBlock>
       </Section>
 
       <Section id="om-learn" title={l.learnTitle}>

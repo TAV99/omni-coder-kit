@@ -13,10 +13,11 @@ export const featuresData = {
       description: "4 nguyên tắc Senior Engineer: Think → Simplify → Surgical → Goal-Driven. Inject trực tiếp vào DNA của AI agent.",
     },
     {
-      id: "socratic",
-      icon: "❓",
-      title: "Socratic Gate",
-      description: "AI phải hỏi 3 câu trước khi code: scope confirmation, edge case, implementation tradeoff. Không skip được.",
+      id: "project-map",
+      icon: "🗺️",
+      title: "Project Map",
+      badge: "NEW",
+      description: "omni map quét codebase → sinh bản đồ dự án cho AI (0 token). om:map điền mô tả semantic. --refresh theo dõi thay đổi, đánh dấu [NEW]/[DELETED]. Hỗ trợ 7 ngôn ngữ.",
     },
     {
       id: "dna",
@@ -63,10 +64,11 @@ export const featuresData = {
       description: "4 Senior Engineer principles: Think → Simplify → Surgical → Goal-Driven. Injected directly into the AI agent's DNA.",
     },
     {
-      id: "socratic",
-      icon: "❓",
-      title: "Socratic Gate",
-      description: "AI must ask 3 questions before coding: scope confirmation, edge case, implementation tradeoff. Cannot be skipped.",
+      id: "project-map",
+      icon: "🗺️",
+      title: "Project Map",
+      badge: "NEW",
+      description: "omni map scans your codebase → generates a project map for AI navigation (0 tokens). om:map fills semantic descriptions. --refresh tracks changes, marks [NEW]/[DELETED]. Supports 7 languages.",
     },
     {
       id: "dna",

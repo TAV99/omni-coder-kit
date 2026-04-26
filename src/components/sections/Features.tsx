@@ -34,7 +34,7 @@ export function Features() {
           )}
         </h2>
         <p className="mt-4 text-lg text-content-muted">
-          {lang === "vi" ? "8 commands. Từ ý tưởng đến production." : "8 commands. From idea to production."}
+          {lang === "vi" ? "9 commands. Từ ý tưởng đến production." : "9 commands. From idea to production."}
         </p>
       </div>
       <motion.div
@@ -44,10 +44,17 @@ export function Features() {
         viewport={{ once: true, margin: "-100px" }}
         className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
       >
-        {features.map((feature) => (
+        {features.map((feature: { id: string; icon: string; title: string; description: string; badge?: string }) => (
           <motion.div key={feature.id} variants={itemVariants} className="h-full">
-            <Card className="h-full">
-              <span className="text-3xl">{feature.icon}</span>
+            <Card className={`h-full ${feature.badge ? "ring-1 ring-accent-border" : ""}`}>
+              <div className="flex items-center gap-2">
+                <span className="text-3xl">{feature.icon}</span>
+                {feature.badge && (
+                  <span className="rounded-full bg-gradient-to-r from-orange-400 to-yellow-400 px-2 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider">
+                    {feature.badge}
+                  </span>
+                )}
+              </div>
               <h3 className="mt-3 font-mono text-lg font-semibold text-accent">{feature.title}</h3>
               <p className="mt-2 text-sm text-content-muted leading-relaxed">{feature.description}</p>
             </Card>
