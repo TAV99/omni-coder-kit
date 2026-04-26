@@ -74,6 +74,35 @@ Choose strategy based on conditions:
 | Independent tasks exist across files | Parallel (worktree isolation) |
 | User says "tuần tự" / "sequential" | Sequential — respect user choice |
 
+**Step 5.5: Build Context Brief (parallel execution only)**
+Before spawning sub-agents, build a compact Context Brief (~500 tokens max) to avoid each agent re-reading the same files:
+
+1. **Extract from `design-spec.md`:**
+   - Tech Stack (from Summary table)
+   - Project type and goal (1 sentence)
+   - Data model summary (table names + key fields, not full schemas)
+
+2. **Shared files inventory:**
+   - List files that 2+ tasks in the current batch will need (e.g., `globals.css`, `package.json`, `types.ts`)
+   - For each shared file, extract the relevant facts (e.g., color tokens from CSS, exported types from types.ts)
+   - Do NOT copy entire file contents — extract only what agents need to know
+
+3. **Content source (if exists):**
+   - If `content-source.md` exists, include `## Facts` and `## Forbidden Content` verbatim (these are short)
+
+4. **Format:**
+   ```
+   === CONTEXT BRIEF (shared — do not re-read these files) ===
+   Tech: [stack summary]
+   Goal: [1 sentence]
+   Data: [table1(key_fields), table2(key_fields)]
+   Shared: globals.css → [color tokens: primary=#..., bg=#...] | types.ts → [exported: User, Post, Comment]
+   Content rules: [facts + forbidden, if content-source.md exists]
+   ===
+   ```
+
+5. **Pass to agents:** Include this brief at the TOP of each sub-agent's prompt. Instruct agents: "The Context Brief summarizes shared project state. Do NOT re-read files already summarized in the brief — only read files specific to your task that are not covered."
+
 **Step 6a: Parallel Execution (when applicable)**
 For each batch:
 
@@ -82,11 +111,14 @@ For each batch:
    - **mode:** `"auto"`
    - **isolation:** `"worktree"`
    - Each agent receives a self-contained prompt with:
+     - The Context Brief (from Step 5.5) at the top
      - The specific task description from `todo.md`
-     - Relevant excerpt from `design-spec.md` (only the section relevant to this task)
+     - Relevant excerpt from `design-spec.md` (only sections NOT already in the Context Brief)
      - Content of skill files referenced by `@skill:` tags (read and include inline)
+     - Content rules from `content-source.md` (if exists and task generates user-facing text)
      - List of files to create/modify (scope lock — agent must NOT touch other files)
      - Clear success criteria
+     - Instruction: "Do NOT re-read files already summarized in the Context Brief above."
    - Launch all agents in the batch simultaneously (multiple Agent calls in one message).
 
 2. **Wait for all agents in batch to complete.**
