@@ -71,11 +71,11 @@ export function DocsSidebar() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        {mobileOpen && <div className="mt-2 max-h-[60vh] overflow-y-auto">{nav}</div>}
+        {mobileOpen && <div className="mt-2 max-h-[60vh] overflow-y-auto scrollbar-thin">{nav}</div>}
       </div>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block sticky top-20 h-[calc(100vh-5rem)] w-64 shrink-0 overflow-y-auto pr-6 pb-8">
+      <aside className="hidden lg:block sticky top-20 h-[calc(100vh-5rem)] w-64 shrink-0 overflow-y-auto scrollbar-thin pr-6 pb-8">
         {nav}
       </aside>
     </>

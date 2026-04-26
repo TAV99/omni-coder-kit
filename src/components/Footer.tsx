@@ -4,7 +4,7 @@ import { siteConfig } from "@/data/site";
 const footerLinks = {
   product: [
     { label: "Features", href: "#features" },
-    { label: "Cài đặt", href: "#pricing" },
+    { label: "Installation", href: "#installation" },
     { label: "FAQ", href: "#faq" },
   ],
   resources: [

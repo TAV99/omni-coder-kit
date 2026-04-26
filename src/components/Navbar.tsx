@@ -9,7 +9,7 @@ const navLinks = [
   { label: "About", href: "#about" },
   { label: "Features", href: "#features" },
   { label: "Testimonials", href: "#testimonials" },
-  { label: "Cài đặt", href: "#pricing" },
+  { label: "Installation", href: "#installation" },
   { label: "FAQ", href: "#faq" },
   { label: "Contact", href: "#contact" },
   { label: "Docs", href: "/docs" },
@@ -63,7 +63,7 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="primary" href="#pricing" className="hidden md:inline-flex text-sm px-4 py-2">
+          <Button variant="primary" href="#installation" className="hidden md:inline-flex text-sm px-4 py-2">
             Bắt đầu ngay
           </Button>
 
@@ -121,7 +121,7 @@ export function Navbar() {
                 )
               )}
               <div className="pt-2">
-                <Button variant="primary" href="#pricing" className="w-full text-sm" onClick={() => setMobileOpen(false)}>
+                <Button variant="primary" href="#installation" className="w-full text-sm" onClick={() => setMobileOpen(false)}>
                   Bắt đầu ngay
                 </Button>
               </div>

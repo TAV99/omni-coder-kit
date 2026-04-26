@@ -8,8 +8,8 @@ export const docGroups = [
   {
     name: "Getting Started",
     sections: [
-      { id: "introduction", title: "Giới thiệu", group: "Getting Started" },
-      { id: "installation", title: "Cài đặt", group: "Getting Started" },
+      { id: "introduction", title: "Introduction", group: "Getting Started" },
+      { id: "installation", title: "Installation", group: "Getting Started" },
     ],
   },
   {
@@ -32,6 +32,7 @@ export const docGroups = [
       { id: "om-check", title: "om:check", group: "Guide" },
       { id: "om-fix", title: "om:fix", group: "Guide" },
       { id: "om-doc", title: "om:doc", group: "Guide" },
+      { id: "ide-cli-guides", title: "IDE & CLI Guides", group: "Guide" },
     ],
   },
   {
@@ -39,7 +40,6 @@ export const docGroups = [
     sections: [
       { id: "cli-commands", title: "Commands", group: "CLI Reference" },
       { id: "ide-support", title: "IDE Support", group: "CLI Reference" },
-      { id: "overlays", title: "Overlays", group: "CLI Reference" },
     ],
   },
 ] as const;

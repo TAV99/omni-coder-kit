@@ -4,10 +4,25 @@ import { motion } from "framer-motion";
 import { SectionWrapper } from "@/components/ui/SectionWrapper";
 import { Card } from "@/components/ui/Card";
 import { ideSupportData, installSteps } from "@/data/pricing";
+import {
+  ClaudeIcon, GeminiIcon, OpenAIIcon, CursorIcon,
+  WindsurfIcon, AntigravityIcon, CrossToolIcon, GenericIcon,
+} from "@/components/docs/IdeIcons";
+
+const ideIconMap: Record<string, React.ReactNode> = {
+  "Claude Code": <ClaudeIcon />,
+  "Gemini CLI": <GeminiIcon />,
+  "Codex CLI": <OpenAIIcon />,
+  "Cursor": <CursorIcon />,
+  "Windsurf": <WindsurfIcon />,
+  "Antigravity": <AntigravityIcon />,
+  "Cross-tool": <CrossToolIcon />,
+  "Generic": <GenericIcon />,
+};
 
 export function Pricing() {
   return (
-    <SectionWrapper id="pricing">
+    <SectionWrapper id="installation">
       {/* IDE Support */}
       <div className="text-center">
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
@@ -25,7 +40,7 @@ export function Pricing() {
             transition={{ duration: 0.4, delay: i * 0.05 }}
           >
             <Card className="text-center" hover={false}>
-              <span className="text-2xl">{ide.icon}</span>
+              <span className="flex h-8 w-8 items-center justify-center">{ideIconMap[ide.name] ?? ide.icon}</span>
               <h3 className="mt-2 text-sm font-semibold text-white">{ide.name}</h3>
               <p className="mt-1 font-mono text-xs text-gray-500">{ide.configFile}</p>
             </Card>

@@ -47,25 +47,12 @@ export function Contact() {
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
-    setSubmitting(true);
-    try {
-      const formspreeId = process.env.NEXT_PUBLIC_FORMSPREE_ID;
-      const res = await fetch(`https://formspree.io/f/${formspreeId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.name, email: form.email, message: form.message }),
-      });
-      if (res.ok) {
-        setSuccess(true);
-        setForm({ name: "", email: "", message: "", honeypot: "" });
-      } else {
-        setSubmitError("Gửi thất bại, vui lòng thử lại.");
-      }
-    } catch {
-      setSubmitError("Gửi thất bại, vui lòng thử lại.");
-    } finally {
-      setSubmitting(false);
-    }
+    const to = "tav99.dev@gmail.com.vn";
+    const subject = encodeURIComponent(`[Omni-Coder Kit] Liên hệ từ ${form.name}`);
+    const body = encodeURIComponent(`Từ: ${form.name} <${form.email}>\n\n${form.message}`);
+    window.open(`https://mail.google.com/mail/?view=cm&to=${to}&su=${subject}&body=${body}`, "_blank");
+    setSuccess(true);
+    setForm({ name: "", email: "", message: "", honeypot: "" });
   }
 
   function handleChange(field: keyof FormState, value: string) {

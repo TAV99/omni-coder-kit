@@ -1,5 +1,11 @@
 "use client";
 
+import { DocsAccordion } from "./DocsAccordion";
+import {
+  ClaudeIcon, GeminiIcon, OpenAIIcon, CursorIcon,
+  WindsurfIcon, AntigravityIcon, CrossToolIcon, GenericIcon,
+} from "./IdeIcons";
+
 function CodeBlock({ children, title }: { children: string; title?: string }) {
   return (
     <div className="my-4 rounded-lg border border-white/10 bg-[#111112] overflow-hidden">
@@ -334,6 +340,174 @@ omni equip vercel-labs/agent-skills
         </ul>
       </Section>
 
+      <Section id="ide-cli-guides" title="IDE & CLI Guides">
+        <p>
+          Hướng dẫn chi tiết cho từng IDE/CLI được hỗ trợ. Chọn công cụ bạn đang dùng:
+        </p>
+        <div className="space-y-3 my-4">
+
+          <DocsAccordion title="Claude Code" icon={<ClaudeIcon />} defaultOpen>
+            <p><strong>File config:</strong> <Tag>CLAUDE.md</Tag></p>
+            <p><strong>Khởi tạo:</strong></p>
+            <CodeBlock title="Terminal">{`cd your-project
+omni init              # Chọn "Claude Code"
+omni auto-equip        # Cài 6 universal skills`}</CodeBlock>
+            <p><strong>Advanced setup (Overlay):</strong></p>
+            <p>Khi được hỏi &quot;Cài đặt Claude Code nâng cao?&quot;, chọn <strong>Yes</strong> để kích hoạt:</p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li><strong>Slash commands</strong> — 7 lệnh <Tag>/om:*</Tag> gõ trực tiếp trong Claude Code (auto-complete)</li>
+              <li><strong>Permissions allowlist</strong> — <Tag>.claude/settings.json</Tag> cho phép build/test/git, deny rm -rf, force push</li>
+              <li><strong>Quality gate hooks</strong> — tự động nhắc kiểm tra chất lượng khi file thay đổi</li>
+              <li><strong>Enhanced coder-execution</strong> — sub-agent prompting rules, surgical context rule</li>
+            </ul>
+            <p><strong>Sử dụng workflows:</strong></p>
+            <CodeBlock title="Trong Claude Code">{`# Dùng slash commands (auto-complete)
+/om:brainstorm Làm app quản lý task
+
+# Hoặc gõ trực tiếp trong chat
+> om:plan
+> om:cook`}</CodeBlock>
+            <p><strong>Gợi ý khởi động:</strong></p>
+            <CodeBlock title="Terminal">{`claude                               # Chế độ bình thường
+claude --dangerously-skip-permissions  # Bỏ qua permission prompts (cẩn thận)`}</CodeBlock>
+          </DocsAccordion>
+
+          <DocsAccordion title="Gemini CLI" icon={<GeminiIcon />}>
+            <p><strong>File config:</strong> <Tag>GEMINI.md</Tag></p>
+            <p><strong>Khởi tạo:</strong></p>
+            <CodeBlock title="Terminal">{`cd your-project
+omni init              # Chọn "Gemini CLI"
+omni auto-equip        # Cài 6 universal skills`}</CodeBlock>
+            <p><strong>Advanced setup (Overlay):</strong></p>
+            <p>Gemini overlay tạo workflows tối ưu riêng cho Gemini tools:</p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li><strong>requirement-analysis.md</strong> — Phỏng vấn Socratic với DNA detection</li>
+              <li><strong>task-planning.md</strong> — Backend-aware ordering</li>
+              <li><strong>coder-execution.md</strong> — Surgical context rule cho Gemini tools</li>
+              <li><strong>qa-testing.md</strong> — QA pipeline</li>
+            </ul>
+            <p><strong>Sử dụng workflows:</strong></p>
+            <CodeBlock title="Trong Gemini CLI">{`> om:brainstorm Làm landing page cho SaaS
+> om:equip
+> om:plan
+> om:cook`}</CodeBlock>
+            <p><strong>Gợi ý khởi động:</strong></p>
+            <CodeBlock title="Terminal">{`gemini          # Chế độ bình thường
+gemini --yolo   # Tự động approve mọi thao tác (cẩn thận)`}</CodeBlock>
+          </DocsAccordion>
+
+          <DocsAccordion title="Codex CLI (OpenAI)" icon={<OpenAIIcon />}>
+            <p><strong>File config:</strong> <Tag>AGENTS.md</Tag> + <Tag>.codex/</Tag> (optional)</p>
+            <p><strong>Khởi tạo:</strong></p>
+            <CodeBlock title="Terminal">{`cd your-project
+omni init              # Chọn "Codex CLI"
+omni auto-equip        # Cài 6 universal skills`}</CodeBlock>
+            <p><strong>Advanced setup (Overlay):</strong></p>
+            <p>Codex overlay tạo thêm config profiles và hooks:</p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li><strong>.codex/config.toml</strong> — 3 profiles: <Tag>omni_safe</Tag> (sandbox strict), <Tag>omni_yolo</Tag> (auto-approve), <Tag>omni_review</Tag> (review mode)</li>
+              <li><strong>.codex/hooks.json</strong> — Hook reminders cho file changes và quality-cycle checks</li>
+            </ul>
+            <p><strong>Sử dụng workflows:</strong></p>
+            <CodeBlock title="Trong Codex CLI">{`> om:brainstorm
+> om:plan
+> om:cook
+> om:check`}</CodeBlock>
+            <p><strong>Gợi ý khởi động:</strong></p>
+            <CodeBlock title="Terminal">{`codex                          # Chế độ mặc định
+codex --profile omni_safe      # Sandbox strict
+codex --profile omni_yolo      # Auto-approve (cẩn thận)
+codex exec "Read AGENTS.md, then run >om:check"  # One-shot command`}</CodeBlock>
+          </DocsAccordion>
+
+          <DocsAccordion title="Cursor" icon={<CursorIcon />}>
+            <p><strong>File config:</strong> <Tag>.cursorrules</Tag></p>
+            <p><strong>Khởi tạo:</strong></p>
+            <CodeBlock title="Terminal">{`cd your-project
+omni init              # Chọn "Cursor"
+omni auto-equip        # Cài 6 universal skills`}</CodeBlock>
+            <p><strong>Cách hoạt động:</strong></p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>Omni-Coder Kit sinh file <Tag>.cursorrules</Tag> chứa Karpathy mindset + Socratic Gate + SDLC workflows</li>
+              <li>Cursor tự động đọc file này khi mở dự án</li>
+              <li>Workflows <Tag>.omni/workflows/</Tag> được lazy-load khi AI cần</li>
+            </ul>
+            <p><strong>Sử dụng workflows:</strong></p>
+            <CodeBlock title="Trong Cursor Chat">{`> om:brainstorm Thêm feature authentication
+> om:plan
+> om:cook`}</CodeBlock>
+            <p><strong>Gợi ý:</strong> Mở Cursor trong thư mục dự án sau khi <Tag>omni init</Tag>. Cursor sẽ tự đọc <Tag>.cursorrules</Tag>.</p>
+          </DocsAccordion>
+
+          <DocsAccordion title="Windsurf" icon={<WindsurfIcon />}>
+            <p><strong>File config:</strong> <Tag>.windsurfrules</Tag></p>
+            <p><strong>Khởi tạo:</strong></p>
+            <CodeBlock title="Terminal">{`cd your-project
+omni init              # Chọn "Windsurf"
+omni auto-equip        # Cài 6 universal skills`}</CodeBlock>
+            <p><strong>Cách hoạt động:</strong></p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>Sinh file <Tag>.windsurfrules</Tag> chứa toàn bộ core rules + command registry</li>
+              <li>Windsurf tự động đọc file này khi mở dự án</li>
+              <li>Workflows lazy-loaded từ <Tag>.omni/workflows/</Tag></li>
+            </ul>
+            <p><strong>Sử dụng workflows:</strong></p>
+            <CodeBlock title="Trong Windsurf Chat">{`> om:brainstorm
+> om:plan
+> om:cook`}</CodeBlock>
+            <p><strong>Gợi ý:</strong> Mở Windsurf trong thư mục dự án. Cascade AI sẽ tuân thủ rules từ <Tag>.windsurfrules</Tag>.</p>
+          </DocsAccordion>
+
+          <DocsAccordion title="Antigravity" icon={<AntigravityIcon />}>
+            <p><strong>File config:</strong> <Tag>AGENTS.md</Tag></p>
+            <p><strong>Khởi tạo:</strong></p>
+            <CodeBlock title="Terminal">{`cd your-project
+omni init              # Chọn "Antigravity"
+omni auto-equip        # Cài 6 universal skills`}</CodeBlock>
+            <p><strong>Cách hoạt động:</strong></p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>Sinh <Tag>AGENTS.md</Tag> với core rules + command registry</li>
+              <li>Dùng <Tag>.agents/</Tag> directory cho rules, skills, workflows</li>
+              <li>Tương thích với antigravity-kit ecosystem</li>
+            </ul>
+            <p><strong>Sử dụng workflows:</strong></p>
+            <CodeBlock title="Trong Antigravity">{`> om:brainstorm Xây dựng API backend
+> om:equip
+> om:plan
+> om:cook`}</CodeBlock>
+          </DocsAccordion>
+
+          <DocsAccordion title="Cross-tool" icon={<CrossToolIcon />}>
+            <p><strong>File config:</strong> <Tag>AGENTS.md</Tag></p>
+            <p><strong>Khởi tạo:</strong></p>
+            <CodeBlock title="Terminal">{`cd your-project
+omni init              # Chọn "Cross-tool"
+omni auto-equip`}</CodeBlock>
+            <p><strong>Khi nào dùng:</strong></p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>Dự án có nhiều người dùng các AI tool khác nhau</li>
+              <li><Tag>AGENTS.md</Tag> là format tool-agnostic, được hầu hết AI agents đọc</li>
+              <li>Phù hợp cho team có cả Codex, Antigravity, và các tool khác</li>
+            </ul>
+          </DocsAccordion>
+
+          <DocsAccordion title="Generic" icon={<GenericIcon />}>
+            <p><strong>File config:</strong> <Tag>SYSTEM_PROMPT.md</Tag></p>
+            <p><strong>Khởi tạo:</strong></p>
+            <CodeBlock title="Terminal">{`cd your-project
+omni init              # Chọn "Generic"
+omni auto-equip`}</CodeBlock>
+            <p><strong>Khi nào dùng:</strong></p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>AI tool chưa có trong danh sách hỗ trợ chính thức</li>
+              <li>Copy nội dung <Tag>SYSTEM_PROMPT.md</Tag> vào system prompt của tool bạn dùng</li>
+              <li>Mọi workflow <Tag>&gt;om:*</Tag> vẫn hoạt động — AI đọc từ <Tag>.omni/workflows/</Tag></li>
+            </ul>
+          </DocsAccordion>
+
+        </div>
+      </Section>
+
       {/* ── CLI REFERENCE ── */}
       <Section id="cli-commands" title="CLI Commands">
         <Table
@@ -373,35 +547,6 @@ omni rules reset    # Xóa rules`}</CodeBlock>
         />
       </Section>
 
-      <Section id="overlays" title="Overlays (Advanced Setup)">
-        <p>
-          Khi <Tag>omni init</Tag> cho Claude Code, Codex CLI hoặc Gemini CLI, bạn có thể bật <strong>advanced setup</strong>:
-        </p>
-        <div className="space-y-3 my-4">
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <h4 className="font-semibold text-white">Claude Code Overlay</h4>
-            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-400">
-              <li>Slash commands <Tag>/om:*</Tag> — 7 lệnh tương ứng với &gt;om:*</li>
-              <li>Permissions allowlist — cho phép build/test/git, deny rm -rf, force push</li>
-              <li>Quality gate hooks — tự nhắc kiểm tra chất lượng khi file thay đổi</li>
-            </ul>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <h4 className="font-semibold text-white">Codex CLI Overlay</h4>
-            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-400">
-              <li><Tag>.codex/config.toml</Tag> — profiles: omni_safe, omni_yolo, omni_review</li>
-              <li><Tag>.codex/hooks.json</Tag> — hook reminders cho file changes</li>
-            </ul>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <h4 className="font-semibold text-white">Gemini CLI Overlay</h4>
-            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-400">
-              <li>Workflows tối ưu riêng cho Gemini tools</li>
-              <li>GEMINI.md config với DNA detection + surgical context</li>
-            </ul>
-          </div>
-        </div>
-      </Section>
     </div>
   );
 }

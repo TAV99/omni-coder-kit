@@ -47,3 +47,11 @@ body {
 .glow-violet {
   box-shadow: 0 0 30px rgba(139, 92, 246, 0.3);
 }
+
+.scrollbar-thin {
+  scrollbar-width: none;
+  border-right: 0.5px solid rgba(255, 255, 255, 0.5);
+}
+.scrollbar-thin::-webkit-scrollbar {
+  display: none;
+}
