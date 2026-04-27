@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { SectionWrapper } from "@/components/ui/SectionWrapper";
 import { Card } from "@/components/ui/Card";
@@ -44,20 +45,25 @@ export function Features() {
         viewport={{ once: true, margin: "-100px" }}
         className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
       >
-        {features.map((feature: { id: string; icon: string; title: string; description: string; badge?: string }) => (
+        {features.map((feature: { id: string; icon: string; title: string; description: string; badge?: string; docId?: string }) => (
           <motion.div key={feature.id} variants={itemVariants} className="h-full">
-            <Card className={`h-full ${feature.badge ? "ring-1 ring-accent-border" : ""}`}>
-              <div className="flex items-center gap-2">
-                <span className="text-3xl">{feature.icon}</span>
-                {feature.badge && (
-                  <span className="rounded-full bg-gradient-to-r from-orange-400 to-yellow-400 px-2 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider">
-                    {feature.badge}
-                  </span>
-                )}
-              </div>
-              <h3 className="mt-3 font-mono text-lg font-semibold text-accent">{feature.title}</h3>
-              <p className="mt-2 text-sm text-content-muted leading-relaxed">{feature.description}</p>
-            </Card>
+            <Link href={`/docs#${feature.docId ?? feature.id}`} className="block h-full group">
+              <Card className={`h-full transition-all duration-200 group-hover:border-accent-border group-hover:shadow-lg group-hover:shadow-accent/5 ${feature.badge ? "ring-1 ring-accent-border" : ""}`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-3xl">{feature.icon}</span>
+                  {feature.badge && (
+                    <span className="rounded-full bg-gradient-to-r from-orange-400 to-yellow-400 px-2 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider">
+                      {feature.badge}
+                    </span>
+                  )}
+                </div>
+                <h3 className="mt-3 font-mono text-lg font-semibold text-accent group-hover:underline underline-offset-2">{feature.title}</h3>
+                <p className="mt-2 text-sm text-content-muted leading-relaxed">{feature.description}</p>
+                <span className="mt-3 inline-flex items-center text-xs font-medium text-accent opacity-0 group-hover:opacity-100 transition-opacity">
+                  {lang === "vi" ? "Xem docs" : "View docs"} →
+                </span>
+              </Card>
+            </Link>
           </motion.div>
         ))}
       </motion.div>
