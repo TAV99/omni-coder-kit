@@ -18,7 +18,7 @@ const {
     detectExistingProject, scanProject, generateMapSkeleton, refreshMap,
 } = require(path.join(__dirname, '..', 'lib', 'scanner'));
 const {
-    UNIVERSAL_SKILLS, getTestSkillsForStack,
+    UNIVERSAL_SKILLS, getTestSkillsForStack, buildSearchSuggestion,
 } = require(path.join(__dirname, '..', 'lib', 'skills'));
 
 // ========== HELPERS ==========
@@ -1136,10 +1136,28 @@ program
 
         // Phase 2: Detect tech stack → propose test skills
         const detected = detectExistingProject(process.cwd());
-        if (!detected.detected) return;
+        if (!detected.detected) {
+            console.log(chalk.gray('   ⚠️ Không phát hiện project — bỏ qua đề xuất test skills.\n'));
+            return;
+        }
 
         const scan = scanProject(process.cwd());
+        if (!scan.techStack || !scan.techStack.language) {
+            console.log(chalk.gray('   ℹ️ Không xác định được ngôn ngữ chính — bỏ qua test skills.\n'));
+            return;
+        }
+
         const testSkills = getTestSkillsForStack(scan.techStack);
+
+        // Fallback: no curated skills for this language → suggest find-skills search
+        if (testSkills.length === 0) {
+            const keyword = buildSearchSuggestion(scan.techStack.language, scan.techStack.test);
+            console.log(chalk.yellow(`\n   🔍 Chưa có curated test skill cho ${chalk.white(scan.techStack.language)}.`));
+            console.log(chalk.gray(`      Gợi ý: dùng lệnh ${chalk.cyan('>om:equip')} hoặc tìm thủ công:`));
+            console.log(chalk.cyan(`      npx skills search "${keyword}"\n`));
+            return;
+        }
+
         const installedNames = manifest.skills.external.map(s => s.name);
         const testToInstall = testSkills.filter(s => !installedNames.includes(s.name));
 
