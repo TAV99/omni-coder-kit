@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { SectionWrapper } from "@/components/ui/SectionWrapper";
 import { Card } from "@/components/ui/Card";
@@ -49,11 +50,16 @@ export function Pricing() {
             viewport={{ once: true }}
             transition={{ duration: 0.4, delay: i * 0.05 }}
           >
-            <Card className="text-center" hover={false}>
-              <span className="flex h-8 w-8 items-center justify-center">{ideIconMap[ide.name] ?? ide.icon}</span>
-              <h3 className="mt-2 text-sm font-semibold text-content">{ide.name}</h3>
-              <p className="mt-1 font-mono text-xs text-content-faint">{ide.configFile}</p>
-            </Card>
+            <Link href="/docs#ide-cli-guides" className="block group">
+              <Card className="text-center transition-all duration-200 group-hover:border-accent-border group-hover:shadow-lg group-hover:shadow-accent/5" hover={false}>
+                <span className="flex h-8 w-8 items-center justify-center">{ideIconMap[ide.name] ?? ide.icon}</span>
+                <h3 className="mt-2 text-sm font-semibold text-content">{ide.name}</h3>
+                <p className="mt-1 font-mono text-xs text-content-faint">{ide.configFile}</p>
+                <span className="mt-2 inline-flex items-center text-xs font-medium text-accent opacity-0 group-hover:opacity-100 transition-opacity">
+                  {lang === "vi" ? "Xem docs" : "View docs"} →
+                </span>
+              </Card>
+            </Link>
           </motion.div>
         ))}
       </div>

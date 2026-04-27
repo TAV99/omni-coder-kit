@@ -57,7 +57,7 @@ export function Features() {
                     </span>
                   )}
                 </div>
-                <h3 className="mt-3 font-mono text-lg font-semibold text-accent group-hover:underline underline-offset-2">{feature.title}</h3>
+                <h3 className="mt-3 font-mono text-lg font-semibold text-accent">{feature.title}</h3>
                 <p className="mt-2 text-sm text-content-muted leading-relaxed">{feature.description}</p>
                 <span className="mt-3 inline-flex items-center text-xs font-medium text-accent opacity-0 group-hover:opacity-100 transition-opacity">
                   {lang === "vi" ? "Xem docs" : "View docs"} →
