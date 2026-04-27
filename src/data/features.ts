@@ -35,7 +35,7 @@ export const featuresData = {
       id: "knowledge-base",
       icon: "📚",
       title: "Knowledge Base",
-      description: "om:learn tự ghi lại bài học sau mỗi fix thành công vào .omni/knowledge-base.md. om:cook tự đọc lại khi gặp file tương tự. Tối đa 20 entries, auto-prune cũ nhất.",
+      description: "om:learn tự ghi lại bài học sau mỗi fix thành công vào .omni/knowledge/knowledge-base.md. om:cook tự đọc lại khi gặp file tương tự. Tối đa 20 entries, auto-prune cũ nhất.",
     },
     {
       id: "quality",
@@ -47,7 +47,7 @@ export const featuresData = {
       id: "shared-context",
       icon: "🤝",
       title: "Shared Context Brief",
-      description: "Main session extract ~500 tokens từ design-spec.md + shared files. Mỗi parallel sub-agent nhận brief thay vì re-read toàn bộ — tiết kiệm token, đồng bộ context.",
+      description: "Main session extract ~500 tokens từ .omni/sdlc/design-spec.md + shared files. Mỗi parallel sub-agent nhận brief thay vì re-read toàn bộ — tiết kiệm token, đồng bộ context.",
     },
   ],
   en: [
@@ -86,7 +86,7 @@ export const featuresData = {
       id: "knowledge-base",
       icon: "📚",
       title: "Knowledge Base",
-      description: "om:learn automatically records lessons after each successful fix into .omni/knowledge-base.md. om:cook reads it back when encountering similar files. Max 20 entries, auto-prunes oldest.",
+      description: "om:learn automatically records lessons after each successful fix into .omni/knowledge/knowledge-base.md. om:cook reads it back when encountering similar files. Max 20 entries, auto-prunes oldest.",
     },
     {
       id: "quality",
@@ -98,7 +98,7 @@ export const featuresData = {
       id: "shared-context",
       icon: "🤝",
       title: "Shared Context Brief",
-      description: "Main session extracts ~500 tokens from design-spec.md + shared files. Each parallel sub-agent receives a brief instead of re-reading everything — saves tokens, syncs context.",
+      description: "Main session extracts ~500 tokens from .omni/sdlc/design-spec.md + shared files. Each parallel sub-agent receives a brief instead of re-reading everything — saves tokens, syncs context.",
     },
   ],
 };

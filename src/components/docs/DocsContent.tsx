@@ -78,11 +78,11 @@ const t = {
     installReq: "Yêu cầu",
     installInit: "Khởi tạo dự án:",
     installUpdate: "Cập nhật lên phiên bản mới nhất:",
-    installNote: "CLI hỏi 3 bước:",
+    installNote: "CLI tự phát hiện project có sẵn (package.json, go.mod...) → đề xuất tạo Project Map. Sau đó hỏi 3 bước:",
     installStep1: "chọn IDE",
     installStep2: "mức kỷ luật",
     installStep3: "personal rules",
-    installStep3Detail: "(ngôn ngữ, coding style, forbidden patterns, custom rules).",
+    installStep3Detail: "(ngôn ngữ, coding style, forbidden patterns, custom rules). Rules lưu tại .omni/rules.md.",
     karpathyP: "4 nguyên tắc cốt lõi được inject vào mọi AI agent:",
     karpathyItems: [
       { title: "Think Before Coding", desc: "Không assume. Không che giấu confusion. Surface tradeoffs. Hỏi trước khi code." },
@@ -119,7 +119,7 @@ const t = {
       "trước khi sửa file → check knowledge base cho bài học liên quan",
       "Tối đa 20 entries — auto-prune entry cũ nhất khi vượt limit",
     ],
-    scbP: "spawn nhiều sub-agents chạy parallel (worktree isolation), mỗi agent cần hiểu context dự án. Thay vì mỗi agent re-read toàn bộ design-spec.md + shared files, main session extract ~500 tokens thành một context brief gọn.",
+    scbP: "spawn nhiều sub-agents chạy parallel (worktree isolation), mỗi agent cần hiểu context dự án. Thay vì mỗi agent re-read toàn bộ .omni/sdlc/design-spec.md + shared files, main session extract ~500 tokens thành một context brief gọn.",
     scbIncludes: "Brief bao gồm",
     scbItems: [
       "Project summary — goal, tech stack, DNA profile",
@@ -128,14 +128,14 @@ const t = {
       "Knowledge base entries — bài học liên quan đến files agent sẽ sửa",
     ],
     scbBenefit: "Tiết kiệm token (mỗi agent không cần đọc full context), đồng bộ quyết định kiến trúc giữa các agents, giảm conflict khi merge.",
-    csP: "phát hiện dự án có UI, tự động sinh file",
+    csP: "phát hiện dự án có UI, tự động sinh",
     csP2: "— nguồn sự thật duy nhất cho mọi nội dung hiển thị trên UI.",
-    csValidation: "trong om:check đối chiếu mọi text trên UI với content-source.md — đảm bảo nội dung chính xác, nhất quán, không sai lệch.",
+    csValidation: "trong om:check đối chiếu mọi text trên UI với .omni/sdlc/content-source.md — đảm bảo nội dung chính xác, nhất quán, không sai lệch.",
     pmTitle: "Project Map — Codebase Intelligence",
     pmP: "Khi tham gia dự án lớn đã có code, AI cần hiểu codebase mà không phải scan hàng trăm file mỗi session.",
     pmHow: "Cách hoạt động",
     pmItems: [
-      "omni map quét codebase → sinh .omni/project-map.md skeleton (0 token, instant)",
+      "omni map quét codebase → sinh .omni/knowledge/project-map.md skeleton (0 token, instant)",
       "om:map trong chat AI → điền mô tả semantic cho từng module",
       "omni map --refresh → diff cấu trúc, đánh dấu [NEW]/[DELETED], giữ nguyên mô tả AI",
       "Workflows tự động cảnh báo khi map > 7 ngày",
@@ -143,9 +143,9 @@ const t = {
     pmLangs: "Multi-language: Node.js/TypeScript, Python, Go, Rust, Java/Kotlin, Ruby, PHP",
     pmDeep: "Deep scan bao gồm: Tech stack, directory tree (max depth 4), entry points, CI/CD configs, conventions (linter, formatter), landmines (TODO/FIXME/HACK). Zero dependencies, zero network calls.",
     mapTitle: "om:map — Project Map",
-    mapP: "AI đóng vai Architect. Điền mô tả semantic vào .omni/project-map.md đã được omni map sinh sẵn.",
+    mapP: "AI đóng vai Architect. Điền mô tả semantic vào .omni/knowledge/project-map.md đã được omni map sinh sẵn.",
     mapItems: [
-      "Đọc skeleton từ .omni/project-map.md",
+      "Đọc skeleton từ .omni/knowledge/project-map.md",
       "Phân tích từng module/directory → điền mô tả chức năng, patterns, dependencies",
       "Điền Key Patterns: auth strategy, error handling, DB patterns...",
       "Đánh dấu [NEW] modules cần mô tả, bỏ qua [DELETED]",
@@ -153,14 +153,14 @@ const t = {
     wfTitle: "9 SDLC Workflows",
     wfHeaders: ["Lệnh", "Agent", "Mô tả"],
     wfRows: [
-      ["om:brainstorm", "Architect", "Phỏng vấn adaptive + DNA detection → design-spec.md"],
+      ["om:brainstorm", "Architect", "Phỏng vấn adaptive + DNA detection → .omni/sdlc/design-spec.md"],
       ["om:equip", "Skill Manager", "Search skills.sh + conditional groups theo DNA"],
-      ["om:plan", "PM", "Spec → micro-tasks todo.md, @skill:name tags"],
+      ["om:plan", "PM", "Spec → micro-tasks .omni/sdlc/todo.md, @skill:name tags"],
       ["om:cook", "Coder", "Thực thi tasks, Shared Context Brief, quality gate mỗi 1/3"],
-      ["om:check", "QA Tester", "Validation pipeline P0–P5 → test-report.md"],
+      ["om:check", "QA Tester", "Validation pipeline P0–P5 → .omni/sdlc/test-report.md"],
       ["om:fix", "Debugger", "Reproduce → root cause → surgical fix → verify"],
-      ["om:map", "Architect", "Quét codebase → Project Map cho AI navigation"],
-      ["om:learn", "Knowledge", "Auto-record lessons sau fix → knowledge-base.md"],
+      ["om:map", "Architect", "Quét codebase → .omni/knowledge/project-map.md"],
+      ["om:learn", "Knowledge", "Auto-record lessons sau fix → .omni/knowledge/knowledge-base.md"],
       ["om:doc", "Writer", "Đọc code thực tế → sinh README + API docs"],
     ],
     wfNote: "Quality pipeline bắt buộc: 3 quality cycles — cook → check → fix loop tự động sau mỗi 1/3 tasks.",
@@ -173,14 +173,14 @@ const t = {
       "Adaptive questions — chỉ hỏi slots thiếu, prefer multiple-choice",
       "Auto-detect Project DNA (hasUI, hasBackend, backendComplexity)",
     ],
-    brainstormPhase2: "Phase 2: Generate design-spec.md",
+    brainstormPhase2: "Phase 2: Generate .omni/sdlc/design-spec.md",
     brainstormPhase2Items: [
       "Summary table: Goal, Users, Tech Stack, UI Style, Constraints",
       "Tagged requirements: [func], [auth], [data], [api], [nfr], [edge], [ui]",
       "Large projects: auto-decompose thành sub-projects",
     ],
     equipTitle: "om:equip — Cài đặt Skills",
-    equipP: "AI đóng vai Skill Manager. Phân tích tech stack từ design-spec.md, search skills.sh và cài skills phù hợp.",
+    equipP: "AI đóng vai Skill Manager. Phân tích tech stack từ .omni/sdlc/design-spec.md, search skills.sh và cài skills phù hợp.",
     equipGroups: "3 nhóm skill động:",
     equipGroupItems: [
       "Best Practices — luôn có (karpathy, debugging, TDD, code review)",
@@ -188,17 +188,17 @@ const t = {
       "Backend/Infrastructure — khi backendComplexity >= moderate (DB, API, Docker...)",
     ],
     planTitle: "om:plan — Lập kế hoạch",
-    planP: "AI đóng vai Senior PM. Transform design-spec.md → micro-tasks trong todo.md.",
+    planP: "AI đóng vai Senior PM. Transform .omni/sdlc/design-spec.md → micro-tasks trong .omni/sdlc/todo.md.",
     planItems: [
       "Mỗi task atomic, estimable (<20 phút), ordered theo dependency",
       "Backend-aware ordering: DB → Cache → Queue → API → Realtime → UI",
     ],
     cookTitle: "om:cook — Thực thi Code",
-    cookP: "AI đóng vai Senior Developer. Thực thi từng task từ todo.md.",
+    cookP: "AI đóng vai Senior Developer. Thực thi từng task từ .omni/sdlc/todo.md.",
     cookItems: [
       "Dependency graph: phân tích tasks, nhóm thành batches chạy parallel",
-      "Shared Context Brief: extract ~500 tokens từ design-spec.md + shared files, gửi cho mỗi parallel agent thay vì re-read toàn bộ",
-      "Knowledge Base lookup: trước khi sửa file, check .omni/knowledge-base.md cho bài học liên quan",
+      "Shared Context Brief: extract ~500 tokens từ .omni/sdlc/design-spec.md + shared files, gửi cho mỗi parallel agent thay vì re-read toàn bộ",
+      "Knowledge Base lookup: trước khi sửa file, check .omni/knowledge/knowledge-base.md cho bài học liên quan",
       "Auto-continue: tự động chạy task tiếp, chỉ dừng khi lỗi nghiêm trọng",
       "Surgical context: file >200 dòng → grep trước, chỉ đọc ±20 dòng xung quanh",
       "Dev server preflight: tự khởi động dev server trước task đầu tiên (nếu có UI)",
@@ -206,7 +206,7 @@ const t = {
     cookQuality: "Quality gate tự động:",
     checkTitle: "om:check — QA Testing",
     checkP: "AI đóng vai QA Tester. Chạy validation pipeline theo thứ tự:",
-    checkNote: "P0–P3 fail → dừng ngay, auto-trigger om:fix. P5 Content Validation blocking khi dự án có UI — đảm bảo mọi text trên UI khớp với content-source.md. Loop tối đa 3 lần/cycle.",
+    checkNote: "P0–P3 fail → dừng ngay, auto-trigger om:fix. P5 Content Validation blocking khi dự án có UI — đảm bảo mọi text trên UI khớp với .omni/sdlc/content-source.md. Loop tối đa 3 lần/cycle.",
     fixTitle: "om:fix — Debug & Fix",
     fixP: "AI đóng vai Debugger. Quy trình có cấu trúc:",
     fixItems: [
@@ -221,7 +221,7 @@ const t = {
     learnItems: [
       "Auto-trigger: chạy tự động sau om:fix thành công trong quality cycle",
       "Manual: gõ om:learn để ghi bài học thủ công",
-      "Storage: .omni/knowledge-base.md — max 20 entries, FIFO prune",
+      "Storage: .omni/knowledge/knowledge-base.md — max 20 entries, FIFO prune",
       "Lookup: om:cook check knowledge base trước khi sửa mỗi file",
     ],
     learnFormat: "Entry format:",
@@ -265,11 +265,11 @@ const t = {
     installReq: "Requires",
     installInit: "Initialize project:",
     installUpdate: "Update to latest version:",
-    installNote: "CLI asks 3 steps:",
+    installNote: "CLI auto-detects existing projects (package.json, go.mod...) → offers to create Project Map. Then asks 3 steps:",
     installStep1: "choose IDE",
     installStep2: "discipline level",
     installStep3: "personal rules",
-    installStep3Detail: "(language, coding style, forbidden patterns, custom rules).",
+    installStep3Detail: "(language, coding style, forbidden patterns, custom rules). Rules stored at .omni/rules.md.",
     karpathyP: "4 core principles injected into every AI agent:",
     karpathyItems: [
       { title: "Think Before Coding", desc: "Don't assume. Don't hide confusion. Surface tradeoffs. Ask before coding." },
@@ -306,7 +306,7 @@ const t = {
       "before modifying files → checks knowledge base for related lessons",
       "Max 20 entries — auto-prunes oldest when exceeding limit",
     ],
-    scbP: "spawns multiple sub-agents running in parallel (worktree isolation), each agent needs project context. Instead of each agent re-reading all of design-spec.md + shared files, the main session extracts ~500 tokens into a compact context brief.",
+    scbP: "spawns multiple sub-agents running in parallel (worktree isolation), each agent needs project context. Instead of each agent re-reading all of .omni/sdlc/design-spec.md + shared files, the main session extracts ~500 tokens into a compact context brief.",
     scbIncludes: "Brief includes",
     scbItems: [
       "Project summary — goal, tech stack, DNA profile",
@@ -316,13 +316,13 @@ const t = {
     ],
     scbBenefit: "Saves tokens (each agent doesn't need full context), syncs architecture decisions across agents, reduces merge conflicts.",
     csP: "detects a UI project, auto-generates",
-    csP2: "— the single source of truth for all content displayed on the UI.",
-    csValidation: "in om:check cross-references all UI text against content-source.md — ensuring accurate, consistent content.",
+    csP2: "— the single source of truth for all UI content.",
+    csValidation: "in om:check cross-references all UI text against .omni/sdlc/content-source.md — ensuring accurate, consistent content.",
     pmTitle: "Project Map — Codebase Intelligence",
     pmP: "When joining a large existing project, AI needs to understand the codebase without scanning hundreds of files every session.",
     pmHow: "How it works",
     pmItems: [
-      "omni map scans codebase → generates .omni/project-map.md skeleton (0 tokens, instant)",
+      "omni map scans codebase → generates .omni/knowledge/project-map.md skeleton (0 tokens, instant)",
       "om:map in AI chat → fills semantic descriptions for each module",
       "omni map --refresh → diffs structure, marks [NEW]/[DELETED], preserves AI descriptions",
       "Workflows auto-warn when map is > 7 days old",
@@ -330,9 +330,9 @@ const t = {
     pmLangs: "Multi-language: Node.js/TypeScript, Python, Go, Rust, Java/Kotlin, Ruby, PHP",
     pmDeep: "Deep scan includes: Tech stack, directory tree (max depth 4), entry points, CI/CD configs, conventions (linter, formatter), landmines (TODO/FIXME/HACK). Zero dependencies, zero network calls.",
     mapTitle: "om:map — Project Map",
-    mapP: "AI acts as Architect. Fills semantic descriptions into .omni/project-map.md generated by omni map.",
+    mapP: "AI acts as Architect. Fills semantic descriptions into .omni/knowledge/project-map.md generated by omni map.",
     mapItems: [
-      "Reads skeleton from .omni/project-map.md",
+      "Reads skeleton from .omni/knowledge/project-map.md",
       "Analyzes each module/directory → fills functional descriptions, patterns, dependencies",
       "Fills Key Patterns: auth strategy, error handling, DB patterns...",
       "Marks [NEW] modules needing descriptions, skips [DELETED]",
@@ -340,14 +340,14 @@ const t = {
     wfTitle: "9 SDLC Workflows",
     wfHeaders: ["Command", "Agent", "Description"],
     wfRows: [
-      ["om:brainstorm", "Architect", "Adaptive interview + DNA detection → design-spec.md"],
+      ["om:brainstorm", "Architect", "Adaptive interview + DNA detection → .omni/sdlc/design-spec.md"],
       ["om:equip", "Skill Manager", "Search skills.sh + conditional groups by DNA"],
-      ["om:plan", "PM", "Spec → micro-tasks todo.md, @skill:name tags"],
+      ["om:plan", "PM", "Spec → micro-tasks .omni/sdlc/todo.md, @skill:name tags"],
       ["om:cook", "Coder", "Execute tasks, Shared Context Brief, quality gate every 1/3"],
-      ["om:check", "QA Tester", "Validation pipeline P0–P5 → test-report.md"],
+      ["om:check", "QA Tester", "Validation pipeline P0–P5 → .omni/sdlc/test-report.md"],
       ["om:fix", "Debugger", "Reproduce → root cause → surgical fix → verify"],
-      ["om:map", "Architect", "Scan codebase → Project Map for AI navigation"],
-      ["om:learn", "Knowledge", "Auto-record lessons after fix → knowledge-base.md"],
+      ["om:map", "Architect", "Scan codebase → .omni/knowledge/project-map.md"],
+      ["om:learn", "Knowledge", "Auto-record lessons after fix → .omni/knowledge/knowledge-base.md"],
       ["om:doc", "Writer", "Read actual code → generate README + API docs"],
     ],
     wfNote: "Mandatory quality pipeline: 3 quality cycles — automatic cook → check → fix loop after every 1/3 of tasks.",
@@ -360,14 +360,14 @@ const t = {
       "Adaptive questions — only ask for missing slots, prefer multiple-choice",
       "Auto-detect Project DNA (hasUI, hasBackend, backendComplexity)",
     ],
-    brainstormPhase2: "Phase 2: Generate design-spec.md",
+    brainstormPhase2: "Phase 2: Generate .omni/sdlc/design-spec.md",
     brainstormPhase2Items: [
       "Summary table: Goal, Users, Tech Stack, UI Style, Constraints",
       "Tagged requirements: [func], [auth], [data], [api], [nfr], [edge], [ui]",
       "Large projects: auto-decompose into sub-projects",
     ],
     equipTitle: "om:equip — Install Skills",
-    equipP: "AI acts as Skill Manager. Analyzes tech stack from design-spec.md, searches skills.sh and installs matching skills.",
+    equipP: "AI acts as Skill Manager. Analyzes tech stack from .omni/sdlc/design-spec.md, searches skills.sh and installs matching skills.",
     equipGroups: "3 dynamic skill groups:",
     equipGroupItems: [
       "Best Practices — always included (karpathy, debugging, TDD, code review)",
@@ -375,17 +375,17 @@ const t = {
       "Backend/Infrastructure — when backendComplexity >= moderate (DB, API, Docker...)",
     ],
     planTitle: "om:plan — Task Planning",
-    planP: "AI acts as Senior PM. Transforms design-spec.md → micro-tasks in todo.md.",
+    planP: "AI acts as Senior PM. Transforms .omni/sdlc/design-spec.md → micro-tasks in .omni/sdlc/todo.md.",
     planItems: [
       "Each task is atomic, estimable (<20 min), ordered by dependency",
       "Backend-aware ordering: DB → Cache → Queue → API → Realtime → UI",
     ],
     cookTitle: "om:cook — Code Execution",
-    cookP: "AI acts as Senior Developer. Executes tasks from todo.md.",
+    cookP: "AI acts as Senior Developer. Executes tasks from .omni/sdlc/todo.md.",
     cookItems: [
       "Dependency graph: analyzes tasks, groups into parallel batches",
-      "Shared Context Brief: extracts ~500 tokens from design-spec.md + shared files, sends to each parallel agent instead of re-reading everything",
-      "Knowledge Base lookup: checks .omni/knowledge-base.md before modifying each file",
+      "Shared Context Brief: extracts ~500 tokens from .omni/sdlc/design-spec.md + shared files, sends to each parallel agent instead of re-reading everything",
+      "Knowledge Base lookup: checks .omni/knowledge/knowledge-base.md before modifying each file",
       "Auto-continue: automatically proceeds to next task, only stops on critical errors",
       "Surgical context: files >200 lines → grep first, only read ±20 lines around match",
       "Dev server preflight: auto-starts dev server before first task (if hasUI)",
@@ -393,7 +393,7 @@ const t = {
     cookQuality: "Automatic quality gate:",
     checkTitle: "om:check — QA Testing",
     checkP: "AI acts as QA Tester. Runs validation pipeline in order:",
-    checkNote: "P0–P3 fail → stop immediately, auto-trigger om:fix. P5 Content Validation is blocking for UI projects — ensures all UI text matches content-source.md. Max 3 loops per cycle.",
+    checkNote: "P0–P3 fail → stop immediately, auto-trigger om:fix. P5 Content Validation is blocking for UI projects — ensures all UI text matches .omni/sdlc/content-source.md. Max 3 loops per cycle.",
     fixTitle: "om:fix — Debug & Fix",
     fixP: "AI acts as Debugger. Structured process:",
     fixItems: [
@@ -408,7 +408,7 @@ const t = {
     learnItems: [
       "Auto-trigger: runs automatically after successful om:fix in quality cycle",
       "Manual: type om:learn to record lessons manually",
-      "Storage: .omni/knowledge-base.md — max 20 entries, FIFO prune",
+      "Storage: .omni/knowledge/knowledge-base.md — max 20 entries, FIFO prune",
       "Lookup: om:cook checks knowledge base before modifying each file",
     ],
     learnFormat: "Entry format:",
@@ -460,7 +460,7 @@ const checkRows = [
   ["P2", "Build: compile/bundle project", "Yes"],
   ["P3", "Tests: vitest/jest/pytest", "Yes"],
   ["P4", "Bundle: unused deps, bundle size", "No (advisory)"],
-  ["P5", "Content: UI text vs content-source.md", "Yes (hasUI)"],
+  ["P5", "Content: UI text vs .omni/sdlc/content-source.md", "Yes (hasUI)"],
 ];
 
 function IdeGuides({ lang }: { lang: Lang }) {
@@ -476,7 +476,7 @@ omni auto-equip        # ${vi ? "Cài 6 universal skills" : "Install 6 universal
         <p><strong>Advanced setup (Overlay):</strong></p>
         <p>{vi ? 'Khi được hỏi "Cài đặt Claude Code nâng cao?", chọn' : 'When asked "Advanced Claude Code setup?", choose'} <strong>Yes</strong> {vi ? "để kích hoạt:" : "to enable:"}</p>
         <ul className="list-disc list-inside space-y-1 ml-2">
-          <li><strong>Slash commands</strong> — 8 {vi ? "lệnh" : "commands"} <Tag>/om:*</Tag></li>
+          <li><strong>Slash commands</strong> — 9 {vi ? "lệnh" : "commands"} <Tag>/om:*</Tag></li>
           <li><strong>Permissions allowlist</strong> — <Tag>.claude/settings.json</Tag></li>
           <li><strong>Quality gate hooks</strong></li>
           <li><strong>Shared Context Brief</strong></li>
@@ -580,7 +580,8 @@ export function DocsContent() {
         <CodeBlock title="Terminal">{`npm install -g omni-coder-kit`}</CodeBlock>
         <p>{l.installInit}</p>
         <CodeBlock title="Terminal">{`cd your-project
-omni init          # ${lang === "vi" ? "Chọn IDE, mức kỷ luật, personal rules" : "Choose IDE, discipline level, personal rules"}
+omni init          # ${lang === "vi" ? "Chọn IDE, mức kỷ luật, personal rules (auto-detect project có sẵn)" : "Choose IDE, discipline level, personal rules (auto-detects existing projects)"}
+omni map           # ${lang === "vi" ? "Quét codebase → Project Map (nếu chưa tạo khi init)" : "Scan codebase → Project Map (if not created during init)"}
 omni auto-equip    # ${lang === "vi" ? "Cài 6 universal skills mặc định" : "Install 6 default universal skills"}
 omni status        # ${lang === "vi" ? "Kiểm tra trạng thái" : "Check status"}`}</CodeBlock>
         <p>{l.installUpdate}</p>
@@ -652,7 +653,7 @@ omni status        # ${lang === "vi" ? "Kiểm tra trạng thái" : "Check statu
       </Section>
 
       <Section id="knowledge-base" title={l.kbTitle}>
-        <p>{l.kbP} {lang === "vi" ? "Sau mỗi" : "After each successful"} <Tag>om:fix</Tag> {lang === "vi" ? "thành công," : ","} <Tag>om:learn</Tag> {l.kbP2} <Tag>.omni/knowledge-base.md</Tag>.</p>
+        <p>{l.kbP} {lang === "vi" ? "Sau mỗi" : "After each successful"} <Tag>om:fix</Tag> {lang === "vi" ? "thành công," : ","} <Tag>om:learn</Tag> {l.kbP2} <Tag>.omni/knowledge/knowledge-base.md</Tag>.</p>
         <div className="space-y-3 my-4">
           <div className="rounded-lg border border-accent-border bg-orange-400/5 p-4">
             <h4 className="font-semibold text-accent">{l.kbHow}</h4>
@@ -664,7 +665,7 @@ omni status        # ${lang === "vi" ? "Kiểm tra trạng thái" : "Check statu
             </ul>
           </div>
         </div>
-        <CodeBlock title=".omni/knowledge-base.md">{`## Lesson #1 — 2025-01-15
+        <CodeBlock title=".omni/knowledge/knowledge-base.md">{`## Lesson #1 — 2025-01-15
 **Files:** src/api/auth.ts, src/middleware/jwt.ts
 **Root cause:** JWT token refresh race condition
 **Fix pattern:** Mutex lock on refresh endpoint, queue pending requests
@@ -685,8 +686,8 @@ omni status        # ${lang === "vi" ? "Kiểm tra trạng thái" : "Check statu
       </Section>
 
       <Section id="content-source" title="Content Source-of-Truth">
-        <p>{lang === "vi" ? "Khi" : "When"} <Tag>om:brainstorm</Tag> {l.csP} <Tag>content-source.md</Tag> {l.csP2}</p>
-        <CodeBlock title="content-source.md">{`## Facts
+        <p>{lang === "vi" ? "Khi" : "When"} <Tag>om:brainstorm</Tag> {l.csP} <Tag>.omni/sdlc/content-source.md</Tag> {l.csP2}</p>
+        <CodeBlock title=".omni/sdlc/content-source.md">{`## Facts
 - Product name: "Omni-Coder Kit"
 - Price: Free forever (ISC License)
 - IDEs supported: 8+
@@ -711,8 +712,8 @@ omni init    # → "Existing project detected. Create Project Map?"
 
 # Refresh structure (0 tokens)
 omni map --refresh`}</CodeBlock>
-        <p><strong>Output:</strong> <Tag>.omni/project-map.md</Tag></p>
-        <CodeBlock title=".omni/project-map.md">{`# Project Map — my-app
+        <p><strong>Output:</strong> <Tag>.omni/knowledge/project-map.md</Tag></p>
+        <CodeBlock title=".omni/knowledge/project-map.md">{`# Project Map — my-app
 > Generated by omni map | 2026-04-27 | 98 files, 12 dirs, ~5400 LOC
 
 ## Tech Stack
@@ -736,7 +737,7 @@ Runtime: Node.js | Lang: TypeScript | Framework: Express | DB: Prisma | Test: Je
         <p><strong>{l.pmLangs}</strong></p>
         <p className="text-sm text-content-muted">{l.pmDeep}</p>
         <p>{lang === "vi" ? "Sau khi chạy" : "After running"} <Tag>om:map</Tag> {lang === "vi" ? "trong chat AI:" : "in AI chat:"}</p>
-        <CodeBlock title=".omni/project-map.md">{`## Structure
+        <CodeBlock title=".omni/knowledge/project-map.md">{`## Structure
 - \`src/modules/auth/\`      (12 files) → JWT login, OAuth2, 2FA, refresh rotation
 - \`src/modules/orders/\`    (18 files) → Order state machine: draft→paid→shipped→done
 - \`src/utils/\`             (5 files)  → Logger (pino), date/currency formatters
@@ -785,9 +786,9 @@ omni equip vercel-labs/agent-skills
         <ul className="list-disc list-inside space-y-1 ml-2">
           {l.planItems.map((item) => <li key={item}>{item}</li>)}
           <li>Skill-tagged: <Tag>@skill:skill-name</Tag></li>
-          <li>{lang === "vi" ? "Infra tasks tách vào" : "Infra tasks separated into"} <Tag>setup.sh</Tag>, code tasks → todo.md</li>
+          <li>{lang === "vi" ? "Infra tasks tách vào" : "Infra tasks separated into"} <Tag>setup.sh</Tag>, code tasks → .omni/sdlc/todo.md</li>
         </ul>
-        <CodeBlock title="todo.md">{`## 1. Database
+        <CodeBlock title=".omni/sdlc/todo.md">{`## 1. Database
 - [ ] Create users table migration @skill:supabase-postgres
 - [ ] Seed sample data @skill:supabase-postgres
 
@@ -839,7 +840,7 @@ omni equip vercel-labs/agent-skills
   ✓ src/modules/orders/ → Order state machine: draft→paid→shipped→done
   ✓ Key Patterns: 3 patterns ${lang === "vi" ? "đã nhận diện" : "identified"}
 
-✅ Project Map ${lang === "vi" ? "đã cập nhật" : "updated"} (.omni/project-map.md)`}</CodeBlock>
+✅ Project Map ${lang === "vi" ? "đã cập nhật" : "updated"} (.omni/knowledge/project-map.md)`}</CodeBlock>
       </Section>
 
       <Section id="om-learn" title={l.learnTitle}>

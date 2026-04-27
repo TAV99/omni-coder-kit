@@ -22,19 +22,19 @@ export const faqData = {
     },
     {
       question: "Knowledge Base (om:learn) hoạt động thế nào?",
-      answer: "Sau mỗi om:fix thành công, om:learn tự ghi bài học vào .omni/knowledge-base.md (file đã thay đổi, root cause, fix pattern). Khi om:cook gặp file tương tự, tự đọc lại knowledge base để tránh lặp lỗi. Tối đa 20 entries, auto-prune cũ nhất.",
+      answer: "Sau mỗi om:fix thành công, om:learn tự ghi bài học vào .omni/knowledge/knowledge-base.md (file đã thay đổi, root cause, fix pattern). Khi om:cook gặp file tương tự, tự đọc lại knowledge base để tránh lặp lỗi. Tối đa 20 entries, auto-prune cũ nhất.",
     },
     {
       question: "Shared Context Brief cho parallel agents là gì?",
-      answer: "Khi om:cook spawn nhiều sub-agents chạy song song, main session extract ~500 tokens từ design-spec.md + shared files thành context brief. Mỗi agent nhận brief thay vì re-read toàn bộ — tiết kiệm token và đồng bộ context giữa các agents.",
+      answer: "Khi om:cook spawn nhiều sub-agents chạy song song, main session extract ~500 tokens từ .omni/sdlc/design-spec.md + shared files thành context brief. Mỗi agent nhận brief thay vì re-read toàn bộ — tiết kiệm token và đồng bộ context giữa các agents.",
     },
     {
       question: "Có hỗ trợ dự án đang có sẵn không?",
-      answer: "Có. Chạy omni init trên dự án hiện tại, sau đó om:brainstorm để phân tích. om:plan sẽ phân tích codebase và tạo todo.md phù hợp với code hiện tại.",
+      answer: "Có. Chạy omni init trên dự án hiện tại (tự phát hiện project có sẵn → đề xuất tạo Project Map), sau đó om:brainstorm để phân tích. om:plan sẽ phân tích codebase và tạo .omni/sdlc/todo.md phù hợp với code hiện tại.",
     },
     {
-      question: "Content Source-of-Truth (content-source.md) là gì?",
-      answer: "Khi om:brainstorm phát hiện dự án có UI, tự sinh content-source.md chứa Facts, Tone, Forbidden Content. P5 Content Validation trong om:check đối chiếu mọi text trên UI với file này — đảm bảo nội dung chính xác, nhất quán.",
+      question: "Content Source-of-Truth là gì?",
+      answer: "Khi om:brainstorm phát hiện dự án có UI, tự sinh .omni/sdlc/content-source.md chứa Facts, Tone, Forbidden Content. P5 Content Validation trong om:check đối chiếu mọi text trên UI với file này — đảm bảo nội dung chính xác, nhất quán.",
     },
     {
       question: "Personal rules là gì?",
@@ -64,19 +64,19 @@ export const faqData = {
     },
     {
       question: "How does Knowledge Base (om:learn) work?",
-      answer: "After each successful om:fix, om:learn records lessons in .omni/knowledge-base.md (changed files, root cause, fix pattern). When om:cook encounters similar files, it reads the knowledge base to avoid repeating mistakes. Max 20 entries, auto-prunes oldest.",
+      answer: "After each successful om:fix, om:learn records lessons in .omni/knowledge/knowledge-base.md (changed files, root cause, fix pattern). When om:cook encounters similar files, it reads the knowledge base to avoid repeating mistakes. Max 20 entries, auto-prunes oldest.",
     },
     {
       question: "What is Shared Context Brief for parallel agents?",
-      answer: "When om:cook spawns multiple sub-agents running in parallel, the main session extracts ~500 tokens from design-spec.md + shared files into a context brief. Each agent receives the brief instead of re-reading everything — saves tokens and syncs context across agents.",
+      answer: "When om:cook spawns multiple sub-agents running in parallel, the main session extracts ~500 tokens from .omni/sdlc/design-spec.md + shared files into a context brief. Each agent receives the brief instead of re-reading everything — saves tokens and syncs context across agents.",
     },
     {
       question: "Does it support existing projects?",
-      answer: "Yes. Run omni init on your existing project, then om:brainstorm to analyze. om:plan will analyze the codebase and create todo.md tailored to your current code.",
+      answer: "Yes. Run omni init on your existing project (auto-detects existing projects → offers to create Project Map), then om:brainstorm to analyze. om:plan will analyze the codebase and create .omni/sdlc/todo.md tailored to your current code.",
     },
     {
-      question: "What is Content Source-of-Truth (content-source.md)?",
-      answer: "When om:brainstorm detects a UI project, it auto-generates content-source.md containing Facts, Tone, Forbidden Content. P5 Content Validation in om:check cross-references all UI text against this file — ensuring accurate, consistent content.",
+      question: "What is Content Source-of-Truth?",
+      answer: "When om:brainstorm detects a UI project, it auto-generates .omni/sdlc/content-source.md containing Facts, Tone, Forbidden Content. P5 Content Validation in om:check cross-references all UI text against this file — ensuring accurate, consistent content.",
     },
     {
       question: "What are personal rules?",
