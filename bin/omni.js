@@ -321,7 +321,7 @@ function buildCommandRegistry(ide) {
             '- `.omni/workflows/pm-templates.md` - Output format standards',
             '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
             '- `.omni/workflows/superpower-sdlc.md` - Full SDLC overview and pipeline diagram',
-            '- `.omni/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
+            '- `.omni/knowledge/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
             '',
             '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
             '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
@@ -352,7 +352,7 @@ function buildCommandRegistry(ide) {
             '- `.omni/workflows/pm-templates.md` - Output format standards',
             '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
             '- `.omni/workflows/superpower-sdlc.md` - Gemini-aware SDLC overview',
-            '- `.omni/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
+            '- `.omni/knowledge/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
             '',
             '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
             '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
@@ -390,7 +390,7 @@ function buildCommandRegistry(ide) {
             '- `.omni/workflows/pm-templates.md` - Output format standards',
             '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
             '- `.omni/workflows/superpower-sdlc.md` - Codex-aware SDLC overview',
-            '- `.omni/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
+            '- `.omni/knowledge/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
             '',
             '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
             '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
@@ -422,7 +422,7 @@ function buildCommandRegistry(ide) {
             '- `.omni/workflows/pm-templates.md` - Output format standards',
             '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
             '- `.omni/workflows/superpower-sdlc.md` - Cursor-aware SDLC overview',
-            '- `.omni/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
+            '- `.omni/knowledge/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
             '',
             '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
             '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
@@ -450,7 +450,7 @@ function buildCommandRegistry(ide) {
         '- `.omni/workflows/pm-templates.md` - Output format standards',
         '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
         '- `.omni/workflows/superpower-sdlc.md` - Full SDLC overview and pipeline diagram',
-        '- `.omni/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
+        '- `.omni/knowledge/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
         '',
         '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
         '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
@@ -938,13 +938,13 @@ program
             const scan = scanProject(process.cwd());
             const projectName = path.basename(process.cwd());
             const skeleton = generateMapSkeleton(scan, projectName);
-            const omniDir = path.join(process.cwd(), '.omni');
-            fs.mkdirSync(omniDir, { recursive: true });
-            writeFileSafe(path.join(omniDir, 'project-map.md'), skeleton);
+            const knowledgeDir = path.join(process.cwd(), '.omni', 'knowledge');
+            fs.mkdirSync(knowledgeDir, { recursive: true });
+            writeFileSafe(path.join(knowledgeDir, 'project-map.md'), skeleton);
             manifest.projectMap = true;
             manifest.mapGeneratedAt = new Date().toISOString();
             saveManifest(manifest);
-            console.log(chalk.green('📁 Project Map: .omni/project-map.md'));
+            console.log(chalk.green('📁 Project Map: .omni/knowledge/project-map.md'));
             console.log(chalk.gray('   Chạy >om:map trong chat AI để AI điền mô tả chi tiết.\n'));
         }
         console.log('');
@@ -1178,15 +1178,15 @@ program
         console.log(chalk.cyan.bold('\n📋 Danh sách lệnh >om: (gõ trong chat với AI)\n'));
 
         const commands = [
-            { cmd: '>om:brainstorm', slash: '/om:brainstorm', role: 'Architect',  desc: 'Phỏng vấn yêu cầu → đề xuất Tech Stack → xuất .omni/design-spec.md' },
+            { cmd: '>om:brainstorm', slash: '/om:brainstorm', role: 'Architect',  desc: 'Phỏng vấn yêu cầu → đề xuất Tech Stack → xuất .omni/sdlc/design-spec.md' },
             { cmd: '>om:equip',      slash: '/om:equip',      role: 'Skill Mgr',  desc: 'Cài universal skills + tìm & đề xuất skills từ skills.sh theo design-spec' },
-            { cmd: '>om:plan',       slash: '/om:plan',        role: 'PM',          desc: 'Phân tích design-spec → micro-tasks trong .omni/todo.md (<20 phút/task)' },
+            { cmd: '>om:plan',       slash: '/om:plan',        role: 'PM',          desc: 'Phân tích design-spec → micro-tasks trong .omni/sdlc/todo.md (<20 phút/task)' },
             { cmd: '>om:cook',       slash: '/om:cook',        role: 'Coder',       desc: 'Sub-agent parallel execution, dependency graph, worktree isolation' },
             { cmd: '>om:check',      slash: '/om:check',       role: 'QA Tester',   desc: 'Validation pipeline: security → lint → build → test → feature verify' },
             { cmd: '>om:fix',        slash: '/om:fix',          role: 'Debugger',    desc: 'Reproduce → root cause → surgical fix → verify (không shotgun-fix)' },
             { cmd: '>om:doc',        slash: '/om:doc',          role: 'Writer',      desc: 'Đọc code thực tế → sinh README.md + API docs bằng tiếng Việt' },
             { cmd: '>om:learn',      slash: '/om:learn',        role: 'Learner',     desc: 'Đúc kết bài học từ bug fix → ghi vào knowledge-base.md (auto sau >om:fix)' },
-            { cmd: '>om:map',        slash: '/om:map',          role: 'Architect',   desc: 'Quét codebase → sinh bản đồ dự án (.omni/project-map.md)' },
+            { cmd: '>om:map',        slash: '/om:map',          role: 'Architect',   desc: 'Quét codebase → sinh bản đồ dự án (.omni/knowledge/project-map.md)' },
         ];
 
         const maxCmd   = Math.max(...commands.map(c => c.cmd.length));
@@ -1216,12 +1216,12 @@ program
         if (options.refresh) {
             const result = refreshMap(process.cwd());
             if (!result) {
-                console.log(chalk.red.bold('\n❌ Không tìm thấy .omni/project-map.md. Chạy "omni map" hoặc "omni init" trước.\n'));
+                console.log(chalk.red.bold('\n❌ Không tìm thấy .omni/knowledge/project-map.md. Chạy "omni map" hoặc "omni init" trước.\n'));
                 return;
             }
-            fs.mkdirSync(path.join(process.cwd(), '.omni'), { recursive: true });
-            fs.writeFileSync(path.join(process.cwd(), '.omni', 'project-map.md'), result, 'utf-8');
-            console.log(chalk.green.bold('\n🔄 Project Map refreshed: .omni/project-map.md'));
+            fs.mkdirSync(path.join(process.cwd(), '.omni', 'knowledge'), { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), '.omni', 'knowledge', 'project-map.md'), result, 'utf-8');
+            console.log(chalk.green.bold('\n🔄 Project Map refreshed: .omni/knowledge/project-map.md'));
             console.log(chalk.gray('   Các thay đổi cấu trúc đã được đánh dấu [NEW]/[DELETED].'));
             console.log(chalk.gray('   Chạy >om:map để AI cập nhật mô tả.\n'));
             return;
@@ -1239,8 +1239,8 @@ program
         const projectName = path.basename(process.cwd());
         const skeleton = generateMapSkeleton(scan, projectName);
 
-        fs.mkdirSync(path.join(process.cwd(), '.omni'), { recursive: true });
-        fs.writeFileSync(path.join(process.cwd(), '.omni', 'project-map.md'), skeleton, 'utf-8');
+        fs.mkdirSync(path.join(process.cwd(), '.omni', 'knowledge'), { recursive: true });
+        fs.writeFileSync(path.join(process.cwd(), '.omni', 'knowledge', 'project-map.md'), skeleton, 'utf-8');
 
         // Update manifest
         const manifest = loadManifest();
@@ -1248,7 +1248,7 @@ program
         manifest.mapGeneratedAt = new Date().toISOString();
         saveManifest(manifest);
 
-        console.log(chalk.green.bold('\n📁 Project Map skeleton: .omni/project-map.md'));
+        console.log(chalk.green.bold('\n📁 Project Map skeleton: .omni/knowledge/project-map.md'));
         console.log(chalk.white(`   ${scan.stats.files} files | ${scan.stats.dirs} dirs | ~${scan.stats.loc} LOC`));
         console.log(chalk.white(`   ${scan.structure.filter(s => s.depth <= 2).length} directories mapped`));
         console.log(chalk.white(`   ${scan.entryPoints.length} entry points detected`));

@@ -10,7 +10,7 @@ If ANY failure is detected during P0-P3 checks or Feature Verification, you MUST
     - **Title:** `[BUG] - <Brief failure description>`
     - **Description:** Include the error message, failing file/component, and priority (P0-P4).
     - **Type:** If your tracking system supports it, label it as a bug.
-2.  **Report in `.omni/test-report.md`:** (Standard procedure)
+2.  **Report in `.omni/sdlc/test-report.md`:** (Standard procedure)
 
 ### Step 5: Auto Fix/Check Loop
 When detection triggers `>om:fix`, update the Gemini Task Tracker:

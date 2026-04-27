@@ -1,15 +1,15 @@
 ## CODEX CODER WORKFLOW (SURGICAL TASK EXECUTION)
 
-When executing `>om:cook` in Codex CLI, act as a Senior Developer. Implement tasks from `.omni/todo.md` one at a time unless the user explicitly asks for subagent delegation.
+When executing `>om:cook` in Codex CLI, act as a Senior Developer. Implement tasks from `.omni/sdlc/todo.md` one at a time unless the user explicitly asks for subagent delegation.
 
 ### Step 1: Load Context
 
-- Read `.omni/todo.md` and identify the next unchecked task.
-- Read `.omni/design-spec.md` for architecture and constraints.
+- Read `.omni/sdlc/todo.md` and identify the next unchecked task.
+- Read `.omni/sdlc/design-spec.md` for architecture and constraints.
 - Read relevant files before editing. Do not assume file structure.
 - If the task has `@skill:name` tags, load the installed skill instructions before coding.
-- If `.omni/project-map.md` exists, read it first to understand project structure. Warn if Age > 7 days.
-- If `.omni/todo.md` does not exist, stop and tell the user to run `>om:plan` first.
+- If `.omni/knowledge/project-map.md` exists, read it first to understand project structure. Warn if Age > 7 days.
+- If `.omni/sdlc/todo.md` does not exist, stop and tell the user to run `>om:plan` first.
 
 ### Step 2: Dev Server Preflight (MANDATORY CHECKPOINT)
 You MUST complete this step and report the result BEFORE writing any code.
@@ -46,7 +46,7 @@ For the current task:
 2. Scope lock: only create/modify files declared in 4.1. No cleanup, no refactoring, no "improvements".
 3. Make the smallest code change that satisfies the task.
 4. Run the narrowest useful verification command.
-5. Mark the task done in `.omni/todo.md` by changing `- [ ]` to `- [x]`.
+5. Mark the task done in `.omni/sdlc/todo.md` by changing `- [ ]` to `- [x]`.
 6. Report files changed, verification result, and next task.
 
 ### Step 5: Subagents
@@ -64,11 +64,11 @@ When using subagents, define each agent's owned files and tell agents they are n
 
 The project runs exactly 3 quality cycles:
 
-1. Count total task checkboxes in `.omni/todo.md`.
+1. Count total task checkboxes in `.omni/sdlc/todo.md`.
 2. Compute `checkpoint = ceil(total / 3)`.
 3. After each checkpoint, run `>om:check`.
 4. If blocking failures exist, run `>om:fix`, then rerun `>om:check`.
-5. Max 3 fix attempts per cycle. If still failing: mark task `[BLOCKED]` in `.omni/todo.md`, escalate to user, skip and continue.
+5. Max 3 fix attempts per cycle. If still failing: mark task `[BLOCKED]` in `.omni/sdlc/todo.md`, escalate to user, skip and continue.
 
 ### Rules
 

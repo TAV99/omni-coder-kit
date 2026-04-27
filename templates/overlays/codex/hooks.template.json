@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"console.log(JSON.stringify({systemMessage:'[omni] If .omni/todo.md progress changed, verify the current quality cycle before claiming completion.'}))\"",
+            "command": "node -e \"console.log(JSON.stringify({systemMessage:'[omni] If .omni/sdlc/todo.md progress changed, verify the current quality cycle before claiming completion.'}))\"",
             "timeout": 10,
             "statusMessage": "Omni quality-cycle reminder"
           }

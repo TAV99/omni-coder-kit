@@ -3,7 +3,7 @@ When executing the [>om:learn] command (or auto-triggered after a successful fix
 
 **Step 1: Analyze Recent Fix**
 - Read `git diff HEAD~1` (or the most recent fix diff if multiple commits).
-- Read `.omni/test-report.md` if it exists — look for the FAIL that was fixed.
+- Read `.omni/sdlc/test-report.md` if it exists — look for the FAIL that was fixed.
 - Identify: what broke, why it broke, and what fixed it.
 
 **Step 2: Evaluate — Is This Worth Recording?**
@@ -20,7 +20,7 @@ Record if:
 If not worth recording, output: `📝 Learn: skipped — trivial fix.` and stop.
 
 **Step 3: Write Entry**
-Read `.omni/knowledge-base.md` if it exists. Append a new entry in this format:
+Read `.omni/knowledge/knowledge-base.md` if it exists. Append a new entry in this format:
 
 ```markdown
 ## [YYYY-MM-DD] [Short title]
@@ -29,7 +29,7 @@ Read `.omni/knowledge-base.md` if it exists. Append a new entry in this format:
 **Fix:** [What solved it — 1 sentence]
 ```
 
-If `.omni/knowledge-base.md` does not exist, create it with header:
+If `.omni/knowledge/knowledge-base.md` does not exist, create it with header:
 ```markdown
 # Knowledge Base — Project Lessons
 > Auto-captured by >om:learn. Max 20 entries — oldest removed when full.
@@ -42,5 +42,5 @@ Count `##` entries in the file. If more than 20, remove the oldest entry (first 
 ```
 📝 Learned: [short title]
    Scope: [files]
-   KB: .omni/knowledge-base.md ([N]/20 entries)
+   KB: .omni/knowledge/knowledge-base.md ([N]/20 entries)
 ```

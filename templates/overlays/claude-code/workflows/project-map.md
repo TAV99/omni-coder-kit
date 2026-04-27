@@ -2,13 +2,13 @@
 When executing the [>om:map] command (or `/om:map` slash command), act as a Senior Architect performing codebase reconnaissance.
 
 **Step 1: Load Skeleton**
-- Read `.omni/project-map.md`. If it does not exist, run `omni map` via Bash tool to generate the skeleton, then re-read.
+- Read `.omni/knowledge/project-map.md`. If it does not exist, run `omni map` via Bash tool to generate the skeleton, then re-read.
 - Identify all `[PENDING]`, `[NEW]`, `[DELETED]` markers.
 - If no markers found and ## Key Patterns already has content, report "🗺️ Map is up to date" and stop.
 
 **Step 2: Prioritized Reading**
 For large projects (>100 directories), spawn an Explore sub-agent:
-- Agent prompt: "Read entry points and key modules listed in .omni/project-map.md. For each [PENDING] directory, read its main/index file and return a 1-sentence description."
+- Agent prompt: "Read entry points and key modules listed in .omni/knowledge/project-map.md. For each [PENDING] directory, read its main/index file and return a 1-sentence description."
 - For smaller projects, read directly using Read tool.
 
 Priority order:

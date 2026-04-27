@@ -3,11 +3,11 @@ When executing the [>om:fix] command, you MUST act as a Senior Debugger. Your jo
 
 **Step 1: Collect Error Evidence**
 Gather ALL available error information:
-- Read `.omni/test-report.md` if it exists (from `>om:check`). Focus on FAIL items.
+- Read `.omni/sdlc/test-report.md` if it exists (from `>om:check`). Focus on FAIL items.
 - If no test report, ask the user: "Lỗi cụ thể là gì? (error message, screenshot, hoặc bước để reproduce)"
 - Run build/lint/typecheck to get fresh error output.
-- **Knowledge base:** If `.omni/knowledge-base.md` exists, check if this error matches a known pattern. If found, apply the recorded fix first.
-- **Project Map:** If `.omni/project-map.md` exists, read ## Entry Points and ## Key Patterns to understand architecture before tracing. Check ## Landmines for known tech debt near the error location.
+- **Knowledge base:** If `.omni/knowledge/knowledge-base.md` exists, check if this error matches a known pattern. If found, apply the recorded fix first.
+- **Project Map:** If `.omni/knowledge/project-map.md` exists, read ## Entry Points and ## Key Patterns to understand architecture before tracing. Check ## Landmines for known tech debt near the error location.
 *CRITICAL: Do NOT start fixing without a specific error to target. "It doesn't work" is not actionable — ask for specifics.*
 
 **Step 2: Reproduce the Error**

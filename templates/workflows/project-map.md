@@ -2,7 +2,7 @@
 When executing the [>om:map] command, you MUST act as a Senior Architect performing codebase reconnaissance.
 
 **Step 1: Load Skeleton**
-- Read `.omni/project-map.md`. If it does not exist, STOP — tell the user to run `omni map` first to generate the skeleton.
+- Read `.omni/knowledge/project-map.md`. If it does not exist, STOP — tell the user to run `omni map` first to generate the skeleton.
 - Identify all `[PENDING]`, `[NEW]`, `[DELETED]` markers.
 - If no markers found and ## Key Patterns already has content, report "🗺️ Map is up to date — no pending items." and stop.
 

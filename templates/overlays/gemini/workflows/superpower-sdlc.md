@@ -20,10 +20,10 @@ Gemini CLI operates in a single, high-context session. It does not use independe
 - **Persistence:** Use `save_memory` (project scope) for architectural decisions that should survive across restarts.
 
 ### Command Descriptions
-- **[>om:brainstorm]:** Solutions Architect. Uses `ask_user` for adaptive interviewing. Outputs `.omni/design-spec.md`.
+- **[>om:brainstorm]:** Solutions Architect. Uses `ask_user` for adaptive interviewing. Outputs `.omni/sdlc/design-spec.md`.
 - **[>om:equip]:** Skill Manager. Search and proposes expert skills from skills.sh. **Note:** Gemini `--yolo` sandbox blocks `npx` network calls. If install fails, output commands for user to run in terminal.
-- **[>om:plan]:** PM Agent. Transforms `.omni/design-spec.md` into `.omni/todo.md` AND initializes Gemini `tracker_create_task` for each item.
-- **[>om:cook]:** Coder Agent. Executes tasks from `.omni/todo.md`. Updates task status via `tracker_update_task`.
+- **[>om:plan]:** PM Agent. Transforms `.omni/sdlc/design-spec.md` into `.omni/sdlc/todo.md` AND initializes Gemini `tracker_create_task` for each item.
+- **[>om:cook]:** Coder Agent. Executes tasks from `.omni/sdlc/todo.md`. Updates task status via `tracker_update_task`.
 - **[>om:check]:** QA Tester Agent. Runs validation pipeline.
 - **[>om:fix]:** Debugger Agent. Systematic debugging and surgical fixes.
 - **[>om:doc]:** Technical Writer Agent. Generates documentation in Vietnamese.

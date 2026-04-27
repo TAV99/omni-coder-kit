@@ -2,7 +2,7 @@
 When executing `>om:map`, act as a Senior Architect scanning the codebase.
 
 ### Step 1: Load Skeleton
-- Read `.omni/project-map.md`. If missing, tell the user to run `omni map` first.
+- Read `.omni/knowledge/project-map.md`. If missing, tell the user to run `omni map` first.
 - Identify `[PENDING]`, `[NEW]`, `[DELETED]` markers.
 
 ### Step 2: Read Key Files

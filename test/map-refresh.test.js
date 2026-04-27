@@ -23,8 +23,8 @@ describe('refreshMap', () => {
             const scan = scanProject(tmp);
             let md = generateMapSkeleton(scan, 'test-app');
             md = md.replace('[PENDING]', '→ Main application code');
-            fs.mkdirSync(path.join(tmp, '.omni'), { recursive: true });
-            fs.writeFileSync(path.join(tmp, '.omni', 'project-map.md'), md);
+            fs.mkdirSync(path.join(tmp, '.omni', 'knowledge'), { recursive: true });
+            fs.writeFileSync(path.join(tmp, '.omni', 'knowledge', 'project-map.md'), md);
 
             fs.mkdirSync(path.join(tmp, 'lib'));
             fs.writeFileSync(path.join(tmp, 'lib', 'utils.js'), '');
@@ -45,8 +45,8 @@ describe('refreshMap', () => {
             fs.writeFileSync(path.join(tmp, 'utils', 'helpers.js'), '');
             const scan = scanProject(tmp);
             const md = generateMapSkeleton(scan, 'test-app');
-            fs.mkdirSync(path.join(tmp, '.omni'), { recursive: true });
-            fs.writeFileSync(path.join(tmp, '.omni', 'project-map.md'), md);
+            fs.mkdirSync(path.join(tmp, '.omni', 'knowledge'), { recursive: true });
+            fs.writeFileSync(path.join(tmp, '.omni', 'knowledge', 'project-map.md'), md);
 
             fs.rmSync(path.join(tmp, 'utils'), { recursive: true, force: true });
 
@@ -66,8 +66,8 @@ describe('refreshMap', () => {
             md = md.replace(/\[PENDING\]/, '→ Express REST API server');
             md = md.replace('## Key Patterns\n[PENDING — AI fills this when running >om:map]',
                 '## Key Patterns\n- Auth: JWT with refresh tokens\n- Error: Global handler');
-            fs.mkdirSync(path.join(tmp, '.omni'), { recursive: true });
-            fs.writeFileSync(path.join(tmp, '.omni', 'project-map.md'), md);
+            fs.mkdirSync(path.join(tmp, '.omni', 'knowledge'), { recursive: true });
+            fs.writeFileSync(path.join(tmp, '.omni', 'knowledge', 'project-map.md'), md);
 
             const result = refreshMap(tmp);
             assert.ok(result.includes('Express REST API server'));
@@ -84,8 +84,8 @@ describe('refreshMap', () => {
             const scan = scanProject(tmp);
             let md = generateMapSkeleton(scan, 'test-app');
             md = md.replace(/Last refresh: \S+/, 'Last refresh: 2020-01-01');
-            fs.mkdirSync(path.join(tmp, '.omni'), { recursive: true });
-            fs.writeFileSync(path.join(tmp, '.omni', 'project-map.md'), md);
+            fs.mkdirSync(path.join(tmp, '.omni', 'knowledge'), { recursive: true });
+            fs.writeFileSync(path.join(tmp, '.omni', 'knowledge', 'project-map.md'), md);
 
             const result = refreshMap(tmp);
             const today = new Date().toISOString().split('T')[0];

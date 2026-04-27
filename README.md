@@ -14,11 +14,11 @@
 - **Universal Skills:** 6 skills mặc định (find-skills, karpathy-guidelines, systematic-debugging, test-driven-development, requesting-code-review, using-git-worktrees)
 - **Dynamic Skill Discovery:** `>om:equip` dùng `find-skills` search skills.sh theo tech stack — không giới hạn framework
 - **IDE-Aware Skills:** `auto-equip` chỉ cài skill cho IDE/CLI đã chọn, dùng `--agent` flag của skills.sh
-- **Skill-Tagged Tasks:** `>om:plan` gắn `@skill:name` cho từng task trong `.omni/todo.md`, `>om:cook` tự động load skill tương ứng khi thực thi
-- **Content Source-of-Truth:** `>om:brainstorm` tự động sinh `.omni/content-source.md` (Facts, Tone, Forbidden Content) cho UI project — `>om:cook` dùng làm ground truth, `>om:check` validate nội dung (P5)
+- **Skill-Tagged Tasks:** `>om:plan` gắn `@skill:name` cho từng task trong `.omni/sdlc/todo.md`, `>om:cook` tự động load skill tương ứng khi thực thi
+- **Content Source-of-Truth:** `>om:brainstorm` tự động sinh `.omni/sdlc/content-source.md` (Facts, Tone, Forbidden Content) cho UI project — `>om:cook` dùng làm ground truth, `>om:check` validate nội dung (P5)
 - **Automated Quality Pipeline:** 3 quality cycles bắt buộc — `cook → check → fix` loop tự động sau mỗi 1/3 tasks, P5 Content Validation blocks khi HIGH severity
-- **Knowledge Base:** `>om:learn` tự động ghi bài học sau mỗi fix thành công vào `.omni/knowledge-base.md` — `>om:cook` đọc lại khi gặp file tương tự
-- **Project Map (v2.4.5):** `omni map` quét codebase → sinh `.omni/project-map.md` skeleton (0 token). `>om:map` điền mô tả semantic. `--refresh` diff cấu trúc, đánh dấu `[NEW]`/`[DELETED]`, giữ nguyên mô tả AI. Multi-language: Node.js, Python, Go, Rust, Java, Ruby, PHP
+- **Knowledge Base:** `>om:learn` tự động ghi bài học sau mỗi fix thành công vào `.omni/knowledge/knowledge-base.md` — `>om:cook` đọc lại khi gặp file tương tự
+- **Project Map (v2.4.5):** `omni map` quét codebase → sinh `.omni/knowledge/project-map.md` skeleton (0 token). `>om:map` điền mô tả semantic. `--refresh` diff cấu trúc, đánh dấu `[NEW]`/`[DELETED]`, giữ nguyên mô tả AI. Multi-language: Node.js, Python, Go, Rust, Java, Ruby, PHP
 - **Existing Project Detection (v2.4.5):** `omni init` tự động phát hiện project có sẵn (package.json, pyproject.toml, go.mod...) và đề xuất tạo Project Map
 - **Parallel Sub-Agent Execution (Claude Code):** Dependency graph analysis, batch parallel agents với worktree isolation, Shared Context Brief (~500 tokens) giảm token duplication
 - **Token Optimization:** Config file chỉ ~5KB, workflows lazy-loaded khi cần, examples lazy-loaded khi cần, surgical context rule (grep trước khi đọc file lớn), context-aware verbosity theo lệnh >om:, Shared Context Brief cho sub-agents
@@ -172,7 +172,7 @@ omni init
 CLI sẽ hỏi 3-4 bước:
 
 **Bước 0 (auto) — Phát hiện project có sẵn:**
-Nếu phát hiện `package.json`, `pyproject.toml`, `go.mod`... → hỏi `"Tạo Project Map?"`. Nếu Yes, scan codebase và sinh `.omni/project-map.md` sau khi init hoàn tất.
+Nếu phát hiện `package.json`, `pyproject.toml`, `go.mod`... → hỏi `"Tạo Project Map?"`. Nếu Yes, scan codebase và sinh `.omni/knowledge/project-map.md` sau khi init hoàn tất.
 
 **Bước 1 — Chọn IDE/Tool:**
 Chọn AI IDE bạn đang dùng (Claude Code, Gemini CLI, Codex CLI, Cursor, Windsurf, ...). Mỗi IDE sẽ sinh file cấu hình riêng phù hợp.
@@ -223,13 +223,13 @@ AI: 📋 Tôi đã hiểu:
 Bạn: admin (CRUD tasks, quản lý team), member (tạo/sửa task, comment)
 
 AI: ... [tiếp tục phỏng vấn cho đến khi đủ thông tin] ...
-   ✅ Đã tạo .omni/design-spec.md + .omni/content-source.md
+   ✅ Đã tạo .omni/sdlc/design-spec.md + .omni/sdlc/content-source.md
 
 Bạn: >om:equip
 AI: [Cài skills phù hợp cho tech stack đã chọn]
 
 Bạn: >om:plan
-AI: [Tạo .omni/todo.md với micro-tasks, mỗi task gắn @skill:name]
+AI: [Tạo .omni/sdlc/todo.md với micro-tasks, mỗi task gắn @skill:name]
 
 Bạn: >om:cook
 AI: [Bắt đầu code, tự động quality gate mỗi 1/3 tasks]
@@ -265,14 +265,14 @@ Sau khi khởi tạo, gõ các lệnh `>om:` trong chat với AI:
 
 | Lệnh | Agent | Mô tả |
 |-------|-------|-------|
-| `>om:brainstorm` | Architect | Phỏng vấn adaptive (1–5 câu theo độ phức tạp) + DNA detection, đề xuất tech stack, xuất `.omni/design-spec.md` + `.omni/content-source.md` |
+| `>om:brainstorm` | Architect | Phỏng vấn adaptive (1–5 câu theo độ phức tạp) + DNA detection, đề xuất tech stack, xuất `.omni/sdlc/design-spec.md` + `.omni/sdlc/content-source.md` |
 | `>om:equip` | Skill Manager | Dùng find-skills search skills.sh dynamic + conditional skill groups theo DNA |
-| `>om:plan` | PM | Phân tích spec → micro-tasks trong `.omni/todo.md`, gắn `@skill:name`, backend-aware ordering với `[infra]` tag |
+| `>om:plan` | PM | Phân tích spec → micro-tasks trong `.omni/sdlc/todo.md`, gắn `@skill:name`, backend-aware ordering với `[infra]` tag |
 | `>om:cook` | Coder | Thực thi từng task, dev server preflight, surgical context, auto-continue, quality gate mỗi 1/3 |
-| `>om:check` | QA Tester | Validation pipeline (P0–P3 blocking, P5 Content Validation) + feature verification → `.omni/test-report.md` |
+| `>om:check` | QA Tester | Validation pipeline (P0–P3 blocking, P5 Content Validation) + feature verification → `.omni/sdlc/test-report.md` |
 | `>om:fix` | Debugger | Reproduce → root cause → surgical fix → verify. Không shotgun-fix |
-| `>om:map` | Architect | Quét codebase → điền mô tả semantic vào `.omni/project-map.md` |
-| `>om:learn` | Knowledge | Auto-ghi bài học sau fix thành công vào `.omni/knowledge-base.md` |
+| `>om:map` | Architect | Quét codebase → điền mô tả semantic vào `.omni/knowledge/project-map.md` |
+| `>om:learn` | Knowledge | Auto-ghi bài học sau fix thành công vào `.omni/knowledge/knowledge-base.md` |
 | `>om:doc` | Writer | Đọc code thực tế → sinh README.md + API docs |
 
 ### Project DNA Detection
@@ -300,7 +300,7 @@ DNA ảnh hưởng đến toàn bộ quy trình:
 
 ### Content Source-of-Truth (v2.4.0)
 
-Khi dự án có UI, `>om:brainstorm` tự động sinh `.omni/content-source.md` bên cạnh `.omni/design-spec.md`:
+Khi dự án có UI, `>om:brainstorm` tự động sinh `.omni/sdlc/content-source.md` bên cạnh `.omni/sdlc/design-spec.md`:
 
 ```markdown
 # Content Source-of-Truth — [Project Name]
@@ -322,7 +322,7 @@ Khi dự án có UI, `>om:brainstorm` tự động sinh `.omni/content-source.md
 
 **Quality gate:**
 - `## Facts` bắt buộc tối thiểu 3 verified facts (project name + project type + ít nhất 1 domain-specific fact). Nếu thiếu, AI hỏi thêm trước khi sinh file
-- `>om:cook` dùng `.omni/content-source.md` làm ground truth khi tạo nội dung UI
+- `>om:cook` dùng `.omni/sdlc/content-source.md` làm ground truth khi tạo nội dung UI
 - `>om:check` P5 validate: HIGH severity (mâu thuẫn Facts hoặc vi phạm Forbidden Content) → **BLOCKING**, LOW/MEDIUM → advisory
 
 ### Project Map — Codebase Intelligence (v2.4.5)
@@ -337,7 +337,7 @@ omni map
 omni init    # → "Phát hiện project có sẵn. Tạo Project Map?"
 ```
 
-**Output:** `.omni/project-map.md` — skeleton với `[PENDING]` markers:
+**Output:** `.omni/knowledge/project-map.md` — skeleton với `[PENDING]` markers:
 
 ```markdown
 # Project Map — my-app
@@ -390,7 +390,7 @@ omni map --refresh
 - **Lazy-loaded examples:** Interview question templates tách riêng thành `interview-examples.md`, chỉ đọc khi AI cần tham khảo
 - **Surgical context rule:** Với file > 200 dòng, AI dùng grep/search trước để tìm code cần thiết, chỉ đọc ±20 dòng xung quanh — không đọc toàn bộ file
 - **Context-aware verbosity:** `>om:cook` terse (chỉ báo task done, files changed), `>om:check` terse on PASS / verbose on FAIL, `>om:brainstorm`/`>om:plan` verbose
-- **Shared Context Brief (Claude Code):** Main session extract ~500 tokens từ `.omni/design-spec.md` + shared files trước khi spawn parallel sub-agents — mỗi agent nhận brief thay vì tự đọc lại, tiết kiệm token đáng kể
+- **Shared Context Brief (Claude Code):** Main session extract ~500 tokens từ `.omni/sdlc/design-spec.md` + shared files trước khi spawn parallel sub-agents — mỗi agent nhận brief thay vì tự đọc lại, tiết kiệm token đáng kể
 
 ### Automated Quality Pipeline
 
@@ -444,7 +444,7 @@ Khi chạy `>om:check`, AI thực thi pipeline theo thứ tự:
 | P2 | **Build:** compile/bundle project | Yes |
 | P3 | **Tests:** vitest/jest/pytest | Yes |
 | P4 | **Bundle:** unused deps, bundle size | No (advisory) |
-| P5 | **Content:** cross-check UI text vs `.omni/content-source.md` | HIGH = Yes, LOW/MEDIUM = No |
+| P5 | **Content:** cross-check UI text vs `.omni/sdlc/content-source.md` | HIGH = Yes, LOW/MEDIUM = No |
 
 - P0–P3 fail → dừng ngay, auto-trigger `>om:fix`, loop cho đến khi pass
 - P5 HIGH (mâu thuẫn Facts, vi phạm Forbidden Content) → dừng ngay, khuyến nghị `>om:fix`
@@ -463,7 +463,7 @@ omni-coder-kit/                    # Package (npm)
 ├── templates/
 │   ├── core/                      # Karpathy mindset + anti-hallucination (Paranoid)
 │   ├── workflows/                 # SDLC workflows (13 files)
-│   │   ├── requirement-analysis.md    # Brainstorm + DNA detection + .omni/content-source.md
+│   │   ├── requirement-analysis.md    # Brainstorm + DNA detection + .omni/sdlc/content-source.md
 │   │   ├── interview-examples.md      # Lazy-loaded question templates
 │   │   ├── skill-manager.md           # Conditional skill groups
 │   │   ├── task-planning.md           # Backend-aware ordering + [infra]
@@ -517,14 +517,16 @@ your-project/
 │   │   ├── project-map.md           # >om:map (codebase intelligence)
 │   │   ├── documentation-writer.md   # >om:doc
 │   │   └── ... (supporting files)
-│   ├── project-map.md              # Bản đồ dự án (CLI skeleton + AI semantic)
-│   ├── knowledge-base.md           # Bài học từ >om:learn (tối đa 20 entries)
+│   ├── sdlc/                       # SDLC pipeline outputs
+│   │   ├── design-spec.md          # >om:brainstorm output
+│   │   ├── content-source.md       # Content source-of-truth (UI projects)
+│   │   ├── todo.md                 # >om:plan output
+│   │   └── test-report.md          # >om:check output
+│   ├── knowledge/                  # Project intelligence
+│   │   ├── project-map.md          # CLI skeleton + AI semantic
+│   │   └── knowledge-base.md       # Bài học từ >om:learn (max 20 entries)
 │   ├── manifest.json               # Tracking: IDE, skills
-│   ├── rules.md                    # Personal rules (nếu có)
-│   ├── design-spec.md              # Output của >om:brainstorm
-│   ├── content-source.md           # Content source-of-truth (UI projects)
-│   ├── todo.md                     # Output của >om:plan
-│   └── test-report.md              # Output của >om:check
+│   └── rules.md                    # Personal rules (nếu có)
 ```
 
 **Token optimization:** Config file chỉ chứa core rules + bảng registry (~5KB thay vì ~36KB). AI chỉ đọc workflow file khi lệnh `>om:` tương ứng được gọi, và chỉ đọc example files khi cần tham khảo. Fallback: nếu `.omni/workflows/` không tồn tại → đọc từ `node_modules/omni-coder-kit/templates/workflows/`.

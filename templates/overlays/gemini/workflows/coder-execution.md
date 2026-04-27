@@ -3,7 +3,7 @@ When executing [>om:cook], implement tasks sequentially.
 
 ### Step 1: Research & Validate
 - Use `enter_plan_mode` before starting a task to research existing code patterns.
-- Read `.omni/todo.md` and check the Gemini Task Tracker to find the next `TODO` task.
+- Read `.omni/sdlc/todo.md` and check the Gemini Task Tracker to find the next `TODO` task.
 
 ### Step 2: Dev Server Preflight (MANDATORY CHECKPOINT)
 You MUST complete this step and report the result BEFORE writing any code in Step 3.
@@ -29,14 +29,14 @@ Before editing: run `git diff --stat`. If uncommitted changes exist from a prior
 - **Surgical Context:** For files > 200 lines, use search tools to locate target code first. Read only the relevant section, not the entire file.
 - Follow the Surgical Changes mandate.
 - Apply rules from `@skill` tags.
-- If `.omni/project-map.md` exists, read it first via `read_file`. Use ## Structure to navigate instead of scanning. Warn if Age > 7 days.
+- If `.omni/knowledge/project-map.md` exists, read it first via `read_file`. Use ## Structure to navigate instead of scanning. Warn if Age > 7 days.
 
 ### Step 4: Verification & Update
 - After finishing a task, run local verification.
 - Use `tracker_update_task` to set status to `DONE`.
-- Mark task as `- [x]` in `.omni/todo.md`.
+- Mark task as `- [x]` in `.omni/sdlc/todo.md`.
 
 ### Quality Gate triggers
 - Every 1/3 tasks (calculated from `save_memory` project data), automatically pause and run `>om:check`.
 - If `>om:check` fails, run `>om:fix`. Max 3 fix attempts per cycle.
-- If 3 attempts exhausted: mark task `[BLOCKED]` in `.omni/todo.md`, use `tracker_update_task` to set status `BLOCKED`, escalate to user, skip and continue.
+- If 3 attempts exhausted: mark task `[BLOCKED]` in `.omni/sdlc/todo.md`, use `tracker_update_task` to set status `BLOCKED`, escalate to user, skip and continue.
