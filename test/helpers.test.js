@@ -6,10 +6,12 @@ const os = require('os');
 
 const TEMPLATES = path.join(__dirname, '..', 'templates');
 const {
-    parseSource, isValidSkillName, buildRulesContent,
-    extractRulesForInject, createManifest, IDE_AGENT_MAP,
+    parseSource, isValidSkillName, createManifest, IDE_AGENT_MAP,
     IDE_CONFIG_FILE, getAgentFlags, getOverlayNameForTarget, detectDNA,
 } = require(path.join(__dirname, '..', 'lib', 'helpers'));
+const { parseRules, formatMarkdown, formatInject } = require(path.join(__dirname, '..', 'lib', 'rules'));
+const buildRulesContent = (rp) => formatMarkdown(parseRules(rp));
+const extractRulesForInject = (rp) => formatInject(parseRules(rp));
 
 // ─── parseSource ─────────────────────────────────────────────────────────────
 
