@@ -100,3 +100,91 @@ describe('parseFrameworks', () => {
         assert.deepEqual(parseFrameworks('Jest + Playwright + Cypress'), ['Jest', 'Playwright', 'Cypress']);
     });
 });
+
+describe('getTestSkillsForStack', () => {
+    it('returns empty for null stack', () => {
+        assert.deepEqual(getTestSkillsForStack(null), []);
+    });
+
+    it('returns empty for stack without language', () => {
+        assert.deepEqual(getTestSkillsForStack({ language: null }), []);
+    });
+
+    it('returns Jest skill for TypeScript + Jest', () => {
+        const result = getTestSkillsForStack({ language: 'TypeScript', test: 'Jest' });
+        assert.ok(result.length > 0);
+        assert.equal(result[0].name, 'javascript-typescript-jest');
+        assert.ok(!result.some(s => s.name === 'javascript-testing-patterns'), 'generic should be excluded when exact match exists');
+    });
+
+    it('returns Vitest skill for TypeScript + Vitest', () => {
+        const result = getTestSkillsForStack({ language: 'TypeScript', test: 'Vitest' });
+        assert.ok(result.length > 0);
+        assert.equal(result[0].name, 'vitest');
+    });
+
+    it('returns Mocha skill for JavaScript + Mocha', () => {
+        const result = getTestSkillsForStack({ language: 'JavaScript', test: 'Mocha' });
+        assert.ok(result.length > 0);
+        assert.equal(result[0].name, 'mocha-testing');
+    });
+
+    it('returns both Jest and Playwright for composite stack', () => {
+        const result = getTestSkillsForStack({ language: 'TypeScript', test: 'Jest + Playwright' });
+        const names = result.map(s => s.name);
+        assert.ok(names.includes('javascript-typescript-jest'), 'should include Jest skill');
+        assert.ok(names.includes('playwright-best-practices'), 'should include Playwright skill');
+        assert.ok(!names.includes('javascript-testing-patterns'), 'generic should be excluded');
+        assert.ok(!names.includes('vitest'), 'non-matching framework should be excluded');
+    });
+
+    it('returns generic JS testing when no framework detected', () => {
+        const result = getTestSkillsForStack({ language: 'TypeScript', test: null });
+        assert.ok(result.length > 0);
+        assert.ok(result.some(s => s.name === 'javascript-testing-patterns'));
+        assert.ok(!result.some(s => s.name === 'javascript-typescript-jest'), 'framework-specific should not appear without detection');
+    });
+
+    it('returns Python generic skill regardless of pytest detection', () => {
+        const withPytest = getTestSkillsForStack({ language: 'Python', test: 'pytest' });
+        const withoutPytest = getTestSkillsForStack({ language: 'Python', test: null });
+        assert.ok(withPytest.some(s => s.name === 'python-testing-patterns'));
+        assert.ok(withoutPytest.some(s => s.name === 'python-testing-patterns'));
+    });
+
+    it('returns Rust skill', () => {
+        const result = getTestSkillsForStack({ language: 'Rust', test: null });
+        assert.ok(result.length > 0);
+        assert.ok(result.some(s => s.name === 'rust-best-practices'));
+    });
+
+    it('returns PHP skill', () => {
+        const result = getTestSkillsForStack({ language: 'PHP', test: null });
+        assert.ok(result.length > 0);
+        assert.ok(result.some(s => s.name === 'php-pro'));
+    });
+
+    it('returns empty for Go (no curated skills)', () => {
+        assert.equal(getTestSkillsForStack({ language: 'Go', test: null }).length, 0);
+    });
+
+    it('returns empty for Ruby (no curated skills)', () => {
+        assert.equal(getTestSkillsForStack({ language: 'Ruby', test: null }).length, 0);
+    });
+
+    it('returns empty for Java (no curated skills)', () => {
+        assert.equal(getTestSkillsForStack({ language: 'Java', test: null }).length, 0);
+    });
+
+    it('sorts results by score descending', () => {
+        const result = getTestSkillsForStack({ language: 'TypeScript', test: 'Jest + Playwright' });
+        assert.equal(result[0].name, 'javascript-typescript-jest');
+        assert.equal(result[1].name, 'playwright-best-practices');
+    });
+
+    it('deduplicates results by name', () => {
+        const result = getTestSkillsForStack({ language: 'TypeScript', test: null });
+        const names = result.map(s => s.name);
+        assert.equal(names.length, new Set(names).size);
+    });
+});
