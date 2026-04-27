@@ -38,8 +38,11 @@ Mandatory groups are determined by project DNA — not all groups apply to every
 | Group | Mandatory when | Search keywords |
 |-------|---------------|----------------|
 | **Best Practices** | Always | `best-practices`, `conventions`, `optimization`, `patterns`, `performance` + tech-stack-specific keywords |
+| **Testing** | Always | `testing`, `test`, `unit-test`, `jest`, `vitest`, `pytest`, `playwright` + detected test framework |
 | **UI/UX/Frontend** | `hasUI = true` | `design`, `ui`, `ux`, `frontend`, `css`, `component`, `accessibility` |
 | **Backend/Infrastructure** | `backendComplexity ≥ moderate` | AI generates from detected patterns in DNA (see below) |
+
+**Testing skill selection:** `omni auto-equip` already proposes curated test skills based on detected tech stack. If test skills are already installed, skip this group. If not, search for the project's test framework (e.g., `jest` for Node.js, `pytest` for Python) or generic testing patterns for the detected language.
 
 **Backend keyword generation:** When `backendComplexity ≥ moderate`, AI reads detected patterns from DNA and maps to search keywords. This is open-ended — no hardcoded keyword list. Examples:
 - DNA detects `realtime` → search: `websocket`, `realtime`, `socket`, `pubsub`
@@ -73,14 +76,17 @@ Mandatory groups are determined by project DNA — not all groups apply to every
 ⚡ Best Practices:
   1. ✅ skill-name — Mô tả (⬇ 12.3k ⭐ 4.8) [source]
 
+🧪 Testing:                           ← bỏ qua nếu đã cài qua auto-equip
+  2. ✅ skill-name — Mô tả (⬇ 15.8k ⭐ 4.9) [source]
+
 🎨 UI/UX/Frontend:                    ← chỉ hiện nếu hasUI
-  2. ✅ skill-name — Mô tả (⬇ 8.1k ⭐ 4.7) [source]
+  3. ✅ skill-name — Mô tả (⬇ 8.1k ⭐ 4.7) [source]
 
 🔧 Backend/Infrastructure:            ← chỉ hiện nếu backendComplexity ≥ moderate
-  3. ✅ skill-name — Mô tả (⬇ 5.2k ⭐ 4.5) [source]
+  4. ✅ skill-name — Mô tả (⬇ 5.2k ⭐ 4.5) [source]
 
 🛠️ Project-specific:
-  4. ✅ skill-name — Mô tả (⬇ 5.2k ⭐ 4.5) [source]
+  5. ✅ skill-name — Mô tả (⬇ 5.2k ⭐ 4.5) [source]
 
 Cài tất cả? Gõ số để loại bỏ (vd: "loại 3"), hoặc gõ y để cài hết.
 ```

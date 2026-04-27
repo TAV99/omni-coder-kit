@@ -17,17 +17,9 @@ const {
 const {
     detectExistingProject, scanProject, generateMapSkeleton, refreshMap,
 } = require(path.join(__dirname, '..', 'lib', 'scanner'));
-
-// ========== UNIVERSAL SKILLS (skills.sh) ==========
-
-const UNIVERSAL_SKILLS = [
-    { source: 'vercel-labs/skills', name: 'find-skills', desc: 'Tìm kiếm & cài đặt skills tự động từ skills.sh' },
-    { source: 'forrestchang/andrej-karpathy-skills', name: 'karpathy-guidelines', desc: 'Karpathy mindset: Think → Simplify → Surgical → Goal-Driven' },
-    { source: 'obra/superpowers', name: 'systematic-debugging', desc: 'Debugging có hệ thống' },
-    { source: 'obra/superpowers', name: 'test-driven-development', desc: 'Phát triển hướng test (TDD)' },
-    { source: 'obra/superpowers', name: 'requesting-code-review', desc: 'Quy trình review code chuyên nghiệp' },
-    { source: 'obra/superpowers', name: 'using-git-worktrees', desc: 'Quản lý Git worktrees hiệu quả' },
-];
+const {
+    UNIVERSAL_SKILLS, getTestSkillsForStack,
+} = require(path.join(__dirname, '..', 'lib', 'skills'));
 
 // ========== HELPERS ==========
 
@@ -1141,6 +1133,67 @@ program
         }
         console.log(chalk.gray(`   Manifest: ${MANIFEST_FILE}`));
         console.log(chalk.cyan.bold('─'.repeat(45) + '\n'));
+
+        // Phase 2: Detect tech stack → propose test skills
+        const detected = detectExistingProject(process.cwd());
+        if (!detected.detected) return;
+
+        const scan = scanProject(process.cwd());
+        const testSkills = getTestSkillsForStack(scan.techStack);
+        const installedNames = manifest.skills.external.map(s => s.name);
+        const testToInstall = testSkills.filter(s => !installedNames.includes(s.name));
+
+        if (testToInstall.length === 0) return;
+
+        console.log(chalk.cyan.bold('🧪 Phát hiện tech stack — đề xuất test skills:\n'));
+        const stackLabel = [scan.techStack.language, scan.techStack.test].filter(Boolean).join(' + ');
+        console.log(chalk.gray(`   Stack: ${stackLabel}\n`));
+        testToInstall.forEach((s, i) => {
+            console.log(chalk.white(`   ${i + 1}. ${chalk.bold(s.name)} ${chalk.green('MỚI')}`));
+            console.log(chalk.gray(`      └─ ${s.desc} (${s.source})`));
+        });
+        console.log('');
+
+        if (!options.yes) {
+            const { installTest } = await prompts({
+                type: 'confirm',
+                name: 'installTest',
+                message: `Cài thêm ${testToInstall.length} test skill${testToInstall.length > 1 ? 's' : ''}? (y/N)`,
+                initial: false
+            });
+            if (!installTest) return;
+        } else {
+            console.log(chalk.green(`⚡ Auto-install: ${testToInstall.length} test skill(s)\n`));
+        }
+
+        let testInstalled = 0;
+        for (const skill of testToInstall) {
+            console.log(chalk.cyan(`\n🧪 Đang cài: ${chalk.white(skill.name)}...`));
+            try {
+                const skillArgs = ['-y', 'skills', 'add', skill.source];
+                if (agentFlags) {
+                    skillArgs.push(...agentFlags.split(' '), '--skill', skill.name, '-y');
+                } else {
+                    skillArgs.push('--skill', skill.name, '-y');
+                }
+                execFileSync('npx', skillArgs, { stdio: 'inherit', timeout: 60000 });
+                manifest.skills.external.push({
+                    name: skill.name,
+                    source: skill.source,
+                    installedAt: new Date().toISOString(),
+                    category: 'testing'
+                });
+                testInstalled++;
+                console.log(chalk.green(`   ✓ ${skill.name}`));
+            } catch {
+                console.log(chalk.red(`   ✗ ${skill.name} — thất bại, bỏ qua`));
+            }
+        }
+
+        if (testInstalled > 0) {
+            saveManifest(manifest);
+            console.log(chalk.green.bold(`\n   🧪 Test skills: ${testInstalled}/${testToInstall.length} cài thành công\n`));
+        }
     });
 
 // ---------- STATUS ----------
