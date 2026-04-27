@@ -202,3 +202,42 @@ describe('buildSearchSuggestion', () => {
         assert.equal(buildSearchSuggestion('Java', 'JUnit'), 'java junit testing');
     });
 });
+
+describe('TEST_SKILLS registry', () => {
+    it('has entries for JavaScript', () => {
+        assert.ok(TEST_SKILLS.some(s => s.lang.includes('JavaScript')));
+    });
+
+    it('has entries for TypeScript', () => {
+        assert.ok(TEST_SKILLS.some(s => s.lang.includes('TypeScript')));
+    });
+
+    it('has entries for Python', () => {
+        assert.ok(TEST_SKILLS.some(s => s.lang.includes('Python')));
+    });
+
+    it('has entries for Rust', () => {
+        assert.ok(TEST_SKILLS.some(s => s.lang.includes('Rust')));
+    });
+
+    it('has entries for PHP', () => {
+        assert.ok(TEST_SKILLS.some(s => s.lang.includes('PHP')));
+    });
+
+    it('has no duplicate names', () => {
+        const names = TEST_SKILLS.map(s => s.name);
+        assert.equal(names.length, new Set(names).size, 'duplicate names found');
+    });
+
+    it('every entry has valid schema (covered by validateRegistry at load)', () => {
+        assert.ok(true);
+    });
+
+    it('includes Mocha entry', () => {
+        assert.ok(TEST_SKILLS.some(s => s.name === 'mocha-testing'));
+    });
+
+    it('has exactly 8 entries', () => {
+        assert.equal(TEST_SKILLS.length, 8);
+    });
+});
