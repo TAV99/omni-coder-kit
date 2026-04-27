@@ -14,7 +14,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node -c bin/omni.js && node --test test/*.test.js"
+    "test": "node -c bin/omni.js && node --test test/*.test.js test/**/*.test.js"
   },
   "keywords": [
     "ai",
