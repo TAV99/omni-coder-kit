@@ -74,3 +74,29 @@ describe('validateRegistry', () => {
         );
     });
 });
+
+describe('parseFrameworks', () => {
+    it('returns empty array for null', () => {
+        assert.deepEqual(parseFrameworks(null), []);
+    });
+
+    it('returns empty array for empty string', () => {
+        assert.deepEqual(parseFrameworks(''), []);
+    });
+
+    it('parses single framework', () => {
+        assert.deepEqual(parseFrameworks('Jest'), ['Jest']);
+    });
+
+    it('parses composite frameworks', () => {
+        assert.deepEqual(parseFrameworks('Jest + Playwright'), ['Jest', 'Playwright']);
+    });
+
+    it('handles extra whitespace', () => {
+        assert.deepEqual(parseFrameworks(' Jest  +  Vitest '), ['Jest', 'Vitest']);
+    });
+
+    it('parses triple composite', () => {
+        assert.deepEqual(parseFrameworks('Jest + Playwright + Cypress'), ['Jest', 'Playwright', 'Cypress']);
+    });
+});
