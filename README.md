@@ -18,8 +18,9 @@
 - **Content Source-of-Truth:** `>om:brainstorm` tự động sinh `.omni/sdlc/content-source.md` (Facts, Tone, Forbidden Content) cho UI project — `>om:cook` dùng làm ground truth, `>om:check` validate nội dung (P5)
 - **Automated Quality Pipeline:** 3 quality cycles bắt buộc — `cook → check → fix` loop tự động sau mỗi 1/3 tasks, P5 Content Validation blocks khi HIGH severity
 - **Knowledge Base:** `>om:learn` tự động ghi bài học sau mỗi fix thành công vào `.omni/knowledge/knowledge-base.md` — `>om:cook` đọc lại khi gặp file tương tự
-- **Project Map (v2.4.5):** `omni map` quét codebase → sinh `.omni/knowledge/project-map.md` skeleton (0 token). `>om:map` điền mô tả semantic. `--refresh` diff cấu trúc, đánh dấu `[NEW]`/`[DELETED]`, giữ nguyên mô tả AI. Multi-language: Node.js, Python, Go, Rust, Java, Ruby, PHP
-- **Existing Project Detection (v2.4.5):** `omni init` tự động phát hiện project có sẵn (package.json, pyproject.toml, go.mod...) và đề xuất tạo Project Map
+- **Project Map:** `omni map` quét codebase → sinh `.omni/knowledge/project-map.md` skeleton (0 token). `>om:map` điền mô tả semantic. `--refresh` diff cấu trúc, đánh dấu `[NEW]`/`[DELETED]`, giữ nguyên mô tả AI. Multi-language: Node.js, Python, Go, Rust, Java, Ruby, PHP
+- **Existing Project Detection:** `omni init` tự động phát hiện project có sẵn (package.json, pyproject.toml, go.mod...) và đề xuất tạo Project Map
+- **Organized .omni/ (v2.5.0):** Tất cả file tự sinh gom vào `.omni/` — `sdlc/` (design-spec, todo, test-report, content-source), `knowledge/` (project-map, knowledge-base), root (manifest.json, rules.md, workflows/). `.gitignore` chỉ cần 1 dòng `.omni/`
 - **Parallel Sub-Agent Execution (Claude Code):** Dependency graph analysis, batch parallel agents với worktree isolation, Shared Context Brief (~500 tokens) giảm token duplication
 - **Token Optimization:** Config file chỉ ~5KB, workflows lazy-loaded khi cần, examples lazy-loaded khi cần, surgical context rule (grep trước khi đọc file lớn), context-aware verbosity theo lệnh >om:, Shared Context Brief cho sub-agents
 - **Anti-Hallucination (Paranoid Mode):** Grounding rules, self-verification checklist, no phantom imports/APIs
@@ -103,14 +104,14 @@ omni update
 
 Khi chọn **Claude Code**, `omni init` tự động cài thêm:
 
-- **Slash commands `/om:*`** — 8 lệnh tương ứng với `>om:*`, gõ trực tiếp trong Claude Code
+- **Slash commands `/om:*`** — 9 lệnh tương ứng với `>om:*`, gõ trực tiếp trong Claude Code
 - **Permissions allowlist** — `.claude/settings.json` với các lệnh build/test/git được allow sẵn, deny các lệnh nguy hiểm (`rm -rf`, `git push --force`, `git reset --hard`)
 - **Quality gate hooks** — Tự động nhắc AI kiểm tra chất lượng khi file thay đổi
 - **Enhanced coder-execution** — Parallel sub-agent execution với dependency graph, worktree isolation, Shared Context Brief (~500 tokens)
 
 Khi được hỏi `"🔧 Cài đặt Claude Code nâng cao?"`, chọn **Yes** để kích hoạt permissions + hooks.
 
-### Cursor Overlay (tính năng nâng cao — v2.3.0)
+### Cursor Overlay (tính năng nâng cao)
 
 Khi chọn **Cursor**, `omni init` tạo `.cursorrules` cơ bản và hỏi có muốn cài advanced setup:
 
@@ -298,7 +299,7 @@ DNA ảnh hưởng đến toàn bộ quy trình:
 - **`>om:equip`:** Kích hoạt nhóm Backend/Infrastructure skill khi `backendComplexity >= moderate`
 - **`>om:plan`:** Backend-aware ordering (`DB → Cache → Queue/Worker → API → Realtime → UI`), `[infra]` task classification
 
-### Content Source-of-Truth (v2.4.0)
+### Content Source-of-Truth
 
 Khi dự án có UI, `>om:brainstorm` tự động sinh `.omni/sdlc/content-source.md` bên cạnh `.omni/sdlc/design-spec.md`:
 
@@ -325,7 +326,7 @@ Khi dự án có UI, `>om:brainstorm` tự động sinh `.omni/sdlc/content-sour
 - `>om:cook` dùng `.omni/sdlc/content-source.md` làm ground truth khi tạo nội dung UI
 - `>om:check` P5 validate: HIGH severity (mâu thuẫn Facts hoặc vi phạm Forbidden Content) → **BLOCKING**, LOW/MEDIUM → advisory
 
-### Project Map — Codebase Intelligence (v2.4.5)
+### Project Map — Codebase Intelligence
 
 Khi tham gia dự án lớn đã có code, AI cần hiểu codebase mà không phải scan hàng trăm file mỗi session:
 
