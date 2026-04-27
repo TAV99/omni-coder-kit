@@ -2,6 +2,6 @@
 .git/
 .gitignore
 CLAUDE.md
-.omni-manifest.json
+.omni/
 node_modules/
 *.tgz

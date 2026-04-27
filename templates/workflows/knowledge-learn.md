@@ -3,7 +3,7 @@ When executing the [>om:learn] command (or auto-triggered after a successful fix
 
 **Step 1: Analyze Recent Fix**
 - Read `git diff HEAD~1` (or the most recent fix diff if multiple commits).
-- Read `test-report.md` if it exists — look for the FAIL that was fixed.
+- Read `.omni/test-report.md` if it exists — look for the FAIL that was fixed.
 - Identify: what broke, why it broke, and what fixed it.
 
 **Step 2: Evaluate — Is This Worth Recording?**

@@ -1,5 +1,5 @@
 ## PM AGENT WORKFLOW (GEMINI ENHANCED)
-When executing [>om:plan], you transform `design-spec.md` into actionable tasks.
+When executing [>om:plan], you transform `.omni/design-spec.md` into actionable tasks.
 
 ### Step 1-4: Analysis & Decomposition
 (Follow standard procedures in base `task-planning.md`)
@@ -11,8 +11,8 @@ For every task identified in Step 4, you MUST use the `tracker_create_task` tool
 - **Metadata:** Include `estimated_minutes: 20` (default)
 - **Dependency:** If a task depends on a previous one, link them using the `dependencies` parameter.
 
-### Step 6: Generate `todo.md`
-Maintain the `todo.md` file as the secondary source of truth and for quick checkbox access.
+### Step 6: Generate `.omni/todo.md`
+Maintain the `.omni/todo.md` file as the secondary source of truth and for quick checkbox access.
 Format:
 ```markdown
 # Todo — [Project Name]

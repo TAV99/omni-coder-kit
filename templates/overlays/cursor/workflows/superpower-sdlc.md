@@ -27,11 +27,11 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 | YOLO mode | >om:cook + >om:check | Fast iteration |
 
 ### Command Descriptions
-- **[>om:brainstorm]:** Solutions Architect. Uses @Codebase for project scan, then adaptive interview. Outputs `design-spec.md`.
-- **[>om:equip]:** Skill Manager. Reads tech stack from `design-spec.md`, proposes expert skills from skills.sh.
-- **[>om:plan]:** PM Agent. Breaks `design-spec.md` into micro-tasks in `todo.md`.
+- **[>om:brainstorm]:** Solutions Architect. Uses @Codebase for project scan, then adaptive interview. Outputs `.omni/design-spec.md`.
+- **[>om:equip]:** Skill Manager. Reads tech stack from `.omni/design-spec.md`, proposes expert skills from skills.sh.
+- **[>om:plan]:** PM Agent. Breaks `.omni/design-spec.md` into micro-tasks in `.omni/todo.md`.
 - **[>om:cook]:** Coder Agent. Executes tasks with YOLO-aware guardrails and Agent mode cook-check-fix loop.
-- **[>om:check]:** QA Tester. Verifies completed tasks work (build, tests, features). Outputs `test-report.md`.
+- **[>om:check]:** QA Tester. Verifies completed tasks work (build, tests, features). Outputs `.omni/test-report.md`.
 - **[>om:fix]:** Debugger. Reproduces → Root cause → Surgical fix → Verify. Use @Web for error research.
 - **[>om:doc]:** Technical Writer. Generates README.md and API docs. Documents only what was built.
 - **[>om:learn]:** Knowledge Capture. Auto-records lessons after successful fixes into `.omni/knowledge-base.md`.

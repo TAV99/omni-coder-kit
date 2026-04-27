@@ -359,7 +359,8 @@ describe('E2E: codex init', () => {
             ide: 'codex',
             skills: { external: [] },
         };
-        const manifestPath = path.join(tmpDir, '.omni-manifest.json');
+        const manifestPath = path.join(tmpDir, '.omni', 'manifest.json');
+        fs.mkdirSync(path.join(tmpDir, '.omni'), { recursive: true });
         fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
         const loaded = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));

@@ -92,7 +92,7 @@ If complexity = Large:
 
 Bắt đầu từ đâu? (1/2/3)
 ```
-Each sub-project runs through Steps 1-2 independently and generates its own `design-spec.md` (named `design-spec-[subproject].md`). The first sub-project uses `design-spec.md` as filename.
+Each sub-project runs through Steps 1-2 independently and generates its own `.omni/design-spec.md` (named `.omni/design-spec-[subproject].md`). The first sub-project uses `.omni/design-spec.md` as filename.
 
 ### Self-check before Phase 2
 Before generating spec, verify you can fill ALL of these:
@@ -129,7 +129,7 @@ Wait for user to pick an approach before proceeding to Phase 2. If user agrees w
 
 **Skip rule:** For **Small** complexity projects with an obvious single approach (e.g., a CLI tool, a static site), briefly state the approach in 1-2 sentences and ask for confirmation instead of proposing alternatives.
 
-**Phase 2: Generate `design-spec.md`**
+**Phase 2: Generate `.omni/design-spec.md`**
 
 ### Part A: Structured Summary
 ```markdown
@@ -184,15 +184,15 @@ Each requirement is a bullet with a category tag. Available tags: `[func]`, `[au
 ```
 
 **Rules for requirements:**
-- Each bullet should be specific enough to become 1-3 tasks in `todo.md`.
+- Each bullet should be specific enough to become 1-3 tasks in `.omni/todo.md`.
 - Use "input → process → output" format for `[func]` items when possible.
 - Include concrete numbers for `[nfr]` items (e.g., "<2s response time", "support 1000 concurrent users").
 - `[data]` items should list actual field names, not just "user table".
 - `[api]` items should include method, path, and auth level.
 - `[infra]` items should specify the pattern, technology choice, and concrete scaling/failure behavior.
 
-### Part C: Generate `content-source.md` (UI projects only)
-If the project has UI (`ui_hint` is not "API only"), generate `content-source.md` alongside `design-spec.md`:
+### Part C: Generate `.omni/content-source.md` (UI projects only)
+If the project has UI (`ui_hint` is not "API only"), generate `.omni/content-source.md` alongside `.omni/design-spec.md`:
 
 ```markdown
 # Content Source-of-Truth — [Project Name]
@@ -220,15 +220,15 @@ Content that MUST NOT appear in the final product:
 - [e.g., "No stock photos — use code screenshots or diagrams"]
 ```
 
-**Rules for content-source.md:**
+**Rules for .omni/content-source.md:**
 - Populate `## Facts` from the user's input during Phase 1 and the chosen approach. Every fact MUST be traceable to something the user said or confirmed.
 - Populate `## Forbidden Content` from edge cases, constraints, and the project type. If the project is open-source, automatically add "No pricing tiers" and "No fake testimonials".
 - Keep it short — aim for 15-30 lines total. This file is read by cook and check, so brevity saves tokens.
 - If the project is "API only" (no UI), skip this file entirely — content validation is not applicable.
-- **Minimum facts gate:** `## Facts` MUST contain at least 3 verified facts (project name + project type + at least 1 domain-specific fact). If fewer than 3 facts can be extracted from the user's input, ask 1 targeted question: "Tôi cần thêm thông tin để đảm bảo nội dung chính xác: [specific gap]. Ví dụ: dự án này là open-source hay commercial? Có tên chính thức chưa?" Do NOT generate `content-source.md` with fewer than 3 facts.
+- **Minimum facts gate:** `## Facts` MUST contain at least 3 verified facts (project name + project type + at least 1 domain-specific fact). If fewer than 3 facts can be extracted from the user's input, ask 1 targeted question: "Tôi cần thêm thông tin để đảm bảo nội dung chính xác: [specific gap]. Ví dụ: dự án này là open-source hay commercial? Có tên chính thức chưa?" Do NOT generate `.omni/content-source.md` with fewer than 3 facts.
 
 ### Spec Self-Review (AI-internal — no user prompt needed)
-After writing `design-spec.md`, review it with fresh eyes before presenting to the user:
+After writing `.omni/design-spec.md`, review it with fresh eyes before presenting to the user:
 1. **Placeholder scan:** Any "TBD", "TODO", empty sections, or vague requirements like "handle errors appropriately"? Fix them with concrete content.
 2. **Internal consistency:** Does the tech stack match the requirements? Do API endpoints match the data model? Do auth roles match the permissions described in features?
 3. **Ambiguity check:** Could any requirement be interpreted two different ways? If so, pick the most likely interpretation and make it explicit.
@@ -240,7 +240,7 @@ Fix any issues inline in the spec file. Do not ask the user — just fix and mov
 ### After spec generation
 Display non-blocking next steps:
 ```
-✅ Đã tạo design-spec.md ([complexity], [N] requirements)
+✅ Đã tạo .omni/design-spec.md ([complexity], [N] requirements)
 
 💡 Bước tiếp theo:
    1. >om:equip — cài skills chuyên sâu cho [detected stack]
@@ -248,7 +248,7 @@ Display non-blocking next steps:
 ```
 
 **Rules:**
-- Do NOT write code. Your only output is `design-spec.md`.
+- Do NOT write code. Your only output is `.omni/design-spec.md`.
 - Do NOT skip Phase 1 even if the user says "code luôn". Respond: "Trả lời 1 câu này trước để tôi hiểu đúng yêu cầu."
 - If the user's prompt is a single vague sentence ("làm app quản lý"), probe deeper: "Quản lý cái gì? Cho ai? Quy mô bao nhiêu người dùng?"
 - Keep total interview under 5 questions for medium projects, 1 for simple.

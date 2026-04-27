@@ -94,11 +94,6 @@ function readTemplate(filePath) {
 
 const OMNI_GITIGNORE_PATTERNS = [
     '.omni/',
-    '.omni-manifest.json',
-    '.omni-rules.md',
-    'design-spec.md',
-    'todo.md',
-    'test-report.md',
 ];
 
 function ensureGitignore(ide, cwd) {
@@ -237,7 +232,7 @@ function simulateInit(ide, opts = {}) {
         ide,
         skills: { external: [] },
     };
-    fs.writeFileSync(path.join(tmpDir, '.omni-manifest.json'), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(tmpDir, '.omni', 'manifest.json'), JSON.stringify(manifest, null, 2));
     result.manifest = manifest;
 
     // .gitignore
@@ -318,7 +313,7 @@ describe('E2E: claudecode init', () => {
 
     it('creates manifest with correct IDE', () => {
         const manifest = JSON.parse(
-            fs.readFileSync(path.join(result.tmpDir, '.omni-manifest.json'), 'utf-8')
+            fs.readFileSync(path.join(result.tmpDir, '.omni', 'manifest.json'), 'utf-8')
         );
         assert.equal(manifest.ide, 'claudecode');
         assert.equal(manifest.configFile, 'CLAUDE.md');
@@ -407,7 +402,7 @@ describe('E2E: dual init', () => {
 
     it('manifest records dual IDE', () => {
         const manifest = JSON.parse(
-            fs.readFileSync(path.join(result.tmpDir, '.omni-manifest.json'), 'utf-8')
+            fs.readFileSync(path.join(result.tmpDir, '.omni', 'manifest.json'), 'utf-8')
         );
         assert.equal(manifest.ide, 'dual');
     });
@@ -457,7 +452,7 @@ describe('E2E: antigravity init', () => {
 
     it('manifest records antigravity IDE', () => {
         const manifest = JSON.parse(
-            fs.readFileSync(path.join(result.tmpDir, '.omni-manifest.json'), 'utf-8')
+            fs.readFileSync(path.join(result.tmpDir, '.omni', 'manifest.json'), 'utf-8')
         );
         assert.equal(manifest.ide, 'antigravity');
         assert.equal(manifest.configFile, 'AGENTS.md');
@@ -492,7 +487,7 @@ describe('E2E: cursor init', () => {
 
     it('manifest records cursor IDE', () => {
         const manifest = JSON.parse(
-            fs.readFileSync(path.join(result.tmpDir, '.omni-manifest.json'), 'utf-8')
+            fs.readFileSync(path.join(result.tmpDir, '.omni', 'manifest.json'), 'utf-8')
         );
         assert.equal(manifest.ide, 'cursor');
         assert.equal(manifest.configFile, '.cursorrules');
@@ -548,7 +543,7 @@ describe('E2E: cursor advanced init', () => {
 
     it('manifest records cursor IDE', () => {
         const manifest = JSON.parse(
-            fs.readFileSync(path.join(result.tmpDir, '.omni-manifest.json'), 'utf-8')
+            fs.readFileSync(path.join(result.tmpDir, '.omni', 'manifest.json'), 'utf-8')
         );
         assert.equal(manifest.ide, 'cursor');
         assert.equal(manifest.configFile, '.cursorrules');
@@ -628,7 +623,7 @@ describe('E2E: windsurf init', () => {
 
     it('manifest records windsurf IDE', () => {
         const manifest = JSON.parse(
-            fs.readFileSync(path.join(result.tmpDir, '.omni-manifest.json'), 'utf-8')
+            fs.readFileSync(path.join(result.tmpDir, '.omni', 'manifest.json'), 'utf-8')
         );
         assert.equal(manifest.ide, 'windsurf');
         assert.equal(manifest.configFile, '.windsurfrules');
@@ -653,7 +648,7 @@ describe('E2E: agents init', () => {
 
     it('manifest records agents IDE', () => {
         const manifest = JSON.parse(
-            fs.readFileSync(path.join(result.tmpDir, '.omni-manifest.json'), 'utf-8')
+            fs.readFileSync(path.join(result.tmpDir, '.omni', 'manifest.json'), 'utf-8')
         );
         assert.equal(manifest.ide, 'agents');
         assert.equal(manifest.configFile, 'AGENTS.md');
@@ -681,7 +676,7 @@ describe('E2E: generic init', () => {
 
     it('manifest records generic IDE', () => {
         const manifest = JSON.parse(
-            fs.readFileSync(path.join(result.tmpDir, '.omni-manifest.json'), 'utf-8')
+            fs.readFileSync(path.join(result.tmpDir, '.omni', 'manifest.json'), 'utf-8')
         );
         assert.equal(manifest.ide, 'generic');
         assert.equal(manifest.configFile, 'SYSTEM_PROMPT.md');
@@ -837,7 +832,6 @@ describe('.gitignore generation', () => {
             assert.ok(content.includes('node_modules/'));
             const matches = content.match(/\.omni\//g);
             assert.equal(matches.length, 1, '.omni/ should not be duplicated');
-            assert.ok(content.includes('design-spec.md'));
         } finally {
             fs.rmSync(tmpDir, { recursive: true, force: true });
         }

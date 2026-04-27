@@ -3,11 +3,6 @@ node_modules/
 
 # Omni-generated files (from omni init / >om: commands)
 .omni/
-.omni-manifest.json
-.omni-rules.md
-design-spec.md
-todo.md
-test-report.md
 
 # IDE overlay outputs (from omni init advanced setup)
 .claude/

@@ -12,7 +12,7 @@ Run `omni auto-equip -y` to install the 6 universal skills (find-skills, karpath
 Then skip to Step 2 — proceed with whatever skills are already installed. Do NOT block the workflow.
 
 ### Step 2: Analyze Tech Stack, DNA & Assess Project Scale
-Read `design-spec.md` and extract:
+Read `.omni/design-spec.md` and extract:
 - **Technologies:** Languages, frameworks, databases, services, patterns
 - **DNA Profile:** Read the `Backend DNA` row from Summary table. Extract `hasUI`, `backendComplexity`, and detected patterns. If the spec lacks a Backend DNA row (older format), infer from tech stack and requirements.
 - **Project scale:** Determine from design-spec complexity:
@@ -51,7 +51,7 @@ Mandatory groups are determined by project DNA — not all groups apply to every
 **Filtering (3 steps):**
 
 **Filter 1 — Relevance:**
-- Compare skill name + description against the tech stack in `design-spec.md`
+- Compare skill name + description against the tech stack in `.omni/design-spec.md`
 - REJECT skills for a different framework/language than the project uses
 - REJECT skills that duplicate the 6 universal skills already installed
 - REJECT skills with no clear description
@@ -68,7 +68,7 @@ Mandatory groups are determined by project DNA — not all groups apply to every
 
 ### Step 5: Present Proposal (Accept All + Exclude)
 ```
-🔍 Dựa trên design-spec.md (quy mô: [small/medium/large], DNA: [profile], max [N] skills):
+🔍 Dựa trên .omni/design-spec.md (quy mô: [small/medium/large], DNA: [profile], max [N] skills):
 
 ⚡ Best Practices:
   1. ✅ skill-name — Mô tả (⬇ 12.3k ⭐ 4.8) [source]
@@ -82,10 +82,10 @@ Mandatory groups are determined by project DNA — not all groups apply to every
 🛠️ Project-specific:
   4. ✅ skill-name — Mô tả (⬇ 5.2k ⭐ 4.5) [source]
 
-Cài tất cả? Gõ số để loại bỏ (vd: "loại 3"), hoặc Enter để cài hết.
+Cài tất cả? Gõ số để loại bỏ (vd: "loại 3"), hoặc gõ y để cài hết.
 ```
 
-- **Enter / "cài hết"** → install all (default)
+- **"y" / "cài hết"** → install all
 - **"loại 2, 3"** → exclude specific skills, install the rest
 - **"không"** → skip all
 

@@ -10,7 +10,7 @@ Type these commands as normal chat text:
 |---------|---------------|---------|
 | `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Requirements interview and design spec |
 | `>om:equip` | `.omni/workflows/skill-manager.md` | Skill discovery |
-| `>om:plan` | `.omni/workflows/task-planning.md` | Convert spec to `todo.md` |
+| `>om:plan` | `.omni/workflows/task-planning.md` | Convert spec to `.omni/todo.md` |
 | `>om:cook` | `.omni/workflows/coder-execution.md` | Implement tasks |
 | `>om:check` | `.omni/workflows/qa-testing.md` | Validate work |
 | `>om:fix` | `.omni/workflows/debugger-workflow.md` | Diagnose and fix failures |

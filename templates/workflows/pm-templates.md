@@ -1,7 +1,7 @@
 ## OUTPUT FORMAT STANDARDS
 When executing workflow commands, you MUST adhere to these exact output structures in standard Vietnamese:
 
-**For [>om:brainstorm] -> `design-spec.md`:**
+**For [>om:brainstorm] -> `.omni/design-spec.md`:**
 Hybrid format with 2 parts:
 - **Part A — Summary table:** Goal, Users, Tech Stack (with justification), UI Style, Constraints. Machine-readable for `>om:plan`.
 - **Part B — Tagged requirement list:** Each requirement is a bullet with category tag. Tags: `[func]`, `[auth]`, `[nfr]`, `[edge]`, `[ui]`, `[data]`, `[api]`. Grouped by: Core, Auth & Permissions, Data, API, Non-Functional, Edge Cases, Visual.
@@ -10,7 +10,7 @@ Hybrid format with 2 parts:
 - Each `[api]` item includes method, path, and auth level.
 - Each `[nfr]` item includes concrete numbers.
 
-**For [>om:plan] -> `todo.md`:**
+**For [>om:plan] -> `.omni/todo.md`:**
 - Must be grouped by components/modules.
 - Each task MUST use the `- [ ]` markdown checkbox format.
 - Tasks must be micro-sized (estimable to < 20 mins of coding).
@@ -21,10 +21,10 @@ Hybrid format with 2 parts:
 - Quality gate triggers automatically every ceil(total/3) tasks (3 cycles). No manual `>om:check` needed.
 - Summary on stop: X/Y tasks completed, Z skipped.
 
-**For [>om:check] -> `test-report.md`:**
+**For [>om:check] -> `.omni/test-report.md`:**
 - Build & Lint status (PASS/FAIL).
 - Automated test results (X/Y passed).
-- Feature verification table: each `- [x]` task from `todo.md` with method, result, and notes.
+- Feature verification table: each `- [x]` task from `.omni/todo.md` with method, result, and notes.
 - Summary: total/passed/failed/skipped counts + blocking issues.
 - Next steps: proceed to `>om:doc` or fix with `>om:fix` then re-check.
 
@@ -34,4 +34,4 @@ Hybrid format with 2 parts:
 
 **For [>om:doc] -> `README.md` + optional `docs/api.md`:**
 - README must include: Tổng quan, Cài đặt, Sử dụng, Cấu trúc dự án, API Documentation, Tech Stack.
-- All in Vietnamese. Only document implemented features (cross-check with todo.md completion).
+- All in Vietnamese. Only document implemented features (cross-check with .omni/todo.md completion).

@@ -7,7 +7,7 @@ const chalk = require('chalk');
 const { program } = require('commander');
 const { execSync, execFileSync } = require('child_process');
 
-const MANIFEST_FILE = '.omni-manifest.json';
+const MANIFEST_FILE = path.join('.omni', 'manifest.json');
 const PKG = require(path.join(__dirname, '..', 'package.json'));
 const {
     IDE_AGENT_MAP, IDE_CONFIG_FILE, parseSource, isValidSkillName,
@@ -49,11 +49,6 @@ function readTemplate(filePath) {
 
 const OMNI_GITIGNORE_PATTERNS = [
     '.omni/',
-    '.omni-manifest.json',
-    '.omni-rules.md',
-    'design-spec.md',
-    'todo.md',
-    'test-report.md',
 ];
 
 function ensureGitignore(ide) {
@@ -102,10 +97,12 @@ function loadManifest() {
 }
 
 function saveManifest(manifest) {
-    return writeFileSafe(path.join(process.cwd(), MANIFEST_FILE), JSON.stringify(manifest, null, 2));
+    const manifestPath = path.join(process.cwd(), MANIFEST_FILE);
+    fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+    return writeFileSafe(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
-const RULES_FILE = '.omni-rules.md';
+const RULES_FILE = path.join('.omni', 'rules.md');
 
 function syncRulesToConfig() {
     const configFile = findConfigFile();
@@ -599,10 +596,10 @@ program
         // Khởi tạo manifest mới cho project
         const manifest = createManifest();
 
-        // Personal Rules: sinh .omni-rules.md + inject vào config
+        // Personal Rules: sinh .omni/rules.md + inject vào config
         const rulesContent = buildRulesContent(rulesPrompt);
         if (rulesContent) {
-            const rulesPath = path.join(process.cwd(), '.omni-rules.md');
+            const rulesPath = path.join(process.cwd(), '.omni', 'rules.md');
             writeFileSafe(rulesPath, rulesContent);
             finalRules += `\n<!-- omni:rules -->\n## PERSONAL RULES\n${extractRulesForInject(rulesPrompt)}\n<!-- /omni:rules -->\n\n`;
         }
@@ -1063,8 +1060,8 @@ program
             const { confirmed } = await prompts({
                 type: 'confirm',
                 name: 'confirmed',
-                message: `Cài đặt ${toInstall.length} skills trên?`,
-                initial: true
+                message: `Cài đặt ${toInstall.length} skills trên? (y/N)`,
+                initial: false
             });
 
             if (!confirmed) {
@@ -1181,9 +1178,9 @@ program
         console.log(chalk.cyan.bold('\n📋 Danh sách lệnh >om: (gõ trong chat với AI)\n'));
 
         const commands = [
-            { cmd: '>om:brainstorm', slash: '/om:brainstorm', role: 'Architect',  desc: 'Phỏng vấn yêu cầu → đề xuất Tech Stack → xuất design-spec.md' },
+            { cmd: '>om:brainstorm', slash: '/om:brainstorm', role: 'Architect',  desc: 'Phỏng vấn yêu cầu → đề xuất Tech Stack → xuất .omni/design-spec.md' },
             { cmd: '>om:equip',      slash: '/om:equip',      role: 'Skill Mgr',  desc: 'Cài universal skills + tìm & đề xuất skills từ skills.sh theo design-spec' },
-            { cmd: '>om:plan',       slash: '/om:plan',        role: 'PM',          desc: 'Phân tích design-spec → micro-tasks trong todo.md (<20 phút/task)' },
+            { cmd: '>om:plan',       slash: '/om:plan',        role: 'PM',          desc: 'Phân tích design-spec → micro-tasks trong .omni/todo.md (<20 phút/task)' },
             { cmd: '>om:cook',       slash: '/om:cook',        role: 'Coder',       desc: 'Sub-agent parallel execution, dependency graph, worktree isolation' },
             { cmd: '>om:check',      slash: '/om:check',       role: 'QA Tester',   desc: 'Validation pipeline: security → lint → build → test → feature verify' },
             { cmd: '>om:fix',        slash: '/om:fix',          role: 'Debugger',    desc: 'Reproduce → root cause → surgical fix → verify (không shotgun-fix)' },

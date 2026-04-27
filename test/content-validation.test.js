@@ -69,7 +69,7 @@ describe('Content Source-of-Truth — cook warns missing content-source.md', () 
     for (const v of variants) {
         it(`${v.name}: warns when UI project lacks content-source.md`, () => {
             const content = fs.readFileSync(v.path, 'utf-8');
-            assert.ok(content.includes('UI project without content-source.md'));
+            assert.ok(content.includes('UI project without .omni/content-source.md'));
         });
     }
 });

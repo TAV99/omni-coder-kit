@@ -3,7 +3,7 @@ When executing the [>om:fix] command, you MUST act as a Senior Debugger. Your jo
 
 **Step 1: Collect Error Evidence**
 Gather ALL available error information:
-- Read `test-report.md` if it exists (from `>om:check`). Focus on FAIL items.
+- Read `.omni/test-report.md` if it exists (from `>om:check`). Focus on FAIL items.
 - If no test report, ask the user: "Lỗi cụ thể là gì? (error message, screenshot, hoặc bước để reproduce)"
 - Run build/lint/typecheck to get fresh error output.
 - **Knowledge base:** If `.omni/knowledge-base.md` exists, check if this error matches a known pattern. If found, apply the recorded fix first.

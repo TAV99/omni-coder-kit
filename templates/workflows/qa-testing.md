@@ -1,8 +1,8 @@
 ## QA TESTING WORKFLOW (PROACTIVE VERIFICATION)
-When executing the [>om:check] command, you MUST act as a QA Engineer. Your job is to verify that every completed task in `todo.md` actually works — not just that the code exists.
+When executing the [>om:check] command, you MUST act as a QA Engineer. Your job is to verify that every completed task in `.omni/todo.md` actually works — not just that the code exists.
 
 **Step 1: Inventory — What needs testing?**
-Read `todo.md`. Collect all tasks marked `- [x]` (completed). Group them by type:
+Read `.omni/todo.md`. Collect all tasks marked `- [x]` (completed). Group them by type:
 - **Build:** Does the project compile/start without errors?
 - **API:** Endpoints return correct responses?
 - **UI:** Pages render, interactions work?
@@ -16,23 +16,23 @@ Execute the full automated validation pipeline. Run checks in strict priority or
 - **P2: Build** (compile/bundle the project) — BLOCKING
 - **P3: Automated Tests** (vitest/jest/pytest) — BLOCKING
 - **P4: Bundle Analysis** (size, unused deps) — ADVISORY
-- **P5: Content Validation** (cross-check against content-source.md) — HIGH=BLOCKING, LOW/MEDIUM=ADVISORY
+- **P5: Content Validation** (cross-check against .omni/content-source.md) — HIGH=BLOCKING, LOW/MEDIUM=ADVISORY
 
 **Evidence rule:** You MUST run a shell command for each P0-P3 check. "Code looks correct" is NOT verification. Use quiet flags to minimize output: `--silent`, `-q`, `--quiet`, `2>&1 | tail -5`. Only capture what's needed to determine PASS/FAIL.
 
 *If ANY blocking check (P0-P3) fails, STOP. Do NOT proceed to Feature Verification. Report failures and recommend `>om:fix`.*
 
 **P5: Content Validation (ADVISORY — runs after P0-P3 pass)**
-If `content-source.md` exists in the project root:
-1. Read `content-source.md` — extract `## Facts` and `## Forbidden Content`.
+If `.omni/content-source.md` exists:
+1. Read `.omni/content-source.md` — extract `## Facts` and `## Forbidden Content`.
 2. Scan all user-facing files (HTML, JSX/TSX, markdown, data files with UI text) for violations:
    - **Fact check:** Does any generated text contradict a fact? (e.g., "pricing" when facts say "open-source, no pricing")
    - **Forbidden check:** Does any content match a forbidden pattern? (e.g., fake testimonials, placeholder text, lorem ipsum)
    - **Placeholder check:** Search for common placeholder patterns: "Lorem ipsum", "John Doe", "example@email.com", "[Your Name]", "TBD", "Coming soon" (when not intentional)
-3. Report findings in `test-report.md` under a `## Content Validation` section:
+3. Report findings in `.omni/test-report.md` under a `## Content Validation` section:
    ```
    ## Content Validation
-   Source: content-source.md
+   Source: .omni/content-source.md
    | # | File | Issue | Severity |
    |---|------|-------|----------|
    | 1 | src/data/pricing.ts | Contains pricing tiers — forbidden (open-source project) | HIGH |
@@ -46,10 +46,10 @@ If `content-source.md` exists in the project root:
    - **MEDIUM** (fake/placeholder data not explicitly forbidden) → ADVISORY. Flag prominently but do not block.
    - **LOW** (minor placeholder like "Coming soon") → ADVISORY.
 
-If `content-source.md` does not exist, skip P5 silently.
+If `.omni/content-source.md` does not exist, skip P5 silently.
 
 **Step 3: Feature Verification (per completed task)**
-For EACH completed `- [x]` task in `todo.md`, verify it works:
+For EACH completed `- [x]` task in `.omni/todo.md`, verify it works:
 
 - **API endpoints:** Use `curl` or a script to hit the endpoint, check status code + response shape.
 - **UI features:** Start dev server (`npm run dev`), open in browser, test the golden path + one edge case. Use Playwright/browser tool if available.
@@ -58,13 +58,13 @@ For EACH completed `- [x]` task in `todo.md`, verify it works:
 - **Config/env:** Verify the app starts with the expected configuration.
 
 For each task, record:
-- Task description (from todo.md)
+- Task description (from .omni/todo.md)
 - Verification method used
 - Result: PASS / FAIL / SKIP (with reason)
 - If FAIL: specific error or unexpected behavior
 
 **Step 4: Generate Test Report**
-Output `test-report.md`. Keep it terse — 1 line per PASS, details only on FAIL.
+Output `.omni/test-report.md`. Keep it terse — 1 line per PASS, details only on FAIL.
 
 ```markdown
 # Test Report — [date]
@@ -97,11 +97,11 @@ Passed: Y/Z | Failed: N | Blocked: M
 **Step 5: Auto Fix/Check Loop**
 When >om:check is triggered automatically from >om:cook's quality gate:
 - If ANY blocking check (P0–P3) or feature verification FAILS:
-  1. Automatically execute [>om:fix] with the failures from `test-report.md`. No user prompt needed.
+  1. Automatically execute [>om:fix] with the failures from `.omni/test-report.md`. No user prompt needed.
   2. After >om:fix completes, re-run >om:check from Step 2.
   3. Repeat until all checks PASS or **max 3 fix attempts** reached.
   4. If max attempts reached and errors remain:
-     - Mark the failing task as `- [ ] [BLOCKED] ...` in `todo.md`.
+     - Mark the failing task as `- [ ] [BLOCKED] ...` in `.omni/todo.md`.
      - STOP and escalate:
        ```
        ⚠️ Quality Gate — 3 fix attempts exhausted.
@@ -118,4 +118,4 @@ When >om:check is triggered automatically from >om:cook's quality gate:
 - If the project has no test framework set up, recommend one appropriate for the stack but do NOT install it without asking.
 - For UI: you MUST start the dev server and interact with the feature. Screenshots or browser tool output count as evidence.
 - Keep the report factual. No opinions, no suggestions — just what works and what doesn't.
-- **[BLOCKED] protocol:** If a task fails 3 fix attempts, mark it `[BLOCKED]` in todo.md with a summary of what was tried. Do NOT continue fixing it.
+- **[BLOCKED] protocol:** If a task fails 3 fix attempts, mark it `[BLOCKED]` in .omni/todo.md with a summary of what was tried. Do NOT continue fixing it.
