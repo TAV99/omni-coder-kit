@@ -188,3 +188,17 @@ describe('getTestSkillsForStack', () => {
         assert.equal(names.length, new Set(names).size);
     });
 });
+
+describe('buildSearchSuggestion', () => {
+    it('returns language + testing for lang only', () => {
+        assert.equal(buildSearchSuggestion('Go', null), 'go testing');
+    });
+
+    it('returns language + framework + testing', () => {
+        assert.equal(buildSearchSuggestion('Ruby', 'RSpec'), 'ruby rspec testing');
+    });
+
+    it('lowercases everything', () => {
+        assert.equal(buildSearchSuggestion('Java', 'JUnit'), 'java junit testing');
+    });
+});
