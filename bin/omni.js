@@ -363,9 +363,12 @@ function buildCommandRegistry(ide) {
     if (isCodex) {
         return [
             '## WORKFLOW COMMANDS',
-            '> Codex CLI: type `>om:*` as normal chat text. Codex custom project `/om:*` slash commands are not assumed in this setup.',
+            '> Codex CLI: type `>om:*` or `$om:*` as normal chat text. Codex custom project `/om:*` slash commands are not assumed in this setup.',
             '',
-            'When the user invokes a `>om:` command, read the corresponding workflow file and follow its instructions.',
+            'When the user invokes a `>om:` command or `$om:` alias, read the corresponding workflow file and follow its instructions.',
+            'Normalize `$om:<cmd>` to `>om:<cmd>` for workflow routing.',
+            'Ignore `$om:*` tokens inside inline backticks or fenced code blocks.',
+            'If multiple valid commands appear, execute only the first valid command in non-code text order.',
             '',
             '| Command | Workflow File | Role |',
             '|---------|--------------|------|',
@@ -638,6 +641,8 @@ program
             agentsRules += `## IDE SPECIFIC ADAPTERS\n`;
             agentsRules += `- **Codex CLI Agent Mode:** This file is auto-discovered by Codex CLI walking from project root to cwd. Keep total content under 32 KiB.\n`;
             agentsRules += `- **Stable Omni Commands:** Type \`>om:brainstorm\`, \`>om:plan\`, \`>om:cook\`, etc. as normal chat text. Do not rely on custom \`/om:*\` slash commands in Codex.\n`;
+            agentsRules += `- **Alias Commands:** You may type \`$om:brainstorm\`, \`$om:plan\`, \`$om:cook\`, etc. anywhere in normal text; treat them as \`>om:*\` commands.\n`;
+            agentsRules += `- **Alias Escape:** Ignore \`$om:*\` tokens inside inline backticks and fenced code blocks.\n`;
             agentsRules += `- **Native Codex Commands:** Use \`/plan\`, \`/review\`, \`/permissions\`, \`/agent\`, \`/mcp\`, and \`/plugins\` when they help the current workflow.\n`;
             agentsRules += `- **Sandbox Awareness:** Codex may run in read-only or workspace-write sandbox modes. Do not attempt network calls or external writes unless the active profile allows them.\n`;
             agentsRules += `- **Cross-Tool Compatibility:** This file is also read by Antigravity, Gemini CLI, and other AGENTS.md-compatible tools.\n`;

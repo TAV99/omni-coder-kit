@@ -2,7 +2,7 @@
 
 Omni-Coder Kit supports Codex CLI through `AGENTS.md`, lazy-loaded `.omni/workflows/`, and optional `.codex/` project configuration.
 
-## Stable Omni Commands
+## Stable Omni Commands (`$om:*` alias supported)
 
 Type these commands as normal chat text in Codex:
 
@@ -15,6 +15,19 @@ Type these commands as normal chat text in Codex:
 | `>om:check` | Validation and feature verification |
 | `>om:fix` | Systematic debugging |
 | `>om:doc` | Documentation from implemented code |
+| `>om:learn` | Capture lessons learned from recent fixes |
+| `>om:map` | Refresh project map from current codebase |
+
+You can also invoke the same workflows with `$om:*` aliases in normal chat text:
+
+```text
+$om:brainstorm
+$om:plan
+$om:cook
+$om:check
+```
+
+Use inline backticks or fenced code blocks when you want to mention `$om:*` literally (for example: `` `$om:plan` ``) without triggering command routing.
 
 Codex CLI documents built-in slash commands such as `/plan`, `/review`, `/permissions`, `/agent`, `/mcp`, and `/plugins`. Project-defined custom `/om:*` slash commands are not used by this overlay because Codex does not currently document a stable project-level custom slash command directory like Claude Code's `.claude/commands/`.
 
