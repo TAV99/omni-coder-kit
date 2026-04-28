@@ -114,9 +114,14 @@ Dùng trong Codex chat:
 >om:plan
 >om:cook
 >om:check
+$om:brainstorm
+$om:plan
+$om:cook
+$om:check
 ```
 
 Codex CLI có các slash commands native như `/plan`, `/review`, `/permissions`, `/agent`, `/mcp`, `/plugins`. Phase này không cài custom `/om:*` slash commands cho Codex vì Codex chưa document cơ chế project-level custom command tương đương `.claude/commands/`.
+Khi cần viết literal command mà không trigger, đặt trong backtick như `` `$om:plan` `` hoặc fenced code block.
 
 Khởi động gợi ý:
 
@@ -239,6 +244,8 @@ Sau khi khởi tạo, gõ các lệnh `>om:` trong chat với AI:
 | `>om:check` | QA Tester | Validation pipeline (P0–P3 blocking) + feature verification → `test-report.md` |
 | `>om:fix` | Debugger | Reproduce → root cause → surgical fix → verify. Không shotgun-fix |
 | `>om:doc` | Writer | Đọc code thực tế → sinh README.md + API docs bằng tiếng Việt |
+| `>om:learn` | Learner | Tổng hợp bài học từ fix gần nhất vào `.omni/knowledge/knowledge-base.md` |
+| `>om:map` | Architect | Quét codebase và cập nhật `.omni/knowledge/project-map.md` theo trạng thái hiện tại |
 
 ### Automated Quality Pipeline
 
