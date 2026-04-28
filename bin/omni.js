@@ -299,9 +299,12 @@ function buildCommandRegistry(ide) {
     if (isCodex) {
         return [
             '## WORKFLOW COMMANDS',
-            '> Codex CLI: type `>om:*` as normal chat text. Codex custom project `/om:*` slash commands are not assumed in this setup.',
+            '> Codex CLI: type `>om:*` or `$om:*` as normal chat text. Codex custom project `/om:*` slash commands are not assumed in this setup.',
             '',
-            'When the user invokes a `>om:` command, read the corresponding workflow file and follow its instructions.',
+            'When the user invokes a `>om:` command or `$om:` alias, read the corresponding workflow file and follow its instructions.',
+            'Normalize `$om:<cmd>` to `>om:<cmd>` for workflow routing.',
+            'Ignore `$om:*` tokens inside inline backticks or fenced code blocks.',
+            'If multiple valid commands appear, execute only the first valid command in non-code text order.',
             '',
             '| Command | Workflow File | Role |',
             '|---------|--------------|------|',
@@ -312,6 +315,8 @@ function buildCommandRegistry(ide) {
             '| `>om:check` | `.omni/workflows/qa-testing.md` | QA Tester |',
             '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | Debugger |',
             '| `>om:doc` | `.omni/workflows/documentation-writer.md` | Writer |',
+            '| `>om:learn` | `.omni/workflows/knowledge-learn.md` | Learner |',
+            '| `>om:map` | `.omni/workflows/project-map.md` | Architect |',
             '',
             'Codex native helpers:',
             '- Use `/plan` for Codex-native planning before edits.',
@@ -491,6 +496,8 @@ program
                 fileName = 'AGENTS.md';
                 finalRules += `- **Codex CLI Agent Mode:** This file is auto-discovered by Codex CLI walking from project root to cwd. Keep total content under 32 KiB.\n`;
                 finalRules += `- **Stable Omni Commands:** Type \`>om:brainstorm\`, \`>om:plan\`, \`>om:cook\`, etc. as normal chat text. Do not rely on custom \`/om:*\` slash commands in Codex.\n`;
+                finalRules += `- **Alias Commands:** You may type \`$om:brainstorm\`, \`$om:plan\`, \`$om:cook\`, etc. anywhere in normal text; treat them as \`>om:*\` commands.\n`;
+                finalRules += `- **Alias Escape:** Ignore \`$om:*\` tokens inside inline backticks and fenced code blocks.\n`;
                 finalRules += `- **Native Codex Commands:** Use \`/plan\`, \`/review\`, \`/permissions\`, \`/agent\`, \`/mcp\`, and \`/plugins\` when they help the current workflow.\n`;
                 finalRules += `- **Sandbox Awareness:** Codex may run in read-only or workspace-write sandbox modes. Do not attempt network calls or external writes unless the active profile allows them.\n`;
                 finalRules += `- **Approval Policy:** Respect the configured approval mode. In stricter modes, present risky commands for review instead of forcing execution.\n`;
@@ -561,6 +568,8 @@ program
             agentsRules += `## IDE SPECIFIC ADAPTERS\n`;
             agentsRules += `- **Codex CLI Agent Mode:** This file is auto-discovered by Codex CLI walking from project root to cwd. Keep total content under 32 KiB.\n`;
             agentsRules += `- **Stable Omni Commands:** Type \`>om:brainstorm\`, \`>om:plan\`, \`>om:cook\`, etc. as normal chat text. Do not rely on custom \`/om:*\` slash commands in Codex.\n`;
+            agentsRules += `- **Alias Commands:** You may type \`$om:brainstorm\`, \`$om:plan\`, \`$om:cook\`, etc. anywhere in normal text; treat them as \`>om:*\` commands.\n`;
+            agentsRules += `- **Alias Escape:** Ignore \`$om:*\` tokens inside inline backticks and fenced code blocks.\n`;
             agentsRules += `- **Native Codex Commands:** Use \`/plan\`, \`/review\`, \`/permissions\`, \`/agent\`, \`/mcp\`, and \`/plugins\` when they help the current workflow.\n`;
             agentsRules += `- **Sandbox Awareness:** Codex may run in read-only or workspace-write sandbox modes. Do not attempt network calls or external writes unless the active profile allows them.\n`;
             agentsRules += `- **Cross-Tool Compatibility:** This file is also read by Antigravity, Gemini CLI, and other AGENTS.md-compatible tools.\n`;
@@ -1023,6 +1032,8 @@ program
             { cmd: '>om:check',      slash: '/om:check',       role: 'QA Tester',   desc: 'Validation pipeline: security → lint → build → test → feature verify' },
             { cmd: '>om:fix',        slash: '/om:fix',          role: 'Debugger',    desc: 'Reproduce → root cause → surgical fix → verify (không shotgun-fix)' },
             { cmd: '>om:doc',        slash: '/om:doc',          role: 'Writer',      desc: 'Đọc code thực tế → sinh README.md + API docs bằng tiếng Việt' },
+            { cmd: '>om:learn',      slash: '/om:learn',        role: 'Learner',     desc: 'Tổng hợp bài học từ fix gần nhất vào knowledge base của dự án' },
+            { cmd: '>om:map',        slash: '/om:map',          role: 'Architect',   desc: 'Quét codebase và cập nhật project-map.md theo trạng thái hiện tại' },
         ];
 
         const maxCmd   = Math.max(...commands.map(c => c.cmd.length));
@@ -1037,7 +1048,7 @@ program
         });
 
         console.log(chalk.gray('\n  ─────────────────────────────────────────────────────'));
-        console.log(chalk.white('  Workflow: ') + chalk.cyan('brainstorm → equip → plan → cook → check → fix → doc'));
+        console.log(chalk.white('  Workflow: ') + chalk.cyan('brainstorm → equip → plan → cook → check → fix → learn → doc (map on demand)'));
         console.log(chalk.gray('\n  Lưu ý: Các lệnh >om: được gõ trực tiếp trong chat AI (Claude, Codex, Cursor...),'));
         console.log(chalk.gray('  không phải lệnh terminal. Claude Code users: dùng /om:* (auto-complete).'));
         console.log(chalk.gray('  Chạy ') + chalk.yellow('omni init') + chalk.gray(' trước để tạo file luật cho AI.\n'));
