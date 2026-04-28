@@ -134,6 +134,21 @@ Khi chọn **Codex CLI**, `omni init` tạo `AGENTS.md` và `.omni/workflows/`. 
 - **`.codex/config.toml`** — profile `omni_safe`, `omni_yolo`, `omni_review`, sandbox/approval defaults, `project_doc_max_bytes`
 - **`.codex/hooks.json`** — hook reminders cho file changes và quality-cycle checks
 
+Dùng trong Codex chat:
+
+```text
+>om:brainstorm
+>om:plan
+>om:cook
+>om:check
+$om:brainstorm
+$om:plan
+$om:cook
+$om:check
+```
+
+Khi cần viết literal command mà không trigger, đặt trong backtick như `` `$om:plan` `` hoặc fenced code block.
+
 Khởi động gợi ý:
 
 ```bash

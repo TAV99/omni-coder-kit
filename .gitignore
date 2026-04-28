@@ -8,5 +8,9 @@ node_modules/
 .claude/
 .codex/
 
+# Local worktrees
+.worktrees/
+
 # Superpowers (local brainstorming/planning docs)
+doc/
 docs/
