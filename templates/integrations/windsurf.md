@@ -1,0 +1,1 @@
+- **Cascade Rules:** Utilize Windsurf's context awareness. Do not duplicate existing logic.

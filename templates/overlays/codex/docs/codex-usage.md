@@ -10,7 +10,7 @@ Type these commands as normal chat text in Codex:
 |---------|----------|
 | `>om:brainstorm` | Requirements interview and design spec |
 | `>om:equip` | Skill discovery and installation guidance |
-| `>om:plan` | `design-spec.md` to `todo.md` |
+| `>om:plan` | `.omni/sdlc/design-spec.md` to `.omni/sdlc/todo.md` |
 | `>om:cook` | Surgical task execution |
 | `>om:check` | Validation and feature verification |
 | `>om:fix` | Systematic debugging |

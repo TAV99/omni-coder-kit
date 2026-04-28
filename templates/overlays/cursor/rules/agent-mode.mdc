@@ -1,0 +1,31 @@
+---
+description: Cursor Agent mode integration — cook-check-fix loop, multi-file protocol. Always active.
+alwaysApply: true
+---
+
+# Agent Mode Rules
+
+## Quality Loop (Cook-Check-Fix)
+When executing tasks via >om:cook in Agent mode:
+- After every 1/3 of total tasks, automatically run lint and tests.
+- If tests fail, attempt to fix automatically (max 3 attempts).
+- If 3 fix attempts fail, STOP. Report the failure and suggest `>om:fix`.
+
+## Multi-File Edit Protocol
+When a task requires editing more than 3 files:
+1. List ALL files that will change with a one-line description per file.
+2. Wait for user confirmation before starting edits.
+3. Apply changes in dependency order: shared modules first, consumers last.
+
+## Terminal Command Awareness
+In Agent mode, prefer running tests and lint automatically instead of asking the user:
+- Auto-run: lint, type-check, unit tests, dev server
+- Warn first: git commit, npm install, file deletion
+- Always ask: git push, git reset --hard, rm -rf, database writes
+
+## Context Gathering
+Before each task, use Cursor's built-in context:
+- @Codebase to scan architecture
+- @Files to read files relevant to the task
+- @Git to check recent changes in the area
+- @Docs to verify API/library usage

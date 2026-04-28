@@ -1,32 +1,53 @@
 ## CODER AGENT WORKFLOW (SURGICAL TASK EXECUTION)
-When executing the [>om:cook] command, you MUST act as a Senior Developer. Your job is to implement tasks from `todo.md` one by one, using Surgical Changes.
+When executing the [>om:cook] command, you MUST act as a Senior Developer. Your job is to implement tasks from `.omni/sdlc/todo.md` one by one, using Surgical Changes.
 
 **Step 1: Load Context**
-- Read `todo.md`. Identify the NEXT uncompleted task (`- [ ]`).
-- Read `design-spec.md` for architectural context (schema, endpoints, tech stack).
+- Read `.omni/sdlc/todo.md`. Identify the NEXT uncompleted task (`- [ ]`).
+- Read `.omni/sdlc/design-spec.md` for architectural context (schema, endpoints, tech stack).
 - Read existing project files to understand current state. Do NOT assume file structure.
 - **Load skill:** If the task has `@skill:skill-name` tag(s), read the corresponding skill file(s) from `.agents/skills/` or `.claude/skills/` and apply those rules during implementation.
+- **Knowledge base:** If `.omni/knowledge/knowledge-base.md` exists, scan it for entries matching the current task's files. Apply relevant lessons.
+- **Project Map:** If `.omni/knowledge/project-map.md` exists, read it FIRST — use it to locate relevant files instead of scanning the full codebase. If the map header shows Age > 7 days, warn: "⚠️ Project Map cũ [N] ngày. Chạy `omni map --refresh` để cập nhật." If map has `[PENDING]` or `[NEW]` markers for files you touch during this task, fill them in opportunistically.
+- **Content source:** If `.omni/sdlc/content-source.md` exists, read it. Use `## Facts` as ground truth for any user-facing text. Check `## Forbidden Content` before writing copy, labels, or descriptions. Do NOT generate content that contradicts these facts. If the project has UI files (HTML, JSX, TSX, Vue, Svelte) but `.omni/sdlc/content-source.md` is missing, warn: "⚠️ UI project without .omni/sdlc/content-source.md — run `>om:brainstorm` to generate it. Content accuracy cannot be verified."
 - **Infra pre-check:** If `setup.sh` exists in the project root, verify infrastructure is ready before coding:
   - Check: Docker running? DB accessible? `.env` exists? Dependencies installed?
   - If any check fails → STOP. Tell the user: "Chạy `bash setup.sh` trước khi tiếp tục >om:cook."
   - If all checks pass or `setup.sh` does not exist → proceed normally.
-*CRITICAL: If `todo.md` does not exist, STOP. Tell the user to run `>om:plan` first.*
+*CRITICAL: If `.omni/sdlc/todo.md` does not exist, STOP. Tell the user to run `>om:plan` first.*
 
-**Step 2: Execute ONE Task at a Time**
+**Step 2: Dev Server Preflight (MANDATORY CHECKPOINT)**
+You MUST complete this step and report the result BEFORE writing any code in Step 3.
+1. Detect dev command:
+   - `package.json` → scripts `dev`, `start`, or `serve` (prefer in that order)
+   - `docker-compose.yml` → web/app service with exposed ports
+   - `Makefile` → target `dev` or `serve`
+   - `manage.py` → `python manage.py runserver`
+2. If a command is found:
+   a. Install dependencies if missing (e.g. `node_modules/` absent).
+   b. Run the dev server as a background process.
+   c. Wait up to 5 seconds for the server to print a URL.
+3. Report to user (REQUIRED — pick one):
+   - `🟢 Dev server: <command> → <URL>` (running)
+   - `🟡 Dev server: skipped — no dev command found` (no UI project)
+   - `🔴 Dev server: <command> failed — <reason>` (error, continue anyway)
+4. Only after printing one of the above lines may you proceed to Step 3.
+
+**Step 3: Execute ONE Task at a Time**
+Before editing: run `git diff --stat`. If uncommitted changes exist from a prior task, commit or stash first.
 For the current task:
-1. State what you will do and which files will be affected.
-2. Write the minimum code to complete the task. Follow the Simplicity First principle.
-3. Use Surgical Changes — touch only what the task requires.
+1. State what you will do and which files will be affected (scope declaration).
+2. Scope lock: only create/modify files declared in 3.1. Zero exceptions — no cleanup, no refactoring, no "improvements".
+3. Write the minimum code to complete the task. Follow the Simplicity First principle.
 4. After writing code, verify it works (compile check, quick test, or logical validation).
-5. Mark the task as done: change `- [ ]` to `- [x]` in `todo.md`.
+5. Mark the task as done: change `- [ ]` to `- [x]` in `.omni/sdlc/todo.md`.
 
-**Step 3: Report & Auto-Continue**
+**Step 4: Report & Auto-Continue**
 After completing a task, report:
 ```
 ✅ [Task description] — Done
    Files changed: [list]
    Progress: [completed]/[total] tasks (Cycle [1|2|3]/3)
-   Next task: [next uncompleted task from todo.md]
+   Next task: [next uncompleted task from .omni/sdlc/todo.md]
 ```
 Then evaluate the result:
 - **Auto-continue (default):** If the task completed without errors, or only has minor/non-blocking issues — proceed to the next `- [ ]` task immediately. Do NOT ask for confirmation.
@@ -38,9 +59,9 @@ Then evaluate the result:
   - Dependency conflicts that affect multiple tasks
 - If user says stop at any point, summarize progress (X/Y tasks completed).
 
-**Step 4: Quality Gate — Auto Check/Fix Cycle**
+**Step 5: Quality Gate — Auto Check/Fix Cycle**
 The project runs exactly **3 quality cycles**. Each cycle triggers after completing 1/3 of total tasks:
-1. On first launch, count total tasks (`- [ ]` + `- [x]`) in `todo.md` → compute `checkpoint = ceil(total / 3)`.
+1. On first launch, count total tasks (`- [ ]` + `- [x]`) in `.omni/sdlc/todo.md` → compute `checkpoint = ceil(total / 3)`.
 2. Track `cycle` counter (1, 2, 3) across the session.
 3. After every `checkpoint` tasks completed in the current cycle:
    ```
@@ -48,8 +69,9 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
       Auto-triggering >om:check...
    ```
    - Automatically execute the [>om:check] workflow (inline, no user prompt needed).
-   - If >om:check finds errors → automatically execute [>om:fix] → re-run [>om:check]. Repeat until all blocking errors are resolved (max 3 fix attempts per cycle).
-   - Once >om:check passes (or max fix attempts reached), resume >om:cook for the next batch.
+   - If >om:check finds errors → automatically execute [>om:fix] → re-run [>om:check]. Max 3 fix attempts per cycle.
+   - If max attempts reached: mark failing task `[BLOCKED]` in `.omni/sdlc/todo.md`, escalate to user, then resume >om:cook for the next batch (skipping blocked tasks).
+   - Once >om:check passes, resume >om:cook for the next batch.
 4. After cycle 3 completes and >om:check passes:
    ```
    ✅ All 3 quality cycles complete. [total] tasks done.
@@ -58,8 +80,9 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
 
 **Rules:**
 - ONE task at a time. Do not batch multiple tasks unless the user explicitly asks.
-- Follow the tech stack rules from `design-spec.md` and any installed skills.
-- If a task is blocked (depends on something not yet built), SKIP it and move to the next non-blocked task. Note the skip reason.
+- **Surgical Context:** For files > 200 lines, use grep/search to locate target code first. Read only the relevant section (±20 lines around target), not the entire file.
+- Follow the tech stack rules from `.omni/sdlc/design-spec.md` and any installed skills.
+- If a task is blocked (depends on something not yet built) or marked `[BLOCKED]`, SKIP it and move to the next non-blocked task. Note the skip reason.
 - If a task is ambiguous, ASK before implementing. Do not guess.
 - Do NOT refactor, optimize, or "improve" code beyond what the task specifies.
 - Quality gate cycles are mandatory — do NOT skip them even if all tasks look correct.

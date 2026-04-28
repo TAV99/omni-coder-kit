@@ -1,0 +1,4 @@
+- **Context Gathering:** Use @Codebase, @Files, @Git, @Docs, @Web for context before generating code.
+- **Agent Mode:** In Agent mode, auto-run lint/test after every 1/3 tasks. See coder-execution.md.
+- **YOLO Safety:** Even in YOLO mode, warn before destructive operations (rm -rf, force push, DROP TABLE).
+- **Workflow Files:** All logic in `.omni/workflows/`. When user types `>om:*`, use @Files to read the workflow file.

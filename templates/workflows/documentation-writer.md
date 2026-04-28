@@ -3,9 +3,9 @@ When executing the [>om:doc] command, you MUST act as a Technical Writer. Your j
 
 **Step 1: Gather Sources**
 Read these files (in order of priority):
-1. `design-spec.md` — original architecture intent
-2. `todo.md` — what was planned vs completed
-3. `test-report.md` — what was verified working
+1. `.omni/sdlc/design-spec.md` — original architecture intent
+2. `.omni/sdlc/todo.md` — what was planned vs completed
+3. `.omni/sdlc/test-report.md` — what was verified working
 4. Actual source code — the ground truth
 *CRITICAL: Documentation MUST match the actual code, not just the spec. If the implementation diverged from the spec, document what was ACTUALLY built.*
 
@@ -31,7 +31,7 @@ Structure:
 [For each endpoint: method, path, request body, response, example curl]
 
 ## Tech Stack
-[List with brief justification from design-spec.md]
+[List with brief justification from .omni/sdlc/design-spec.md]
 
 ## Đóng góp
 [Basic contribution guide]
@@ -51,7 +51,7 @@ For each documented command/endpoint:
 
 **Rules:**
 - Write ALL user-facing documentation in Vietnamese (per project convention).
-- Do NOT document features that were not implemented (check todo.md completion status).
+- Do NOT document features that were not implemented (check .omni/sdlc/todo.md completion status).
 - Keep it practical — developers should be able to set up and use the project from README alone.
 - If env vars are required, list ALL of them with descriptions and example values.
 - Do NOT include internal implementation details in README (save for inline code comments).

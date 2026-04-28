@@ -7,19 +7,16 @@ const chalk = require('chalk');
 const { program } = require('commander');
 const { execSync, execFileSync } = require('child_process');
 
-const MANIFEST_FILE = '.omni-manifest.json';
+const MANIFEST_FILE = path.join('.omni', 'manifest.json');
 const PKG = require(path.join(__dirname, '..', 'package.json'));
-
-const IDE_AGENT_MAP = {
-    claudecode:  ['claude-code'],
-    codex:       ['codex'],
-    dual:        ['claude-code', 'codex'],
-    antigravity: ['antigravity'],
-    cursor:      ['cursor'],
-    windsurf:    ['windsurf'],
-    agents:      ['claude-code', 'codex', 'antigravity'],
-    generic:     null,
-};
+const {
+    IDE_AGENT_MAP, IDE_CONFIG_FILE, parseSource, isValidSkillName,
+    buildRulesContent, extractRulesForInject, createManifest,
+    getAgentFlags, getOverlayNameForTarget, detectDNA,
+} = require(path.join(__dirname, '..', 'lib', 'helpers'));
+const {
+    detectExistingProject, scanProject, generateMapSkeleton, refreshMap,
+} = require(path.join(__dirname, '..', 'lib', 'scanner'));
 
 // ========== UNIVERSAL SKILLS (skills.sh) ==========
 
@@ -35,7 +32,7 @@ const UNIVERSAL_SKILLS = [
 // ========== HELPERS ==========
 
 function findConfigFile() {
-    const files = ['.cursorrules', '.windsurfrules', 'CLAUDE.md', 'AGENTS.md', 'SYSTEM_PROMPT.md'];
+    const files = ['.cursorrules', '.windsurfrules', 'CLAUDE.md', 'GEMINI.md', 'AGENTS.md', 'SYSTEM_PROMPT.md'];
     for (const file of files) {
         if (fs.existsSync(path.join(process.cwd(), file))) return file;
     }
@@ -46,10 +43,32 @@ function readTemplate(filePath) {
     try {
         return fs.readFileSync(filePath, 'utf-8');
     } catch (err) {
-        console.log(chalk.red.bold(`\n❌ Lỗi khi đọc file template: ${path.basename(filePath)}`));
-        console.log(chalk.red(`   Chi tiết: ${err.message}\n`));
-        process.exit(1);
+        throw new Error(`Không đọc được template ${path.basename(filePath)}: ${err.message}`);
     }
+}
+
+const OMNI_GITIGNORE_PATTERNS = [
+    '.omni/',
+];
+
+function ensureGitignore(ide) {
+    const gitignorePath = path.join(process.cwd(), '.gitignore');
+    const patterns = [...OMNI_GITIGNORE_PATTERNS];
+    if (ide === 'claudecode' || ide === 'dual') patterns.push('.claude/');
+    if (ide === 'codex' || ide === 'dual') patterns.push('.codex/');
+    if (ide === 'cursor') patterns.push('.cursor/');
+
+    let existing = '';
+    if (fs.existsSync(gitignorePath)) {
+        existing = fs.readFileSync(gitignorePath, 'utf-8');
+    }
+    const existingLines = new Set(existing.split('\n').map(l => l.trim()));
+    const missing = patterns.filter(p => !existingLines.has(p));
+    if (missing.length === 0) return 0;
+
+    const block = `\n# Omni-Coder Kit (generated)\n${missing.join('\n')}\n`;
+    fs.writeFileSync(gitignorePath, existing.trimEnd() + '\n' + block, 'utf-8');
+    return missing.length;
 }
 
 function writeFileSafe(filePath, content) {
@@ -61,33 +80,6 @@ function writeFileSafe(filePath, content) {
         console.log(chalk.red(`   Chi tiết: ${err.message}\n`));
         return false;
     }
-}
-
-function isValidSkillName(name) {
-    return /^[a-z0-9-]+$/.test(name);
-}
-
-// Parse source: hỗ trợ cả URL GitHub lẫn owner/repo format
-function parseSource(raw) {
-    if (!raw) return null;
-    let cleaned = raw.trim().replace(/\/+$/, ''); // bỏ trailing slashes
-
-    // Hỗ trợ full GitHub URL: https://github.com/owner/repo[/...]
-    const urlMatch = cleaned.match(/^https?:\/\/(?:www\.)?github\.com\/([a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+(?:\/.+)?)$/);
-    if (urlMatch) cleaned = urlMatch[1];
-
-    // Hỗ trợ git@ SSH format: git@github.com:owner/repo.git
-    const sshMatch = cleaned.match(/^git@github\.com:([a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+?)(?:\.git)?$/);
-    if (sshMatch) cleaned = sshMatch[1];
-
-    // Bỏ .git suffix nếu còn sót
-    cleaned = cleaned.replace(/\.git$/, '');
-
-    // Validate format cuối cùng: owner/repo hoặc owner/repo/path
-    if (cleaned.includes('..')) return null;
-    if (!/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+(\/.+)?$/.test(cleaned)) return null;
-
-    return cleaned;
 }
 
 // ========== MANIFEST SYSTEM ==========
@@ -104,40 +96,13 @@ function loadManifest() {
     return createManifest();
 }
 
-function createManifest() {
-    return { version: '2.1.0', configFile: null, skills: { external: [] } };
-}
-
 function saveManifest(manifest) {
-    return writeFileSafe(path.join(process.cwd(), MANIFEST_FILE), JSON.stringify(manifest, null, 2));
+    const manifestPath = path.join(process.cwd(), MANIFEST_FILE);
+    fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+    return writeFileSafe(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
-function getAgentFlags(manifest) {
-    const agents = IDE_AGENT_MAP[manifest.ide];
-    if (!agents) return '';
-    return `--agent ${agents.join(' ')}`;
-}
-
-const RULES_FILE = '.omni-rules.md';
-
-function buildRulesContent(rp) {
-    const sections = [];
-    if (rp.language) sections.push(`## Ngôn ngữ\n- ${rp.language}`);
-    if (rp.codingStyle) sections.push(`## Coding Style\n${rp.codingStyle.split(';').map(r => r.trim()).filter(Boolean).map(r => `- ${r}`).join('\n')}`);
-    if (rp.forbidden) sections.push(`## Forbidden Patterns\n${rp.forbidden.split(';').map(r => r.trim()).filter(Boolean).map(r => `- ${r}`).join('\n')}`);
-    if (rp.custom) sections.push(`## Custom Rules\n${rp.custom.split(';').map(r => r.trim()).filter(Boolean).map(r => `- ${r}`).join('\n')}`);
-    if (sections.length === 0) return null;
-    return `# Personal Rules\n> Generated by Omni-Coder Kit | Last updated: ${new Date().toISOString().split('T')[0]}\n\n${sections.join('\n\n')}\n`;
-}
-
-function extractRulesForInject(rp) {
-    const lines = [];
-    if (rp.language) lines.push(`- **Ngôn ngữ:** ${rp.language}`);
-    if (rp.codingStyle) rp.codingStyle.split(';').map(r => r.trim()).filter(Boolean).forEach(r => lines.push(`- ${r}`));
-    if (rp.forbidden) rp.forbidden.split(';').map(r => r.trim()).filter(Boolean).forEach(r => lines.push(`- **KHÔNG:** ${r}`));
-    if (rp.custom) rp.custom.split(';').map(r => r.trim()).filter(Boolean).forEach(r => lines.push(`- ${r}`));
-    return lines.join('\n');
-}
+const RULES_FILE = path.join('.omni', 'rules.md');
 
 function syncRulesToConfig() {
     const configFile = findConfigFile();
@@ -174,20 +139,10 @@ function findSkillConflict(manifest, skillName) {
 
 // ========== OVERLAY SYSTEM ==========
 
-function getOverlayNameForTarget(ide, target) {
-    if (target === 'claude-code') {
-        return (ide === 'claudecode' || ide === 'dual') ? 'claude-code' : null;
-    }
-    if (target === 'codex') {
-        return (ide === 'codex' || ide === 'dual') ? 'codex' : null;
-    }
-    return null;
-}
-
 function getOverlayDir(ide, target = null) {
     const overlayName = target
         ? getOverlayNameForTarget(ide, target)
-        : ({ claudecode: 'claude-code', dual: 'claude-code' }[ide] || null);
+        : ({ claudecode: 'claude-code', dual: 'claude-code', cursor: 'cursor' }[ide] || null);
     if (!overlayName) return null;
     const dir = path.join(__dirname, '..', 'templates', 'overlays', overlayName);
     return fs.existsSync(dir) ? dir : null;
@@ -264,9 +219,84 @@ function buildCodexHooks(ide, advanced) {
     return fs.readFileSync(templatePath, 'utf-8');
 }
 
+function buildCursorMcp(projectDir) {
+    const servers = {};
+    servers.context7 = { command: 'npx', args: ['-y', '@upstash/context7-mcp'] };
+
+    let pkg = {};
+    try {
+        pkg = JSON.parse(fs.readFileSync(path.join(projectDir, 'package.json'), 'utf-8'));
+    } catch {}
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    const hasDep = (name) => name in allDeps;
+
+    if (hasDep('@supabase/supabase-js'))
+        servers.supabase = { command: 'npx', args: ['-y', 'supabase-mcp-server'] };
+    if (hasDep('prisma') || fs.existsSync(path.join(projectDir, 'prisma', 'schema.prisma')))
+        servers.prisma = { command: 'npx', args: ['-y', '@anthropic/mcp-prisma'] };
+    if (hasDep('next'))
+        servers.vercel = { command: 'npx', args: ['-y', '@vercel/mcp'] };
+    if (hasDep('firebase') || hasDep('firebase-admin'))
+        servers.firebase = { command: 'npx', args: ['-y', '@anthropic/mcp-firebase'] };
+    if (fs.existsSync(path.join(projectDir, 'Dockerfile')) || fs.existsSync(path.join(projectDir, 'docker-compose.yml')))
+        servers.docker = { command: 'npx', args: ['-y', '@anthropic/mcp-docker'] };
+    if (fs.existsSync(path.join(projectDir, '.git')))
+        servers.github = { command: 'npx', args: ['-y', '@anthropic/mcp-github'] };
+
+    return JSON.stringify({ mcpServers: servers }, null, 2);
+}
+
+function buildCursorRules(dnaProfile) {
+    const overlayDir = path.join(__dirname, '..', 'templates', 'overlays', 'cursor', 'rules');
+    if (!fs.existsSync(overlayDir)) return null;
+
+    const alwaysInclude = ['core-mindset.mdc', 'workflow-commands.mdc', 'yolo-guardrails.mdc', 'agent-mode.mdc'];
+    const conditionalMap = {
+        'frontend.mdc': dnaProfile.hasUI,
+        'backend.mdc': dnaProfile.hasBackend,
+        'testing.mdc': true,
+    };
+
+    const result = [];
+    for (const f of alwaysInclude) {
+        const src = path.join(overlayDir, f);
+        if (fs.existsSync(src)) result.push({ name: f, src });
+    }
+    for (const [f, include] of Object.entries(conditionalMap)) {
+        if (include) {
+            const src = path.join(overlayDir, f);
+            if (fs.existsSync(src)) result.push({ name: f, src });
+        }
+    }
+
+    return result.length > 0 ? result : null;
+}
+
+function buildCursorBootstrapRules(fullRules, strictnessBlock, personalRulesBlock) {
+    let bootstrap = `> Generated by Omni-Coder Kit\n\n`;
+    bootstrap += strictnessBlock + '\n';
+    bootstrap += `## RULES SYSTEM\n`;
+    bootstrap += `This project uses layered MDC rules in \`.cursor/rules/\`.\n`;
+    bootstrap += `- Core rules are always active\n`;
+    bootstrap += `- Context-specific rules activate based on file patterns\n`;
+    bootstrap += `- See \`.cursor/rules/\` for full rule definitions\n\n`;
+    bootstrap += `## WORKFLOW COMMANDS\n`;
+    bootstrap += `Type \`>om:*\` commands in chat. Full registry in \`.cursor/rules/workflow-commands.mdc\`.\n`;
+    bootstrap += `Use @Files to read workflow files from \`.omni/workflows/\`.\n\n`;
+    if (personalRulesBlock) {
+        bootstrap += personalRulesBlock + '\n';
+    }
+    bootstrap += `## IDE SPECIFIC ADAPTERS\n`;
+    bootstrap += `- **Context Gathering:** Use @Codebase, @Files, @Git, @Docs, @Web for context.\n`;
+    bootstrap += `- **Agent Mode:** Cook-check-fix loop runs automatically. See \`.cursor/rules/agent-mode.mdc\`.\n`;
+    bootstrap += `- **YOLO Safety:** Destructive operation warnings in \`.cursor/rules/yolo-guardrails.mdc\`.\n`;
+    return bootstrap;
+}
+
 function buildCommandRegistry(ide) {
     const isClaudeCode = ide === 'claudecode' || ide === 'dual';
     const isCodex = ide === 'codex';
+    const isGemini = ide === 'gemini';
 
     if (isClaudeCode) {
         return [
@@ -284,11 +314,45 @@ function buildCommandRegistry(ide) {
             '| `>om:check` | `/om:check` | Main session | `.omni/workflows/qa-testing.md` |',
             '| `>om:fix` | `/om:fix` | Main session | `.omni/workflows/debugger-workflow.md` |',
             '| `>om:doc` | `/om:doc` | Main session | `.omni/workflows/documentation-writer.md` |',
+            '| `>om:learn` | `/om:learn` | Main session | `.omni/workflows/knowledge-learn.md` |',
+            '| `>om:map` | `/om:map` | Architect | `.omni/workflows/project-map.md` |',
             '',
             'Supporting files (referenced by workflows as needed):',
             '- `.omni/workflows/pm-templates.md` - Output format standards',
             '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
             '- `.omni/workflows/superpower-sdlc.md` - Full SDLC overview and pipeline diagram',
+            '- `.omni/knowledge/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
+            '',
+            '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
+            '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
+            '**Fallback:** If `.omni/workflows/` not found, read from `node_modules/omni-coder-kit/templates/workflows/`.',
+        ].join('\n');
+    }
+
+    if (isGemini) {
+        return [
+            '## WORKFLOW COMMANDS',
+            '> Gemini CLI: type `>om:*` as normal chat text.',
+            '',
+            'When the user invokes a `>om:` command, read the corresponding workflow file and follow its instructions.',
+            '',
+            '| Command | Workflow File | Agent Strategy | Gemini Tools |',
+            '|---------|--------------|----------------|--------------|',
+            '| `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Main session | `ask_user`, `save_memory` |',
+            '| `>om:equip` | `.omni/workflows/skill-manager.md` | Main session | `google_web_search` |',
+            '| `>om:plan` | `.omni/workflows/task-planning.md` | Main session | `tracker_create_task` |',
+            '| `>om:cook` | `.omni/workflows/coder-execution.md` | Main session | `tracker_update_task`, `enter_plan_mode` |',
+            '| `>om:check` | `.omni/workflows/qa-testing.md` | Main session | `run_shell_command` |',
+            '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | Main session | `systematic-debugging` |',
+            '| `>om:doc` | `.omni/workflows/documentation-writer.md` | Main session | `read_file` |',
+            '| `>om:learn` | `.omni/workflows/knowledge-learn.md` | Main session | `save_memory` |',
+            '| `>om:map` | `.omni/workflows/project-map.md` | Architect | `read_file`, `save_memory` |',
+            '',
+            'Supporting files (referenced by workflows as needed):',
+            '- `.omni/workflows/pm-templates.md` - Output format standards',
+            '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
+            '- `.omni/workflows/superpower-sdlc.md` - Gemini-aware SDLC overview',
+            '- `.omni/knowledge/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
             '',
             '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
             '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
@@ -329,10 +393,43 @@ function buildCommandRegistry(ide) {
             '- `.omni/workflows/pm-templates.md` - Output format standards',
             '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
             '- `.omni/workflows/superpower-sdlc.md` - Codex-aware SDLC overview',
+            '- `.omni/knowledge/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
             '',
             '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
             '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
             '**Token Budget:** Keep `AGENTS.md` compact; long instructions belong in `.omni/workflows/`.',
+        ].join('\n');
+    }
+
+    const isCursor = ide === 'cursor';
+    if (isCursor) {
+        return [
+            '## WORKFLOW COMMANDS',
+            '> Cursor: type `>om:*` in chat. Use @Files to read workflow files.',
+            '',
+            'When the user types a `>om:` command, use @Files to read the corresponding workflow file, then follow its instructions.',
+            '',
+            '| Command | Workflow File | Context Hints |',
+            '|---------|--------------|---------------|',
+            '| `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | @Codebase for project scan |',
+            '| `>om:equip` | `.omni/workflows/skill-manager.md` | @Web for skill discovery |',
+            '| `>om:plan` | `.omni/workflows/task-planning.md` | @Git for recent changes |',
+            '| `>om:cook` | `.omni/workflows/coder-execution.md` | @Files for scope, Agent mode |',
+            '| `>om:check` | `.omni/workflows/qa-testing.md` | @Git for diff review |',
+            '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | @Web for error research |',
+            '| `>om:doc` | `.omni/workflows/documentation-writer.md` | @Codebase for API surface |',
+            '| `>om:learn` | `.omni/workflows/knowledge-learn.md` | @Git for fix history |',
+            '| `>om:map` | `.omni/workflows/project-map.md` | @Codebase for structure scan |',
+            '',
+            'Supporting files (referenced by workflows as needed):',
+            '- `.omni/workflows/pm-templates.md` - Output format standards',
+            '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
+            '- `.omni/workflows/superpower-sdlc.md` - Cursor-aware SDLC overview',
+            '- `.omni/knowledge/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
+            '',
+            '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
+            '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
+            '**Fallback:** If `.omni/workflows/` not found, read from `node_modules/omni-coder-kit/templates/workflows/`.',
         ].join('\n');
     }
 
@@ -349,11 +446,14 @@ function buildCommandRegistry(ide) {
         '| `>om:check` | `.omni/workflows/qa-testing.md` | QA Tester |',
         '| `>om:fix` | `.omni/workflows/debugger-workflow.md` | Debugger |',
         '| `>om:doc` | `.omni/workflows/documentation-writer.md` | Writer |',
+        '| `>om:learn` | `.omni/workflows/knowledge-learn.md` | Learner |',
+        '| `>om:map` | `.omni/workflows/project-map.md` | Architect |',
         '',
         'Supporting files (referenced by workflows as needed):',
         '- `.omni/workflows/pm-templates.md` - Output format standards',
         '- `.omni/workflows/validation-scripts.md` - P0-P4 validation pipeline scripts',
         '- `.omni/workflows/superpower-sdlc.md` - Full SDLC overview and pipeline diagram',
+        '- `.omni/knowledge/knowledge-base.md` - Project lessons learned (auto-captured by >om:learn)',
         '',
         '**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.',
         '**Quality Pipeline:** `>om:cook` enforces 3 quality cycles (cook -> check -> fix). See coder-execution.md.',
@@ -375,6 +475,22 @@ program
     .action(async () => {
         console.log(chalk.cyan.bold('\n🚀 Khởi tạo Omni-Coder Kit!\n'));
 
+        // Detect existing project for Project Map generation
+        let pendingMapGeneration = null;
+        const detected = detectExistingProject(process.cwd());
+        if (detected.detected) {
+            const { generateMap } = await prompts({
+                type: 'confirm',
+                name: 'generateMap',
+                message: `📁 Phát hiện project có sẵn (${detected.stats.files} files, ${detected.lang}). Tạo Project Map?`,
+                initial: true,
+            });
+            if (generateMap) {
+                console.log(chalk.gray('   Sẽ tạo Project Map sau khi init hoàn tất...\n'));
+                pendingMapGeneration = true;
+            }
+        }
+
         const q = (n, total, text) => `${chalk.whiteBright.bold(`[${n}/${total}]`)} ${text}`;
 
         const response = await prompts([
@@ -384,6 +500,7 @@ program
                 message: q(1, 3, 'Bạn đang sử dụng AI IDE/Công cụ nào?'),
                 choices: [
                     { title: 'Claude Code (CLI) / OpenCode', value: 'claudecode' },
+                    { title: 'Gemini CLI (Google)', value: 'gemini' },
                     { title: 'Antigravity', value: 'antigravity' },
                     { title: 'Cursor', value: 'cursor' },
                     { title: 'Windsurf', value: 'windsurf' },
@@ -398,8 +515,8 @@ program
                 name: 'strictness',
                 message: q(2, 3, 'Mức độ kỷ luật?'),
                 choices: [
-                    { title: 'Hardcore (Ép 100% SDLC)', value: 'hardcore' },
-                    { title: 'Flexible (Cho phép bypass lỗi vặt)', value: 'flexible' }
+                    { title: 'Hardcore (Ép 100% SDLC - Khuyên dùng)', value: 'hardcore' },
+                    { title: 'Flexible (Cho phép bypass lỗi vặt - Cần tự định nghĩa giới hạn trong Personal Rules)', value: 'flexible' }
                 ]
             },
         ]);
@@ -453,9 +570,13 @@ program
         fs.mkdirSync(omniWorkflowsDir, { recursive: true });
         const workflowTarget = response.ide === 'codex'
             ? 'codex'
-            : response.ide === 'dual'
-                ? 'base'
-                : null;
+            : response.ide === 'gemini'
+                ? 'gemini'
+                : response.ide === 'cursor'
+                    ? 'cursor'
+                    : response.ide === 'dual'
+                        ? 'base'
+                        : null;
         const mergedWorkflows = buildWorkflows(response.ide, workflowTarget);
         const workflowFiles = Object.keys(mergedWorkflows);
         for (const wf of workflowFiles) {
@@ -466,78 +587,30 @@ program
         const isCodex = response.ide === 'codex' || response.ide === 'dual';
         const commandRegistry = buildCommandRegistry(response.ide);
 
-        let finalRules = `> Generated by Omni-Coder Kit\n\n${mindset}\n\n${hygiene}\n\n${commandRegistry}\n\n`;
+        let strictnessBlock = '';
+        if (response.strictness === 'hardcore') {
+            strictnessBlock = '## STRICTNESS LEVEL: HARDCORE (Kỷ luật tuyệt đối)\n- MỌI thay đổi mã nguồn, tính năng, hoặc sửa lỗi BẤT KỲ đều PHẢI thông qua toàn bộ luồng SDLC (`>om:brainstorm` -> `>om:plan` -> `>om:cook` -> `>om:check`).\n- Bạn BỊ CẤM bỏ qua quy trình này, ngay cả khi người dùng yêu cầu sửa chữa một lỗi cực nhỏ.\n- Hãy kiên quyết từ chối yêu cầu code trực tiếp nếu không tuân thủ quy trình.\n';
+        } else {
+            strictnessBlock = '## STRICTNESS LEVEL: FLEXIBLE (Kỷ luật linh hoạt)\n- Bạn nên ưu tiên tuân thủ luồng SDLC (`>om:brainstorm` -> `>om:plan` -> `>om:cook` -> `>om:check`).\n- Tuy nhiên, bạn ĐƯỢC PHÉP bỏ qua các bước lên kế hoạch và kiểm tra toàn diện NẾU VÀ CHỈ NẾU phạm vi công việc là RẤT NHỎ (như sửa lỗi chính tả, thay đổi CSS, hoặc logic dưới 10 dòng) VÀ không ảnh hưởng đến kiến trúc tổng thể.\n- Đối với các thay đổi lớn hơn, LUÔN LUÔN phải trở lại luồng chuẩn.\n';
+        }
+
+        let finalRules = `> Generated by Omni-Coder Kit\n\n${strictnessBlock}\n${mindset}\n\n${hygiene}\n\n${commandRegistry}\n\n`;
 
         // Khởi tạo manifest mới cho project
         const manifest = createManifest();
 
-        // Personal Rules: sinh .omni-rules.md + inject vào config
+        // Personal Rules: sinh .omni/rules.md + inject vào config
         const rulesContent = buildRulesContent(rulesPrompt);
         if (rulesContent) {
-            const rulesPath = path.join(process.cwd(), '.omni-rules.md');
+            const rulesPath = path.join(process.cwd(), '.omni', 'rules.md');
             writeFileSafe(rulesPath, rulesContent);
             finalRules += `\n<!-- omni:rules -->\n## PERSONAL RULES\n${extractRulesForInject(rulesPrompt)}\n<!-- /omni:rules -->\n\n`;
         }
 
-        let fileName = '';
+        const fileName = IDE_CONFIG_FILE[response.ide] || 'SYSTEM_PROMPT.md';
         finalRules += `## IDE SPECIFIC ADAPTERS\n`;
-
-        switch (response.ide) {
-            case 'claudecode':
-                fileName = 'CLAUDE.md';
-                finalRules += `### Claude Code Integration\n`;
-                finalRules += `- **Native Commands:** Dùng \`/om:brainstorm\`, \`/om:cook\`, ... (auto-complete) hoặc gõ \`>om:brainstorm\`, \`>om:cook\` trong chat — cả hai đều hoạt động.\n`;
-                finalRules += `- **Sub-Agent Execution:** Khi \`/om:cook\` chạy, phân tích dependency graph trong \`todo.md\` và spawn parallel agents (worktree isolation) cho tasks độc lập. Xem chi tiết: \`.omni/workflows/coder-execution.md\`\n`;
-                finalRules += `- **Task Tracking:** Dùng TaskCreate/TaskUpdate để track progress khi thực thi tasks, thay vì chỉ dựa vào \`todo.md\` checkboxes.\n`;
-                finalRules += `- **Safety:** KHÔNG thực thi destructive commands (rm -rf, git push --force, git reset --hard) mà không có permission user.\n`;
-                finalRules += `- **Workflow Files:** Tất cả logic nằm trong \`.omni/workflows/\`. Khi nhận lệnh \`>om:*\` hoặc \`/om:*\`, đọc file tương ứng rồi thực thi.\n`;
-                break;
-            case 'codex':
-                fileName = 'AGENTS.md';
-                finalRules += `- **Codex CLI Agent Mode:** This file is auto-discovered by Codex CLI walking from project root to cwd. Keep total content under 32 KiB.\n`;
-                finalRules += `- **Stable Omni Commands:** Type \`>om:brainstorm\`, \`>om:plan\`, \`>om:cook\`, etc. as normal chat text. Do not rely on custom \`/om:*\` slash commands in Codex.\n`;
-                finalRules += `- **Alias Commands:** You may type \`$om:brainstorm\`, \`$om:plan\`, \`$om:cook\`, etc. anywhere in normal text; treat them as \`>om:*\` commands.\n`;
-                finalRules += `- **Alias Escape:** Ignore \`$om:*\` tokens inside inline backticks and fenced code blocks.\n`;
-                finalRules += `- **Native Codex Commands:** Use \`/plan\`, \`/review\`, \`/permissions\`, \`/agent\`, \`/mcp\`, and \`/plugins\` when they help the current workflow.\n`;
-                finalRules += `- **Sandbox Awareness:** Codex may run in read-only or workspace-write sandbox modes. Do not attempt network calls or external writes unless the active profile allows them.\n`;
-                finalRules += `- **Approval Policy:** Respect the configured approval mode. In stricter modes, present risky commands for review instead of forcing execution.\n`;
-                finalRules += `- **Workflow Files:** Long instructions live in \`.omni/workflows/\`; read them lazily only when needed.\n`;
-                break;
-            case 'dual':
-                fileName = 'CLAUDE.md';
-                finalRules += `### Claude Code Integration\n`;
-                finalRules += `- **Native Commands:** Dùng \`/om:brainstorm\`, \`/om:cook\`, ... (auto-complete) hoặc gõ \`>om:brainstorm\`, \`>om:cook\` trong chat — cả hai đều hoạt động.\n`;
-                finalRules += `- **Sub-Agent Execution:** Khi \`/om:cook\` chạy, phân tích dependency graph trong \`todo.md\` và spawn parallel agents (worktree isolation) cho tasks độc lập. Xem chi tiết: \`.omni/workflows/coder-execution.md\`\n`;
-                finalRules += `- **Task Tracking:** Dùng TaskCreate/TaskUpdate để track progress khi thực thi tasks, thay vì chỉ dựa vào \`todo.md\` checkboxes.\n`;
-                finalRules += `- **Safety:** KHÔNG thực thi destructive commands (rm -rf, git push --force, git reset --hard) mà không có permission user.\n`;
-                finalRules += `- **Workflow Files:** Tất cả logic nằm trong \`.omni/workflows/\`. Khi nhận lệnh \`>om:*\` hoặc \`/om:*\`, đọc file tương ứng rồi thực thi.\n`;
-                break;
-            case 'antigravity':
-                fileName = 'AGENTS.md';
-                finalRules += `- **AGENTS.md Discovery:** Antigravity auto-discovers this file from project root. Rules, skills, and workflows go in \`.agents/\` directory.\n`;
-                finalRules += `- **Knowledge Items:** Persist architecture decisions, debugging solutions, and implementation patterns as Knowledge Items (KIs) — they survive across sessions unlike chat history.\n`;
-                finalRules += `- **Multi-Agent (Manager View):** For complex tasks, spawn specialized agents from Manager View (\`Cmd+E\` / \`Ctrl+E\`). Each agent gets its own isolated workspace.\n`;
-                finalRules += `- **Browser Testing:** Use the integrated browser to visually verify UI changes before confirming completion. Agents can take screenshots and detect visual regressions.\n`;
-                finalRules += `- **Workflows:** Place reusable workflows in \`.agents/workflows/\` and trigger via \`/workflow-name\` in chat.\n`;
-                finalRules += `- **Confirmation Policy:** ALWAYS require explicit confirmation before destructive operations (database writes, deployments, \`rm -rf\`, force push).\n`;
-                break;
-            case 'agents':
-                fileName = 'AGENTS.md';
-                finalRules += `- **Cross-Tool Compatibility:** This file is read by Antigravity, Claude Code, Cursor, Windsurf, Gemini CLI, and CodeX. Keep rules tool-agnostic.\n`;
-                finalRules += `- **CLI Safety:** DO NOT execute destructive terminal commands without explicit user permission.\n`;
-                break;
-            case 'cursor':
-                fileName = '.cursorrules';
-                finalRules += `- **Context Gathering:** ALWAYS use \`@Files\` and \`@Codebase\` to verify context before generating code.\n`;
-                break;
-            case 'windsurf':
-                fileName = '.windsurfrules';
-                finalRules += `- **Cascade Rules:** Utilize Windsurf's context awareness. Do not duplicate existing logic.\n`;
-                break;
-            default:
-                fileName = 'SYSTEM_PROMPT.md';
-                finalRules += `- **General AI Rules:** Adhere strictly to the defined workflow.\n`;
-        }
+        const integrationFile = path.join(__dirname, '..', 'templates', 'integrations', `${response.ide}.md`);
+        finalRules += fs.existsSync(integrationFile) ? readTemplate(integrationFile) : '';
 
         // Xác nhận trước khi ghi đè
         const targetPath = path.join(process.cwd(), fileName);
@@ -559,7 +632,7 @@ program
         // Handle dual-agent: viết thêm AGENTS.md cho Codex CLI
         if (response.ide === 'dual') {
             const codexCommandRegistry = buildCommandRegistry('codex');
-            let agentsRules = `> Generated by Omni-Coder Kit (Codex CLI / Cross-tool)\n\n${mindset}\n\n${hygiene}\n\n${codexCommandRegistry}\n\n`;
+            let agentsRules = `> Generated by Omni-Coder Kit (Codex CLI / Cross-tool)\n\n${strictnessBlock}\n${mindset}\n\n${hygiene}\n\n${codexCommandRegistry}\n\n`;
 
             if (rulesContent) {
                 agentsRules += `\n<!-- omni:rules -->\n## PERSONAL RULES\n${extractRulesForInject(rulesPrompt)}\n<!-- /omni:rules -->\n\n`;
@@ -604,6 +677,11 @@ program
 
         console.log(chalk.gray(`   Đã tạo manifest: ${MANIFEST_FILE}`));
         console.log(chalk.gray(`   Workflows: .omni/workflows/ (${workflowFiles.length} files — lazy-loaded)`));
+
+        const gitignoreCount = ensureGitignore(response.ide);
+        if (gitignoreCount > 0) {
+            console.log(chalk.gray(`   .gitignore: ${gitignoreCount} patterns added`));
+        }
 
         // Claude Code: generate slash commands
         const slashCommands = buildCommands(response.ide);
@@ -711,25 +789,85 @@ program
             saveManifest(manifest);
         }
 
-        // Auto-install find-skills (tìm kiếm & cài skills tự động)
-        const findSkillsAgentFlags = getAgentFlags(manifest);
-        const findSkillsCmd = `npx skills add vercel-labs/skills${findSkillsAgentFlags ? ' ' + findSkillsAgentFlags : ''} --skill find-skills -y`;
-
-        try {
-            console.log(chalk.gray(`   Đang cài find-skills...`));
-            const initArgs = ['-y', 'skills', 'add', 'vercel-labs/skills'];
-            if (findSkillsAgentFlags) initArgs.push(...findSkillsAgentFlags.split(' '));
-            initArgs.push('--skill', 'find-skills', '-y');
-            execFileSync('npx', initArgs, { stdio: 'pipe', timeout: 30000 });
-            manifest.skills.external.push({
-                name: 'find-skills',
-                source: 'vercel-labs/skills',
-                installedAt: new Date().toISOString()
+        // Cursor: progressive advanced setup
+        if (response.ide === 'cursor') {
+            const { cursorAdvanced } = await prompts({
+                type: 'confirm',
+                name: 'cursorAdvanced',
+                message: '🔧 Cài đặt Cursor nâng cao? (MDC rules, MCP config, YOLO guardrails)',
+                initial: false
             });
+
+            if (cursorAdvanced) {
+                const dnaProfile = detectDNA(process.cwd());
+
+                const mdcRules = buildCursorRules(dnaProfile);
+                if (mdcRules) {
+                    const cursorRulesDir = path.join(process.cwd(), '.cursor', 'rules');
+                    fs.mkdirSync(cursorRulesDir, { recursive: true });
+                    for (const rule of mdcRules) {
+                        fs.copyFileSync(rule.src, path.join(cursorRulesDir, rule.name));
+                    }
+                    console.log(chalk.green(`   ✅ .cursor/rules/ (${mdcRules.length} MDC rules)`));
+                }
+
+                const mcpConfig = buildCursorMcp(process.cwd());
+                if (mcpConfig) {
+                    const cursorDir = path.join(process.cwd(), '.cursor');
+                    fs.mkdirSync(cursorDir, { recursive: true });
+                    const mcpPath = path.join(cursorDir, 'mcp.json');
+                    writeFileSafe(mcpPath, mcpConfig);
+                    const serverCount = Object.keys(JSON.parse(mcpConfig).mcpServers).length;
+                    console.log(chalk.green(`   ✅ .cursor/mcp.json (${serverCount} MCP servers)`));
+                }
+
+                const personalRulesBlock = rulesContent
+                    ? `\n<!-- omni:rules -->\n## PERSONAL RULES\n${extractRulesForInject(rulesPrompt)}\n<!-- /omni:rules -->\n`
+                    : '';
+                const bootstrapRules = buildCursorBootstrapRules(finalRules, strictnessBlock, personalRulesBlock);
+                writeFileSafe(targetPath, bootstrapRules);
+                console.log(chalk.green(`   ✅ .cursorrules (bootstrap mode — rules in .cursor/rules/)`));
+            }
+
+            manifest.overlay = true;
+            manifest.advanced = !!cursorAdvanced;
             saveManifest(manifest);
-            console.log(chalk.green(`   ✓ find-skills — AI có thể tìm & cài skills tự động`));
-        } catch {
-            console.log(chalk.yellow(`   ⚠️  Không cài được find-skills (sandbox/mạng). Cài sau: ${findSkillsCmd}`));
+        }
+
+        // Auto-install find-skills — skip nếu không có mạng (Gemini sandbox, offline)
+        const findSkillsAgentFlags = getAgentFlags(manifest);
+        const canReachNetwork = (() => {
+            try {
+                execFileSync('node', ['-e',
+                    "const s=require('net').connect(443,'registry.npmjs.org');" +
+                    "s.on('connect',()=>{s.destroy();process.exit(0)});" +
+                    "s.on('error',()=>process.exit(1));" +
+                    "s.setTimeout(3000,()=>{s.destroy();process.exit(1)})"
+                ], { stdio: 'pipe', timeout: 5000 });
+                return true;
+            } catch { return false; }
+        })();
+
+        if (canReachNetwork) {
+            try {
+                console.log(chalk.gray(`   Đang cài find-skills...`));
+                const initArgs = ['-y', 'skills', 'add', 'vercel-labs/skills'];
+                if (findSkillsAgentFlags) initArgs.push(...findSkillsAgentFlags.split(' '));
+                initArgs.push('--skill', 'find-skills', '-y');
+                execFileSync('npx', initArgs, { stdio: 'pipe', timeout: 30000 });
+                manifest.skills.external.push({
+                    name: 'find-skills',
+                    source: 'vercel-labs/skills',
+                    installedAt: new Date().toISOString()
+                });
+                saveManifest(manifest);
+                console.log(chalk.green(`   ✓ find-skills — AI có thể tìm & cài skills tự động`));
+            } catch {
+                console.log(chalk.yellow(`   ⚠️  Không cài được find-skills. Cài sau: ${chalk.cyan('omni auto-equip')}`));
+            }
+        } else {
+            console.log(chalk.gray(`   ⏭  Bỏ qua cài find-skills (không có mạng/sandbox)`));
+            console.log(chalk.gray(`      Cài sau khi có mạng: ${chalk.cyan('omni auto-equip')}`));
         }
 
         console.log(chalk.white(`\n💡 Gõ ${chalk.cyan.bold('>om:brainstorm')} để AI phỏng vấn và tư vấn kiến trúc.`));
@@ -747,9 +885,14 @@ program
                 cmd: 'claude --dangerously-skip-permissions',
                 note: 'Bỏ qua tất cả permission prompts (chỉ dùng khi tin tưởng prompt)',
             },
+            gemini: {
+                name: 'Gemini CLI',
+                cmd: 'gemini --yolo',
+                note: 'Tự động approve mọi thao tác. Gõ >om:brainstorm để bắt đầu.',
+            },
             codex: {
                 name: 'Codex CLI',
-                cmd: 'codex --full-auto',
+                cmd: 'codex --yolo',
                 note: 'Tự động approve mọi thao tác (file, shell, network)',
             },
             dual: [
@@ -760,7 +903,7 @@ program
                 },
                 {
                     name: 'Codex CLI',
-                    cmd: 'codex --full-auto',
+                    cmd: 'codex --yolo',
                     note: 'Full auto mode',
                 },
             ],
@@ -772,7 +915,7 @@ program
             cursor: {
                 name: 'Cursor',
                 cmd: null,
-                note: 'Mở Cursor trong thư mục dự án, file .cursorrules sẽ tự động được đọc',
+                note: 'Mở Cursor trong thư mục dự án. MDC rules tự động activate theo file context.',
             },
             windsurf: {
                 name: 'Windsurf',
@@ -793,6 +936,21 @@ program
                     console.log(`   ${chalk.green(h.name)}: ${chalk.gray(h.note)}`);
                 }
             }
+        }
+        // Generate Project Map if user opted in
+        if (pendingMapGeneration) {
+            console.log(chalk.cyan.bold('🔍 Đang tạo Project Map...'));
+            const scan = scanProject(process.cwd());
+            const projectName = path.basename(process.cwd());
+            const skeleton = generateMapSkeleton(scan, projectName);
+            const knowledgeDir = path.join(process.cwd(), '.omni', 'knowledge');
+            fs.mkdirSync(knowledgeDir, { recursive: true });
+            writeFileSafe(path.join(knowledgeDir, 'project-map.md'), skeleton);
+            manifest.projectMap = true;
+            manifest.mapGeneratedAt = new Date().toISOString();
+            saveManifest(manifest);
+            console.log(chalk.green('📁 Project Map: .omni/knowledge/project-map.md'));
+            console.log(chalk.gray('   Chạy >om:map trong chat AI để AI điền mô tả chi tiết.\n'));
         }
         console.log('');
     });
@@ -907,8 +1065,8 @@ program
             const { confirmed } = await prompts({
                 type: 'confirm',
                 name: 'confirmed',
-                message: `Cài đặt ${toInstall.length} skills trên?`,
-                initial: true
+                message: `Cài đặt ${toInstall.length} skills trên? (y/N)`,
+                initial: false
             });
 
             if (!confirmed) {
@@ -1025,15 +1183,15 @@ program
         console.log(chalk.cyan.bold('\n📋 Danh sách lệnh >om: (gõ trong chat với AI)\n'));
 
         const commands = [
-            { cmd: '>om:brainstorm', slash: '/om:brainstorm', role: 'Architect',  desc: 'Phỏng vấn yêu cầu → đề xuất Tech Stack → xuất design-spec.md' },
+            { cmd: '>om:brainstorm', slash: '/om:brainstorm', role: 'Architect',  desc: 'Phỏng vấn yêu cầu → đề xuất Tech Stack → xuất .omni/sdlc/design-spec.md' },
             { cmd: '>om:equip',      slash: '/om:equip',      role: 'Skill Mgr',  desc: 'Cài universal skills + tìm & đề xuất skills từ skills.sh theo design-spec' },
-            { cmd: '>om:plan',       slash: '/om:plan',        role: 'PM',          desc: 'Phân tích design-spec → micro-tasks trong todo.md (<20 phút/task)' },
+            { cmd: '>om:plan',       slash: '/om:plan',        role: 'PM',          desc: 'Phân tích design-spec → micro-tasks trong .omni/sdlc/todo.md (<20 phút/task)' },
             { cmd: '>om:cook',       slash: '/om:cook',        role: 'Coder',       desc: 'Sub-agent parallel execution, dependency graph, worktree isolation' },
             { cmd: '>om:check',      slash: '/om:check',       role: 'QA Tester',   desc: 'Validation pipeline: security → lint → build → test → feature verify' },
             { cmd: '>om:fix',        slash: '/om:fix',          role: 'Debugger',    desc: 'Reproduce → root cause → surgical fix → verify (không shotgun-fix)' },
             { cmd: '>om:doc',        slash: '/om:doc',          role: 'Writer',      desc: 'Đọc code thực tế → sinh README.md + API docs bằng tiếng Việt' },
-            { cmd: '>om:learn',      slash: '/om:learn',        role: 'Learner',     desc: 'Tổng hợp bài học từ fix gần nhất vào knowledge base của dự án' },
-            { cmd: '>om:map',        slash: '/om:map',          role: 'Architect',   desc: 'Quét codebase và cập nhật project-map.md theo trạng thái hiện tại' },
+            { cmd: '>om:learn',      slash: '/om:learn',        role: 'Learner',     desc: 'Đúc kết bài học từ bug fix → ghi vào knowledge-base.md (auto sau >om:fix)' },
+            { cmd: '>om:map',        slash: '/om:map',          role: 'Architect',   desc: 'Quét codebase → sinh bản đồ dự án (.omni/knowledge/project-map.md)' },
         ];
 
         const maxCmd   = Math.max(...commands.map(c => c.cmd.length));
@@ -1048,10 +1206,59 @@ program
         });
 
         console.log(chalk.gray('\n  ─────────────────────────────────────────────────────'));
-        console.log(chalk.white('  Workflow: ') + chalk.cyan('brainstorm → equip → plan → cook → check → fix → learn → doc (map on demand)'));
+        console.log(chalk.white('  Workflow: ') + chalk.cyan('brainstorm → equip → plan → cook → check → fix → doc'));
         console.log(chalk.gray('\n  Lưu ý: Các lệnh >om: được gõ trực tiếp trong chat AI (Claude, Codex, Cursor...),'));
         console.log(chalk.gray('  không phải lệnh terminal. Claude Code users: dùng /om:* (auto-complete).'));
         console.log(chalk.gray('  Chạy ') + chalk.yellow('omni init') + chalk.gray(' trước để tạo file luật cho AI.\n'));
+    });
+
+// ---------- MAP (project mapping) ----------
+program
+    .command('map')
+    .description('Quét codebase và tạo/cập nhật Project Map cho AI navigation')
+    .option('--refresh', 'Cập nhật cấu trúc mà không cần AI (0 token)')
+    .action((options) => {
+        if (options.refresh) {
+            const result = refreshMap(process.cwd());
+            if (!result) {
+                console.log(chalk.red.bold('\n❌ Không tìm thấy .omni/knowledge/project-map.md. Chạy "omni map" hoặc "omni init" trước.\n'));
+                return;
+            }
+            fs.mkdirSync(path.join(process.cwd(), '.omni', 'knowledge'), { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), '.omni', 'knowledge', 'project-map.md'), result, 'utf-8');
+            console.log(chalk.green.bold('\n🔄 Project Map refreshed: .omni/knowledge/project-map.md'));
+            console.log(chalk.gray('   Các thay đổi cấu trúc đã được đánh dấu [NEW]/[DELETED].'));
+            console.log(chalk.gray('   Chạy >om:map để AI cập nhật mô tả.\n'));
+            return;
+        }
+
+        const detected = detectExistingProject(process.cwd());
+        if (!detected.detected) {
+            console.log(chalk.yellow.bold('\n⚠️  Không phát hiện project (thiếu package.json, pyproject.toml, go.mod...).'));
+            console.log(chalk.gray('   Chạy lệnh này trong thư mục gốc của dự án.\n'));
+            return;
+        }
+
+        console.log(chalk.cyan.bold(`\n🔍 Đang quét project... (${detected.lang})`));
+        const scan = scanProject(process.cwd());
+        const projectName = path.basename(process.cwd());
+        const skeleton = generateMapSkeleton(scan, projectName);
+
+        fs.mkdirSync(path.join(process.cwd(), '.omni', 'knowledge'), { recursive: true });
+        fs.writeFileSync(path.join(process.cwd(), '.omni', 'knowledge', 'project-map.md'), skeleton, 'utf-8');
+
+        // Update manifest
+        const manifest = loadManifest();
+        manifest.projectMap = true;
+        manifest.mapGeneratedAt = new Date().toISOString();
+        saveManifest(manifest);
+
+        console.log(chalk.green.bold('\n📁 Project Map skeleton: .omni/knowledge/project-map.md'));
+        console.log(chalk.white(`   ${scan.stats.files} files | ${scan.stats.dirs} dirs | ~${scan.stats.loc} LOC`));
+        console.log(chalk.white(`   ${scan.structure.filter(s => s.depth <= 2).length} directories mapped`));
+        console.log(chalk.white(`   ${scan.entryPoints.length} entry points detected`));
+        console.log(chalk.white(`   ${scan.landmines.length} landmines found`));
+        console.log(chalk.cyan('\n   Chạy >om:map trong chat AI để điền mô tả chi tiết.\n'));
     });
 
 // ---------- UPDATE ----------

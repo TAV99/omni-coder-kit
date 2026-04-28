@@ -1,16 +1,16 @@
 ## PM AGENT WORKFLOW (TASK DECOMPOSITION & PLANNING)
-When executing the [>om:plan] command, you MUST act as a Senior Project Manager. Your job is to transform `design-spec.md` into an actionable, micro-task checklist in `todo.md`.
+When executing the [>om:plan] command, you MUST act as a Senior Project Manager. Your job is to transform `.omni/sdlc/design-spec.md` into an actionable, micro-task checklist in `.omni/sdlc/todo.md`.
 
 **Step 1: Read & Validate Design Spec**
-Read `design-spec.md` fully. It uses a hybrid format:
+Read `.omni/sdlc/design-spec.md` fully. It uses a hybrid format:
 - **Summary table** (top): Goal, Users, Tech Stack, UI Style, Constraints — read this first for context.
-- **Tagged requirement list** (body): Each requirement has a category tag (`[func]`, `[auth]`, `[data]`, `[api]`, `[nfr]`, `[edge]`, `[ui]`).
+- **Tagged requirement list** (body): Each requirement has a category tag (`[func]`, `[auth]`, `[data]`, `[api]`, `[nfr]`, `[edge]`, `[ui]`, `[infra]`).
 
 Verify it has at minimum:
 - A filled Summary table (Goal + Tech Stack)
 - At least 1 `[func]` requirement
 - At least 1 `[data]` or `[api]` requirement
-*CRITICAL: If `design-spec.md` is missing or incomplete, STOP. Tell the user to run `>om:brainstorm` first.*
+*CRITICAL: If `.omni/sdlc/design-spec.md` is missing or incomplete, STOP. Tell the user to run `>om:brainstorm` first.*
 
 **Step 2: Identify Components/Modules**
 Use the requirement tags to auto-group into components:
@@ -19,6 +19,7 @@ Use the requirement tags to auto-group into components:
 - `[func]` + `[ui]` → Frontend pages/components
 - `[auth]` → Auth & middleware
 - `[nfr]` → Configuration, performance, infrastructure
+- `[infra]` → Infrastructure layer (services, workers, queues, cache config)
 - `[edge]` → Error handling (distribute into relevant components)
 
 If the spec uses the old prose format (no tags), fall back to manual grouping:
@@ -26,7 +27,7 @@ If the spec uses the old prose format (no tags), fall back to manual grouping:
 
 **Step 3: Inventory Installed Skills**
 Before decomposing tasks, scan available skills:
-- Read `.omni-manifest.json` → `skills.external[]` for installed skill names.
+- Read `.omni/manifest.json` → `skills.external[]` for installed skill names.
 - Read skill files in `.agents/skills/` or `.claude/skills/` to understand each skill's capability.
 - Build a **skill map**: which skill applies to which type of work (e.g., `supabase-postgres-best-practices` → DB tasks, `vercel-react-best-practices` → React components, `systematic-debugging` → complex logic).
 
@@ -34,7 +35,7 @@ Before decomposing tasks, scan available skills:
 For EACH component, create tasks that are:
 - **Atomic:** One task = one clear deliverable (a file, a function, a migration)
 - **Estimable:** Each task should take < 20 minutes of coding
-- **Ordered:** Dependencies first (DB before API, API before UI)
+- **Ordered:** Dependencies first. Extended ordering: DB → Cache → Queue/Worker → API → Realtime → UI. Specifics: cache layer before API endpoints (API may use cache), queue/worker before features that send async tasks, realtime setup before UI components that consume realtime data.
 - **Testable:** Each task has an implicit verification (compiles, returns expected data, renders)
 - **Skill-tagged:** Each task MUST specify which installed skill(s) the agent should apply during execution
 
@@ -42,6 +43,7 @@ For EACH component, create tasks that are:
 For each task, determine if it is **infra** (run once, no code to write) or **code** (needs implementation):
 - **Infra:** package install, docker-compose, DB migration/seed, .env setup, prisma generate, mkdir, chmod, tool install, config file generation — anything that is "run a command once and it's done".
 - **Code:** create files, write functions, implement endpoints, build components, write tests — anything that requires writing or modifying source code.
+- **`[infra]` tag tasks** are classified flexibly: pure config (Redis setup, queue connection, WebSocket server init) → `setup.sh`. Tasks requiring code (worker logic, event handlers, cache invalidation logic) → `.omni/sdlc/todo.md` with `@skill:` tags. Classify based on task nature, not hardcoded rules.
 
 If infra tasks exist, generate `setup.sh` — a single bash script that executes all infra tasks in order with built-in verification:
 ```bash
@@ -82,17 +84,17 @@ After generating `setup.sh`, instruct the user:
 ```
 📋 Đã tạo:
    • setup.sh — chạy 1 lần để cài đặt hạ tầng (N tasks)
-   • todo.md — danh sách code tasks cho >om:cook (M tasks)
+   • .omni/sdlc/todo.md — danh sách code tasks cho >om:cook (M tasks)
 
 👉 Chạy: bash setup.sh
    Sau khi setup thành công, gõ >om:cook để bắt đầu code.
 ```
 
-**Step 6: Generate `todo.md`**
+**Step 6: Generate `.omni/sdlc/todo.md`**
 Output code tasks using this exact format:
 ```
 # Todo — [Project Name]
-> Generated from design-spec.md | [date]
+> Generated from .omni/sdlc/design-spec.md | [date]
 > Skills: [list all installed skills used in this plan]
 
 ## Setup (đã tách vào setup.sh)
@@ -121,7 +123,7 @@ If no infra tasks exist, omit the `## Setup` section entirely.
 **Rules:**
 - Every task MUST use `- [ ]` checkbox format.
 - Group by component, order by dependency within each group.
-- Infra tasks go to `setup.sh`, NOT into `todo.md` as uncompleted tasks.
+- Infra tasks go to `setup.sh`, NOT into `.omni/sdlc/todo.md` as uncompleted tasks.
 - Do NOT include vague tasks like "implement feature X". Be specific: "Create POST /api/users endpoint with validation for email and password fields".
 - If a task is too large (>20 min estimate), split it further.
 - Add a final `## Verification` section with build/lint/test tasks.

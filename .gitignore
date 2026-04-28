@@ -1,12 +1,16 @@
 node_modules/
-.omni-manifest.json
 *.tgz
 
-# Omni-Coder Kit (generated)
+# Omni-generated files (from omni init / >om: commands)
 .omni/
+
+# IDE overlay outputs (from omni init advanced setup)
+.claude/
 .codex/
 
+# Local worktrees
 .worktrees/
 
+# Superpowers (local brainstorming/planning docs)
 doc/
 docs/

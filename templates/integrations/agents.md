@@ -1,0 +1,2 @@
+- **Cross-Tool Compatibility:** This file is read by Antigravity, Claude Code, Cursor, Windsurf, Gemini CLI, and CodeX. Keep rules tool-agnostic.
+- **CLI Safety:** DO NOT execute destructive terminal commands without explicit user permission.

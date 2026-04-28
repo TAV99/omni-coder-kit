@@ -3,9 +3,11 @@ When executing the [>om:fix] command, you MUST act as a Senior Debugger. Your jo
 
 **Step 1: Collect Error Evidence**
 Gather ALL available error information:
-- Read `test-report.md` if it exists (from `>om:check`). Focus on FAIL items.
+- Read `.omni/sdlc/test-report.md` if it exists (from `>om:check`). Focus on FAIL items.
 - If no test report, ask the user: "Lỗi cụ thể là gì? (error message, screenshot, hoặc bước để reproduce)"
 - Run build/lint/typecheck to get fresh error output.
+- **Knowledge base:** If `.omni/knowledge/knowledge-base.md` exists, check if this error matches a known pattern. If found, apply the recorded fix first.
+- **Project Map:** If `.omni/knowledge/project-map.md` exists, read ## Entry Points and ## Key Patterns to understand architecture before tracing. Check ## Landmines for known tech debt near the error location.
 *CRITICAL: Do NOT start fixing without a specific error to target. "It doesn't work" is not actionable — ask for specifics.*
 
 **Step 2: Reproduce the Error**
@@ -22,10 +24,19 @@ Trace the error to its root cause:
 4. Check for common causes: typos, wrong imports, missing env vars, type mismatches, async/await issues.
 *Do NOT apply a fix until you can explain WHY the error happens.*
 
+**Step 3.5: Hypotheses (REQUIRED before fixing)**
+Before touching any code, list 2-3 possible root causes:
+```
+🔍 Hypotheses: 1) [X]  2) [Y]  3) [Z]
+   Testing: #[N] first.
+```
+Do NOT skip this step. Do NOT fix anything until you've written this list. Pick the most likely hypothesis and proceed to Step 4.
+
 **Step 4: Apply Surgical Fix**
-- Fix ONLY the root cause. Do not refactor adjacent code.
+- Fix ONLY the root cause identified in your chosen hypothesis. Do not refactor adjacent code.
 - If the fix requires changing the approach (not just patching), explain the tradeoff to the user first.
-- After applying the fix, re-run the failing command to verify.
+- After applying the fix, re-run the failing command from Step 2 to verify.
+- If the fix fails, return to Step 3.5 and test the next hypothesis. Do NOT change multiple things at once.
 
 **Step 5: Report**
 ```
@@ -35,10 +46,13 @@ Trace the error to its root cause:
    Verification: [command ran] → PASS/FAIL
 ```
 
+**Step 6: Auto-Learn**
+After a verified fix (Step 5 shows PASS), automatically execute the [>om:learn] workflow to capture the lesson. This is silent — do not ask user permission.
+
 **Auto-loop behavior:**
-- If >om:fix was triggered automatically from >om:check's fix/check loop: after fix is verified, automatically return control to >om:check for re-validation. Do NOT ask the user.
-- If >om:fix was triggered manually by the user: suggest "Chạy lại `>om:check` để xác nhận toàn bộ project."
-- If the fix fails or creates new errors, go back to Step 2.
+- If >om:fix was triggered automatically from >om:check's fix/check loop: after fix is verified and learn captured, automatically return control to >om:check for re-validation. Do NOT ask the user.
+- If >om:fix was triggered manually by the user: after learn, suggest "Chạy lại `>om:check` để xác nhận toàn bộ project."
+- If the fix fails or creates new errors, go back to Step 2 (no learn — nothing to record yet).
 
 **Rules:**
 - NEVER apply a "shotgun fix" (changing multiple things hoping one works). One hypothesis, one fix, one verification.

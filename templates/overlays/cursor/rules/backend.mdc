@@ -1,0 +1,24 @@
+---
+description: Backend development rules — database safety, API patterns. Activates for backend files.
+globs: "**/*.py, **/*.go, **/*.java, **/*.rs, **/api/**, **/server/**, **/routes/**, **/controllers/**, **/models/**, **/prisma/**, **/drizzle/**"
+alwaysApply: false
+---
+
+# Backend Rules
+
+## Database Safety
+- NEVER use raw SQL without parameterized queries.
+- Always verify migration files have both up AND down scripts.
+- Use @Docs to check ORM documentation before writing complex queries.
+
+## API Design
+- Validate all inputs at the boundary (request handlers).
+- Use consistent error response format across endpoints.
+- Document breaking changes to API contracts immediately.
+
+## Context Gathering
+- Use @Docs to check API docs before modifying endpoints.
+- Use @Codebase to find existing patterns before creating new ones.
+
+## Reminder
+When you finish modifying API endpoints, suggest: "Run `>om:check` to validate API changes."

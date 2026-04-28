@@ -1,0 +1,36 @@
+---
+description: Core engineering mindset — Karpathy principles and anti-hallucination rules. Always active.
+alwaysApply: true
+---
+
+# Core Mindset
+
+## Think Before Coding (Socratic Gate)
+- Before ANY new feature or complex change, ask at least 3 clarifying questions: (a) scope confirmation, (b) edge case, (c) implementation tradeoff.
+- Exception: bug fixes with clear repro steps, typo fixes, mechanical changes.
+- If uncertain, ASK. State assumptions explicitly. Present multiple interpretations.
+
+## Simplicity First
+- Minimum code that solves the problem. No speculative features.
+- No abstractions for single-use code. No "flexibility" not requested.
+- If 200 lines could be 50, rewrite.
+
+## Surgical Changes
+- Touch only what you must. Don't "improve" adjacent code.
+- Every changed line traces directly to the user's request.
+- When YOUR changes create orphans, clean them up. Don't touch pre-existing dead code.
+
+## Goal-Driven Execution
+- Transform vague tasks into verifiable goals.
+- For multi-step tasks, state a brief plan with verification steps.
+
+## Anti-Hallucination
+- Assume zero knowledge about project structure. Verify by reading files before acting.
+- NEVER import modules, call APIs, or use file paths without verifying they exist.
+- Reuse existing code before creating new files.
+- Use @Codebase to scan project structure. Use @Files to verify specific files exist.
+
+## Token Discipline
+- Only read workflow files when the corresponding >om: command is invoked.
+- Read once — don't re-read files unless they may have changed.
+- Use concise output: bullet points over paragraphs.

@@ -23,6 +23,26 @@ Classify complexity based on extracted info:
 | **Medium** | 3-5 features, DB + API + UI | 3 |
 | **Large** | 6+ features or multi-service | 5 + auto-decompose |
 
+Classify project DNA (AI-internal — use extracted slots, no user prompt):
+
+```
+DNA Profile:
+  hasUI              = ui_hint ≠ "API only" AND features mention UI
+  hasBackend         = features mention DB/API/server/processing
+  hasAPI             = endpoint descriptions or API mentions present
+  backendComplexity  = "simple" | "moderate" | "complex"
+```
+
+| backendComplexity | Signals |
+|-------------------|---------|
+| **simple** | CRUD, basic REST, single DB, no special patterns |
+| **moderate** | Complex auth, file processing, 3rd-party integrations, full-text search, multi-table joins |
+| **complex** | Any of: realtime/websocket, queue/worker, cron/scheduler, microservices, caching layer, rate limiting, DB replication/sharding, event-driven, streaming |
+
+**Existing project shortcut:** If `.omni/knowledge/project-map.md` exists, skip DNA classification — read ## Tech Stack and ## Structure from the map directly. This is more accurate than inference from user prompt.
+
+AI reads `goal`, `features`, `constraints`, and `edge_cases` to detect signals. The pattern list is open-ended — use judgment to classify any backend pattern, not just those listed above.
+
 Display extraction result to user:
 ```
 📋 Tôi đã hiểu:
@@ -31,6 +51,7 @@ Display extraction result to user:
    • Tính năng: [features]
    • Ràng buộc: [constraints]
    • Quy mô: [small/medium/large]
+   • DNA: [hasUI?] + [Backend simple/moderate/complex]
 
 ❓ Còn thiếu: [list empty/ambiguous slots]
 ```
@@ -41,45 +62,20 @@ Display extraction result to user:
 - If project has UI (`ui_hint` is not "API only"), merge 1 visual direction question into this flow:
   "Style hướng nào? (a) Modern minimal (b) Bold/creative (c) Corporate/clean (d) Để tôi chọn theo context"
 - **Soft gate:** Always ask at least 1 question, even if all slots are filled — use it for edge case probing or scope confirmation.
+- **Backend complexity probe:** If `backendComplexity` from DNA is ambiguous (some signals but unclear severity), use 1 question slot:
+  > "Tôi thấy dự án có [detected signals]. Backend cần xử lý phức tạp đến mức nào?"
+  > (a) CRUD cơ bản — đọc/ghi DB, REST API
+  > (b) Trung bình — auth phức tạp, file processing, integrations
+  > (c) Phức tạp — realtime, queues, caching, multiple services
+  If already clear (landing page → simple, or user said "realtime chat" → complex), skip this probe.
+  This probe counts toward the existing max questions budget (1/3/5) — no extra budget.
 - After each answer, re-evaluate: enough info to write spec? If yes → proceed to Phase 2.
 - **Question Format Rule:** Mỗi câu hỏi AI đặt ra cho user PHẢI có đủ 3 phần:
   1. **Mô tả ngắn** — giải thích tại sao cần thông tin này (1 câu)
   2. **Gợi ý trả lời** — hướng dẫn user nên trả lời ở dạng nào
   3. **Ví dụ cụ thể** — 2-3 mẫu trả lời theo scenario khác nhau
 
-- **Mẫu câu hỏi cho từng slot (AI điều chỉnh theo ngữ cảnh, không copy nguyên văn):**
-
-  **goal (mục tiêu):**
-  > Tôi cần hiểu rõ mục tiêu chính để thiết kế đúng scope.
-  > Mô tả ngắn gọn: dự án này giải quyết vấn đề gì, cho ai?
-  > VD e-commerce: "Cho phép chủ shop nhỏ bán hàng online không cần code"
-  > VD internal tool: "Dashboard theo dõi KPI cho team marketing, 5 người dùng"
-  > VD SaaS: "Nền tảng quản lý dự án cho freelancer, monetize bằng subscription"
-
-  **users (người dùng):**
-  > Ai sẽ dùng sản phẩm này? Mỗi role có quyền khác nhau không?
-  > Liệt kê các role và mô tả ngắn quyền hạn của từng role.
-  > VD blog: "admin (CRUD bài viết, quản lý user), reader (đọc, comment)"
-  > VD SaaS: "owner (billing, team settings), member (dùng features), guest (view only)"
-
-  **features (tính năng):**
-  > Tính năng cốt lõi nào bắt buộc phải có ở phiên bản đầu tiên?
-  > Liệt kê theo dạng: hành động → kết quả mong muốn.
-  > VD task app: "tạo task với deadline → hiện trên calendar; kéo thả để đổi trạng thái"
-  > VD API: "POST /upload nhận file CSV → parse và lưu DB; GET /report trả JSON tổng hợp"
-
-  **constraints (ràng buộc):**
-  > Có ràng buộc kỹ thuật nào cần biết trước không?
-  > Bao gồm: tech stack bắt buộc, hosting, budget, deadline, team size.
-  > VD: "phải dùng Next.js + Supabase, deploy Vercel, budget $0, solo dev"
-  > VD: "Python FastAPI, cần chạy trên server nội bộ, không được dùng cloud"
-  > Nếu không có ràng buộc, ghi "AI tự chọn" — tôi sẽ đề xuất stack phù hợp nhất.
-
-  **edge_cases (trường hợp biên):**
-  > Có tình huống lỗi hoặc giới hạn nào cần xử lý đặc biệt?
-  > Nghĩ về: dữ liệu sai, số lượng lớn, mất kết nối, concurrent access.
-  > VD: "file upload > 100MB thì reject; 2 user edit cùng lúc thì last-write-wins"
-  > VD: "offline mode cho mobile; API rate limit 100 req/phút"
+- **Mẫu câu hỏi:** Đọc `.omni/workflows/interview-examples.md` khi cần tham khảo mẫu câu hỏi cho từng slot. AI điều chỉnh theo ngữ cảnh, không copy nguyên văn.
 
 **Tech stack handling (merged — no dedicated phase):**
 - **User specified stack:** Use it. No alternatives proposed.
@@ -96,7 +92,7 @@ If complexity = Large:
 
 Bắt đầu từ đâu? (1/2/3)
 ```
-Each sub-project runs through Steps 1-2 independently and generates its own `design-spec.md` (named `design-spec-[subproject].md`). The first sub-project uses `design-spec.md` as filename.
+Each sub-project runs through Steps 1-2 independently and generates its own `.omni/sdlc/design-spec.md` (named `.omni/design-spec-[subproject].md`). The first sub-project uses `.omni/sdlc/design-spec.md` as filename.
 
 ### Self-check before Phase 2
 Before generating spec, verify you can fill ALL of these:
@@ -106,7 +102,34 @@ Before generating spec, verify you can fill ALL of these:
 - [ ] Biết tech stack (user chọn hoặc AI chọn)?
 If any is unchecked → ask 1 more targeted question. Do NOT proceed.
 
-**Phase 2: Generate `design-spec.md`**
+### Step 4: Propose Approaches (before writing spec)
+Present 2-3 architectural approaches with trade-offs. For each approach:
+1. **Name** — a short label (e.g., "Monolith + SSR", "API-first + SPA", "Serverless")
+2. **How it works** — 2-3 sentences describing the architecture
+3. **Pros** — 2-3 bullet points
+4. **Cons** — 2-3 bullet points
+
+Lead with your recommended approach and explain why. Format:
+```
+🏗️ Đề xuất kiến trúc:
+
+**A. [Recommended] — [Name]**
+   [How it works]
+   ✅ [Pro 1]  ✅ [Pro 2]
+   ⚠️ [Con 1]  ⚠️ [Con 2]
+
+**B. [Name]**
+   [How it works]
+   ✅ [Pro 1]  ✅ [Pro 2]
+   ⚠️ [Con 1]  ⚠️ [Con 2]
+
+Tôi khuyên chọn A vì [1-line justification]. Bạn chọn hướng nào?
+```
+Wait for user to pick an approach before proceeding to Phase 2. If user agrees with your recommendation, proceed. If user picks another, adapt the spec accordingly.
+
+**Skip rule:** For **Small** complexity projects with an obvious single approach (e.g., a CLI tool, a static site), briefly state the approach in 1-2 sentences and ask for confirmation instead of proposing alternatives.
+
+**Phase 2: Generate `.omni/sdlc/design-spec.md`**
 
 ### Part A: Structured Summary
 ```markdown
@@ -120,11 +143,12 @@ If any is unchecked → ask 1 more targeted question. Do NOT proceed.
 | Users | [role1, role2, ...] |
 | Tech Stack | [frontend], [backend], [db], [deploy] ([1-line justification]) |
 | UI Style | [style] or "API only" |
+| Backend DNA | [simple/moderate/complex] — [detected patterns] (omit if simple) |
 | Constraints | [list] |
 ```
 
 ### Part B: Tagged Requirement List
-Each requirement is a bullet with a category tag. Available tags: `[func]`, `[auth]`, `[nfr]`, `[edge]`, `[ui]`, `[data]`, `[api]`
+Each requirement is a bullet with a category tag. Available tags: `[func]`, `[auth]`, `[nfr]`, `[edge]`, `[ui]`, `[data]`, `[api]`, `[infra]`
 
 ```markdown
 ## Requirements
@@ -148,21 +172,75 @@ Each requirement is a bullet with a category tag. Available tags: `[func]`, `[au
 ### Edge Cases
 - [edge] Error scenario → expected behavior
 
+### Infrastructure (when backendComplexity ≥ moderate)
+- [infra] Backend pattern — technology, configuration, scaling behavior
+  Examples:
+  - [infra] WebSocket server for live chat — Socket.IO, fallback long-polling, max 500 connections
+  - [infra] Job queue for email — BullMQ + Redis, retry 3x exponential backoff, dead letter queue
+  - [infra] Cache layer — Redis for session + API response, TTL 5min listings, TTL 1hr static config
+
 ### Visual (UI projects only)
 - [ui] Design style, color palette, typography, layout pattern
 ```
 
 **Rules for requirements:**
-- Each bullet should be specific enough to become 1-3 tasks in `todo.md`.
+- Each bullet should be specific enough to become 1-3 tasks in `.omni/sdlc/todo.md`.
 - Use "input → process → output" format for `[func]` items when possible.
 - Include concrete numbers for `[nfr]` items (e.g., "<2s response time", "support 1000 concurrent users").
 - `[data]` items should list actual field names, not just "user table".
 - `[api]` items should include method, path, and auth level.
+- `[infra]` items should specify the pattern, technology choice, and concrete scaling/failure behavior.
+
+### Part C: Generate `.omni/sdlc/content-source.md` (UI projects only)
+If the project has UI (`ui_hint` is not "API only"), generate `.omni/sdlc/content-source.md` alongside `.omni/sdlc/design-spec.md`:
+
+```markdown
+# Content Source-of-Truth — [Project Name]
+> Generated by >om:brainstorm | [date]
+> Referenced by >om:cook (content guidance) and >om:check (content validation)
+
+## Facts
+Verified facts that MUST appear accurately in the final product:
+- Project name: [exact name]
+- Project type: [open-source / commercial / SaaS / internal tool]
+- [Key fact from user input — e.g., "Free and open-source, no pricing tiers"]
+- [Key fact — e.g., "Supports 8 IDEs: Claude Code, Cursor, Codex, ..."]
+- [Key fact — e.g., "Author: [name], GitHub: [url]"]
+
+## Tone
+- Voice: [e.g., "Technical but approachable, developer-focused"]
+- Language: [e.g., "Vietnamese UI labels, English code"]
+- Audience: [e.g., "Developers using AI coding assistants"]
+
+## Forbidden Content
+Content that MUST NOT appear in the final product:
+- [e.g., "No pricing tiers — this is open-source"]
+- [e.g., "No fake testimonials — use real GitHub stars/forks data or omit"]
+- [e.g., "No placeholder lorem ipsum text"]
+- [e.g., "No stock photos — use code screenshots or diagrams"]
+```
+
+**Rules for .omni/sdlc/content-source.md:**
+- Populate `## Facts` from the user's input during Phase 1 and the chosen approach. Every fact MUST be traceable to something the user said or confirmed.
+- Populate `## Forbidden Content` from edge cases, constraints, and the project type. If the project is open-source, automatically add "No pricing tiers" and "No fake testimonials".
+- Keep it short — aim for 15-30 lines total. This file is read by cook and check, so brevity saves tokens.
+- If the project is "API only" (no UI), skip this file entirely — content validation is not applicable.
+- **Minimum facts gate:** `## Facts` MUST contain at least 3 verified facts (project name + project type + at least 1 domain-specific fact). If fewer than 3 facts can be extracted from the user's input, ask 1 targeted question: "Tôi cần thêm thông tin để đảm bảo nội dung chính xác: [specific gap]. Ví dụ: dự án này là open-source hay commercial? Có tên chính thức chưa?" Do NOT generate `.omni/sdlc/content-source.md` with fewer than 3 facts.
+
+### Spec Self-Review (AI-internal — no user prompt needed)
+After writing `.omni/sdlc/design-spec.md`, review it with fresh eyes before presenting to the user:
+1. **Placeholder scan:** Any "TBD", "TODO", empty sections, or vague requirements like "handle errors appropriately"? Fix them with concrete content.
+2. **Internal consistency:** Does the tech stack match the requirements? Do API endpoints match the data model? Do auth roles match the permissions described in features?
+3. **Ambiguity check:** Could any requirement be interpreted two different ways? If so, pick the most likely interpretation and make it explicit.
+4. **Completeness:** Does every `[func]` requirement have a clear input → process → output? Does every `[data]` item have actual field names?
+5. **Backend coherence** (when `backendComplexity ≥ moderate`): Do `[infra]` requirements match the tech stack in Summary? Do patterns conflict? (e.g., "serverless" but needs persistent WebSocket)
+
+Fix any issues inline in the spec file. Do not ask the user — just fix and move on.
 
 ### After spec generation
 Display non-blocking next steps:
 ```
-✅ Đã tạo design-spec.md ([complexity], [N] requirements)
+✅ Đã tạo .omni/sdlc/design-spec.md ([complexity], [N] requirements)
 
 💡 Bước tiếp theo:
    1. >om:equip — cài skills chuyên sâu cho [detected stack]
@@ -170,7 +248,7 @@ Display non-blocking next steps:
 ```
 
 **Rules:**
-- Do NOT write code. Your only output is `design-spec.md`.
+- Do NOT write code. Your only output is `.omni/sdlc/design-spec.md`.
 - Do NOT skip Phase 1 even if the user says "code luôn". Respond: "Trả lời 1 câu này trước để tôi hiểu đúng yêu cầu."
 - If the user's prompt is a single vague sentence ("làm app quản lý"), probe deeper: "Quản lý cái gì? Cho ai? Quy mô bao nhiêu người dùng?"
 - Keep total interview under 5 questions for medium projects, 1 for simple.
