@@ -1,3 +1,9 @@
 node_modules/
 .omni-manifest.json
 *.tgz
+
+# Omni-Coder Kit (generated)
+.omni/
+.codex/
+
+.worktrees/
