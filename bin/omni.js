@@ -464,8 +464,22 @@ program
             return;
         }
 
+        // Sub-agent question (only for IDEs that support parallel agents)
+        const supportsSubagents = ['claudecode', 'codex', 'dual'].includes(response.ide);
+        let useSubagents = false;
+        if (supportsSubagents) {
+            const sa = await prompts({
+                type: 'confirm',
+                name: 'subagents',
+                message: q(3, 4, 'Sử dụng sub-agents (parallel execution)? ⚠️ Tốn token hơn, nhưng nhanh hơn.'),
+                initial: false,
+            });
+            useSubagents = !!sa.subagents;
+        }
+        const totalQ = supportsSubagents ? 4 : 3;
+
         // Personal Rules (guided + free-text)
-        console.log(chalk.cyan(`\n${q(3, 3, 'Personal Rules')} ${chalk.gray('(Enter để bỏ qua từng mục)')}\n`));
+        console.log(chalk.cyan(`\n${q(supportsSubagents ? 4 : 3, totalQ, 'Personal Rules')} ${chalk.gray('(Enter để bỏ qua từng mục)')}\n`));
 
         console.log(chalk.gray('📝 Ngôn ngữ AI dùng để trả lời bạn. Có thể ghi nhiều ngôn ngữ.'));
         console.log(chalk.dim('   VD React dev: "Tiếng Việt, technical terms giữ English"'));
@@ -515,7 +529,7 @@ program
                     : response.ide === 'dual'
                         ? 'base'
                         : null;
-        const mergedWorkflows = buildWorkflows(response.ide, workflowTarget);
+        const mergedWorkflows = buildWorkflows(response.ide, workflowTarget, { subagents: useSubagents });
         const workflowFiles = Object.keys(mergedWorkflows);
         for (const wf of workflowFiles) {
             fs.copyFileSync(mergedWorkflows[wf], path.join(omniWorkflowsDir, wf));
@@ -612,6 +626,7 @@ program
         // Lưu manifest
         manifest.configFile = fileName;
         manifest.ide = response.ide;
+        if (supportsSubagents) manifest.subagents = useSubagents;
         saveManifest(manifest);
 
         console.log(chalk.gray(`   Đã tạo manifest: ${MANIFEST_FILE}`));

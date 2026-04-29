@@ -119,3 +119,14 @@ When >om:check is triggered automatically from >om:cook's quality gate:
 - For UI: you MUST start the dev server and interact with the feature. Screenshots or browser tool output count as evidence.
 - Keep the report factual. No opinions, no suggestions — just what works and what doesn't.
 - **[BLOCKED] protocol:** If a task fails 3 fix attempts, mark it `[BLOCKED]` in .omni/sdlc/todo.md with a summary of what was tried. Do NOT continue fixing it.
+
+**Verification Discipline — Evidence Before Claims:**
+
+| Claim | Requires | NOT Sufficient |
+|-------|----------|----------------|
+| Tests pass | Test command output: 0 failures | Previous run, "should pass" |
+| Linter clean | Linter output: 0 errors | Partial check, extrapolation |
+| Build succeeds | Build command: exit 0 | "Linter passed" |
+| Bug fixed | Reproduce original symptom: fixed | "Code changed, assumed fixed" |
+
+Reject rationalizations: "Should work now" → RUN it. "I'm confident" → confidence ≠ evidence. "Partial check is enough" → partial proves nothing.

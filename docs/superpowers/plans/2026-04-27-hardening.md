@@ -1,6 +1,5 @@
 # Hardening Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix 4 issues — file size guard, rules sync corrupt detection, init God Function extraction, --dry-run preview mode
 

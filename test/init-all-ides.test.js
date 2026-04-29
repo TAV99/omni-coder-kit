@@ -30,7 +30,7 @@ function getOverlayDir(ide, target = null) {
     return fs.existsSync(dir) ? dir : null;
 }
 
-function buildWorkflows(ide, target = null) {
+function buildWorkflows(ide, target = null, options = {}) {
     const baseDir = path.join(TEMPLATES, 'workflows');
     const files = {};
     for (const f of fs.readdirSync(baseDir).filter(f => f.endsWith('.md'))) {
@@ -41,6 +41,8 @@ function buildWorkflows(ide, target = null) {
         const overlayWorkflowDir = path.join(overlayDir, 'workflows');
         if (fs.existsSync(overlayWorkflowDir)) {
             for (const f of fs.readdirSync(overlayWorkflowDir).filter(f => f.endsWith('.md'))) {
+                if (!options.subagents && f === 'coder-execution.md'
+                    && path.basename(overlayDir) === 'claude-code') continue;
                 files[f] = path.join(overlayWorkflowDir, f);
             }
         }
@@ -140,7 +142,7 @@ function simulateInit(ide, opts = {}) {
     fs.mkdirSync(workflowsDir, { recursive: true });
 
     const workflowTarget = ide === 'codex' ? 'codex' : ide === 'gemini' ? 'gemini' : ide === 'cursor' ? 'cursor' : ide === 'dual' ? 'base' : null;
-    const mergedWorkflows = buildWorkflows(ide, workflowTarget);
+    const mergedWorkflows = buildWorkflows(ide, workflowTarget, { subagents: !!opts.subagents });
     for (const [name, srcPath] of Object.entries(mergedWorkflows)) {
         fs.copyFileSync(srcPath, path.join(workflowsDir, name));
     }
@@ -246,7 +248,7 @@ function simulateInit(ide, opts = {}) {
 describe('E2E: claudecode init', () => {
     let result;
 
-    beforeEach(() => { result = simulateInit('claudecode', { advanced: true }); });
+    beforeEach(() => { result = simulateInit('claudecode', { advanced: true, subagents: true }); });
     afterEach(() => { fs.rmSync(result.tmpDir, { recursive: true, force: true }); });
 
     it('creates CLAUDE.md', () => {
@@ -267,12 +269,27 @@ describe('E2E: claudecode init', () => {
         }
     });
 
-    it('applies claude-code workflow overlay (coder-execution.md)', () => {
+    it('applies claude-code workflow overlay (coder-execution.md) with subagents', () => {
         const content = fs.readFileSync(path.join(result.tmpDir, '.omni', 'workflows', 'coder-execution.md'), 'utf-8');
         const overlayContent = fs.readFileSync(
             path.join(TEMPLATES, 'overlays', 'claude-code', 'workflows', 'coder-execution.md'), 'utf-8'
         );
         assert.equal(content, overlayContent);
+    });
+
+    it('uses base coder-execution.md without subagents', () => {
+        const noSubResult = simulateInit('claudecode', { advanced: true, subagents: false });
+        try {
+            const content = fs.readFileSync(
+                path.join(noSubResult.tmpDir, '.omni', 'workflows', 'coder-execution.md'), 'utf-8'
+            );
+            const baseContent = fs.readFileSync(
+                path.join(TEMPLATES, 'workflows', 'coder-execution.md'), 'utf-8'
+            );
+            assert.equal(content, baseContent);
+        } finally {
+            fs.rmSync(noSubResult.tmpDir, { recursive: true, force: true });
+        }
     });
 
     it('creates 9 slash commands in .claude/commands/', () => {
@@ -359,6 +376,95 @@ describe('Claude Code overlay content integrity', () => {
             path.join(TEMPLATES, 'overlays', 'claude-code', 'settings.template.json'), 'utf-8'
         );
         assert.doesNotThrow(() => JSON.parse(content));
+    });
+});
+
+// ─── Subagent mode: Claude Code ─────────────────────────────────────────────
+
+describe('Subagent mode: claudecode', () => {
+    it('subagents=true applies claude-code overlay for coder-execution', () => {
+        const wf = buildWorkflows('claudecode', null, { subagents: true });
+        const coderPath = wf['coder-execution.md'];
+        assert.ok(coderPath.includes(path.join('overlays', 'claude-code')));
+    });
+
+    it('subagents=false uses base coder-execution (no parallel agents)', () => {
+        const wf = buildWorkflows('claudecode', null, { subagents: false });
+        const coderPath = wf['coder-execution.md'];
+        assert.ok(!coderPath.includes('overlays'));
+    });
+
+    it('subagents=false still applies non-coder-execution overlays', () => {
+        const wf = buildWorkflows('claudecode', null, { subagents: false });
+        const sdlcPath = wf['superpower-sdlc.md'];
+        assert.ok(sdlcPath.includes(path.join('overlays', 'claude-code')));
+    });
+
+    it('codex overlay is not affected by subagents flag', () => {
+        const wf = buildWorkflows('codex', 'codex', { subagents: false });
+        const coderPath = wf['coder-execution.md'];
+        assert.ok(coderPath.includes(path.join('overlays', 'codex')));
+    });
+
+    it('cursor overlay is not affected by subagents flag', () => {
+        const wf = buildWorkflows('cursor', null, { subagents: false });
+        const coderPath = wf['coder-execution.md'];
+        assert.ok(coderPath.includes(path.join('overlays', 'cursor')));
+    });
+});
+
+// ─── TDD + Verification content in workflows ──────────────────────────────
+
+describe('TDD + Verification content embedded in workflows', () => {
+    it('base coder-execution.md includes TDD discipline', () => {
+        const content = fs.readFileSync(
+            path.join(TEMPLATES, 'workflows', 'coder-execution.md'), 'utf-8'
+        );
+        assert.ok(content.includes('TDD Discipline'));
+        assert.ok(content.includes('Red-Green-Refactor'));
+    });
+
+    it('base coder-execution.md includes verification discipline', () => {
+        const content = fs.readFileSync(
+            path.join(TEMPLATES, 'workflows', 'coder-execution.md'), 'utf-8'
+        );
+        assert.ok(content.includes('Verification Discipline'));
+        assert.ok(content.includes('Evidence Before Claims'));
+    });
+
+    it('base qa-testing.md includes verification discipline', () => {
+        const content = fs.readFileSync(
+            path.join(TEMPLATES, 'workflows', 'qa-testing.md'), 'utf-8'
+        );
+        assert.ok(content.includes('Verification Discipline'));
+    });
+
+    it('claude-code overlay coder-execution.md includes TDD discipline', () => {
+        const content = fs.readFileSync(
+            path.join(TEMPLATES, 'overlays', 'claude-code', 'workflows', 'coder-execution.md'), 'utf-8'
+        );
+        assert.ok(content.includes('TDD Discipline'));
+    });
+
+    it('codex overlay coder-execution.md includes TDD discipline', () => {
+        const content = fs.readFileSync(
+            path.join(TEMPLATES, 'overlays', 'codex', 'workflows', 'coder-execution.md'), 'utf-8'
+        );
+        assert.ok(content.includes('TDD Discipline'));
+    });
+
+    it('cursor overlay coder-execution.md includes TDD discipline', () => {
+        const content = fs.readFileSync(
+            path.join(TEMPLATES, 'overlays', 'cursor', 'workflows', 'coder-execution.md'), 'utf-8'
+        );
+        assert.ok(content.includes('TDD Discipline'));
+    });
+
+    it('gemini qa-testing overlay includes verification discipline', () => {
+        const content = fs.readFileSync(
+            path.join(TEMPLATES, 'overlays', 'gemini', 'workflows', 'qa-testing.md'), 'utf-8'
+        );
+        assert.ok(content.includes('Verification Discipline'));
     });
 });
 

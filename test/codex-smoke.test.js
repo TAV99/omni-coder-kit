@@ -41,7 +41,7 @@ function getOverlayDir(ide, target = null) {
     return fs.existsSync(dir) ? dir : null;
 }
 
-function buildWorkflows(ide, target = null) {
+function buildWorkflows(ide, target = null, options = {}) {
     const baseDir = path.join(TEMPLATES, 'workflows');
     const files = {};
     for (const f of fs.readdirSync(baseDir).filter(f => f.endsWith('.md'))) {
@@ -52,6 +52,8 @@ function buildWorkflows(ide, target = null) {
         const overlayWorkflowDir = path.join(overlayDir, 'workflows');
         if (fs.existsSync(overlayWorkflowDir)) {
             for (const f of fs.readdirSync(overlayWorkflowDir).filter(f => f.endsWith('.md'))) {
+                if (!options.subagents && f === 'coder-execution.md'
+                    && path.basename(overlayDir) === 'claude-code') continue;
                 files[f] = path.join(overlayWorkflowDir, f);
             }
         }
@@ -218,6 +220,32 @@ describe('buildWorkflows', () => {
         const wf = buildWorkflows('dual', 'base');
         const coderPath = wf['coder-execution.md'];
         assert.ok(!coderPath.includes('overlays'));
+    });
+
+    it('claudecode with subagents=true uses claude-code overlay for coder-execution', () => {
+        const wf = buildWorkflows('claudecode', null, { subagents: true });
+        const coderPath = wf['coder-execution.md'];
+        assert.ok(coderPath.includes(path.join('overlays', 'claude-code')));
+    });
+
+    it('claudecode with subagents=false uses base coder-execution', () => {
+        const wf = buildWorkflows('claudecode', null, { subagents: false });
+        const coderPath = wf['coder-execution.md'];
+        assert.ok(!coderPath.includes('overlays'), 'should use base when subagents disabled');
+    });
+
+    it('claudecode with subagents=false still applies other overlays', () => {
+        const wf = buildWorkflows('claudecode', null, { subagents: false });
+        const sdlcPath = wf['superpower-sdlc.md'];
+        assert.ok(sdlcPath.includes(path.join('overlays', 'claude-code')),
+            'non-coder-execution overlays should still apply');
+    });
+
+    it('codex overlay keeps coder-execution regardless of subagents flag', () => {
+        const wf = buildWorkflows('codex', 'codex', { subagents: false });
+        const coderPath = wf['coder-execution.md'];
+        assert.ok(coderPath.includes(path.join('overlays', 'codex')),
+            'codex overlay should not be affected by subagents flag');
     });
 });
 

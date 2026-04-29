@@ -20,3 +20,14 @@ When detection triggers `>om:fix`, update the Gemini Task Tracker:
 ### Rules:
 - A release/cycle is only considered successful when ALL `[BUG]` tasks in the Gemini Task Tracker are marked as `DONE`.
 - Use `save_memory` to keep track of the cumulative bug count for the project.
+
+**Verification Discipline — Evidence Before Claims:**
+
+| Claim | Requires | NOT Sufficient |
+|-------|----------|----------------|
+| Tests pass | Test command output: 0 failures | Previous run, "should pass" |
+| Linter clean | Linter output: 0 errors | Partial check, extrapolation |
+| Build succeeds | Build command: exit 0 | "Linter passed" |
+| Bug fixed | Reproduce original symptom: fixed | "Code changed, assumed fixed" |
+
+Reject rationalizations: "Should work now" → RUN it. "I'm confident" → confidence ≠ evidence. "Partial check is enough" → partial proves nothing.
