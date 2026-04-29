@@ -87,6 +87,13 @@ describe('grepLandmines', () => {
         assert.equal(result.length, 1);
         assert.ok(result[0].text.length <= 120, `expected text.length <= 120 but got ${result[0].text.length}`);
     });
+
+    test('skips files larger than MAX_FILE_SIZE (1MB)', () => {
+        const bigContent = '// TODO: should be skipped\n' + 'x'.repeat(1.5 * 1024 * 1024);
+        fs.writeFileSync(path.join(tmpDir, 'huge.js'), bigContent);
+        const result = grepLandmines(tmpDir, ['huge.js']);
+        assert.equal(result.length, 0, 'large files should be silently skipped');
+    });
 });
 
 // ─── groupBySeverity ─────────────────────────────────────────────────────────
