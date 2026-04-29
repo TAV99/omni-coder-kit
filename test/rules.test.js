@@ -187,3 +187,43 @@ test('syncRulesToConfig: returns corrupt when only end marker present', () => {
     const after = fs.readFileSync(claudePath, 'utf-8');
     assert.equal(after, original, 'file should not be modified when corrupt');
 });
+
+// ---------------------------------------------------------------------------
+// syncRulesToConfig — dryRun mode
+// ---------------------------------------------------------------------------
+
+test('syncRulesToConfig: dryRun returns preview without writing to disk', () => {
+    const dir = makeTmpDir();
+    const omniDir = path.join(dir, '.omni');
+    fs.mkdirSync(omniDir);
+
+    const claudePath = path.join(dir, 'CLAUDE.md');
+    fs.writeFileSync(claudePath, '# Config\n\n<!-- omni:rules -->\nold stuff\n<!-- /omni:rules -->\n', 'utf-8');
+    const original = fs.readFileSync(claudePath, 'utf-8');
+
+    const rulesPath = path.join(omniDir, 'rules.md');
+    fs.writeFileSync(rulesPath, '- rule one\n- rule two\n', 'utf-8');
+
+    const result = syncRulesToConfig(() => 'CLAUDE.md', dir, { dryRun: true });
+    assert.equal(result.action, 'replace');
+    assert.ok(result.preview.includes('rule one'));
+    assert.ok(result.preview.includes('rule two'));
+
+    const after = fs.readFileSync(claudePath, 'utf-8');
+    assert.equal(after, original, 'file should NOT be modified in dryRun mode');
+});
+
+test('syncRulesToConfig: dryRun with corrupt markers returns action corrupt', () => {
+    const dir = makeTmpDir();
+    const omniDir = path.join(dir, '.omni');
+    fs.mkdirSync(omniDir);
+
+    const claudePath = path.join(dir, 'CLAUDE.md');
+    fs.writeFileSync(claudePath, '# Config\n\n<!-- omni:rules -->\nbroken\n', 'utf-8');
+
+    const rulesPath = path.join(omniDir, 'rules.md');
+    fs.writeFileSync(rulesPath, '- rule one\n', 'utf-8');
+
+    const result = syncRulesToConfig(() => 'CLAUDE.md', dir, { dryRun: true });
+    assert.equal(result.action, 'corrupt');
+});

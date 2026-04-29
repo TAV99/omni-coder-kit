@@ -113,7 +113,8 @@ program
 program
     .command('init')
     .description('Khởi tạo DNA và workflow cho dự án mới')
-    .action(async () => {
+    .option('--dry-run', 'Xem trước danh sách files sẽ được tạo (không ghi)')
+    .action(async (options) => {
         console.log(chalk.cyan.bold('\n🚀 Khởi tạo Omni-Coder Kit!\n'));
 
         // Detect existing project for Project Map generation
@@ -231,6 +232,19 @@ program
         });
 
         const { files: initFiles, dirs: initDirs, manifest } = initResult;
+
+        if (options.dryRun) {
+            console.log(chalk.cyan.bold('\n📋 Dry run — files that would be created:\n'));
+            for (const file of initFiles) {
+                const targetPath = path.join(process.cwd(), file.path);
+                const exists = fs.existsSync(targetPath);
+                const label = exists ? chalk.yellow('OVERWRITE') : chalk.green('CREATE   ');
+                console.log(`  ${label}  ${file.path}`);
+            }
+            console.log(chalk.gray(`\n  Dirs: ${initDirs.join(', ')}`));
+            console.log(chalk.gray('  No files were changed.\n'));
+            return;
+        }
 
         // Create directories
         for (const dir of initDirs) {
@@ -993,7 +1007,8 @@ program
 program
     .command('rules [action]')
     .description('Quản lý personal rules (xem/sửa/sync/reset)')
-    .action(async (action) => {
+    .option('--dry-run', 'Xem trước kết quả sync (không ghi)')
+    .action(async (action, options) => {
         const rulesPath = path.join(process.cwd(), RULES_FILE);
         const configFile = findConfigFile();
 
@@ -1080,13 +1095,26 @@ program
                 console.log(chalk.red(`\n❌ Không tìm thấy config file. Chạy ${chalk.cyan('omni init')} trước.\n`));
                 return;
             }
-            const syncResult = syncRulesToConfig(findConfigFile, process.cwd());
-            if (syncResult === 'corrupt') {
-                console.log(chalk.red(`\n⚠️  ${configFile} có markers hỏng (chỉ có 1 trong 2 markers <!-- omni:rules -->). Sửa thủ công trước khi sync.\n`));
-            } else if (syncResult) {
-                console.log(chalk.green.bold(`\n✅ Đã sync ${RULES_FILE} → ${configFile}\n`));
+            if (options.dryRun) {
+                const result = syncRulesToConfig(findConfigFile, process.cwd(), { dryRun: true });
+                if (result.action === 'corrupt') {
+                    console.log(chalk.red(`\n⚠️  ${configFile} có markers hỏng. Sửa thủ công trước khi sync.\n`));
+                } else if (result.action === 'skip') {
+                    console.log(chalk.yellow(`\nKhông có gì để sync.\n`));
+                } else {
+                    console.log(chalk.cyan.bold(`\n📋 Dry run — would ${result.action} rules in ${configFile}:\n`));
+                    console.log(result.preview);
+                    console.log(chalk.gray('\nNo files were changed.\n'));
+                }
             } else {
-                console.log(chalk.red('\n❌ Sync thất bại.\n'));
+                const syncResult = syncRulesToConfig(findConfigFile, process.cwd());
+                if (syncResult === 'corrupt') {
+                    console.log(chalk.red(`\n⚠️  ${configFile} có markers hỏng (chỉ có 1 trong 2 markers <!-- omni:rules -->). Sửa thủ công trước khi sync.\n`));
+                } else if (syncResult) {
+                    console.log(chalk.green.bold(`\n✅ Đã sync ${RULES_FILE} → ${configFile}\n`));
+                } else {
+                    console.log(chalk.red('\n❌ Sync thất bại.\n'));
+                }
             }
             return;
         }
