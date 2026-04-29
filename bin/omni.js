@@ -1397,10 +1397,15 @@ program
             writeFileSafe(rulesPath, content);
             console.log(chalk.green.bold(`\n✅ Đã lưu ${RULES_FILE}`));
 
-            if (configFile && syncRulesToConfig(findConfigFile, process.cwd())) {
-                console.log(chalk.green(`   ✅ Đã sync vào ${configFile}\n`));
-            } else if (configFile) {
-                console.log(chalk.yellow(`   ⚠️  Không thể sync vào ${configFile}. Chạy ${chalk.cyan('omni rules sync')} thủ công.\n`));
+            if (configFile) {
+                const syncResult = syncRulesToConfig(findConfigFile, process.cwd());
+                if (syncResult === 'corrupt') {
+                    console.log(chalk.red(`   ⚠️  ${configFile} có markers hỏng (chỉ có 1 trong 2 markers <!-- omni:rules -->). Sửa thủ công rồi chạy ${chalk.cyan('omni rules sync')}.\n`));
+                } else if (syncResult) {
+                    console.log(chalk.green(`   ✅ Đã sync vào ${configFile}\n`));
+                } else {
+                    console.log(chalk.yellow(`   ⚠️  Không thể sync vào ${configFile}. Chạy ${chalk.cyan('omni rules sync')} thủ công.\n`));
+                }
             }
             return;
         }
@@ -1414,7 +1419,10 @@ program
                 console.log(chalk.red(`\n❌ Không tìm thấy config file. Chạy ${chalk.cyan('omni init')} trước.\n`));
                 return;
             }
-            if (syncRulesToConfig(findConfigFile, process.cwd())) {
+            const syncResult = syncRulesToConfig(findConfigFile, process.cwd());
+            if (syncResult === 'corrupt') {
+                console.log(chalk.red(`\n⚠️  ${configFile} có markers hỏng (chỉ có 1 trong 2 markers <!-- omni:rules -->). Sửa thủ công trước khi sync.\n`));
+            } else if (syncResult) {
                 console.log(chalk.green.bold(`\n✅ Đã sync ${RULES_FILE} → ${configFile}\n`));
             } else {
                 console.log(chalk.red('\n❌ Sync thất bại.\n'));

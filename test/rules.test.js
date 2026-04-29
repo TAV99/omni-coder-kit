@@ -149,3 +149,41 @@ test('syncRulesToConfig: returns false when no config file found', () => {
     const result = syncRulesToConfig(() => null, dir);
     assert.equal(result, false);
 });
+
+test('syncRulesToConfig: returns corrupt when only start marker present', () => {
+    const dir = makeTmpDir();
+    const omniDir = path.join(dir, '.omni');
+    fs.mkdirSync(omniDir);
+
+    const claudePath = path.join(dir, 'CLAUDE.md');
+    fs.writeFileSync(claudePath, '# Config\n\n<!-- omni:rules -->\nold rules here\n', 'utf-8');
+
+    const rulesPath = path.join(omniDir, 'rules.md');
+    fs.writeFileSync(rulesPath, '- rule one\n', 'utf-8');
+
+    const original = fs.readFileSync(claudePath, 'utf-8');
+    const result = syncRulesToConfig(() => 'CLAUDE.md', dir);
+    assert.equal(result, 'corrupt');
+
+    const after = fs.readFileSync(claudePath, 'utf-8');
+    assert.equal(after, original, 'file should not be modified when corrupt');
+});
+
+test('syncRulesToConfig: returns corrupt when only end marker present', () => {
+    const dir = makeTmpDir();
+    const omniDir = path.join(dir, '.omni');
+    fs.mkdirSync(omniDir);
+
+    const claudePath = path.join(dir, 'CLAUDE.md');
+    fs.writeFileSync(claudePath, '# Config\n\n<!-- /omni:rules -->\n', 'utf-8');
+
+    const rulesPath = path.join(omniDir, 'rules.md');
+    fs.writeFileSync(rulesPath, '- rule one\n', 'utf-8');
+
+    const original = fs.readFileSync(claudePath, 'utf-8');
+    const result = syncRulesToConfig(() => 'CLAUDE.md', dir);
+    assert.equal(result, 'corrupt');
+
+    const after = fs.readFileSync(claudePath, 'utf-8');
+    assert.equal(after, original, 'file should not be modified when corrupt');
+});
