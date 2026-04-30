@@ -270,20 +270,21 @@ describe('Knowledge Base — read in cook and fix', () => {
 });
 
 describe('Knowledge Base — command registry includes >om:learn', () => {
-    const strategiesJs = fs.readFileSync(
-        path.join(__dirname, '..', 'lib', 'init', 'strategies.js'), 'utf-8'
-    );
+    const { buildCommandRegistry } = require('../lib/init/strategies');
 
     it('Claude Code registry has >om:learn', () => {
-        assert.ok(strategiesJs.includes("'| `>om:learn` | `/om:learn`"));
+        const output = buildCommandRegistry('claudecode');
+        assert.ok(output.includes('`>om:learn` | `/om:learn`'));
     });
 
     it('Gemini registry has >om:learn', () => {
-        assert.ok(strategiesJs.includes("'| `>om:learn` | `.omni/workflows/knowledge-learn.md` | Main session | `save_memory`"));
+        const output = buildCommandRegistry('gemini');
+        assert.ok(output.includes('`>om:learn` | `.omni/workflows/knowledge-learn.md` | Main session | `save_memory`'));
     });
 
     it('generic registry has >om:learn', () => {
-        assert.ok(strategiesJs.includes("'| `>om:learn` | `.omni/workflows/knowledge-learn.md` | Learner |'"));
+        const output = buildCommandRegistry('generic');
+        assert.ok(output.includes('`>om:learn` | `.omni/workflows/knowledge-learn.md` | Learner'));
     });
 });
 

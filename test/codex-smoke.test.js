@@ -54,7 +54,13 @@ function buildWorkflows(ide, target = null, options = {}) {
             for (const f of fs.readdirSync(overlayWorkflowDir).filter(f => f.endsWith('.md'))) {
                 if (!options.subagents && f === 'coder-execution.md'
                     && path.basename(overlayDir) === 'claude-code') continue;
-                files[f] = path.join(overlayWorkflowDir, f);
+                const overlayPath = path.join(overlayWorkflowDir, f);
+                const firstLine = fs.readFileSync(overlayPath, 'utf-8').split('\n', 1)[0];
+                if (firstLine === '<!-- augment -->' && files[f]) {
+                    files[f] = [files[f], overlayPath];
+                } else {
+                    files[f] = overlayPath;
+                }
             }
         }
     }
@@ -341,9 +347,11 @@ describe('E2E: codex init', () => {
         fs.mkdirSync(workflowsDir, { recursive: true });
 
         // Simulate: copy workflows with codex overlay
+        const { resolvePartials, readWorkflow } = require('../lib/workflows/build');
         const mergedWorkflows = buildWorkflows('codex', 'codex');
-        for (const [name, srcPath] of Object.entries(mergedWorkflows)) {
-            fs.copyFileSync(srcPath, path.join(workflowsDir, name));
+        for (const [name, src] of Object.entries(mergedWorkflows)) {
+            const raw = readWorkflow(src);
+            fs.writeFileSync(path.join(workflowsDir, name), resolvePartials(raw), 'utf-8');
         }
 
         // Verify coder-execution.md is codex version
@@ -455,9 +463,11 @@ describe('E2E: dual init', () => {
         fs.mkdirSync(workflowsDir, { recursive: true });
 
         // Dual uses 'base' target (no overlay)
+        const { resolvePartials, readWorkflow } = require('../lib/workflows/build');
         const mergedWorkflows = buildWorkflows('dual', 'base');
-        for (const [name, srcPath] of Object.entries(mergedWorkflows)) {
-            fs.copyFileSync(srcPath, path.join(workflowsDir, name));
+        for (const [name, src] of Object.entries(mergedWorkflows)) {
+            const raw = readWorkflow(src);
+            fs.writeFileSync(path.join(workflowsDir, name), resolvePartials(raw), 'utf-8');
         }
 
         // coder-execution.md should be the BASE version (no codex overlay)

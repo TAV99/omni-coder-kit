@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 
 const TEMPLATES = path.join(__dirname, '..', 'templates');
+const { resolvePartials, readWorkflow, buildWorkflows: buildWorkflowsFromLib } = require('../lib/workflows/build');
 
 // ─── Helpers extracted from omni.js ──────────────────────────────────────────
 
@@ -17,6 +18,9 @@ function getOverlayNameForTarget(ide, target) {
     }
     if (target === 'cursor') {
         return (ide === 'cursor') ? 'cursor' : null;
+    }
+    if (target === 'gemini') {
+        return (ide === 'gemini') ? 'gemini' : null;
     }
     return null;
 }
@@ -43,7 +47,13 @@ function buildWorkflows(ide, target = null, options = {}) {
             for (const f of fs.readdirSync(overlayWorkflowDir).filter(f => f.endsWith('.md'))) {
                 if (!options.subagents && f === 'coder-execution.md'
                     && path.basename(overlayDir) === 'claude-code') continue;
-                files[f] = path.join(overlayWorkflowDir, f);
+                const overlayPath = path.join(overlayWorkflowDir, f);
+                const firstLine = fs.readFileSync(overlayPath, 'utf-8').split('\n', 1)[0];
+                if (firstLine === '<!-- augment -->' && files[f]) {
+                    files[f] = [files[f], overlayPath];
+                } else {
+                    files[f] = overlayPath;
+                }
             }
         }
     }
@@ -143,8 +153,9 @@ function simulateInit(ide, opts = {}) {
 
     const workflowTarget = ide === 'codex' ? 'codex' : ide === 'gemini' ? 'gemini' : ide === 'cursor' ? 'cursor' : ide === 'dual' ? 'base' : null;
     const mergedWorkflows = buildWorkflows(ide, workflowTarget, { subagents: !!opts.subagents });
-    for (const [name, srcPath] of Object.entries(mergedWorkflows)) {
-        fs.copyFileSync(srcPath, path.join(workflowsDir, name));
+    for (const [name, src] of Object.entries(mergedWorkflows)) {
+        const raw = readWorkflow(src);
+        fs.writeFileSync(path.join(workflowsDir, name), resolvePartials(raw), 'utf-8');
     }
     result.files.workflows = Object.keys(mergedWorkflows);
 
@@ -274,7 +285,7 @@ describe('E2E: claudecode init', () => {
         const overlayContent = fs.readFileSync(
             path.join(TEMPLATES, 'overlays', 'claude-code', 'workflows', 'coder-execution.md'), 'utf-8'
         );
-        assert.equal(content, overlayContent);
+        assert.equal(content, resolvePartials(overlayContent));
     });
 
     it('uses base coder-execution.md without subagents', () => {
@@ -286,7 +297,7 @@ describe('E2E: claudecode init', () => {
             const baseContent = fs.readFileSync(
                 path.join(TEMPLATES, 'workflows', 'coder-execution.md'), 'utf-8'
             );
-            assert.equal(content, baseContent);
+            assert.equal(content, resolvePartials(baseContent));
         } finally {
             fs.rmSync(noSubResult.tmpDir, { recursive: true, force: true });
         }
@@ -417,54 +428,61 @@ describe('Subagent mode: claudecode', () => {
 
 describe('TDD + Verification content embedded in workflows', () => {
     it('base coder-execution.md includes TDD discipline', () => {
-        const content = fs.readFileSync(
+        const raw = fs.readFileSync(
             path.join(TEMPLATES, 'workflows', 'coder-execution.md'), 'utf-8'
         );
+        const content = resolvePartials(raw);
         assert.ok(content.includes('TDD Discipline'));
         assert.ok(content.includes('Red-Green-Refactor'));
     });
 
     it('base coder-execution.md includes verification discipline', () => {
-        const content = fs.readFileSync(
+        const raw = fs.readFileSync(
             path.join(TEMPLATES, 'workflows', 'coder-execution.md'), 'utf-8'
         );
+        const content = resolvePartials(raw);
         assert.ok(content.includes('Verification Discipline'));
         assert.ok(content.includes('Evidence Before Claims'));
     });
 
     it('base qa-testing.md includes verification discipline', () => {
-        const content = fs.readFileSync(
+        const raw = fs.readFileSync(
             path.join(TEMPLATES, 'workflows', 'qa-testing.md'), 'utf-8'
         );
+        const content = resolvePartials(raw);
         assert.ok(content.includes('Verification Discipline'));
     });
 
     it('claude-code overlay coder-execution.md includes TDD discipline', () => {
-        const content = fs.readFileSync(
+        const raw = fs.readFileSync(
             path.join(TEMPLATES, 'overlays', 'claude-code', 'workflows', 'coder-execution.md'), 'utf-8'
         );
+        const content = resolvePartials(raw);
         assert.ok(content.includes('TDD Discipline'));
     });
 
     it('codex overlay coder-execution.md includes TDD discipline', () => {
-        const content = fs.readFileSync(
+        const raw = fs.readFileSync(
             path.join(TEMPLATES, 'overlays', 'codex', 'workflows', 'coder-execution.md'), 'utf-8'
         );
+        const content = resolvePartials(raw);
         assert.ok(content.includes('TDD Discipline'));
     });
 
     it('cursor overlay coder-execution.md includes TDD discipline', () => {
-        const content = fs.readFileSync(
+        const raw = fs.readFileSync(
             path.join(TEMPLATES, 'overlays', 'cursor', 'workflows', 'coder-execution.md'), 'utf-8'
         );
+        const content = resolvePartials(raw);
         assert.ok(content.includes('TDD Discipline'));
     });
 
-    it('gemini qa-testing overlay includes verification discipline', () => {
-        const content = fs.readFileSync(
-            path.join(TEMPLATES, 'overlays', 'gemini', 'workflows', 'qa-testing.md'), 'utf-8'
-        );
-        assert.ok(content.includes('Verification Discipline'));
+    it('gemini qa-testing augmented output includes verification discipline + tracker', () => {
+        const workflows = buildWorkflows('gemini', 'gemini');
+        const merged = readWorkflow(workflows['qa-testing.md']);
+        const content = resolvePartials(merged);
+        assert.ok(content.includes('Verification Discipline'), 'should have base verification content');
+        assert.ok(content.includes('tracker_create_task'), 'should have Gemini tracker content');
     });
 });
 
@@ -503,7 +521,7 @@ describe('E2E: dual init', () => {
         const baseContent = fs.readFileSync(
             path.join(TEMPLATES, 'workflows', 'coder-execution.md'), 'utf-8'
         );
-        assert.equal(content, baseContent);
+        assert.equal(content, resolvePartials(baseContent));
     });
 
     it('manifest records dual IDE', () => {
@@ -553,7 +571,7 @@ describe('E2E: antigravity init', () => {
         const baseContent = fs.readFileSync(
             path.join(TEMPLATES, 'workflows', 'coder-execution.md'), 'utf-8'
         );
-        assert.equal(content, baseContent);
+        assert.equal(content, resolvePartials(baseContent));
     });
 
     it('manifest records antigravity IDE', () => {
@@ -705,6 +723,59 @@ describe('Cursor overlay template files exist', () => {
     }
 });
 
+// ─── Gemini init ────────────────────────────────────────────────────────────
+
+describe('E2E: gemini init', () => {
+    let result;
+
+    beforeEach(() => { result = simulateInit('gemini'); });
+    afterEach(() => { fs.rmSync(result.tmpDir, { recursive: true, force: true }); });
+
+    it('creates GEMINI.md', () => {
+        assert.ok(fs.existsSync(path.join(result.tmpDir, 'GEMINI.md')));
+    });
+
+    it('creates all workflows', () => {
+        const baseWorkflows = fs.readdirSync(path.join(TEMPLATES, 'workflows')).filter(f => f.endsWith('.md'));
+        const outputWorkflows = fs.readdirSync(path.join(result.tmpDir, '.omni', 'workflows'));
+        for (const wf of baseWorkflows) {
+            assert.ok(outputWorkflows.includes(wf), `${wf} should exist`);
+        }
+    });
+
+    it('applies gemini coder-execution overlay (replace)', () => {
+        const content = fs.readFileSync(
+            path.join(result.tmpDir, '.omni', 'workflows', 'coder-execution.md'), 'utf-8'
+        );
+        assert.ok(content.includes('Gemini'), 'should contain Gemini-specific content');
+    });
+
+    it('augments qa-testing with Gemini tracker (base + overlay)', () => {
+        const content = fs.readFileSync(
+            path.join(result.tmpDir, '.omni', 'workflows', 'qa-testing.md'), 'utf-8'
+        );
+        assert.ok(content.includes('QA TESTING WORKFLOW'), 'should contain base title');
+        assert.ok(content.includes('tracker_create_task'), 'should contain Gemini tracker');
+        assert.ok(!content.includes('<!-- augment -->'), 'should not contain augment marker');
+    });
+
+    it('augments requirement-analysis with Gemini ask_user tools', () => {
+        const content = fs.readFileSync(
+            path.join(result.tmpDir, '.omni', 'workflows', 'requirement-analysis.md'), 'utf-8'
+        );
+        assert.ok(content.includes('ADAPTIVE ARCHITECT'), 'should contain base title');
+        assert.ok(content.includes('ask_user'), 'should contain Gemini ask_user');
+    });
+
+    it('augments task-planning with Gemini task tracker', () => {
+        const content = fs.readFileSync(
+            path.join(result.tmpDir, '.omni', 'workflows', 'task-planning.md'), 'utf-8'
+        );
+        assert.ok(content.includes('PM AGENT WORKFLOW'), 'should contain base title');
+        assert.ok(content.includes('tracker_create_task'), 'should contain Gemini tracker');
+    });
+});
+
 // ─── Windsurf init ───────────────────────────────────────────────────────────
 
 describe('E2E: windsurf init', () => {
@@ -806,7 +877,7 @@ describe('Cross-IDE isolation', () => {
                     const baseContent = fs.readFileSync(
                         path.join(TEMPLATES, 'workflows', wf), 'utf-8'
                     );
-                    assert.equal(outputContent, baseContent, `${ide}:${wf} should match base`);
+                    assert.equal(outputContent, resolvePartials(baseContent), `${ide}:${wf} should match base`);
                 }
             } finally {
                 fs.rmSync(result.tmpDir, { recursive: true, force: true });
