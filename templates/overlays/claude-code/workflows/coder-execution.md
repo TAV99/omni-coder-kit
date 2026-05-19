@@ -74,6 +74,22 @@ Choose strategy based on conditions:
 | All tasks modify same file | Sequential — guaranteed conflicts |
 | Independent tasks exist across files | Parallel (worktree isolation) |
 | User says "tuần tự" / "sequential" | Sequential — respect user choice |
+| Cross-layer tasks needing coordination | Agent Teams (experimental) |
+
+**Step 5a: Agent Teams Mode (experimental — complex features only)**
+Use Agent Teams when work requires specialist coordination (code review with multiple perspectives, cross-layer features needing discussion, investigation with competing hypotheses):
+
+1. **Create team:** Use `TeamCreate` to create a team of 3-5 specialist teammates.
+2. **Task assignment:** Use `TaskCreate` for each work item. Set dependencies between tasks.
+3. **Teammates coordinate:** Teammates claim tasks, message each other, and share findings.
+4. **Lead synthesizes:** After teammates complete, review and synthesize all results.
+5. **Prefer subagents** for simple parallel tasks — teams are for work needing inter-agent communication.
+
+| Condition | Strategy |
+|-----------|----------|
+| Independent tasks, no coordination needed | Subagents (Step 6a) |
+| Cross-layer work needing discussion | Agent Teams (Step 5a) |
+| Code review with multiple perspectives | Agent Teams (Step 5a) |
 
 **Step 5.5: Build Context Brief (parallel execution only)**
 Before spawning sub-agents, build a compact Context Brief (~500 tokens max) to avoid each agent re-reading the same files:

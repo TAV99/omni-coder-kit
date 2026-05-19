@@ -17,6 +17,7 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 ### Agent Strategy Guide
 - **Main session:** Execute directly in current conversation. Suitable for interactive workflows (brainstorm, fix) and workflows needing full project context (doc, check).
 - **Main → sub-agents (parallel):** Main session analyzes dependency graph, then dispatches General sub-agents with worktree isolation for independent tasks. Used by `/om:cook` only.
+- **Agent Teams (experimental):** Main session creates a team of specialist teammates that can communicate with each other via shared task list and direct messaging. Best for code review, competing hypothesis debugging, and cross-layer feature development.
 
 ### Command Descriptions
 - **[>om:brainstorm]:** Activates the Solutions Architect Agent. Extracts info from user prompt, classifies complexity (small/medium/large), asks only what's missing (adaptive interview), auto-decomposes large projects, then outputs `.omni/sdlc/design-spec.md` in hybrid format (summary table + tagged requirement list). → See ADAPTIVE ARCHITECT WORKFLOW section.

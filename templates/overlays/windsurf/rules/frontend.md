@@ -1,0 +1,22 @@
+---
+trigger: glob
+globs: ["**/*.tsx", "**/*.jsx", "**/*.vue", "**/*.svelte", "**/components/**", "**/pages/**", "**/app/**"]
+description: "Frontend development rules — component patterns, accessibility. Activates for UI files."
+---
+
+# Frontend Rules
+
+## Component Patterns
+- Prefer composition over inheritance. Keep components focused on one responsibility.
+- Extract shared logic into custom hooks or composables, not utility classes.
+- Colocate styles, tests, and types with their components.
+
+## Accessibility
+- All interactive elements must be keyboard accessible.
+- Images need alt text. Form fields need labels.
+- Use semantic HTML elements over generic divs.
+
+## Performance
+- Lazy-load routes and heavy components. Use dynamic imports.
+- Memoize expensive computations only when profiling shows a need.
+- Avoid premature optimization — measure first.

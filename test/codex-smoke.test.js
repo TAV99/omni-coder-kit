@@ -286,7 +286,7 @@ describe('buildCodexConfig', () => {
     it('returns config content for codex + advanced', () => {
         const config = buildCodexConfig('codex', true);
         assert.ok(config);
-        assert.ok(config.includes('sandbox_mode'));
+        assert.ok(config.includes('default_permissions'));
         assert.ok(config.includes('approval_policy'));
         assert.ok(config.includes('network_access = false'));
         assert.ok(config.includes('[profiles.omni_safe]'));
@@ -357,7 +357,7 @@ describe('E2E: codex init', () => {
         // Verify coder-execution.md is codex version
         const coderContent = fs.readFileSync(path.join(workflowsDir, 'coder-execution.md'), 'utf-8');
         assert.ok(coderContent.includes('Codex Safety Preflight'), 'coder-execution.md should contain Codex-specific preflight');
-        assert.ok(coderContent.includes('sandbox mode'), 'should mention sandbox mode');
+        assert.ok(coderContent.includes('permission profile'), 'should mention permission profile');
         assert.ok(!coderContent.includes('worktree isolation'), 'should NOT contain Claude-specific worktree isolation');
 
         // Verify superpower-sdlc.md is codex version
@@ -508,7 +508,7 @@ describe('Codex workflow content integrity', () => {
             'utf-8'
         );
         assert.ok(content.includes('Codex Safety Preflight'));
-        assert.ok(content.includes('sandbox'));
+        assert.ok(content.includes('permission'));
         assert.ok(content.includes('approval'));
         assert.ok(content.includes('Subagents'));
         assert.ok(content.includes('Quality Gate'));
@@ -531,7 +531,7 @@ describe('Codex workflow content integrity', () => {
         );
         assert.ok(content.includes('network_access = false'));
         assert.ok(content.includes('approval_policy = "on-request"'));
-        assert.ok(content.includes('sandbox_mode = "workspace-write"'));
+        assert.ok(content.includes('default_permissions = ":workspace"'));
     });
 
     it('codex hooks.json uses systemMessage (non-destructive)', () => {

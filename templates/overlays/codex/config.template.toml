@@ -5,11 +5,12 @@
 # Keep AGENTS.md compact. Omni stores long workflow instructions in .omni/workflows/.
 project_doc_max_bytes = 32768
 
-# Safer default for interactive local work.
-sandbox_mode = "workspace-write"
+# Permission profile: controls filesystem and network access.
+# Built-in profiles: ":read-only", ":workspace", ":danger-no-sandbox"
+default_permissions = ":workspace"
 approval_policy = "on-request"
 
-[sandbox_workspace_write]
+[workspace_permissions]
 network_access = false
 
 [features]
@@ -17,20 +18,23 @@ network_access = false
 codex_hooks = true
 
 [profiles.omni_safe]
-sandbox_mode = "workspace-write"
+default_permissions = ":workspace"
 approval_policy = "on-request"
+model = "codex-1"
 model_reasoning_effort = "medium"
 model_verbosity = "medium"
 
 [profiles.omni_yolo]
 # Lower-friction mode. Use only in repositories and sandboxes you trust.
-sandbox_mode = "workspace-write"
+default_permissions = ":workspace"
 approval_policy = "never"
+model = "codex-1"
 model_reasoning_effort = "medium"
 model_verbosity = "medium"
 
 [profiles.omni_review]
-sandbox_mode = "read-only"
+default_permissions = ":read-only"
 approval_policy = "untrusted"
+model = "codex-1"
 model_reasoning_effort = "high"
 model_verbosity = "medium"

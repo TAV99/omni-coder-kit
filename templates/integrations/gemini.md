@@ -4,4 +4,8 @@
 - **Task Tracking:** Use `tracker_create_task` and `tracker_update_task` tools to manage progress. This is the primary source of truth for task status.
 - **Context Efficiency:** Use `save_memory` (project scope) for long-term project facts to keep the main context lean.
 - **Interactive Tools:** Use `ask_user` for making decisions and `google_web_search` for documentation search.
+- **Modular Config:** If `.gemini/` directory exists, GEMINI.md uses `@./.gemini/*.md` imports for modular rules. Edit individual module files to customize.
+- **Agent Skills Alignment:** Gemini Agent Skills (`.gemini/skills/`) and Omni skills (`.omni/skills/`) serve different roles. Use `>om:equip` for workflow-level skills that integrate with the SDLC pipeline. Use Gemini's native `activate_skill` for domain-specific expertise (security auditing, deployment, etc.). Both coexist — Gemini skills activate on-demand, Omni skills are referenced by `@skill:` tags in todo.md.
+- **Model Recommendations:** Gemini 3 Flash (default — fast, capable), Gemini 3 Pro (advanced reasoning), Gemini 3.1 Pro (most capable). Use `/model` to switch.
+- **Memory Partitioning:** Gemini Auto Memory Inbox is separate from `.omni/` project state. Use `.omni/knowledge/` for workflow lessons, Gemini memories for session context.
 - **Workflow Files:** All logic is in `.omni/workflows/`. Read corresponding files when receiving `>om:*` commands.

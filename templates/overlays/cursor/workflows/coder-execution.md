@@ -32,6 +32,11 @@ You MUST complete this step and report the result BEFORE writing any code in Ste
    - `🔴 Dev server: <command> failed — <reason>` (error, continue anyway)
 4. Only after printing one of the above lines may you proceed to Step 3.
 
+**Step 2.5: Plan Mode Pre-Check**
+If this is the first task and the feature is complex (>3 files to modify):
+- Suggest: "Consider using Plan Mode (Shift + Tab) for codebase research before coding."
+- If user already ran >om:plan, the plan exists — proceed directly.
+
 **Step 3: Cursor Context Gathering**
 Before editing any file for the current task:
 - Use @Codebase to scan overall architecture if this is the first task.
@@ -62,6 +67,11 @@ When a task requires editing more than 3 files:
 2. Wait for user confirmation before starting edits.
 3. Apply changes in dependency order: shared modules first, consumers last.
 
+**Parallel Dispatch (/multitask):**
+When remaining tasks include 3+ independent items (different files, no import chain):
+- Suggest: "Use /multitask to parallelize independent tasks across subagents."
+- Each subagent gets: task description, relevant design spec excerpt, file scope lock.
+
 **Step 6: Report & Auto-Continue**
 After completing a task, report:
 ```
@@ -88,6 +98,7 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
       Auto-triggering >om:check...
    ```
    - Automatically execute the [>om:check] workflow (no user prompt needed).
+   - Use Agent browser to verify UI changes visually (if dev server is running).
    - In Agent mode: auto-run lint and test commands directly.
    - If >om:check finds errors → automatically execute [>om:fix] → re-run [>om:check]. Max 3 fix attempts per cycle.
    - If max attempts reached: mark failing task `[BLOCKED]` in `.omni/sdlc/todo.md`, escalate to user, then resume.

@@ -26,6 +26,9 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 | @Web | During >om:fix for unknown errors | Error research |
 | Agent mode | >om:cook execution | Auto lint/test cycle |
 | YOLO mode | >om:cook + >om:check | Fast iteration |
+| Plan Mode (Shift+Tab) | Before >om:cook on complex features | Codebase research + file identification |
+| /multitask | >om:cook with 10+ independent tasks | Parallel subagent dispatch, worktree isolation |
+| Agent browser | >om:check quality gates | UI verification, console/network debugging |
 
 ### Command Descriptions
 - **[>om:brainstorm]:** Solutions Architect. Uses @Codebase for project scan, then adaptive interview. Outputs `.omni/sdlc/design-spec.md`.

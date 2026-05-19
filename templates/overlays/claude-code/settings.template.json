@@ -21,11 +21,34 @@
     ]
   },
   "hooks": {
-    "postToolCall": [
+    "SessionStart": [
       {
-        "matcher": "Write|Edit",
-        "command": "echo '[omni] File changed — remember quality gate at checkpoint'"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const fs=require('fs');const m='.omni-manifest.json';if(!fs.existsSync(m)){console.log(JSON.stringify({systemMessage:'[omni] No .omni-manifest.json found. Suggest: omni init or omni onboard'}))}else{const d=JSON.parse(fs.readFileSync(m,'utf-8'));if(d.mapGeneratedAt){const age=Math.floor((Date.now()-new Date(d.mapGeneratedAt).getTime())/86400000);if(age>7)console.log(JSON.stringify({systemMessage:'[omni] Project map is '+age+' days old. Consider: omni map --refresh'}))}}\"",
+            "timeout": 5,
+            "once": true,
+            "statusMessage": "Omni project check"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"console.log(JSON.stringify({systemMessage:'[omni] File changed — remember quality gate at checkpoint'}))\"",
+            "timeout": 5,
+            "statusMessage": "Omni file-change reminder"
+          }
+        ]
       }
     ]
+  },
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   }
 }

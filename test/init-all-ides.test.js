@@ -777,6 +777,49 @@ describe('E2E: gemini init', () => {
     });
 });
 
+// ─── Gemini modules (advanced) ──────────────────────────────────────────────
+
+describe('buildGeminiModules', () => {
+    const { buildGeminiModules } = require('../lib/init');
+
+    it('returns module files', () => {
+        const modules = buildGeminiModules();
+        assert.ok(modules);
+        const names = modules.map(m => m.name);
+        assert.ok(names.includes('core-mindset.md'));
+        assert.ok(names.includes('workflow-commands.md'));
+        assert.ok(names.includes('gemini-tools.md'));
+        assert.equal(modules.length, 3);
+    });
+
+    it('module files exist on disk', () => {
+        const modules = buildGeminiModules();
+        for (const mod of modules) {
+            assert.ok(fs.existsSync(mod.src), `${mod.name} source should exist`);
+        }
+    });
+});
+
+describe('buildGeminiBootstrapContent', () => {
+    const { buildGeminiBootstrapContent, buildStrictnessBlock } = require('../lib/init');
+
+    it('generates bootstrap with @file imports', () => {
+        const strictness = buildStrictnessBlock('flexible');
+        const content = buildGeminiBootstrapContent(strictness, '');
+        assert.ok(content.includes('@./.gemini/core-mindset.md'));
+        assert.ok(content.includes('@./.gemini/workflow-commands.md'));
+        assert.ok(content.includes('@./.gemini/gemini-tools.md'));
+    });
+
+    it('includes personal rules when provided', () => {
+        const strictness = buildStrictnessBlock('hardcore');
+        const personal = '## PERSONAL RULES\nEnglish only.';
+        const content = buildGeminiBootstrapContent(strictness, personal);
+        assert.ok(content.includes('PERSONAL RULES'));
+        assert.ok(content.includes('HARDCORE'));
+    });
+});
+
 // ─── Windsurf init ───────────────────────────────────────────────────────────
 
 describe('E2E: windsurf init', () => {
@@ -805,6 +848,65 @@ describe('E2E: windsurf init', () => {
         );
         assert.equal(manifest.ide, 'windsurf');
         assert.equal(manifest.configFile, '.windsurfrules');
+    });
+});
+
+// ─── Windsurf rules (advanced) ──────────────────────────────────────────────
+
+describe('buildWindsurfRules', () => {
+    const { buildWindsurfRules } = require('../lib/init');
+
+    it('returns rule files for full DNA profile', () => {
+        const rules = buildWindsurfRules({ hasUI: true, hasBackend: true });
+        assert.ok(rules);
+        const names = rules.map(r => r.name);
+        assert.ok(names.includes('core-mindset.md'));
+        assert.ok(names.includes('workflow-commands.md'));
+        assert.ok(names.includes('yolo-guardrails.md'));
+        assert.ok(names.includes('cascade-mode.md'));
+        assert.ok(names.includes('frontend.md'));
+        assert.ok(names.includes('backend.md'));
+        assert.ok(names.includes('testing.md'));
+        assert.equal(rules.length, 7);
+    });
+
+    it('excludes frontend/backend when DNA says no', () => {
+        const rules = buildWindsurfRules({ hasUI: false, hasBackend: false });
+        assert.ok(rules);
+        const names = rules.map(r => r.name);
+        assert.ok(!names.includes('frontend.md'));
+        assert.ok(!names.includes('backend.md'));
+        assert.ok(names.includes('testing.md'));
+    });
+
+    it('rule files have windsurf frontmatter with trigger field', () => {
+        const rules = buildWindsurfRules({ hasUI: true, hasBackend: true });
+        for (const rule of rules) {
+            const content = fs.readFileSync(rule.src, 'utf-8');
+            assert.ok(content.startsWith('---'), `${rule.name} should start with frontmatter`);
+            assert.ok(content.includes('trigger:'), `${rule.name} should have trigger field`);
+            assert.ok(content.includes('description:'), `${rule.name} should have description field`);
+        }
+    });
+});
+
+describe('buildWindsurfBootstrapRules', () => {
+    const { buildWindsurfBootstrapRules, buildStrictnessBlock } = require('../lib/init');
+
+    it('generates bootstrap pointing to .windsurf/rules/', () => {
+        const strictness = buildStrictnessBlock('flexible');
+        const bootstrap = buildWindsurfBootstrapRules(strictness, '');
+        assert.ok(bootstrap.includes('.windsurf/rules/'));
+        assert.ok(bootstrap.includes('RULES SYSTEM'));
+        assert.ok(bootstrap.includes('always_on'));
+    });
+
+    it('includes personal rules when provided', () => {
+        const strictness = buildStrictnessBlock('hardcore');
+        const personal = '## PERSONAL RULES\nUse TypeScript only.';
+        const bootstrap = buildWindsurfBootstrapRules(strictness, personal);
+        assert.ok(bootstrap.includes('PERSONAL RULES'));
+        assert.ok(bootstrap.includes('HARDCORE'));
     });
 });
 
@@ -864,7 +966,7 @@ describe('E2E: generic init', () => {
 // ─── Cross-IDE: no overlay contamination ─────────────────────────────────────
 
 describe('Cross-IDE isolation', () => {
-    const nonOverlayIDEs = ['antigravity', 'windsurf', 'agents', 'generic'];
+    const nonOverlayIDEs = ['antigravity', 'agents', 'generic'];
 
     for (const ide of nonOverlayIDEs) {
         it(`${ide}: workflows are all base (no overlay)`, () => {

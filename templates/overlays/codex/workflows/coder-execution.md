@@ -32,10 +32,10 @@ You MUST complete this step and report the result BEFORE writing any code.
 
 ### Step 3: Codex Safety Preflight
 
-- Respect the active Codex sandbox mode and approval policy.
-- Do not attempt network operations such as `npm install`, `curl`, or `git push` unless the current sandbox/profile allows them or the user explicitly authorizes them.
+- Respect the active Codex permission profile and approval policy.
+- Do not attempt network operations such as `npm install`, `curl`, or `git push` unless the current permission profile allows them or the user explicitly authorizes them.
 - Do not use destructive commands such as `rm -rf`, `git reset --hard`, or force push without explicit user instruction.
-- If a command fails because of sandbox or approval limits, explain the needed command and ask the user to rerun with an appropriate Codex profile or approval.
+- If a command fails because of permission or approval limits, explain the needed command and ask the user to rerun with an appropriate Codex profile or approval.
 
 ### Step 4: Execute One Task
 

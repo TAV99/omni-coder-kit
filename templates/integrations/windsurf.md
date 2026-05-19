@@ -1,1 +1,2 @@
 - **Cascade Rules:** Utilize Windsurf's context awareness. Do not duplicate existing logic.
+- **Memory Partitioning:** Windsurf Auto-Generate Memories are separate from `.omni/` project state. Use `.omni/knowledge/` for workflow lessons.
