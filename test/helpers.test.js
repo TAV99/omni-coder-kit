@@ -7,7 +7,8 @@ const os = require('os');
 const TEMPLATES = path.join(__dirname, '..', 'templates');
 const {
     parseSource, isValidSkillName, createManifest, IDE_AGENT_MAP,
-    IDE_CONFIG_FILE, getAgentFlags, getOverlayNameForTarget, detectDNA,
+    IDE_CONFIG_FILE, IDE_SKILL_DIR, getAgentFlags, getOverlayNameForTarget,
+    classifySource, getSkillDir, githubRawURL, detectDNA,
 } = require(path.join(__dirname, '..', 'lib', 'helpers'));
 const { parseRules, formatMarkdown, formatInject } = require(path.join(__dirname, '..', 'lib', 'rules'));
 const buildRulesContent = (rp) => formatMarkdown(parseRules(rp));
@@ -263,6 +264,96 @@ describe('getOverlayNameForTarget — cursor', () => {
 
     it('returns null for ide=codex, target=cursor', () => {
         assert.equal(getOverlayNameForTarget('codex', 'cursor'), null);
+    });
+});
+
+// ─── classifySource ─────────────────────────────────────────────────────────
+
+describe('classifySource', () => {
+    it('classifies owner/repo as registry', () => {
+        const r = classifySource('vercel-labs/skills');
+        assert.equal(r.type, 'registry');
+        assert.equal(r.value, 'vercel-labs/skills');
+    });
+
+    it('classifies HTTPS URL as url', () => {
+        const r = classifySource('https://example.com/skill.md');
+        assert.equal(r.type, 'url');
+    });
+
+    it('classifies gh: prefix as github', () => {
+        const r = classifySource('gh:owner/repo/skills/react/SKILL.md');
+        assert.equal(r.type, 'github');
+        assert.equal(r.value.owner, 'owner');
+        assert.equal(r.value.repo, 'repo');
+        assert.equal(r.value.path, 'skills/react/SKILL.md');
+    });
+
+    it('returns null for gh: with < 3 segments', () => {
+        assert.equal(classifySource('gh:owner/repo'), null);
+    });
+
+    it('classifies relative .md path as local', () => {
+        const r = classifySource('./my-skills/react.md');
+        assert.equal(r.type, 'local');
+        assert.ok(r.value.endsWith('my-skills/react.md'));
+    });
+
+    it('classifies absolute .md path as local', () => {
+        assert.equal(classifySource('/home/user/skill.md').type, 'local');
+    });
+
+    it('returns null for empty/null', () => {
+        assert.equal(classifySource(''), null);
+        assert.equal(classifySource(null), null);
+    });
+
+    it('returns null for invalid source', () => {
+        assert.equal(classifySource('just-a-word'), null);
+    });
+});
+
+// ─── getSkillDir ────────────────────────────────────────────────────────────
+
+describe('getSkillDir', () => {
+    it('returns .claude/skills for claudecode', () => {
+        assert.equal(getSkillDir({ ide: 'claudecode' }), '.claude/skills');
+    });
+
+    it('returns .codex/skills for codex', () => {
+        assert.equal(getSkillDir({ ide: 'codex' }), '.codex/skills');
+    });
+
+    it('defaults to .claude/skills when no ide', () => {
+        assert.equal(getSkillDir({}), '.claude/skills');
+    });
+});
+
+// ─── githubRawURL ───────────────────────────────────────────────────────────
+
+describe('githubRawURL', () => {
+    it('builds raw URL with default main branch', () => {
+        assert.equal(
+            githubRawURL('owner', 'repo', 'skills/react/SKILL.md'),
+            'https://raw.githubusercontent.com/owner/repo/main/skills/react/SKILL.md'
+        );
+    });
+
+    it('uses custom branch', () => {
+        assert.equal(
+            githubRawURL('owner', 'repo', 'SKILL.md', 'develop'),
+            'https://raw.githubusercontent.com/owner/repo/develop/SKILL.md'
+        );
+    });
+});
+
+// ─── IDE_SKILL_DIR ──────────────────────────────────────────────────────────
+
+describe('IDE_SKILL_DIR', () => {
+    it('has entries for all IDEs in IDE_AGENT_MAP', () => {
+        for (const ide of Object.keys(IDE_AGENT_MAP)) {
+            assert.ok(ide in IDE_SKILL_DIR, `missing IDE_SKILL_DIR for "${ide}"`);
+        }
     });
 });
 

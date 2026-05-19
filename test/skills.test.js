@@ -3,8 +3,10 @@ const assert = require('node:assert/strict');
 
 const {
     UNIVERSAL_SKILLS, TEST_SKILLS,
-    validateRegistry, parseFrameworks,
-    getTestSkillsForStack, buildSearchSuggestion,
+    FE_SKILLS, FE_VALID_CATEGORIES,
+    validateRegistry, validateFERegistry, parseFrameworks,
+    getTestSkillsForStack, getFESkillsForStack,
+    scoreFESkill, buildSearchSuggestion,
 } = require('../lib/skills');
 
 describe('UNIVERSAL_SKILLS', () => {
@@ -239,5 +241,155 @@ describe('TEST_SKILLS registry', () => {
 
     it('has exactly 8 entries', () => {
         assert.equal(TEST_SKILLS.length, 8);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FE_SKILLS
+// ---------------------------------------------------------------------------
+
+describe('FE_SKILLS registry', () => {
+    it('has 14 curated FE skills', () => {
+        assert.equal(FE_SKILLS.length, 14);
+    });
+
+    it('has no duplicate names', () => {
+        const names = FE_SKILLS.map(s => s.name);
+        assert.equal(names.length, new Set(names).size);
+    });
+
+    it('passes validateFERegistry at load time', () => {
+        assert.doesNotThrow(() => validateFERegistry(FE_SKILLS));
+    });
+
+    it('has entries for React, Vue, Angular, Svelte', () => {
+        assert.ok(FE_SKILLS.some(s => s.ui.includes('React')));
+        assert.ok(FE_SKILLS.some(s => s.ui.includes('Vue')));
+        assert.ok(FE_SKILLS.some(s => s.ui.includes('Angular')));
+        assert.ok(FE_SKILLS.some(s => s.ui.includes('Svelte')));
+    });
+
+    it('has Next.js and Nuxt SSR skills', () => {
+        assert.ok(FE_SKILLS.some(s => s.frameworks.includes('Next.js')));
+        assert.ok(FE_SKILLS.some(s => s.frameworks.includes('Nuxt')));
+    });
+
+    it('has dep-based skills (tailwindcss, vite)', () => {
+        assert.ok(FE_SKILLS.some(s => s.deps.includes('tailwindcss')));
+        assert.ok(FE_SKILLS.some(s => s.deps.includes('vite')));
+    });
+
+    it('has generic FE skills', () => {
+        assert.ok(FE_SKILLS.filter(s => s.category === 'generic').length >= 2);
+    });
+
+    it('does not overlap with TEST_SKILLS names', () => {
+        const testNames = new Set(TEST_SKILLS.map(s => s.name));
+        for (const s of FE_SKILLS) {
+            assert.ok(!testNames.has(s.name), `"${s.name}" overlaps with TEST_SKILLS`);
+        }
+    });
+});
+
+describe('validateFERegistry', () => {
+    it('throws on non-array ui', () => {
+        assert.throws(
+            () => validateFERegistry([{ source: 'a/b', name: 'x', desc: 'd', ui: 'React', frameworks: [], deps: [], category: 'component' }]),
+            /FE_SKILLS\[0\].*ui/
+        );
+    });
+
+    it('throws on invalid category', () => {
+        assert.throws(
+            () => validateFERegistry([{ source: 'a/b', name: 'x', desc: 'd', ui: [], frameworks: [], deps: [], category: 'unit' }]),
+            /FE_SKILLS\[0\].*category/
+        );
+    });
+
+    it('throws on duplicate name', () => {
+        assert.throws(
+            () => validateFERegistry([
+                { source: 'a/b', name: 'x', desc: 'd', ui: ['React'], frameworks: [], deps: [], category: 'component' },
+                { source: 'c/d', name: 'x', desc: 'e', ui: ['Vue'], frameworks: [], deps: [], category: 'component' },
+            ]),
+            /FE_SKILLS\[1\].*duplicate.*x/
+        );
+    });
+});
+
+describe('scoreFESkill', () => {
+    it('returns -1 when no criteria match', () => {
+        assert.equal(scoreFESkill({ ui: ['React'], frameworks: [], deps: [], category: 'component' }, ['Vue'], '', {}), -1);
+    });
+
+    it('scores UI match at 10 + category bonus', () => {
+        assert.equal(scoreFESkill({ ui: ['React'], frameworks: [], deps: [], category: 'component' }, ['React'], '', {}), 12);
+    });
+
+    it('scores framework match at 10 + ssr bonus', () => {
+        assert.equal(scoreFESkill({ ui: [], frameworks: ['Next.js'], deps: [], category: 'ssr' }, [], 'Next.js', {}), 12);
+    });
+
+    it('scores dep match at 5 + styling bonus', () => {
+        assert.equal(scoreFESkill({ ui: [], frameworks: [], deps: ['tailwindcss'], category: 'styling' }, ['React'], '', { tailwindcss: '^3' }), 6);
+    });
+
+    it('scores generic at 5 when UI detected', () => {
+        assert.equal(scoreFESkill({ ui: [], frameworks: [], deps: [], category: 'generic' }, ['React'], '', {}), 5);
+    });
+
+    it('returns -1 for generic when no UI', () => {
+        assert.equal(scoreFESkill({ ui: [], frameworks: [], deps: [], category: 'generic' }, [], '', {}), -1);
+    });
+
+    it('combines UI + deps', () => {
+        assert.equal(scoreFESkill({ ui: ['React'], frameworks: [], deps: ['framer-motion'], category: 'animation' }, ['React'], '', { 'framer-motion': '^10' }), 15);
+    });
+});
+
+describe('getFESkillsForStack', () => {
+    it('returns empty for null stack', () => {
+        assert.deepEqual(getFESkillsForStack(null), []);
+    });
+
+    it('returns empty when no UI/framework', () => {
+        assert.deepEqual(getFESkillsForStack({ language: 'Go' }), []);
+    });
+
+    it('returns React skills for React stack', () => {
+        const result = getFESkillsForStack({ ui: 'React', language: 'TypeScript' });
+        assert.ok(result.length > 0);
+        assert.ok(result.some(s => s.name === 'vercel-react-best-practices'));
+    });
+
+    it('returns Vue skills for Vue stack', () => {
+        const result = getFESkillsForStack({ ui: 'Vue', language: 'JavaScript' });
+        assert.ok(result.some(s => s.name === 'vue'));
+    });
+
+    it('returns Next.js + React skills for Next.js', () => {
+        const result = getFESkillsForStack({ ui: 'React', framework: 'Next.js', language: 'TypeScript' });
+        assert.ok(result.some(s => s.name === 'next-best-practices'));
+        assert.ok(result.some(s => s.name === 'vercel-react-best-practices'));
+    });
+
+    it('includes generic FE skills when UI detected', () => {
+        const result = getFESkillsForStack({ ui: 'Angular', language: 'TypeScript' });
+        assert.ok(result.some(s => s.name === 'frontend-ui-engineering'));
+    });
+
+    it('sorts framework-specific above generic', () => {
+        const result = getFESkillsForStack({ ui: 'React', framework: 'Next.js', language: 'TypeScript' });
+        const nextIdx = result.findIndex(s => s.frameworks.includes('Next.js'));
+        const genericIdx = result.findIndex(s => s.category === 'generic');
+        if (nextIdx !== -1 && genericIdx !== -1) {
+            assert.ok(nextIdx < genericIdx);
+        }
+    });
+
+    it('deduplicates by name', () => {
+        const result = getFESkillsForStack({ ui: 'React', language: 'TypeScript' });
+        const names = result.map(s => s.name);
+        assert.equal(names.length, new Set(names).size);
     });
 });

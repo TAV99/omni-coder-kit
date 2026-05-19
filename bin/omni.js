@@ -25,7 +25,7 @@ program
 
 program
     .command('equip <source>')
-    .description('Tải và đồng bộ kỹ năng ngoài (external) từ skills.sh')
+    .description('Cài skill từ nhiều nguồn: owner/repo | URL | gh:owner/repo/path.md | ./local.md')
     .option('-n, --name <name>', 'Đặt tên ngắn gọn cho kỹ năng (mặc định: tự sinh từ source)')
     .option('-f, --force', 'Bỏ qua cảnh báo xung đột để cài đè')
     .action(handleEquip);
