@@ -9,6 +9,7 @@ When the user types a `>om:` command, use @Files to read the corresponding workf
 
 | Command | Workflow File | Context Hints |
 |---------|--------------|---------------|
+| `>om:onboard` | `.omni/workflows/onboard-workflow.md` | @Codebase for legacy project scan |
 | `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | @Codebase for project scan |
 | `>om:equip` | `.omni/workflows/skill-manager.md` | @Web for skill discovery |
 | `>om:plan` | `.omni/workflows/task-planning.md` | @Git for recent changes |

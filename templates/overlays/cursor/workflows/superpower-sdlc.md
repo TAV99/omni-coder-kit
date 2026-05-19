@@ -5,6 +5,7 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 
 | Command | Workflow File | Context Hints |
 |---------|--------------|---------------|
+| `>om:onboard` | `.omni/workflows/onboard-workflow.md` | @Codebase for legacy project scan |
 | `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | @Codebase for project scan |
 | `>om:equip` | `.omni/workflows/skill-manager.md` | @Web for skill discovery |
 | `>om:plan` | `.omni/workflows/task-planning.md` | @Git for recent changes |

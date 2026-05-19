@@ -8,6 +8,7 @@ Type these commands as normal chat text in Codex:
 
 | Command | Workflow |
 |---------|----------|
+| `>om:onboard` | Legacy project onboarding — reverse-engineer rules & skills |
 | `>om:brainstorm` | Requirements interview and design spec |
 | `>om:equip` | Skill discovery and installation guidance |
 | `>om:plan` | `.omni/sdlc/design-spec.md` to `.omni/sdlc/todo.md` |

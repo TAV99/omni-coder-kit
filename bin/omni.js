@@ -11,6 +11,7 @@ const { handleStatus, handleCommands } = require('../lib/commands/status');
 const { handleMap } = require('../lib/commands/map');
 const { handleUpdate } = require('../lib/commands/update');
 const { handleCustomize } = require('../lib/commands/customize');
+const { handleOnboard } = require('../lib/commands/onboard');
 
 program
     .name('omni')
@@ -62,6 +63,13 @@ program
     .description('Quản lý personal rules (xem/sửa/sync/reset)')
     .option('--dry-run', 'Xem trước kết quả sync (không ghi)')
     .action(handleRules);
+
+program
+    .command('onboard')
+    .description('Onboard dự án hiện có — deep scan + sinh report cho AI')
+    .option('--skip-init', 'Bỏ qua auto-init (assume đã init)')
+    .option('--refresh', 'Chạy lại scan, ghi đè report cũ')
+    .action(handleOnboard);
 
 program
     .command('customize <workflow>')

@@ -5,6 +5,7 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 
 | Command | Slash | Agent Strategy | Workflow File |
 |---------|-------|---------------|---------------|
+| `>om:onboard` | `/om:onboard` | Main session | `.omni/workflows/onboard-workflow.md` |
 | `>om:brainstorm` | `/om:brainstorm` | Main session | `.omni/workflows/requirement-analysis.md` |
 | `>om:equip` | `/om:equip` | Main session | `.omni/workflows/skill-manager.md` |
 | `>om:plan` | `/om:plan` | Main session | `.omni/workflows/task-planning.md` |

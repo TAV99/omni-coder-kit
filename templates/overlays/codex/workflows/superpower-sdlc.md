@@ -8,6 +8,7 @@ Type these commands as normal chat text (`>om:*` or `$om:*`):
 
 | Command | Workflow File | Purpose |
 |---------|---------------|---------|
+| `>om:onboard` | `.omni/workflows/onboard-workflow.md` | Legacy project onboarding |
 | `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Requirements interview and design spec |
 | `>om:equip` | `.omni/workflows/skill-manager.md` | Skill discovery |
 | `>om:plan` | `.omni/workflows/task-planning.md` | Convert spec to `.omni/sdlc/todo.md` |
