@@ -20,6 +20,7 @@
 - **Knowledge Base:** `>om:learn` tự động ghi bài học sau mỗi fix thành công vào `.omni/knowledge/knowledge-base.md` — `>om:cook` đọc lại khi gặp file tương tự
 - **Project Map:** `omni map` quét codebase → sinh `.omni/knowledge/project-map.md` skeleton (0 token). `>om:map` điền mô tả semantic. `--refresh` diff cấu trúc, đánh dấu `[NEW]`/`[DELETED]`, giữ nguyên mô tả AI. Multi-language: Node.js, Python, Go, Rust, Java, Ruby, PHP
 - **Existing Project Detection:** `omni init` tự động phát hiện project có sẵn (package.json, pyproject.toml, go.mod...) và đề xuất tạo Project Map
+- **Legacy Project Onboarding (v2.5.0):** `omni onboard` quét sâu dự án cũ (dependencies, conventions, linter/formatter, landmines) để tạo onboard report. AI chạy `>om:onboard` thực hiện phỏng vấn lập trình viên (5-8 câu adaptive) để sinh rules chuyên sâu `.omni/rules.md` (đồng bộ sang IDE config), IDE Skill File, reverse-engineered `.omni/sdlc/design-spec.md` và `.omni/sdlc/todo.md` cải tiến.
 - **Organized .omni/ (v2.5.0):** Tất cả file tự sinh gom vào `.omni/` — `sdlc/` (design-spec, todo, test-report, content-source), `knowledge/` (project-map, knowledge-base), root (manifest.json, rules.md, workflows/). `.gitignore` chỉ cần 1 dòng `.omni/`
 - **Parallel Sub-Agent Execution (Claude Code):** Dependency graph analysis, batch parallel agents với worktree isolation, Shared Context Brief (~500 tokens) giảm token duplication
 - **Token Optimization:** Config file chỉ ~5KB, workflows lazy-loaded khi cần, examples lazy-loaded khi cần, surgical context rule (grep trước khi đọc file lớn), context-aware verbosity theo lệnh >om:, Shared Context Brief cho sub-agents
@@ -51,22 +52,26 @@ omni update
 #    (tự động phát hiện project có sẵn → đề xuất tạo Project Map)
 omni init
 
-# 2. Quét codebase (nếu chưa tạo map khi init)
+# 2. Onboard dự án có sẵn (nếu là dự án legacy/đã có nhiều code)
+omni onboard
+# -> Tiếp theo mở AI Chat và gõ >om:onboard để sinh rules + skills + spec
+
+# 3. Quét codebase và cập nhật Project Map (nếu cần)
 omni map
 
-# 3. Cài universal skills (6 skills mặc định)
+# 4. Cài universal skills (6 skills mặc định)
 omni auto-equip
 
-# 4. Cài thêm skill từ skills.sh (chỉ cho IDE đã chọn)
+# 5. Cài thêm skill từ skills.sh (chỉ cho IDE đã chọn)
 omni equip vercel-labs/agent-skills
 
-# 5. Xem trạng thái
+# 6. Xem trạng thái
 omni status
 
-# 6. Xem danh sách lệnh >om:
+# 7. Xem danh sách lệnh >om:
 omni commands
 
-# 7. Cập nhật lên phiên bản mới nhất
+# 8. Cập nhật lên phiên bản mới nhất
 omni update
 ```
 
@@ -77,6 +82,7 @@ omni update
 | Lệnh | Mô tả |
 |-------|-------|
 | `omni init` | Khởi tạo DNA và workflow cho dự án mới (auto-detect existing project) |
+| `omni onboard` | Onboard dự án hiện có — quét sâu toàn bộ dự án cũ và sinh report cho AI |
 | `omni map` | Quét codebase → sinh Project Map cho AI navigation |
 | `omni map --refresh` | Cập nhật cấu trúc map (0 token, đánh dấu `[NEW]`/`[DELETED]`) |
 | `omni equip <source>` | Tải kỹ năng ngoài từ skills.sh (cài cho IDE đã chọn) |
@@ -173,6 +179,29 @@ Khởi động gợi ý:
 ```bash
 gemini --yolo
 ```
+
+### Legacy Project Onboarding (Tính năng nâng cao)
+
+Dành cho các dự án đã chạy sẵn có lượng lớn code nguồn (legacy codebase). Omni-Coder Kit cung cấp quy trình 2 bước để chuyển hóa dự án thành cấu trúc chuẩn SDLC:
+
+**Bước 1: Quét mã nguồn tĩnh ở terminal:**
+```bash
+omni onboard
+```
+CLI quét sâu toàn bộ dự án (không phụ thuộc internet, không gửi dữ liệu ra ngoài) và phân tích các chỉ số: tech stack, cấu trúc thư mục, quy ước đặt tên và nhập khẩu, các linter/formatter, số dòng code, cùng các điểm nợ kỹ thuật (landmines). Kết quả lưu vào `.omni/onboard-report.json`.
+
+**Bước 2: Kích hoạt AI reverse-engineering trong chat:**
+Gõ lệnh sau trong chat với AI:
+```text
+>om:onboard
+```
+AI đọc báo cáo đã quét và phỏng vấn lập trình viên (5–8 câu hỏi thích ứng tùy theo mức độ rõ ràng của mã nguồn) để thu thập thông tin về: đối tượng phục vụ, số lượng lập trình viên tham gia, coding style ưa thích, v.v. 
+
+Sau phỏng vấn, AI tự động sinh ra 4 tệp cấu hình cốt lõi:
+- **`.omni/rules.md`**: Bộ quy tắc ứng xử đồng bộ trực tiếp sang các tệp cấu hình của IDE/CLI đã chọn.
+- **IDE Skill File (`project-[name].md`)**: Hướng dẫn cấu trúc và mẫu phát triển cụ thể đặt trong thư mục skills của IDE.
+- **`.omni/sdlc/design-spec.md`**: Bản đặc tả kiến trúc được reverse-engineering ngược từ mã nguồn.
+- **`.omni/sdlc/todo.md`**: Danh sách các nhiệm vụ cải tiến mã nguồn được phân loại theo mức độ ưu tiên (High/Medium/Low).
 
 ---
 
@@ -282,6 +311,7 @@ Sau khi khởi tạo, gõ các lệnh `>om:` trong chat với AI:
 | Lệnh | Agent | Mô tả |
 |-------|-------|-------|
 | `>om:brainstorm` | Architect | Phỏng vấn adaptive (1–5 câu theo độ phức tạp) + DNA detection, đề xuất tech stack, xuất `.omni/sdlc/design-spec.md` + `.omni/sdlc/content-source.md` |
+| `>om:onboard` | Architect | Đọc onboard report + phỏng vấn adaptive, sinh `.omni/rules.md`, IDE Skill File, reverse-engineered spec và todo.md cải tiến |
 | `>om:equip` | Skill Manager | Dùng find-skills search skills.sh dynamic + conditional skill groups theo DNA |
 | `>om:plan` | PM | Phân tích spec → micro-tasks trong `.omni/sdlc/todo.md`, gắn `@skill:name`, backend-aware ordering với `[infra]` tag |
 | `>om:cook` | Coder | Thực thi từng task, dev server preflight, surgical context, auto-continue, quality gate mỗi 1/3 |
@@ -487,6 +517,7 @@ omni-coder-kit/                    # Package (npm)
 │   │   ├── qa-testing.md              # P0-P5 pipeline
 │   │   ├── debugger-workflow.md       # + auto-trigger >om:learn
 │   │   ├── documentation-writer.md
+│   │   ├── onboard-workflow.md        # >om:onboard — legacy project onboarding
 │   │   ├── knowledge-learn.md         # >om:learn — knowledge capture
 │   │   ├── project-map.md            # >om:map — codebase intelligence
 │   │   ├── superpower-sdlc.md
@@ -521,8 +552,10 @@ your-project/
 │   ├── IDE adapters
 │   └── Personal rules
 ├── .omni/
+│   ├── onboard-report.json      # Báo cáo quét sâu dự án (tạo bởi omni onboard)
 │   ├── workflows/               # Lazy-loaded bởi AI khi cần
 │   │   ├── requirement-analysis.md   # >om:brainstorm (DNA detection)
+│   │   ├── onboard-workflow.md       # >om:onboard (legacy project onboarding)
 │   │   ├── interview-examples.md     # Lazy-loaded question templates
 │   │   ├── skill-manager.md          # >om:equip (conditional groups)
 │   │   ├── task-planning.md          # >om:plan ([infra] tag)
