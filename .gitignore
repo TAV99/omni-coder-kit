@@ -14,3 +14,10 @@ node_modules/
 # Superpowers (local brainstorming/planning docs)
 doc/
 docs/
+
+# Antigravity CLI runtime artifacts
+.agents/worktrees/
+.agents/scratch/
+.agents/logs/
+.agents/cache/
+.agents/tmp/

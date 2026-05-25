@@ -28,7 +28,7 @@ function getOverlayNameForTarget(ide, target) {
 function getOverlayDir(ide, target = null) {
     const overlayName = target
         ? getOverlayNameForTarget(ide, target)
-        : ({ claudecode: 'claude-code', dual: 'claude-code', cursor: 'cursor' }[ide] || null);
+        : ({ claudecode: 'claude-code', dual: 'claude-code', cursor: 'cursor', antigravity: 'antigravity' }[ide] || null);
     if (!overlayName) return null;
     const dir = path.join(TEMPLATES, 'overlays', overlayName);
     return fs.existsSync(dir) ? dir : null;
@@ -114,6 +114,13 @@ function ensureGitignore(ide, cwd) {
     if (ide === 'claudecode' || ide === 'dual') patterns.push('.claude/');
     if (ide === 'codex' || ide === 'dual') patterns.push('.codex/');
     if (ide === 'cursor') patterns.push('.cursor/');
+    if (ide === 'antigravity') {
+        patterns.push('.agents/worktrees/');
+        patterns.push('.agents/scratch/');
+        patterns.push('.agents/logs/');
+        patterns.push('.agents/cache/');
+        patterns.push('.agents/tmp/');
+    }
 
     let existing = '';
     if (fs.existsSync(gitignorePath)) {
@@ -229,6 +236,22 @@ function simulateInit(ide, opts = {}) {
         const mcpConfig = { mcpServers: { context7: { command: 'npx', args: ['-y', '@upstash/context7-mcp'] } } };
         fs.writeFileSync(path.join(cursorDir, 'mcp.json'), JSON.stringify(mcpConfig, null, 2));
         result.files.mcpConfig = true;
+    }
+
+    // Antigravity advanced
+    if (ide === 'antigravity' && opts.advanced) {
+        const rulesDir = path.join(tmpDir, '.agents', 'rules');
+        fs.mkdirSync(rulesDir, { recursive: true });
+
+        const overlayRulesDir = path.join(TEMPLATES, 'overlays', 'antigravity', 'rules');
+        if (fs.existsSync(overlayRulesDir)) {
+            const alwaysInclude = ['core-mindset.md', 'workflow-commands.md', 'antigravity-tools.md', 'yolo-guardrails.md'];
+            for (const f of alwaysInclude) {
+                const src = path.join(overlayRulesDir, f);
+                if (fs.existsSync(src)) fs.copyFileSync(src, path.join(rulesDir, f));
+            }
+        }
+        result.files.antigravityRules = fs.readdirSync(rulesDir);
     }
 
     // Dual mode: AGENTS.md
@@ -581,6 +604,38 @@ describe('E2E: antigravity init', () => {
         );
         assert.equal(manifest.ide, 'antigravity');
         assert.equal(manifest.configFile, 'AGENTS.md');
+    });
+
+    it('creates modular rule files under .agents/rules/ in advanced mode', () => {
+        const advancedResult = simulateInit('antigravity', { advanced: true });
+        try {
+            const rulesDir = path.join(advancedResult.tmpDir, '.agents', 'rules');
+            assert.ok(fs.existsSync(rulesDir), '.agents/rules/ should exist');
+            const expectedRules = ['core-mindset.md', 'workflow-commands.md', 'antigravity-tools.md', 'yolo-guardrails.md'];
+            for (const rule of expectedRules) {
+                assert.ok(fs.existsSync(path.join(rulesDir, rule)), `${rule} should exist`);
+            }
+        } finally {
+            fs.rmSync(advancedResult.tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('bootstrap AGENTS.md references modular rules in advanced mode', () => {
+        const advancedResult = simulateInit('antigravity', { advanced: true });
+        try {
+            const agentsPath = path.join(advancedResult.tmpDir, 'AGENTS.md');
+            // Mock what the CLI would write
+            const { buildStrictnessBlock, buildAntigravityBootstrapRules } = require('../lib/init/strategies');
+            const strictnessBlock = buildStrictnessBlock('flexible');
+            const bootstrap = buildAntigravityBootstrapRules(strictnessBlock, '');
+            fs.writeFileSync(agentsPath, bootstrap, 'utf-8');
+
+            const content = fs.readFileSync(agentsPath, 'utf-8');
+            assert.ok(content.includes('.agents/rules/'), 'AGENTS.md should reference modular rules');
+            assert.ok(content.includes('antigravity-tools.md'), 'AGENTS.md should mention antigravity-tools.md');
+        } finally {
+            fs.rmSync(advancedResult.tmpDir, { recursive: true, force: true });
+        }
     });
 });
 
