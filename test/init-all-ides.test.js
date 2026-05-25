@@ -252,6 +252,16 @@ function simulateInit(ide, opts = {}) {
             }
         }
         result.files.antigravityRules = fs.readdirSync(rulesDir);
+
+        const slashCommands = buildCommands('claudecode');
+        if (slashCommands) {
+            const agentsWorkflowsDir = path.join(tmpDir, '.agents', 'workflows');
+            fs.mkdirSync(agentsWorkflowsDir, { recursive: true });
+            for (const [name, srcPath] of Object.entries(slashCommands)) {
+                fs.copyFileSync(srcPath, path.join(agentsWorkflowsDir, name));
+            }
+            result.files.commands = Object.keys(slashCommands);
+        }
     }
 
     // Dual mode: AGENTS.md
@@ -633,6 +643,20 @@ describe('E2E: antigravity init', () => {
             const content = fs.readFileSync(agentsPath, 'utf-8');
             assert.ok(content.includes('.agents/rules/'), 'AGENTS.md should reference modular rules');
             assert.ok(content.includes('antigravity-tools.md'), 'AGENTS.md should mention antigravity-tools.md');
+        } finally {
+            fs.rmSync(advancedResult.tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('creates .agents/workflows/ containing slash commands in advanced mode', () => {
+        const advancedResult = simulateInit('antigravity', { advanced: true });
+        try {
+            const workflowsDir = path.join(advancedResult.tmpDir, '.agents', 'workflows');
+            assert.ok(fs.existsSync(workflowsDir), '.agents/workflows/ should exist');
+            const expectedCommands = ['om:brainstorm.md', 'om:plan.md', 'om:cook.md', 'om:check.md', 'om:fix.md', 'om:doc.md', 'om:learn.md', 'om:map.md', 'om:onboard.md'];
+            for (const cmd of expectedCommands) {
+                assert.ok(fs.existsSync(path.join(workflowsDir, cmd)), `${cmd} should exist`);
+            }
         } finally {
             fs.rmSync(advancedResult.tmpDir, { recursive: true, force: true });
         }
