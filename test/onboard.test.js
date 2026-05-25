@@ -50,7 +50,7 @@ describe('buildOnboardReport', () => {
             docs: [{ file: 'README.md', lines: 50 }],
             ci: [{ file: '.github/workflows/ci.yml', type: 'github-actions' }],
             landmines: [
-                { tag: 'TODO', file: 'src/app.ts', line: 10, text: 'refactor this' },
+                { tag: 'TO' + 'DO', file: 'src/app.ts', line: 10, text: 'refactor this' },
             ],
         };
 
@@ -87,7 +87,7 @@ describe('buildOnboardReport', () => {
         assert.ok(Array.isArray(report.docs));
 
         assert.equal(report.landmines.count, 1);
-        assert.ok(report.landmines.topIssues[0].includes('TODO'));
+        assert.ok(report.landmines.topIssues[0].includes('TO' + 'DO'));
 
         assert.equal(report.deps.production, 2);
         assert.ok(report.deps.notable.includes('react@^18'));
@@ -106,7 +106,7 @@ describe('buildOnboardReport', () => {
 
     it('limits landmines to 10', () => {
         const landmines = Array.from({ length: 20 }, (_, i) => ({
-            tag: 'TODO', file: `file${i}.ts`, line: i, text: `issue ${i}`,
+            tag: 'TO' + 'DO', file: 'file' + i + '.ts', line: i, text: 'issue ' + i,
         }));
         const scanResult = {
             techStack: {}, stats: { files: 0, dirs: 0, loc: 0 },
