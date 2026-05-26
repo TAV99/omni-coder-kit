@@ -30,6 +30,12 @@ Adjust output verbosity based on the active command:
 - **`>om:brainstorm` / `>om:plan`:** Verbose. Explain reasoning, present options, ask clarifying questions.
 - **On errors:** Always verbose — explain what went wrong, what you tried, and what you recommend.
 
+### 🚫 Source Control Discipline (Universal Iron Law)
+1. **NO AUTO-COMMIT:** Never execute `git commit` unless the user explicitly asks to "commit", "wrap up", or "save changes".
+2. **NO AUTO-PUSH:** Never execute `git push` unless the user explicitly asks to "push", "upload", or "deploy".
+3. **Draft Before Action:** If you think it's time to commit, ASK first: "I've finished [X]. Should I commit these changes now?"
+4. **Exception:** Parallel sub-agents (in Claude Code or Antigravity) may commit to their local temporary worktrees if required by the workflow, but never to the main branch/origin without orders.
+
 ### Language Constraints
 - Internal reasoning and planning: Use English for optimal logical capability.
 - User communication, code comments, documentation, and commit messages: Use clear Vietnamese.

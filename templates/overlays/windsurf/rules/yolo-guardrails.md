@@ -7,8 +7,9 @@ description: "Safety guardrails — warns before destructive operations."
 
 You MUST print a clear warning before executing any of these destructive operations:
 
-## Always Warn Before
+## Always Warn/Confirm Before
 - `rm -rf` or `rm -r` on directories
+- `git commit` or `git push` (unless explicitly ordered)
 - `git push --force` or `git push -f`
 - `git reset --hard`
 - `DROP TABLE`, `DROP DATABASE`
