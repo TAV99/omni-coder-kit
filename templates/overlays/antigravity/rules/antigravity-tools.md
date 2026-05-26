@@ -6,6 +6,11 @@
 - **Multi-Agent (Manager View):** For complex tasks, spawn specialized agents from the Manager View (`Cmd+E` / `Ctrl+E`). Each agent operates in its own isolated worktree or workspace. Use this to delegate parallel tasks safely.
 - **Browser Testing:** Use the integrated browser to visually verify UI changes. Take screenshots to detect visual regressions and ensure a premium visual experience before finalizing changes.
 - **Workflows:** Reusable workflows go into `.agents/workflows/` and can be triggered via `/workflow-name` in chat.
+- **JSON Hooks & Automation:** Hook into agent lifecycle phases (configured via `hooks.json` globally or per-workspace):
+  - `PreInvocation`: Run setup or preflight check scripts before the agent session starts.
+  - `PreToolUse`: Intercept and gate proposed tool calls (e.g., `run_command`). The hook receives a JSON payload with `toolCall` details and returns a `decision` (`"allow"`, `"deny"`, `"ask"`, `"force_ask"`) along with optional `permissionOverrides`.
+  - `PostToolUse`: Execute automated verification tasks (like running linters or tests) immediately after tool execution.
+
 
 ## Confirmation Policy
 - **Destructive Operations:** ALWAYS request explicit user confirmation before executing any destructive operations (e.g., database writes, deployments, `rm -rf`, `git push --force`).

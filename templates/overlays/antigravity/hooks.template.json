@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "PostToolUse": {
+      "commands": [
+        {
+          "match": "write_file|replace",
+          "exec": "npm test || true",
+          "description": "Auto-verify after code changes"
+        }
+      ]
+    }
+  }
+}
