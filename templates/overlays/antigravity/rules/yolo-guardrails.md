@@ -4,6 +4,7 @@ Even when running in YOLO mode (auto-approve terminal commands), you MUST print 
 
 ## Always Warn/Confirm Before
 - `rm -rf` or `rm -r` on directories
+- `git commit` or `git push` (unless explicitly ordered)
 - `git push --force` or `git push -f`
 - `git reset --hard`
 - `DROP TABLE`, `DROP DATABASE`

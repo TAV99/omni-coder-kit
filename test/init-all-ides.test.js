@@ -257,10 +257,16 @@ function simulateInit(ide, opts = {}) {
         if (slashCommands) {
             const agentsWorkflowsDir = path.join(tmpDir, '.agents', 'workflows');
             fs.mkdirSync(agentsWorkflowsDir, { recursive: true });
+            const registered = [];
             for (const [name, srcPath] of Object.entries(slashCommands)) {
+                const baseName = name.replace('.md', '');
+                const cleanName = baseName.replace('om:', '');
                 fs.copyFileSync(srcPath, path.join(agentsWorkflowsDir, name));
+                fs.copyFileSync(srcPath, path.join(agentsWorkflowsDir, `om-${cleanName}.md`));
+                fs.copyFileSync(srcPath, path.join(agentsWorkflowsDir, `${cleanName}.md`));
+                registered.push(baseName, `om-${cleanName}`, cleanName);
             }
-            result.files.commands = Object.keys(slashCommands);
+            result.files.commands = registered;
         }
     }
 
@@ -598,14 +604,14 @@ describe('E2E: antigravity init', () => {
         }
     });
 
-    it('uses base workflows (no overlay)', () => {
+    it('uses antigravity overlay workflows', () => {
         const content = fs.readFileSync(
             path.join(result.tmpDir, '.omni', 'workflows', 'coder-execution.md'), 'utf-8'
         );
-        const baseContent = fs.readFileSync(
-            path.join(TEMPLATES, 'workflows', 'coder-execution.md'), 'utf-8'
+        const expectedOverlay = fs.readFileSync(
+            path.join(TEMPLATES, 'overlays', 'antigravity', 'workflows', 'coder-execution.md'), 'utf-8'
         );
-        assert.equal(content, resolvePartials(baseContent));
+        assert.equal(content, expectedOverlay);
     });
 
     it('manifest records antigravity IDE', () => {
@@ -653,7 +659,11 @@ describe('E2E: antigravity init', () => {
         try {
             const workflowsDir = path.join(advancedResult.tmpDir, '.agents', 'workflows');
             assert.ok(fs.existsSync(workflowsDir), '.agents/workflows/ should exist');
-            const expectedCommands = ['om:brainstorm.md', 'om:plan.md', 'om:cook.md', 'om:check.md', 'om:fix.md', 'om:doc.md', 'om:learn.md', 'om:map.md', 'om:onboard.md'];
+            const expectedCommands = [
+                'om:brainstorm.md', 'om-brainstorm.md', 'brainstorm.md',
+                'om:plan.md', 'om-plan.md', 'plan.md',
+                'om:cook.md', 'om-cook.md', 'cook.md'
+            ];
             for (const cmd of expectedCommands) {
                 assert.ok(fs.existsSync(path.join(workflowsDir, cmd)), `${cmd} should exist`);
             }
@@ -1045,7 +1055,7 @@ describe('E2E: generic init', () => {
 // ─── Cross-IDE: no overlay contamination ─────────────────────────────────────
 
 describe('Cross-IDE isolation', () => {
-    const nonOverlayIDEs = ['antigravity', 'agents', 'generic'];
+    const nonOverlayIDEs = ['agents', 'generic'];
 
     for (const ide of nonOverlayIDEs) {
         it(`${ide}: workflows are all base (no overlay)`, () => {

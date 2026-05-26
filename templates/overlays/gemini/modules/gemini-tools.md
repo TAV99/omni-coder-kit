@@ -13,9 +13,9 @@ Gemini Agent Skills and Omni skills serve different roles:
 - Both systems coexist. Gemini skills use progressive disclosure (load when needed). Omni skills are injected into sub-agent prompts during `>om:cook`.
 
 ## Model Recommendations
-- **Gemini 3 Flash** — Default. Fast and capable for daily coding tasks.
-- **Gemini 3 Pro** — Advanced reasoning, complex multi-step features.
-- **Gemini 3.1 Pro** — Most capable. Use for architecture decisions and large-scale refactoring.
+- **Gemini 3.5 Flash** — Default. Extremely fast and highly capable for most coding and debugging tasks.
+- **Gemini 3.5 Pro** — Advanced reasoning model. Recommended for complex refactoring, performance optimization, and architectural decisions.
+- **Gemini 3.5 Ultra** — Most capable model. Recommended for large-scale migrations, architectural design, and complex multi-agent orchestration.
 - Switch models with `/model` command during a session.
 
 ## @file Imports

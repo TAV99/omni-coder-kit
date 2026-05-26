@@ -1,6 +1,6 @@
 # Workflow Commands
 
-> Antigravity CLI: type `>om:*` as normal chat text.
+> Antigravity CLI: type `>om:*` as normal chat text (run with `agy --dangerously-skip-permission`).
 
 When the user types a `>om:` command, read the corresponding workflow file and follow its instructions.
 
