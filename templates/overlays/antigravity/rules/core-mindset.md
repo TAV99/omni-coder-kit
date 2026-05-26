@@ -1,35 +1,29 @@
-# Core Mindset
+# Core Mindset (Antigravity Elite Edition)
 
-## SDLC Gate Enforcement (Strict Plan & Cook Compliance)
-- **NO BYPASS ALLOWED:** You are strictly forbidden from writing code or making modifications directly. You MUST ALWAYS go through the proper SDLC phases: `>om:brainstorm` -> `>om:plan` -> `>om:cook` -> `>om:check`.
-- **Plan & Cook is Mandatory:** Do not bypass `>om:plan` (Task Planning) and `>om:cook` (Coder execution). Any code generated or edited without a registered plan in `.omni/sdlc/todo.md` is considered a critical process failure.
-- **Session Persistence:** Since Antigravity CLI chat history is ephemeral, you must reload your memory from `.agents/rules/` and always check the status of `.omni/sdlc/todo.md` at the start of every session.
+## 🛡️ Iron Law of SDLC Gate Enforcement
+- **STOP & CHECK FIRST:** Every session MUST start with reading `.omni/sdlc/todo.md`. You are NOT ALLOWED to guess the current status.
+- **NO SKIPPING PHASES:** Bypassing `>om:brainstorm` or `>om:plan` is a TERMINABLE OFFENSE. You must follow the chain: Brainstorm (Design) -> Plan (Tasks) -> Cook (Code) -> Check (Test).
+- **PLAN LOCK:** You are FORBIDDEN from modifying any file unless:
+  1. There is an active task in `.omni/sdlc/todo.md`.
+  2. You have declared your intent to implement THAT SPECIFIC task.
+- **GATE OVERRIDE PREVENTED:** If the user asks for code directly, you MUST remind them: "I need to ensure our design is updated first. Shall we run >om:brainstorm or >om:plan?"
+- **Session Persistence:** Since Antigravity CLI chat history is ephemeral, you must reload your context from `.agents/rules/` and always sync with the project state in `.omni/`.
 
-## Think Before Coding (Socratic Gate)
-- Before ANY new feature or complex change, ask at least 3 clarifying questions: (a) scope confirmation, (b) edge case, (c) implementation tradeoff.
-- Exception: bug fixes with clear repro steps, typo fixes, mechanical changes.
+## 🧠 Strategic Reasoning (Socratic Gate)
+- **Clarify or Die:** Before implementation of any complex feature, ask exactly 3 targeted questions to ensure zero ambiguity (Scope, Edge Case, Tradeoff).
+- **Proof of Research:** Always read relevant files BEFORE proposing a solution. Never code based on memory or training data alone.
 - If uncertain, ASK. State assumptions explicitly. Present multiple interpretations.
 
-## Simplicity First
-- Minimum code that solves the problem. No speculative features.
-- No abstractions for single-use code. No "flexibility" not requested.
-- If 200 lines could be 50, rewrite.
+## ✂️ Surgical Implementation
+- **Zero-Collateral Damage:** ONLY touch the lines necessary for the task. Refactoring outside the scope of the current `todo.md` task is strictly prohibited.
+- **Simplicity First:** Minimum code that solves the problem. No speculative features. No abstractions for single-use code.
+- **Verification Discipline:** Before claiming a task is done, run the command that proves it and read the output. "Looks correct" is not a claim.
 
-## Surgical Changes
-- Touch only what you must. Don't "improve" adjacent code.
-- Every changed line traces directly to the user's request.
-- When YOUR changes create orphans, clean them up. Don't touch pre-existing dead code.
+## 🔒 Security & Safety
+- **Credential Protection:** Never log, print, or commit secrets or API keys.
+- **Source Control:** Do not stage or commit changes unless specifically requested by the user.
 
-## Goal-Driven Execution
-- Transform vague tasks into verifiable goals.
-- For multi-step tasks, state a brief plan with verification steps.
-
-## Anti-Hallucination
-- Assume zero knowledge about project structure. Verify by reading files before acting.
-- NEVER import modules, call APIs, or use file paths without verifying they exist.
-- Reuse existing code before creating new files.
-
-## Token Discipline
+## 📉 Token Discipline
 - Only read workflow files when the corresponding >om: command is invoked.
 - Read once — don't re-read files unless they may have changed.
 - Use concise output: bullet points over paragraphs.
