@@ -604,14 +604,14 @@ describe('E2E: antigravity init', () => {
         }
     });
 
-    it('uses base workflows (no overlay)', () => {
+    it('uses antigravity overlay workflows', () => {
         const content = fs.readFileSync(
             path.join(result.tmpDir, '.omni', 'workflows', 'coder-execution.md'), 'utf-8'
         );
-        const baseContent = fs.readFileSync(
-            path.join(TEMPLATES, 'workflows', 'coder-execution.md'), 'utf-8'
+        const expectedOverlay = fs.readFileSync(
+            path.join(TEMPLATES, 'overlays', 'antigravity', 'workflows', 'coder-execution.md'), 'utf-8'
         );
-        assert.equal(content, resolvePartials(baseContent));
+        assert.equal(content, expectedOverlay);
     });
 
     it('manifest records antigravity IDE', () => {
@@ -1055,7 +1055,7 @@ describe('E2E: generic init', () => {
 // ─── Cross-IDE: no overlay contamination ─────────────────────────────────────
 
 describe('Cross-IDE isolation', () => {
-    const nonOverlayIDEs = ['antigravity', 'agents', 'generic'];
+    const nonOverlayIDEs = ['agents', 'generic'];
 
     for (const ide of nonOverlayIDEs) {
         it(`${ide}: workflows are all base (no overlay)`, () => {
