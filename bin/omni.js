@@ -13,6 +13,7 @@ const { handleUpdate } = require('../lib/commands/update');
 const { handleCustomize } = require('../lib/commands/customize');
 const { handleOnboard } = require('../lib/commands/onboard');
 const { handleDoctor } = require('../lib/commands/doctor');
+const { handleRun } = require('../lib/commands/run');
 
 program
     .name('omni')
@@ -82,5 +83,14 @@ program
     .description('Kiểm tra sức khỏe registry skill (nguồn sống/chết) + validate skill đã cài')
     .option('--offline', 'Bỏ qua kiểm tra mạng, chỉ validate skill local')
     .action(handleDoctor);
+
+program
+    .command('run')
+    .description('[Pha 0] Harness loop — in kế hoạch SDLC (--dry-run); execution đến ở Pha 1/2')
+    .option('--dry-run', 'In chuỗi state dự kiến, không thực thi, không ghi state')
+    .option('--from <state>', 'Bắt đầu từ một state cụ thể (INIT|BRAINSTORM|...|SHIP)')
+    .option('--resume', 'Tiếp tục từ .omni/run/state.json (fallback: events.ndjson)')
+    .option('--provider <name>', 'Provider động cơ (Pha 0: host-cli)', 'host-cli')
+    .action(handleRun);
 
 program.parseAsync();
