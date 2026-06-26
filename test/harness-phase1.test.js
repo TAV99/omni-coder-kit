@@ -10,6 +10,9 @@ const tasks = require('../lib/harness/tasks');
 const shell = require('../lib/harness/tools/shell');
 const buildTest = require('../lib/harness/tools/build-test');
 const { runPipeline } = require('../lib/harness/gates/pipeline');
+const { runHarness } = require('../lib/harness/loop');
+const { loadState } = require('../lib/harness/state');
+const { readEvents } = require('../lib/harness/events');
 
 function tmpProject() {
     return fs.mkdtempSync(path.join(os.tmpdir(), 'omni-p1-'));
@@ -130,4 +133,51 @@ test('gates.runPipeline: --only filters by id', () => {
     const res = runPipeline('/x', { only: 'P3', runGate: fakeGate });
     assert.strictEqual(res.results.length, 1);
     assert.strictEqual(res.results[0].id, 'P3');
+});
+
+// --- live loop (dry-run provider, no real agent/shell) ---------------------
+
+const passGate = () => ({ passed: true, results: [], failures: [] });
+const failGate = () => ({ passed: false, results: [], failures: ['P3'] });
+
+test('loop live: all tasks done → reaches DOC and PAUSES before SHIP', async () => {
+    const dir = tmpProject();
+    writeTodo(dir, '- [x] a\n- [x] b\n');
+    const final = await runHarness(dir, { from: 'COOK', provider: 'dry-run', runPipeline: passGate });
+    assert.strictEqual(final.state, 'DOC');
+    assert.strictEqual(final.status, 'paused');
+    // persisted + paused event recorded
+    assert.strictEqual(loadState(dir).state, 'DOC');
+    assert.ok(readEvents(dir).some((e) => e.type === 'pause' && /SHIP/i.test(e.reason)));
+});
+
+test('loop live: --yes-ship carries through SHIP to DONE (no auto-deploy)', async () => {
+    const dir = tmpProject();
+    writeTodo(dir, '- [x] a\n');
+    const final = await runHarness(dir, { from: 'COOK', provider: 'dry-run', yesShip: true, runPipeline: passGate });
+    assert.strictEqual(final.state, 'DONE');
+    assert.strictEqual(final.status, 'done');
+    const states = readEvents(dir).filter((e) => e.type === 'transition').map((e) => e.to);
+    assert.ok(states.includes('SHIP') && states.includes('DONE'));
+});
+
+test('loop live: gate fail → FIX, exhaust attempts → BLOCKED (task marked)', async () => {
+    const dir = tmpProject();
+    writeTodo(dir, '- [ ] flaky task\n');
+    const final = await runHarness(dir, {
+        from: 'CHECK', provider: 'dry-run', runPipeline: failGate, budget: { maxFixAttempts: 1 },
+    });
+    assert.strictEqual(final.state, 'BLOCKED');
+    assert.strictEqual(final.status, 'blocked');
+    assert.ok(readEvents(dir).some((e) => e.type === 'blocked'));
+    // the actionable task got tagged [BLOCKED] in todo.md
+    assert.strictEqual(tasks.parseTodo(dir).blocked, 1);
+});
+
+test('loop live: budget cuts an otherwise-infinite COOK (no-op provider) → paused', async () => {
+    const dir = tmpProject();
+    writeTodo(dir, '- [ ] never finishes with dry-run provider\n');
+    const final = await runHarness(dir, { from: 'COOK', provider: 'dry-run', runPipeline: passGate, budget: { maxIterations: 5 } });
+    assert.strictEqual(final.status, 'paused');
+    assert.ok(readEvents(dir).some((e) => e.type === 'pause' && /iterations/.test(e.reason)));
 });

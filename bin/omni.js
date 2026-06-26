@@ -86,11 +86,13 @@ program
 
 program
     .command('run')
-    .description('[Pha 0] Harness loop — in kế hoạch SDLC (--dry-run); execution đến ở Pha 1/2')
+    .description('Harness loop — lái SDLC cook→check→fix; pause trước SHIP. Dùng --dry-run để chỉ xem kế hoạch')
     .option('--dry-run', 'In chuỗi state dự kiến, không thực thi, không ghi state')
     .option('--from <state>', 'Bắt đầu từ một state cụ thể (INIT|BRAINSTORM|...|SHIP)')
     .option('--resume', 'Tiếp tục từ .omni/run/state.json (fallback: events.ndjson)')
-    .option('--provider <name>', 'Provider động cơ (Pha 0: host-cli)', 'host-cli')
+    .option('--provider <name>', 'Provider động cơ: host-cli | dry-run', 'host-cli')
+    .option('--yes-ship', 'Cho phép đi vào SHIP mà không pause (vẫn KHÔNG tự push/deploy)')
+    .option('--max-iterations <n>', 'Giới hạn số transition trước khi pause (mặc định 60)')
     .action(handleRun);
 
 program

@@ -137,17 +137,12 @@ test('loop: planRun returns full annotated sequence ending DONE', () => {
     assert.ok(plan.loopNote.includes('CHECK'));
 });
 
-test('loop: runHarness dry-run plans without executing', () => {
-    const r = loop.runHarness({ dryRun: true });
+test('loop: runHarness dry-run plans without executing', async () => {
+    const r = await loop.runHarness(tmpProject(), { dryRun: true });
     assert.strictEqual(r.executed, false);
     assert.strictEqual(r.mode, 'dry-run');
     assert.ok(r.plan.sequence.length > 0);
 });
 
-test('loop: runHarness live mode refuses in Pha 0 with a reason + initial state', () => {
-    const r = loop.runHarness({ dryRun: false, from: 'PLAN' });
-    assert.strictEqual(r.executed, false);
-    assert.strictEqual(r.mode, 'live');
-    assert.match(r.reason, /Pha 0/);
-    assert.strictEqual(r.initialState.state, 'PLAN');
-});
+// Live-loop behavior (cook→check→fix, pause before SHIP, BLOCKED) is covered in
+// test/harness-phase1.test.js using the dry-run provider + injected gates.
