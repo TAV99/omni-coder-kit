@@ -90,9 +90,10 @@ program
     .option('--dry-run', 'In chuỗi state dự kiến, không thực thi, không ghi state')
     .option('--from <state>', 'Bắt đầu từ một state cụ thể (INIT|BRAINSTORM|...|SHIP)')
     .option('--resume', 'Tiếp tục từ .omni/run/state.json (fallback: events.ndjson)')
-    .option('--provider <name>', 'Provider động cơ: host-cli | dry-run', 'host-cli')
+    .option('--provider <name>', 'Provider động cơ: host-cli | claude-sdk | dry-run', 'host-cli')
     .option('--yes-ship', 'Cho phép đi vào SHIP mà không pause (vẫn KHÔNG tự push/deploy)')
     .option('--max-iterations <n>', 'Giới hạn số transition trước khi pause (mặc định 60)')
+    .option('--max-cost <usd>', 'Giới hạn chi phí token (USD) cho provider claude-sdk (mặc định 5)')
     .action(handleRun);
 
 program
