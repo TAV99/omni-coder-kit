@@ -63,6 +63,8 @@ For each task, record:
 - Result: PASS / FAIL / SKIP (with reason)
 - If FAIL: specific error or unexpected behavior
 
+**Doubt Gate (high-stakes tasks):** for tasks touching security logic, data migrations, public API/schema, or irreversible operations, a green pipeline is not enough — apply the Doubt Gate (below) to the change before recording PASS. If self-review can't establish confidence, escalate to the user rather than rubber-stamping.
+
 **Step 4: Generate Test Report**
 Output `.omni/sdlc/test-report.md`. Keep it terse — 1 line per PASS, details only on FAIL.
 
@@ -121,3 +123,5 @@ When >om:check is triggered automatically from >om:cook's quality gate:
 - **[BLOCKED] protocol:** If a task fails 3 fix attempts, mark it `[BLOCKED]` in .omni/sdlc/todo.md with a summary of what was tried. Do NOT continue fixing it.
 
 {{partial:verification-qa}}
+
+{{partial:doubt-gate}}

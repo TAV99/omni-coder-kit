@@ -17,6 +17,7 @@ When the user types a `>om:` command, use @Files to read the corresponding workf
 | `>om:check` | `.omni/workflows/qa-testing.md` | @Git for diff review |
 | `>om:fix` | `.omni/workflows/debugger-workflow.md` | @Web for error research |
 | `>om:doc` | `.omni/workflows/documentation-writer.md` | @Codebase for API surface |
+| `>om:ship` | `.omni/workflows/shipping.md` | @Git for release diff; only after >om:check passes |
 | `>om:learn` | `.omni/workflows/knowledge-learn.md` | @Git for fix history |
 
 Supporting files (referenced by workflows):

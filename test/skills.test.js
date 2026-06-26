@@ -125,10 +125,12 @@ describe('getTestSkillsForStack', () => {
         assert.equal(result[0].name, 'vitest');
     });
 
-    it('returns Mocha skill for JavaScript + Mocha', () => {
+    it('falls back to generic JS testing for Mocha (no dedicated skill còn sống)', () => {
+        // Nguồn mocha cũ (nicolo-ribaudo/skills) đã 404 → bỏ entry; Mocha rơi về skill generic.
         const result = getTestSkillsForStack({ language: 'JavaScript', test: 'Mocha' });
         assert.ok(result.length > 0);
-        assert.equal(result[0].name, 'mocha-testing');
+        assert.equal(result[0].name, 'javascript-testing-patterns');
+        assert.ok(!result.some(s => s.name === 'mocha-testing'), 'không còn entry mocha-testing chết');
     });
 
     it('returns both Jest and Playwright for composite stack', () => {
@@ -235,12 +237,13 @@ describe('TEST_SKILLS registry', () => {
         assert.ok(true);
     });
 
-    it('includes Mocha entry', () => {
-        assert.ok(TEST_SKILLS.some(s => s.name === 'mocha-testing'));
+    it('không chứa entry mocha-testing chết (nguồn nicolo-ribaudo 404)', () => {
+        assert.ok(!TEST_SKILLS.some(s => s.name === 'mocha-testing'));
+        assert.ok(!TEST_SKILLS.some(s => s.source === 'nicolo-ribaudo/skills'));
     });
 
-    it('has exactly 8 entries', () => {
-        assert.equal(TEST_SKILLS.length, 8);
+    it('has exactly 7 entries', () => {
+        assert.equal(TEST_SKILLS.length, 7);
     });
 });
 

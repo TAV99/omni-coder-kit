@@ -14,6 +14,7 @@ When the user types a `>om:` command, read the corresponding workflow file and f
 | `>om:check` | `.omni/workflows/qa-testing.md` | QA Tester | Run validation script pipeline |
 | `>om:fix` | `.omni/workflows/debugger-workflow.md` | Debugger | Reproduce -> root cause -> surgical fix |
 | `>om:doc` | `.omni/workflows/documentation-writer.md` | Writer | Read implementation to generate docs |
+| `>om:ship` | `.omni/workflows/shipping.md` | Release Engineer | Only after >om:check passes; stage, never auto-deploy |
 | `>om:learn` | `.omni/workflows/knowledge-learn.md` | Learner | Write Knowledge Item (KI) or file |
 
 Supporting files:
