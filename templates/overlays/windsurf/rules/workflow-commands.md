@@ -17,6 +17,7 @@ When the user types a `>om:` command, read the corresponding workflow file from 
 | `>om:check` | `.omni/workflows/qa-testing.md` | QA & testing |
 | `>om:fix` | `.omni/workflows/debugger-workflow.md` | Debugging |
 | `>om:doc` | `.omni/workflows/documentation-writer.md` | Documentation |
+| `>om:ship` | `.omni/workflows/shipping.md` | Release: version, rollout + rollback (after check) |
 | `>om:learn` | `.omni/workflows/knowledge-learn.md` | Knowledge capture |
 
 Supporting files (referenced by workflows):

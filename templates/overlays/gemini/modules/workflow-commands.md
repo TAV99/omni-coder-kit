@@ -14,6 +14,7 @@ When the user types a `>om:` command, read the corresponding workflow file and f
 | `>om:check` | `.omni/workflows/qa-testing.md` | `run_shell_command` |
 | `>om:fix` | `.omni/workflows/debugger-workflow.md` | `systematic-debugging` |
 | `>om:doc` | `.omni/workflows/documentation-writer.md` | `read_file` |
+| `>om:ship` | `.omni/workflows/shipping.md` | `run_shell_command` (only after >om:check passes) |
 | `>om:learn` | `.omni/workflows/knowledge-learn.md` | `save_memory` |
 
 Supporting files:

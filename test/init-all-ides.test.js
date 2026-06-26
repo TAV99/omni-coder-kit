@@ -342,11 +342,11 @@ describe('E2E: claudecode init', () => {
         }
     });
 
-    it('creates 10 slash commands in .claude/commands/', () => {
+    it('creates 11 slash commands in .claude/commands/', () => {
         const cmdsDir = path.join(result.tmpDir, '.claude', 'commands');
         assert.ok(fs.existsSync(cmdsDir));
         const cmds = fs.readdirSync(cmdsDir).filter(f => f.endsWith('.md'));
-        assert.equal(cmds.length, 10);
+        assert.equal(cmds.length, 11);
         assert.ok(cmds.includes('om:onboard.md'));
         assert.ok(cmds.includes('om:brainstorm.md'));
         assert.ok(cmds.includes('om:cook.md'));
@@ -354,6 +354,7 @@ describe('E2E: claudecode init', () => {
         assert.ok(cmds.includes('om:check.md'));
         assert.ok(cmds.includes('om:fix.md'));
         assert.ok(cmds.includes('om:doc.md'));
+        assert.ok(cmds.includes('om:ship.md'));
         assert.ok(cmds.includes('om:equip.md'));
         assert.ok(cmds.includes('om:learn.md'));
         assert.ok(cmds.includes('om:map.md'));
@@ -542,7 +543,7 @@ describe('E2E: dual init', () => {
     it('creates Claude slash commands', () => {
         const cmdsDir = path.join(result.tmpDir, '.claude', 'commands');
         assert.ok(fs.existsSync(cmdsDir));
-        assert.equal(fs.readdirSync(cmdsDir).filter(f => f.endsWith('.md')).length, 10);
+        assert.equal(fs.readdirSync(cmdsDir).filter(f => f.endsWith('.md')).length, 11);
     });
 
     it('creates Claude settings', () => {
