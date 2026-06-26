@@ -12,6 +12,7 @@ const { handleMap } = require('../lib/commands/map');
 const { handleUpdate } = require('../lib/commands/update');
 const { handleCustomize } = require('../lib/commands/customize');
 const { handleOnboard } = require('../lib/commands/onboard');
+const { handleDoctor } = require('../lib/commands/doctor');
 
 program
     .name('omni')
@@ -75,5 +76,11 @@ program
     .command('customize <workflow>')
     .description('Copy a workflow from package to .omni/workflows/ for customization')
     .action(handleCustomize);
+
+program
+    .command('skills:doctor')
+    .description('Kiểm tra sức khỏe registry skill (nguồn sống/chết) + validate skill đã cài')
+    .option('--offline', 'Bỏ qua kiểm tra mạng, chỉ validate skill local')
+    .action(handleDoctor);
 
 program.parseAsync();
