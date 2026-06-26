@@ -13,7 +13,7 @@ const { handleUpdate } = require('../lib/commands/update');
 const { handleCustomize } = require('../lib/commands/customize');
 const { handleOnboard } = require('../lib/commands/onboard');
 const { handleDoctor } = require('../lib/commands/doctor');
-const { handleRun } = require('../lib/commands/run');
+const { handleRun, handleTrace, handleGate } = require('../lib/commands/run');
 
 program
     .name('omni')
@@ -92,5 +92,17 @@ program
     .option('--resume', 'Tiếp tục từ .omni/run/state.json (fallback: events.ndjson)')
     .option('--provider <name>', 'Provider động cơ (Pha 0: host-cli)', 'host-cli')
     .action(handleRun);
+
+program
+    .command('trace')
+    .description('In nhật ký event của lần chạy harness gần nhất (.omni/run/events.ndjson)')
+    .option('--limit <n>', 'Số event cuối cần in (mặc định 50)')
+    .action(handleTrace);
+
+program
+    .command('gate')
+    .description('Chỉ chạy quality pipeline P1–P3 (lint/build/test) và exit 0/1 — CI-friendly')
+    .option('--only <ids>', 'Chỉ chạy các gate theo id, vd: "P3" hoặc "P1,P3"')
+    .action(handleGate);
 
 program.parseAsync();
