@@ -13,7 +13,7 @@ const { handleUpdate } = require('../lib/commands/update');
 const { handleCustomize } = require('../lib/commands/customize');
 const { handleOnboard } = require('../lib/commands/onboard');
 const { handleDoctor } = require('../lib/commands/doctor');
-const { handleRun, handleTrace, handleGate } = require('../lib/commands/run');
+const { handleRun, handleTrace, handleGate, handleStats } = require('../lib/commands/run');
 
 program
     .name('omni')
@@ -107,5 +107,10 @@ program
     .description('Chỉ chạy quality pipeline P1–P3 (lint/build/test) và exit 0/1 — CI-friendly')
     .option('--only <ids>', 'Chỉ chạy các gate theo id, vd: "P3" hoặc "P1,P3"')
     .action(handleGate);
+
+program
+    .command('stats')
+    .description('Tổng hợp token/chi phí/thời gian theo state từ event log của lần chạy gần nhất')
+    .action(handleStats);
 
 program.parseAsync();
