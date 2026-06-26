@@ -39,7 +39,8 @@ For the current task:
 2. Scope lock: only create/modify files declared in 3.1. Zero exceptions — no cleanup, no refactoring, no "improvements".
 3. Write the minimum code to complete the task. Follow the Simplicity First principle.
 4. After writing code, verify it works (compile check, quick test, or logical validation).
-5. Mark the task as done: change `- [ ]` to `- [x]` in `.omni/sdlc/todo.md`.
+5. **Doubt Gate (non-trivial tasks only):** before marking done, if this task meets a non-trivial trigger (branching logic, boundary crossing, unverifiable invariant, irreversible blast radius — see Doubt Gate below), run the doubt cycle. For irreversible/security-sensitive changes, escalate instead of self-reviewing. Trivial tasks skip this.
+6. Mark the task as done: change `- [ ]` to `- [x]` in `.omni/sdlc/todo.md`.
 
 **Step 4: Report & Auto-Continue**
 After completing a task, report:
@@ -88,3 +89,5 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
 - Quality gate cycles are mandatory — do NOT skip them even if all tasks look correct.
 
 {{partial:tdd-verification}}
+
+{{partial:doubt-gate}}

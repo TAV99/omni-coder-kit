@@ -90,6 +90,27 @@ test('resolvePartials: expands {{partial:verification-qa}} to QA table', () => {
     assert.ok(result.includes('| Claim'));
 });
 
+test('resolvePartials: expands {{partial:doubt-gate}} to doubt cycle + orchestration constraint', () => {
+    const input = '{{partial:doubt-gate}}';
+    const result = resolvePartials(input);
+    assert.ok(!result.includes('{{partial:'), 'marker should be resolved');
+    assert.ok(result.includes('Doubt Gate'), 'should contain Doubt Gate heading');
+    assert.ok(/CLAIM[\s\S]*EXTRACT[\s\S]*DOUBT[\s\S]*RECONCILE[\s\S]*STOP/.test(result), 'should contain the 5-step cycle in order');
+    assert.ok(result.includes('depth = 1'), 'must state orchestration depth=1 constraint');
+    assert.ok(/escalate/i.test(result), 'must require escalation for high-stakes');
+});
+
+test('doubt-gate: referenced by both coder-execution and qa-testing workflows', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const wfDir = path.join(__dirname, '..', 'templates', 'workflows');
+    for (const f of ['coder-execution.md', 'qa-testing.md']) {
+        const content = fs.readFileSync(path.join(wfDir, f), 'utf-8');
+        assert.ok(content.includes('{{partial:doubt-gate}}'), `${f} phải tham chiếu doubt-gate`);
+        assert.ok(/Doubt Gate/.test(content), `${f} phải có trigger Doubt Gate inline`);
+    }
+});
+
 test('resolvePartials: leaves unknown partials unchanged', () => {
     const input = '{{partial:nonexistent-thing}}';
     const result = resolvePartials(input);
