@@ -109,23 +109,73 @@ test('build-test.runGateCommand passes through injected runner', () => {
 
 // --- gates/pipeline.js -----------------------------------------------------
 
+// Isolate the P1–P3 build-test gates by injecting no-op P0/P4/P5 handlers.
+const skipHandlers = {
+    runSecurity: () => ({ ran: false, passed: true, output: '' }),
+    runBundle: () => ({ ran: false, passed: true, output: '' }),
+    runContent: () => ({ ran: false, passed: true, output: '', severity: null }),
+};
+
 test('gates.runPipeline: P3 fail → passed:false, failures:[P3]', () => {
     const fakeGate = (_dir, kind) => kind === 'test'
         ? { ran: true, passed: false, output: '1 failing', durationMs: 5 }
         : { ran: true, passed: true, output: 'ok', durationMs: 5 };
-    const res = runPipeline('/x', { runGate: fakeGate });
+    const res = runPipeline('/x', { runGate: fakeGate, ...skipHandlers });
     assert.strictEqual(res.passed, false);
     assert.deepStrictEqual(res.failures, ['P3']);
-    // P0/P4/P5 are placeholders
     assert.strictEqual(res.results.find((r) => r.id === 'P0').status, 'skipped');
 });
 
 test('gates.runPipeline: all gates skipped (no commands) → passed:true', () => {
     const fakeGate = () => ({ ran: false, passed: true, output: 'no command', durationMs: 0 });
-    const res = runPipeline('/x', { runGate: fakeGate });
+    const res = runPipeline('/x', { runGate: fakeGate, ...skipHandlers });
     assert.strictEqual(res.passed, true);
     assert.strictEqual(res.failures.length, 0);
     assert.ok(res.results.every((r) => r.status === 'skipped'));
+});
+
+// --- 2a: full P0/P4/P5 gates ----------------------------------------------
+
+test('gates.runPipeline: P0 security fail (handler) → blocks', () => {
+    const fakeGate = () => ({ ran: false, passed: true, output: '' });
+    const res = runPipeline('/x', {
+        runGate: fakeGate,
+        runSecurity: () => ({ ran: true, passed: false, output: 'secret committed' }),
+        runBundle: skipHandlers.runBundle,
+        runContent: skipHandlers.runContent,
+    });
+    assert.strictEqual(res.passed, false);
+    assert.ok(res.failures.includes('P0'));
+});
+
+test('gates.runPipeline: P4 bundle over threshold → advisory, NOT a failure', () => {
+    const fakeGate = () => ({ ran: false, passed: true, output: '' });
+    const res = runPipeline('/x', {
+        runGate: fakeGate,
+        runSecurity: skipHandlers.runSecurity,
+        runBundle: () => ({ ran: true, passed: false, output: 'bundle 9 MB' }),
+        runContent: skipHandlers.runContent,
+    });
+    assert.strictEqual(res.passed, true, 'advisory P4 must not block');
+    assert.ok(!res.failures.includes('P4'));
+    assert.strictEqual(res.results.find((r) => r.id === 'P4').status, 'advisory');
+});
+
+test('gates.runPipeline: P5 content HIGH → blocks; LOW → advisory', () => {
+    const fakeGate = () => ({ ran: false, passed: true, output: '' });
+    const high = runPipeline('/x', {
+        runGate: fakeGate, runSecurity: skipHandlers.runSecurity, runBundle: skipHandlers.runBundle,
+        runContent: () => ({ ran: true, passed: false, output: 'forbidden', severity: 'HIGH' }),
+    });
+    assert.strictEqual(high.passed, false);
+    assert.ok(high.failures.includes('P5'));
+
+    const low = runPipeline('/x', {
+        runGate: fakeGate, runSecurity: skipHandlers.runSecurity, runBundle: skipHandlers.runBundle,
+        runContent: () => ({ ran: true, passed: true, output: 'placeholder', severity: 'LOW' }),
+    });
+    assert.strictEqual(low.passed, true);
+    assert.ok(!low.failures.includes('P5'));
 });
 
 test('gates.runPipeline: --only filters by id', () => {
