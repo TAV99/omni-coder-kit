@@ -29,6 +29,18 @@ test('host-cli.buildCommand antigravity → agy headless one-shot', () => {
     assert.match(built.cmd, /^agy --dangerously-skip-permissions -p ".*"$/);
 });
 
+test('host-cli antigravity --model: opt-in only (default omits it)', () => {
+    // explicit model → flag emitted before -p
+    const withModel = hostCli.buildCommand('antigravity', 'x', { model: 'gemini-3-pro' });
+    assert.match(withModel.cmd, /^agy --dangerously-skip-permissions --model gemini-3-pro -p ".*"$/);
+    // 'auto' preset maps per step; default (no modelByStep) stays unchanged
+    const auto = hostCli.create({ ide: 'antigravity', modelByStep: 'auto' });
+    assert.match(auto.buildCommand('cook', {}).cmd, /--model gemini-3-pro -p/);
+    assert.match(auto.buildCommand('map', {}).cmd, /--model gemini-3-flash -p/);
+    const def = hostCli.create({ ide: 'antigravity' });
+    assert.ok(!def.buildCommand('cook', {}).cmd.includes('--model'), 'default omits --model');
+});
+
 test('getProviderFromSpec parses name:ide', () => {
     const a = getProviderFromSpec('host-cli:antigravity');
     assert.strictEqual(a.host, 'antigravity');
