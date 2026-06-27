@@ -13,7 +13,7 @@ const { handleUpdate } = require('../lib/commands/update');
 const { handleCustomize } = require('../lib/commands/customize');
 const { handleOnboard } = require('../lib/commands/onboard');
 const { handleDoctor } = require('../lib/commands/doctor');
-const { handleRun, handleTrace, handleGate } = require('../lib/commands/run');
+const { handleRun, handleTrace, handleGate, handleStats } = require('../lib/commands/run');
 
 program
     .name('omni')
@@ -90,9 +90,13 @@ program
     .option('--dry-run', 'In chuỗi state dự kiến, không thực thi, không ghi state')
     .option('--from <state>', 'Bắt đầu từ một state cụ thể (INIT|BRAINSTORM|...|SHIP)')
     .option('--resume', 'Tiếp tục từ .omni/run/state.json (fallback: events.ndjson)')
-    .option('--provider <name>', 'Provider động cơ: host-cli | dry-run', 'host-cli')
+    .option('--provider <name>', 'Provider động cơ: host-cli | claude-sdk | dry-run', 'host-cli')
     .option('--yes-ship', 'Cho phép đi vào SHIP mà không pause (vẫn KHÔNG tự push/deploy)')
     .option('--max-iterations <n>', 'Giới hạn số transition trước khi pause (mặc định 60)')
+    .option('--max-cost <usd>', 'Giới hạn chi phí token (USD) cho provider claude-sdk (mặc định 5)')
+    .option('--debate <specs>', 'Debate đối kháng chéo-provider, vd: "host-cli:claudecode,host-cli:antigravity"')
+    .option('--debate-on <phases>', 'Bật debate ở phase nào: "check,ship" (mặc định check)')
+    .option('--debate-rounds <n>', 'Số vòng tranh luận (mặc định 2)')
     .action(handleRun);
 
 program
@@ -106,5 +110,10 @@ program
     .description('Chỉ chạy quality pipeline P1–P3 (lint/build/test) và exit 0/1 — CI-friendly')
     .option('--only <ids>', 'Chỉ chạy các gate theo id, vd: "P3" hoặc "P1,P3"')
     .action(handleGate);
+
+program
+    .command('stats')
+    .description('Tổng hợp token/chi phí/thời gian theo state từ event log của lần chạy gần nhất')
+    .action(handleStats);
 
 program.parseAsync();
