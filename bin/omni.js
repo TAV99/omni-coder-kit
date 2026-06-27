@@ -94,6 +94,9 @@ program
     .option('--yes-ship', 'Cho phép đi vào SHIP mà không pause (vẫn KHÔNG tự push/deploy)')
     .option('--max-iterations <n>', 'Giới hạn số transition trước khi pause (mặc định 60)')
     .option('--max-cost <usd>', 'Giới hạn chi phí token (USD) cho provider claude-sdk (mặc định 5)')
+    .option('--debate <specs>', 'Debate đối kháng chéo-provider, vd: "host-cli:claudecode,host-cli:antigravity"')
+    .option('--debate-on <phases>', 'Bật debate ở phase nào: "check,ship" (mặc định check)')
+    .option('--debate-rounds <n>', 'Số vòng tranh luận (mặc định 2)')
     .action(handleRun);
 
 program

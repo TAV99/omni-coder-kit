@@ -11,6 +11,14 @@ const manualRelay = require('../lib/harness/providers/manual-relay');
 const { getProvider, getProviderFromSpec } = require('../lib/harness/providers');
 const { runDebate, classify } = require('../lib/harness/debate');
 const { readEvents } = require('../lib/harness/events');
+const { runHarness } = require('../lib/harness/loop');
+
+function writeTodo(dir, body) {
+    fs.mkdirSync(path.join(dir, '.omni', 'sdlc'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.omni', 'sdlc', 'todo.md'), body, 'utf-8');
+}
+const passGate = () => ({ passed: true, results: [], failures: [] });
+const SPECS = ['host-cli:claudecode', 'host-cli:antigravity'];
 
 function tmp() { return fs.mkdtempSync(path.join(os.tmpdir(), 'omni-p3-')); }
 
@@ -117,4 +125,55 @@ test('runDebate: <2 participants → warning', async () => {
     const runStep = async (p) => ({ id: p.id, ok: true, verdict: 'pass', position: 'ok' });
     const res = await runDebate({ projectDir: dir, claim: { question: 'q' }, participants: [{ id: 'solo', host: 'claudecode' }], runStep });
     assert.ok(res.warnings.some((w) => /≥2 participant/.test(w)));
+});
+
+// --- 3c: debate wired into the loop ----------------------------------------
+
+test('loop: debate split at CHECK → escalate pause, does not blind-fix', async () => {
+    const dir = tmp();
+    writeTodo(dir, '- [x] a\n');
+    const fakeDebate = async () => ({ consensus: 'split', verdict: 'fail', transcript: [], rounds: 2, transcriptPath: 'x', warnings: [] });
+    const final = await runHarness(dir, {
+        from: 'CHECK', provider: 'dry-run', runPipeline: passGate,
+        debate: SPECS, debateOn: ['check'], runDebate: fakeDebate,
+    });
+    assert.strictEqual(final.status, 'paused');
+    assert.strictEqual(final.state, 'CHECK'); // did NOT advance to FIX or DOC
+    assert.ok(readEvents(dir).some((e) => e.type === 'pause' && /debate split/.test(e.reason)));
+});
+
+test('loop: debate agree-pass at CHECK → proceeds to DOC', async () => {
+    const dir = tmp();
+    writeTodo(dir, '- [x] a\n');
+    const fakeDebate = async () => ({ consensus: 'agree', verdict: 'pass', transcript: [], rounds: 1, transcriptPath: 'x', warnings: [] });
+    const final = await runHarness(dir, {
+        from: 'CHECK', provider: 'dry-run', runPipeline: passGate,
+        debate: SPECS, debateOn: ['check'], runDebate: fakeDebate,
+    });
+    assert.strictEqual(final.state, 'DOC');
+    assert.strictEqual(final.status, 'paused'); // normal pause-before-SHIP
+});
+
+test('loop: pre-SHIP debate split → escalate, never auto-ships', async () => {
+    const dir = tmp();
+    writeTodo(dir, '- [x] a\n');
+    let calls = 0;
+    const fakeDebate = async () => (calls++ === 0
+        ? { consensus: 'agree', verdict: 'pass', transcript: [], rounds: 1, transcriptPath: 'x', warnings: [] }   // CHECK passes
+        : { consensus: 'split', verdict: 'fail', transcript: [], rounds: 2, transcriptPath: 'x', warnings: [] }); // pre-SHIP splits
+    const final = await runHarness(dir, {
+        from: 'CHECK', provider: 'dry-run', runPipeline: passGate, yesShip: true,
+        debate: SPECS, debateOn: ['check', 'ship'], runDebate: fakeDebate,
+    });
+    assert.strictEqual(final.state, 'DOC'); // stopped at DOC, never entered SHIP
+    assert.strictEqual(final.status, 'paused');
+    assert.ok(!readEvents(dir).some((e) => e.type === 'transition' && e.to === 'SHIP'));
+});
+
+test('loop: debate not configured → no debate events', async () => {
+    const dir = tmp();
+    writeTodo(dir, '- [x] a\n');
+    const final = await runHarness(dir, { from: 'CHECK', provider: 'dry-run', runPipeline: passGate });
+    assert.strictEqual(final.state, 'DOC');
+    assert.ok(!readEvents(dir).some((e) => e.type === 'debate'));
 });
