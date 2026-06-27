@@ -5,11 +5,14 @@ const test = require('node:test');
 const path = require('path');
 const fs = require('fs');
 
-const { 
-    buildAntigravityCommands, 
-    buildAntigravityWorkflows, 
+const {
+    buildAntigravityCommands,
+    buildAntigravityWorkflows,
     buildAntigravityHooks,
-    buildAntigravityRules
+    buildAntigravityRules,
+    buildAntigravityMcpConfig,
+    buildAntigravityExtension,
+    buildAntigravitySkills,
 } = require('../lib/init/strategies');
 
 test('Antigravity Overlay Integration', async (t) => {
@@ -27,11 +30,49 @@ test('Antigravity Overlay Integration', async (t) => {
         assert.ok(workflows['coder-execution.md'].includes('templates/overlays/antigravity/workflows/coder-execution.md'), 'Path should be correct');
     });
 
-    await t.test('buildAntigravityHooks returns hooks content', () => {
+    await t.test('buildAntigravityHooks uses verified Gemini/agy schema (AfterTool, not PostToolUse)', () => {
         const hooks = buildAntigravityHooks('antigravity');
         assert.ok(hooks, 'Should return hooks');
         const parsed = JSON.parse(hooks);
-        assert.ok(parsed.hooks.PostToolUse, 'Should contain PostToolUse hook');
+        assert.ok(Array.isArray(parsed.hooks.AfterTool), 'Should use AfterTool array');
+        assert.ok(!parsed.hooks.PostToolUse, 'Should NOT use Claude-style PostToolUse');
+        const entry = parsed.hooks.AfterTool[0];
+        assert.ok(entry.matcher, 'AfterTool entry has matcher');
+        assert.ok(Array.isArray(entry.hooks) && entry.hooks[0].type === 'command', 'AfterTool entry has command hooks');
+    });
+
+    await t.test('buildAntigravityExtension is a valid gemini-extension.json manifest', () => {
+        const manifest = JSON.parse(buildAntigravityExtension(process.cwd()));
+        assert.strictEqual(manifest.name, 'omni-coder-kit');
+        assert.ok(manifest.version && manifest.version !== '0.0.0', 'version read from package.json');
+        assert.strictEqual(manifest.contextFileName, 'AGENTS.md');
+        assert.ok(manifest.mcpServers.context7, 'seeds Context7 MCP server');
+    });
+
+    await t.test('buildAntigravityMcpConfig has mcpServers shape', () => {
+        const cfg = JSON.parse(buildAntigravityMcpConfig(process.cwd()));
+        assert.ok(cfg.mcpServers, 'has mcpServers');
+        assert.ok(cfg.mcpServers.context7.command === 'npx', 'context7 command server');
+    });
+
+    await t.test('buildAntigravitySkills emits native .agent/skills SKILL.md incl. om-ship', () => {
+        const skills = buildAntigravitySkills('antigravity');
+        assert.ok(skills, 'Should return skills');
+        const names = skills.map(s => s.name);
+        assert.ok(names.includes('om-cook'), 'has om-cook skill');
+        assert.ok(names.includes('om-ship'), 'has om-ship skill (was missing)');
+        const cook = skills.find(s => s.name === 'om-cook');
+        assert.ok(cook.content.startsWith('---\nname: om-cook\n'), 'SKILL.md frontmatter');
+        assert.ok(/description: .+/.test(cook.content), 'SKILL.md has description');
+    });
+
+    await t.test('buildAntigravitySkills returns null for non-antigravity ide', () => {
+        assert.strictEqual(buildAntigravitySkills('claudecode'), null);
+    });
+
+    await t.test('om:ship command exists in antigravity overlay', () => {
+        const commands = buildAntigravityCommands('antigravity');
+        assert.ok(commands['om:ship.md'], 'Should contain om:ship.md');
     });
 
     await t.test('buildAntigravityRules returns correct rules', () => {
