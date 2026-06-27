@@ -33,6 +33,7 @@ denyMessage = "Force-push is blocked by omni-coder-kit"
 priority = 100
 ```
 - **Deny:** `rm -rf`, `git push --force`, `git reset --hard` · **Ask:** install/commit · **Allow:** lint/test/build.
+- A ready-made ruleset ships at `.agents/policy.toml` — review it and apply via `/permissions`.
 - "Always Approve" rules match strictly (non-regex) by default; prefix a rule with `regex:` to opt into regex. Manage via `/permissions`. Project perms in `~/.gemini/config/projects/` take precedence over global `~/.gemini/antigravity-cli/settings.json`.
 
 ## Model Recommendations (verified — switch with `/model` or `--model`)

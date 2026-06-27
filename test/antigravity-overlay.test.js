@@ -10,6 +10,7 @@ const {
     buildAntigravityWorkflows,
     buildAntigravityHooks,
     buildAntigravityRules,
+    buildAntigravityPolicy,
     buildAntigravityMcpConfig,
     buildAntigravityExtension,
     buildAntigravitySkills,
@@ -49,13 +50,29 @@ test('Antigravity Overlay Integration', async (t) => {
         assert.ok(manifest.mcpServers.context7, 'seeds Context7 MCP server');
     });
 
+    await t.test('buildAntigravityPolicy: TOML policy engine deny-list (rm -rf, force-push, hard-reset)', () => {
+        const policy = buildAntigravityPolicy('antigravity');
+        assert.ok(policy, 'Should return policy');
+        assert.match(policy, /commandPrefix\s*=\s*"rm -rf"/);
+        assert.match(policy, /git push .*--force/);
+        assert.match(policy, /git reset --hard/);
+        assert.match(policy, /decision\s*=\s*"deny"/);
+        assert.match(policy, /decision\s*=\s*"ask_user"/);
+        assert.match(policy, /decision\s*=\s*"allow"/);
+        assert.ok(!/"PostToolUse"|"force_ask"/.test(policy), 'no Claude-style / blog-guessed keys');
+    });
+
+    await t.test('buildAntigravityPolicy returns null for non-antigravity ide', () => {
+        assert.strictEqual(buildAntigravityPolicy('claudecode'), null);
+    });
+
     await t.test('buildAntigravityMcpConfig has mcpServers shape', () => {
         const cfg = JSON.parse(buildAntigravityMcpConfig(process.cwd()));
         assert.ok(cfg.mcpServers, 'has mcpServers');
         assert.ok(cfg.mcpServers.context7.command === 'npx', 'context7 command server');
     });
 
-    await t.test('buildAntigravitySkills emits native .agent/skills SKILL.md incl. om-ship', () => {
+    await t.test('buildAntigravitySkills emits native SKILL.md content incl. om-ship', () => {
         const skills = buildAntigravitySkills('antigravity');
         assert.ok(skills, 'Should return skills');
         const names = skills.map(s => s.name);
