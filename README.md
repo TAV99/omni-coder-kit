@@ -100,7 +100,7 @@ omni update
 | Gemini CLI (Google) | `GEMINI.md` | `gemini --yolo` |
 | Codex CLI (OpenAI) | `AGENTS.md` + optional `.codex/` | `codex` hoặc `codex --profile omni_safe` |
 | Claude Code + Codex (dual) | `CLAUDE.md` + `AGENTS.md` | Cả 2 lệnh trên |
-| Antigravity | `AGENTS.md` | `agy --dangerously-skip-permission` |
+| Antigravity | `AGENTS.md` | `agy --dangerously-skip-permissions` |
 | Cursor | `.cursorrules` + optional `.cursor/rules/*.mdc` | Mở Cursor trong thư mục dự án |
 | Windsurf | `.windsurfrules` | Mở Windsurf trong thư mục dự án |
 | Cross-tool | `AGENTS.md` | Tool-agnostic |

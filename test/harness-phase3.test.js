@@ -26,7 +26,7 @@ function tmp() { return fs.mkdtempSync(path.join(os.tmpdir(), 'omni-p3-')); }
 
 test('host-cli.buildCommand antigravity → agy headless one-shot', () => {
     const built = hostCli.buildCommand('antigravity', 'do X');
-    assert.match(built.cmd, /^agy --dangerously-skip-permission -p ".*"$/);
+    assert.match(built.cmd, /^agy --dangerously-skip-permissions -p ".*"$/);
 });
 
 test('getProviderFromSpec parses name:ide', () => {
