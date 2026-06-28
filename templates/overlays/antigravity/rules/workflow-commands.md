@@ -23,5 +23,5 @@ Supporting files:
 - `.omni/workflows/superpower-sdlc.md` — SDLC overview and workflows
 - `.omni/knowledge/knowledge-base.md` — Project lessons learned
 
-**CRITICAL:** Do NOT write code without running `>om:brainstorm` and `>om:plan` first.
+**Khuyến nghị:** Với task lớn, nên chạy `>om:brainstorm` và `>om:plan` trước. Brainstorm/plan KHÔNG bắt buộc — được phép code trực tiếp. Giữ guard: KHÔNG `>om:ship` trước khi `>om:check` pass.
 **Fallback:** If `.omni/workflows/` not found, read from `node_modules/omni-coder-kit/templates/workflows/`.

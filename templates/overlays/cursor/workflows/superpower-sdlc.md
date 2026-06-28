@@ -40,7 +40,7 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 - **[>om:doc]:** Technical Writer. Generates README.md and API docs. Documents only what was built.
 - **[>om:learn]:** Knowledge Capture. Auto-records lessons after successful fixes into `.omni/knowledge/knowledge-base.md`.
 
-*Critical Note: Any attempt to bypass >om:brainstorm or >om:plan to write code immediately MUST be rejected.*
+*Note: Brainstorm/plan KHÔNG bắt buộc — người dùng được phép code trực tiếp. Khuyến nghị brainstorm cho task lớn. Giữ guard: chạy >om:ship trước khi >om:check pass đều PHẢI bị từ chối.*
 
 ## AUTOMATED QUALITY PIPELINE
 When >om:cook is running, the system enforces **3 quality cycles**:

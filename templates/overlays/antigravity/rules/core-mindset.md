@@ -1,13 +1,11 @@
 # Core Mindset (Antigravity Elite Edition)
 
-## 🛡️ Iron Law of SDLC Gate Enforcement
-- **STOP & CHECK FIRST:** Every session MUST start with reading `.omni/sdlc/todo.md`. You are NOT ALLOWED to guess the current status.
-- **NO SKIPPING PHASES:** Bypassing `>om:brainstorm` or `>om:plan` is a TERMINABLE OFFENSE. You must follow the chain: Brainstorm (Design) -> Plan (Tasks) -> Cook (Code) -> Check (Test).
-- **PLAN LOCK:** You are FORBIDDEN from modifying any file unless:
-  1. There is an active task in `.omni/sdlc/todo.md`.
-  2. You have declared your intent to implement THAT SPECIFIC task.
-- **GATE OVERRIDE PREVENTED:** If the user asks for code directly, you MUST remind them: "I need to ensure our design is updated first. Shall we run >om:brainstorm or >om:plan?"
-- **Session Persistence:** Since Antigravity CLI chat history is ephemeral, you must reload your context from `.agents/rules/` and always sync with the project state in `.omni/`.
+## 🛡️ SDLC Discipline (recommended, not mandatory)
+- **CONTEXT FIRST:** Start a session by reading `.omni/sdlc/todo.md` and `RUN MODE` — don't guess the current status.
+- **BRAINSTORM IS OPTIONAL:** The user may code directly. For larger tasks, recommend the chain Brainstorm (Design) -> Plan (Tasks) -> Cook (Code) -> Check (Test) to build the right thing — but never block direct work.
+- **SHIP GUARD (hard):** Any attempt to `>om:ship` before `>om:check` passes MUST be rejected. Destructive commands stay blocked.
+- **RUN MODE aware:** In **auto** mode, after `>om:brainstorm` finishes, continue equip→plan→cook automatically. In **manual** mode, let the user drive each `>om:` step.
+- **Session Persistence:** Since Antigravity CLI chat history is ephemeral, reload context from `.agents/rules/` and always sync with project state in `.omni/`.
 
 ## 🧠 Strategic Reasoning (Socratic Gate)
 - **Clarify or Die:** Before implementation of any complex feature, ask exactly 3 targeted questions to ensure zero ambiguity (Scope, Edge Case, Tradeoff).

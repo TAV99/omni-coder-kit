@@ -48,7 +48,7 @@ omni update
 ## Bắt đầu nhanh
 
 ```bash
-# 1. Khởi tạo — chọn IDE, mức kỷ luật, personal rules
+# 1. Khởi tạo — chọn IDE, chế độ chạy (auto/manual), personal rules
 #    (tự động phát hiện project có sẵn → đề xuất tạo Project Map)
 omni init
 
@@ -222,9 +222,10 @@ Nếu phát hiện `package.json`, `pyproject.toml`, `go.mod`... → hỏi `"T�
 **Bước 1 — Chọn IDE/Tool:**
 Chọn AI IDE bạn đang dùng (Claude Code, Gemini CLI, Codex CLI, Cursor, Windsurf, ...). Mỗi IDE sẽ sinh file cấu hình riêng phù hợp.
 
-**Bước 2 — Mức kỷ luật:**
-- **Hardcore** — Ép 100% SDLC, AI phải tuân thủ mọi quy trình
-- **Flexible** — Cho phép bỏ qua lỗi vặt, phù hợp khi prototyping
+**Bước 2 — Chế độ chạy (Auto/Manual):**
+- **Manual** (mặc định) — bạn tự gõ từng lệnh `>om:` (brainstorm → equip → plan → cook → check → doc).
+- **Auto** — sau khi `>om:brainstorm` xong, AI tự chạy tiếp `equip → plan → cook` (đã gồm auto check/fix), chỉ dừng khi hết task hoặc gặp lỗi nghiêm trọng.
+- Cả 2 chế độ: **brainstorm KHÔNG bắt buộc** — bạn được phép code trực tiếp; gọi `>om:brainstorm` thì vẫn chạy đầy đủ phỏng vấn.
 
 **Bước 3 — Personal Rules:**
 4 câu hỏi cá nhân hóa, mỗi câu kèm mô tả và ví dụ theo scenario:

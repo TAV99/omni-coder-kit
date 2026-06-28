@@ -4,10 +4,10 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 
-const { buildInitConfig } = require('../lib/init');
+const { buildInitConfig, buildModeBlock } = require('../lib/init');
 
 const DEFAULT_OPTS = {
-    strictness: 'hardcore',
+    mode: 'manual',
     parsedRules: null,
     rulesContent: null,
     projectDir: process.cwd(),
@@ -140,18 +140,63 @@ describe('buildInitConfig workflow files', () => {
     });
 });
 
-// ─── Strictness ─────────────────────────────────────────────────
+// ─── buildModeBlock (unit) ──────────────────────────────────────
 
-describe('buildInitConfig strictness', () => {
-    it('hardcore strictness is reflected in config content', () => {
-        const result = buildInitConfig('claudecode', { ...DEFAULT_OPTS, strictness: 'hardcore' });
-        const main = result.files.find(f => f.path === 'CLAUDE.md');
-        assert.ok(main.content.includes('HARDCORE'));
+describe('buildModeBlock', () => {
+    it('common: brainstorm optional in both modes', () => {
+        for (const m of ['auto', 'manual']) {
+            const b = buildModeBlock(m);
+            assert.ok(b.includes('## RUN MODE'));
+            assert.ok(b.includes('Brainstorm KHÔNG bắt buộc'));
+        }
     });
 
-    it('flexible strictness is reflected in config content', () => {
-        const result = buildInitConfig('claudecode', { ...DEFAULT_OPTS, strictness: 'flexible' });
+    it('auto contains equip→plan→cook auto-chain', () => {
+        const b = buildModeBlock('auto');
+        assert.ok(b.includes('Chế độ AUTO'));
+        assert.ok(/equip.*→.*plan.*→.*cook/s.test(b));
+    });
+
+    it('manual contains MANUAL note and no auto-chain', () => {
+        const b = buildModeBlock('manual');
+        assert.ok(b.includes('Chế độ MANUAL'));
+        assert.ok(!b.includes('Chế độ AUTO'));
+    });
+
+    it('defaults (unknown/empty) to manual', () => {
+        assert.ok(buildModeBlock().includes('Chế độ MANUAL'));
+    });
+});
+
+// ─── Run mode (auto/manual) ─────────────────────────────────────
+
+describe('buildInitConfig run mode', () => {
+    it('RUN MODE block + optional brainstorm always present', () => {
+        const result = buildInitConfig('claudecode', { ...DEFAULT_OPTS, mode: 'manual' });
         const main = result.files.find(f => f.path === 'CLAUDE.md');
-        assert.ok(main.content.includes('FLEXIBLE'));
+        assert.ok(main.content.includes('## RUN MODE'));
+        assert.ok(main.content.includes('Brainstorm KHÔNG bắt buộc'));
+        assert.equal(result.manifest.mode, 'manual');
+        assert.equal(result.manifest.strictness, undefined);
+    });
+
+    it('auto mode embeds the equip→plan→cook auto-chain', () => {
+        const result = buildInitConfig('claudecode', { ...DEFAULT_OPTS, mode: 'auto' });
+        const main = result.files.find(f => f.path === 'CLAUDE.md');
+        assert.ok(main.content.includes('Chế độ AUTO'));
+        assert.ok(/equip.*→.*plan.*→.*cook/s.test(main.content));
+        assert.equal(result.manifest.mode, 'auto');
+    });
+
+    it('manual mode states it does NOT auto-chain', () => {
+        const result = buildInitConfig('claudecode', { ...DEFAULT_OPTS, mode: 'manual' });
+        const main = result.files.find(f => f.path === 'CLAUDE.md');
+        assert.ok(main.content.includes('Chế độ MANUAL'));
+    });
+
+    it('no strictness/hardcore/flexible leaks into config', () => {
+        const result = buildInitConfig('claudecode', { ...DEFAULT_OPTS, mode: 'auto' });
+        const main = result.files.find(f => f.path === 'CLAUDE.md');
+        assert.ok(!/HARDCORE|FLEXIBLE|STRICTNESS LEVEL/.test(main.content));
     });
 });

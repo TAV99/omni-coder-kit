@@ -10,7 +10,7 @@ Verify it has at minimum:
 - A filled Summary table (Goal + Tech Stack)
 - At least 1 `[func]` requirement
 - At least 1 `[data]` or `[api]` requirement
-*CRITICAL: If `.omni/sdlc/design-spec.md` is missing or incomplete, STOP. Tell the user to run `>om:brainstorm` first.*
+*Note: If `.omni/sdlc/design-spec.md` is missing or incomplete, recommend `>om:brainstorm` for larger work — but it's optional. You may build the plan directly from the user's description.*
 
 **Step 2: Identify Components/Modules**
 Use the requirement tags to auto-group into components:
