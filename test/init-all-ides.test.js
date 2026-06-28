@@ -642,9 +642,9 @@ describe('E2E: antigravity init', () => {
         try {
             const agentsPath = path.join(advancedResult.tmpDir, 'AGENTS.md');
             // Mock what the CLI would write
-            const { buildStrictnessBlock, buildAntigravityBootstrapRules } = require('../lib/init/strategies');
-            const strictnessBlock = buildStrictnessBlock('flexible');
-            const bootstrap = buildAntigravityBootstrapRules(strictnessBlock, '');
+            const { buildModeBlock, buildAntigravityBootstrapRules } = require('../lib/init/strategies');
+            const modeBlock = buildModeBlock('manual');
+            const bootstrap = buildAntigravityBootstrapRules(modeBlock, '');
             fs.writeFileSync(agentsPath, bootstrap, 'utf-8');
 
             const content = fs.readFileSync(agentsPath, 'utf-8');
@@ -891,22 +891,23 @@ describe('buildGeminiModules', () => {
 });
 
 describe('buildGeminiBootstrapContent', () => {
-    const { buildGeminiBootstrapContent, buildStrictnessBlock } = require('../lib/init');
+    const { buildGeminiBootstrapContent, buildModeBlock } = require('../lib/init');
 
     it('generates bootstrap with @file imports', () => {
-        const strictness = buildStrictnessBlock('flexible');
-        const content = buildGeminiBootstrapContent(strictness, '');
+        const modeBlock = buildModeBlock('manual');
+        const content = buildGeminiBootstrapContent(modeBlock, '');
         assert.ok(content.includes('@./.gemini/core-mindset.md'));
         assert.ok(content.includes('@./.gemini/workflow-commands.md'));
         assert.ok(content.includes('@./.gemini/gemini-tools.md'));
     });
 
-    it('includes personal rules when provided', () => {
-        const strictness = buildStrictnessBlock('hardcore');
+    it('includes personal rules + RUN MODE block', () => {
+        const modeBlock = buildModeBlock('auto');
         const personal = '## PERSONAL RULES\nEnglish only.';
-        const content = buildGeminiBootstrapContent(strictness, personal);
+        const content = buildGeminiBootstrapContent(modeBlock, personal);
         assert.ok(content.includes('PERSONAL RULES'));
-        assert.ok(content.includes('HARDCORE'));
+        assert.ok(content.includes('## RUN MODE'));
+        assert.ok(content.includes('Chế độ AUTO'));
     });
 });
 
@@ -981,22 +982,22 @@ describe('buildWindsurfRules', () => {
 });
 
 describe('buildWindsurfBootstrapRules', () => {
-    const { buildWindsurfBootstrapRules, buildStrictnessBlock } = require('../lib/init');
+    const { buildWindsurfBootstrapRules, buildModeBlock } = require('../lib/init');
 
     it('generates bootstrap pointing to .windsurf/rules/', () => {
-        const strictness = buildStrictnessBlock('flexible');
-        const bootstrap = buildWindsurfBootstrapRules(strictness, '');
+        const modeBlock = buildModeBlock('manual');
+        const bootstrap = buildWindsurfBootstrapRules(modeBlock, '');
         assert.ok(bootstrap.includes('.windsurf/rules/'));
         assert.ok(bootstrap.includes('RULES SYSTEM'));
         assert.ok(bootstrap.includes('always_on'));
     });
 
-    it('includes personal rules when provided', () => {
-        const strictness = buildStrictnessBlock('hardcore');
+    it('includes personal rules + RUN MODE block', () => {
+        const modeBlock = buildModeBlock('auto');
         const personal = '## PERSONAL RULES\nUse TypeScript only.';
-        const bootstrap = buildWindsurfBootstrapRules(strictness, personal);
+        const bootstrap = buildWindsurfBootstrapRules(modeBlock, personal);
         assert.ok(bootstrap.includes('PERSONAL RULES'));
-        assert.ok(bootstrap.includes('HARDCORE'));
+        assert.ok(bootstrap.includes('## RUN MODE'));
     });
 });
 

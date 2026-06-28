@@ -28,7 +28,7 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 - **[>om:fix]:** Activates the Debugger Agent. Reads `.omni/sdlc/test-report.md` or user-reported errors. Reproduces → Root cause analysis → Surgical fix → Verify. Never shotgun-fix. → See DEBUGGER AGENT WORKFLOW section.
 - **[>om:doc]:** Activates the Technical Writer Agent. Reads actual code + design-spec + test-report and generates README.md and API docs in Vietnamese. Documents only what was actually built. → See TECHNICAL WRITER WORKFLOW section.
 
-*Critical Note: Any attempt to bypass the planning steps (>om:brainstorm or >om:plan) to write code immediately MUST be rejected.*
+*Note: Brainstorm/plan KHÔNG bắt buộc — người dùng được phép code trực tiếp. Khuyến nghị brainstorm cho task lớn. Giữ guard: chạy >om:ship trước khi >om:check pass đều PHẢI bị từ chối.*
 
 ## AUTOMATED QUALITY PIPELINE
 When >om:cook is running, the system enforces **3 quality cycles** based on total task count:

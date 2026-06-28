@@ -252,3 +252,8 @@ Display non-blocking next steps:
 - Do NOT skip Phase 1 even if the user says "code luôn". Respond: "Trả lời 1 câu này trước để tôi hiểu đúng yêu cầu."
 - If the user's prompt is a single vague sentence ("làm app quản lý"), probe deeper: "Quản lý cái gì? Cho ai? Quy mô bao nhiêu người dùng?"
 - Keep total interview under 5 questions for medium projects, 1 for simple.
+
+## SAU BRAINSTORM (theo RUN MODE)
+- Đọc RUN MODE trong file config (CLAUDE.md/AGENTS.md...).
+- Nếu **AUTO**: ngay sau khi đã đủ thông tin và ghi `.omni/sdlc/design-spec.md`, tự động tiếp tục `>om:equip` → `>om:plan` → `>om:cook` (auto check/fix) — KHÔNG hỏi giữa bước.
+- Nếu **MANUAL**: kết thúc tại đây, gợi ý người dùng gõ `>om:plan` để tiếp.
