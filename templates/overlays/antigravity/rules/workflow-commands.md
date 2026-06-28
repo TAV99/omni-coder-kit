@@ -6,6 +6,9 @@ When the user types a `>om:` command, read the corresponding workflow file and f
 
 | Command | Workflow File | Agent Role | Context Hints & Antigravity Tools |
 |---------|--------------|------------|-----------------------------------|
+| `>om:go` | `.omni/workflows/go.md` | All-in-one | One-shot pipeline; requirements-aware (auto-acceptance) |
+| `>om:intake` | `.omni/workflows/intake.md` | Acceptance | Spec/Q&A → `.omni/sdlc/requirements.md` (checklist nguyên tử) |
+| `>om:accept` | `.omni/workflows/acceptance.md` | Acceptance | Chấm lai từng requirement; loop tới 100% met → `conformance.md` |
 | `>om:onboard` | `.omni/workflows/onboard-workflow.md` | Architect | Read `.omni/onboard-report.json` |
 | `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Architect | Ask adaptive questions |
 | `>om:equip` | `.omni/workflows/skill-manager.md` | Skill Manager | Call external search if needed |

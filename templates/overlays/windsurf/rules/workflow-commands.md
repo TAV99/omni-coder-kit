@@ -9,6 +9,9 @@ When the user types a `>om:` command, read the corresponding workflow file from 
 
 | Command | Workflow File | Description |
 |---------|--------------|-------------|
+| `>om:go` | `.omni/workflows/go.md` | One-shot pipeline (requirements-aware) |
+| `>om:intake` | `.omni/workflows/intake.md` | Spec/Q&A → `.omni/sdlc/requirements.md` |
+| `>om:accept` | `.omni/workflows/acceptance.md` | Acceptance hybrid (test/agent+debate) → conformance.md |
 | `>om:onboard` | `.omni/workflows/onboard-workflow.md` | Legacy project scan + AI interview |
 | `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Requirement analysis |
 | `>om:equip` | `.omni/workflows/skill-manager.md` | Skill discovery & install |

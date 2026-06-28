@@ -5,6 +5,9 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 
 | Command | Slash | Agent Strategy | Workflow File |
 |---------|-------|---------------|---------------|
+| `>om:go` | `/om:go` | Main session (chain) | `.omni/workflows/go.md` |
+| `>om:intake` | `/om:intake` | Main session | `.omni/workflows/intake.md` |
+| `>om:accept` | `/om:accept` | Main session + sub-agents (debate) | `.omni/workflows/acceptance.md` |
 | `>om:onboard` | `/om:onboard` | Main session | `.omni/workflows/onboard-workflow.md` |
 | `>om:brainstorm` | `/om:brainstorm` | Main session | `.omni/workflows/requirement-analysis.md` |
 | `>om:equip` | `/om:equip` | Main session | `.omni/workflows/skill-manager.md` |
@@ -31,10 +34,11 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 *Note: Brainstorm/plan KHÔNG bắt buộc — người dùng được phép code trực tiếp. Khuyến nghị brainstorm cho task lớn. Giữ guard: chạy >om:ship trước khi >om:check pass đều PHẢI bị từ chối.*
 
 ## AUTOMATED QUALITY PIPELINE
-When >om:cook is running, the system enforces **3 quality cycles** based on total task count:
+When >om:cook is running, the system enforces **3 quality cycles** based on total task count, then a single **ACCEPTANCE** stage before doc:
 ```
->om:cook (1/3 tasks) → >om:check → [>om:fix ↔ >om:check loop] → >om:cook (1/3 tasks) → >om:check → [>om:fix ↔ >om:check loop] → >om:cook (1/3 tasks) → >om:check → [>om:fix ↔ >om:check loop] → >om:doc
+>om:cook → >om:check → [>om:fix ↔ >om:check ≤3] → … (3 cycles) … → ACCEPTANCE → >om:doc
 ```
 - Checkpoint = ceil(total_tasks / 3). Quality gate triggers automatically at each checkpoint.
 - Fix/check loop runs up to 3 attempts per cycle. If unresolved, escalate to user.
-- After all 3 cycles pass, project is ready for >om:doc.
+- **ACCEPTANCE** runs after CHECK passes when `.omni/sdlc/requirements.md` exists. Each requirement is graded hybrid (shell-test or agent+debate cross-model); writes `conformance.md` per round; unmet → loop back to COOK with `[ACCEPT] R<id>` targets up to `--max-accept-rounds` (default 3). Ship is **gated by 100% requirements met** when requirements.md is present.
+- After acceptance is satisfied (or absent), the project is ready for >om:doc.

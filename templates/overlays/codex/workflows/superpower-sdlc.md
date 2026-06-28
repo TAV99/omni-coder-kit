@@ -8,6 +8,9 @@ Type these commands as normal chat text (`>om:*` or `$om:*`):
 
 | Command | Workflow File | Purpose |
 |---------|---------------|---------|
+| `>om:go` | `.omni/workflows/go.md` | One-shot full pipeline (requirements-aware) |
+| `>om:intake` | `.omni/workflows/intake.md` | Spec/Q&A → `.omni/sdlc/requirements.md` |
+| `>om:accept` | `.omni/workflows/acceptance.md` | Hybrid acceptance: test/agent+debate → conformance.md (lặp tới 100%) |
 | `>om:onboard` | `.omni/workflows/onboard-workflow.md` | Legacy project onboarding |
 | `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Requirements interview and design spec |
 | `>om:equip` | `.omni/workflows/skill-manager.md` | Skill discovery |
