@@ -5,6 +5,9 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 
 | Command | Agent Strategy | Workflow File | Gemini-Native Tools |
 |---------|---------------|---------------|---------------------|
+| `>om:go` | Main session (chain) | `.omni/workflows/go.md` | All-in-one pipeline (requirements-aware) |
+| `>om:intake` | Main session | `.omni/workflows/intake.md` | `ask_user`, `save_memory` |
+| `>om:accept` | Main session | `.omni/workflows/acceptance.md` | `run_shell_command` + cross-model debate |
 | `>om:brainstorm` | Main session | `.omni/workflows/requirement-analysis.md` | `ask_user`, `save_memory` |
 | `>om:equip` | Main session | `.omni/workflows/skill-manager.md` | `google_web_search` |
 | `>om:plan` | Main session | `.omni/workflows/task-planning.md` | `tracker_create_task` |
@@ -29,4 +32,8 @@ Gemini CLI operates in a single, high-context session. It does not use independe
 - **[>om:doc]:** Technical Writer Agent. Generates documentation in Vietnamese.
 
 ## AUTOMATED QUALITY PIPELINE
-Standard 3 quality cycles (cook → check → fix). Gemini's high context window allows for more comprehensive analysis during these cycles.
+Standard 3 quality cycles (cook → check → fix), then a single **ACCEPTANCE** stage before doc when `.omni/sdlc/requirements.md` exists:
+```
+>om:cook → >om:check → [>om:fix ↔ >om:check ≤3] → … (3 cycles) … → ACCEPTANCE → >om:doc
+```
+ACCEPTANCE grades each requirement hybrid (shell-test or agent+debate cross-model); unmet → loop back to COOK with `[ACCEPT] R<id>` targets up to `--max-accept-rounds` (default 3). Ship is **gated by 100% requirements met** when requirements.md is present. Gemini's high context window allows comprehensive analysis during these cycles.

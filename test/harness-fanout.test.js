@@ -57,6 +57,29 @@ test('host-cli.buildCommand per ide', () => {
     assert.ok(hostCli.buildCommand('eclipse', 'do X').error, 'unknown ide → error');
 });
 
+test('host-cli.buildCommand --yolo bỏ qua mọi permission', () => {
+    // claude: mặc định acceptEdits → yolo dùng --dangerously-skip-permissions
+    assert.match(hostCli.buildCommand('claudecode', 'do X', { yolo: true }).cmd,
+        /^claude -p ".*" --dangerously-skip-permissions$/);
+    assert.doesNotMatch(hostCli.buildCommand('claudecode', 'do X', { yolo: true }).cmd, /acceptEdits/);
+    // codex: yolo thêm bypass approvals/sandbox
+    assert.match(hostCli.buildCommand('codex', 'do X', { yolo: true }).cmd,
+        /^codex exec --dangerously-bypass-approvals-and-sandbox ".*"$/);
+    // antigravity: đã skip sẵn, yolo không đổi
+    assert.match(hostCli.buildCommand('antigravity', 'do X', { yolo: true }).cmd,
+        /^agy --dangerously-skip-permissions -p ".*"$/);
+    // mặc định (không yolo) vẫn an toàn
+    assert.match(hostCli.buildCommand('claudecode', 'do X').cmd, /--permission-mode acceptEdits$/);
+});
+
+test('host-cli.create({yolo}) truyền cờ xuống runStep', () => {
+    let captured = '';
+    const runner = (cmd) => { captured = cmd; return { exitCode: 0, stdout: 'ok', stderr: '' }; };
+    const p = hostCli.create({ ide: 'claudecode', runCommand: runner, yolo: true });
+    p.runStep('cook', { projectDir: '/tmp', workflowPath: 'wf.md', sharedBrief: 'b' });
+    assert.match(captured, /--dangerously-skip-permissions/);
+});
+
 test('host-cli.runStep uses injected runner + maps exit code', async () => {
     const captured = {};
     const runner = (cmd) => { captured.cmd = cmd; return { exitCode: 0, stdout: 'ok', stderr: '', timedOut: false }; };

@@ -6,6 +6,9 @@ When the user types a `>om:` command, read the corresponding workflow file and f
 
 | Command | Workflow File | Gemini Tools |
 |---------|--------------|--------------|
+| `>om:go` | `.omni/workflows/go.md` | One-shot pipeline (requirements-aware) |
+| `>om:intake` | `.omni/workflows/intake.md` | `ask_user`, `save_memory` (sinh requirements.md) |
+| `>om:accept` | `.omni/workflows/acceptance.md` | `run_shell_command` + cross-model debate |
 | `>om:onboard` | `.omni/workflows/onboard-workflow.md` | `ask_user`, `save_memory` |
 | `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | `ask_user`, `save_memory` |
 | `>om:equip` | `.omni/workflows/skill-manager.md` | `google_web_search` |

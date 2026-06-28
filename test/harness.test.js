@@ -28,7 +28,11 @@ test('state: PIPELINE is a happy path INIT…DONE including SHIP', () => {
 test('state: canTransition enforces the graph', () => {
     assert.ok(state.canTransition('INIT', 'BRAINSTORM'));
     assert.ok(state.canTransition('CHECK', 'FIX'));
-    assert.ok(state.canTransition('CHECK', 'DOC'));
+    assert.ok(state.canTransition('CHECK', 'ACCEPTANCE'));
+    assert.ok(!state.canTransition('CHECK', 'DOC'), 'CHECK → DOC phải đi qua ACCEPTANCE (Phase-4)');
+    assert.ok(state.canTransition('ACCEPTANCE', 'DOC'));
+    assert.ok(state.canTransition('ACCEPTANCE', 'COOK'));
+    assert.ok(state.canTransition('ACCEPTANCE', 'FIX'));
     assert.ok(state.canTransition('DOC', 'SHIP'));
     assert.ok(!state.canTransition('INIT', 'DONE'), 'không được nhảy cóc');
     assert.ok(!state.canTransition('DONE', 'COOK'), 'DONE là terminal');

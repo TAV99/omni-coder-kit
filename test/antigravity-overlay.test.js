@@ -72,12 +72,16 @@ test('Antigravity Overlay Integration', async (t) => {
         assert.ok(cfg.mcpServers.context7.command === 'npx', 'context7 command server');
     });
 
-    await t.test('buildAntigravitySkills emits native SKILL.md content incl. om-ship', () => {
+    await t.test('buildAntigravitySkills emits native SKILL.md content incl. om-ship + Phase-4 trio', () => {
         const skills = buildAntigravitySkills('antigravity');
         assert.ok(skills, 'Should return skills');
         const names = skills.map(s => s.name);
         assert.ok(names.includes('om-cook'), 'has om-cook skill');
         assert.ok(names.includes('om-ship'), 'has om-ship skill (was missing)');
+        // Phase-4 trio: go (all-in-one), intake (spec→requirements), accept (acceptance loop).
+        assert.ok(names.includes('om-go'), 'has om-go skill (Phase-4)');
+        assert.ok(names.includes('om-intake'), 'has om-intake skill (Phase-4)');
+        assert.ok(names.includes('om-accept'), 'has om-accept skill (Phase-4)');
         const cook = skills.find(s => s.name === 'om-cook');
         assert.ok(cook.content.startsWith('---\nname: om-cook\n'), 'SKILL.md frontmatter');
         assert.ok(/description: .+/.test(cook.content), 'SKILL.md has description');
