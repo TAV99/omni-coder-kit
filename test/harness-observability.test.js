@@ -166,6 +166,41 @@ describe('OBS-3 — runCommandAsync + heartbeat ticker', () => {
         assert.equal(spawned, false);
     });
 
+    test('runCommandAsync: array argv -> spawns directly (no shell)', async () => {
+        let seenArgs = null;
+        let seenOpts = null;
+        const fake = (cmd, args, opts) => {
+            seenArgs = args;
+            seenOpts = opts;
+            return fakeSpawn({ stdout: 'ok', code: 0 })();
+        };
+        const res = await runCommandAsync(['printf', '%s', 'he`ho`llo'], { spawnFn: fake });
+        assert.equal(res.exitCode, 0);
+        assert.deepEqual(seenArgs, ['%s', 'he`ho`llo']);
+        assert.ok(!seenOpts.shell, 'shell option should be false/undefined');
+    });
+
+    test('runCommandAsync: string cmd -> spawns with shell: true', async () => {
+        let seenOpts = null;
+        const fake = (cmd, opts) => {
+            seenOpts = opts;
+            return fakeSpawn({ stdout: 'ok', code: 0 })();
+        };
+        const res = await runCommandAsync('echo hi', { spawnFn: fake });
+        assert.equal(res.exitCode, 0);
+        assert.strictEqual(seenOpts.shell, true, 'shell option should be true');
+    });
+
+    test('runCommandAsync: array argv denied command rejects', async () => {
+        let spawned = false;
+        const fake = () => { spawned = true; return new EventEmitter(); };
+        await assert.rejects(
+            () => runCommandAsync(['rm', '-rf', '/'], { spawnFn: fake }),
+            /deny-list/
+        );
+        assert.equal(spawned, false);
+    });
+
     test('createHeartbeat: onTick fires with elapsed seconds; stop clears', () => {
         let fire = null; let cleared = false; let now = 0;
         const ticks = [];

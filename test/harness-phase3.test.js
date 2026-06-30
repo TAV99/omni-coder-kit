@@ -26,31 +26,29 @@ function tmp() { return fs.mkdtempSync(path.join(os.tmpdir(), 'omni-p3-')); }
 
 test('host-cli.buildCommand antigravity → agy headless one-shot', () => {
     const built = hostCli.buildCommand('antigravity', 'do X');
-    assert.match(built.cmd, /^agy --dangerously-skip-permissions -p ".*"$/);
+    assert.deepStrictEqual(built.argv, ['agy', '--dangerously-skip-permissions', '-p', 'do X']);
 });
 
 test('host-cli antigravity --model: opt-in only (default omits it)', () => {
-    // explicit model → flag emitted before -p (raw buildCommand has no
-    // --print-timeout since printTimeoutSec is only injected through create()).
     const withModel = hostCli.buildCommand('antigravity', 'x', { model: 'gemini-3-pro' });
-    assert.match(withModel.cmd, /^agy --dangerously-skip-permissions --model gemini-3-pro -p ".*"$/);
-    // 'auto' preset maps per step; create() also injects --print-timeout
-    // (SPEC-FIX-ANTIGRAVITY-WORKSPACE) — assert the model flag is still there.
+    assert.deepStrictEqual(withModel.argv, ['agy', '--dangerously-skip-permissions', '--model', 'gemini-3-pro', '-p', 'x']);
+    
     const auto = hostCli.create({ ide: 'antigravity', modelByStep: 'auto' });
-    assert.match(auto.buildCommand('cook', {}).cmd, /--model gemini-3-pro/);
-    assert.match(auto.buildCommand('map', {}).cmd, /--model gemini-3-flash/);
+    assert.ok(auto.buildCommand('cook', {}).argv.includes('gemini-3-pro'));
+    assert.ok(auto.buildCommand('map', {}).argv.includes('gemini-3-flash'));
+    
     const def = hostCli.create({ ide: 'antigravity' });
-    assert.ok(!def.buildCommand('cook', {}).cmd.includes('--model'), 'default omits --model');
+    assert.ok(!def.buildCommand('cook', {}).argv.includes('--model'), 'default omits --model');
 });
 
 test('getProviderFromSpec parses name:ide', () => {
     const a = getProviderFromSpec('host-cli:antigravity');
     assert.strictEqual(a.host, 'antigravity');
     assert.strictEqual(a.provider.name, 'host-cli');
-    assert.match(a.provider.buildCommand('debate', 'x').cmd, /^agy /);
+    assert.strictEqual(a.provider.buildCommand('debate', 'x').argv[0], 'agy');
 
     const c = getProviderFromSpec('host-cli:claudecode');
-    assert.match(c.provider.buildCommand('debate', 'x').cmd, /^claude -p/);
+    assert.strictEqual(c.provider.buildCommand('debate', 'x').argv[0], 'claude');
 
     const bare = getProviderFromSpec('dry-run');
     assert.strictEqual(bare.host, 'dry-run');

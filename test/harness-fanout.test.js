@@ -51,42 +51,39 @@ test('fanout: default CHECK_LENSES = code-review/security/test', () => {
 // --- host-cli multi-IDE command building -----------------------------------
 
 test('host-cli.buildCommand per ide', () => {
-    assert.match(hostCli.buildCommand('claudecode', 'do X').cmd, /^claude -p ".*" --permission-mode acceptEdits$/);
-    assert.match(hostCli.buildCommand('gemini', 'do X').cmd, /^gemini --yolo -p ".*"$/);
-    assert.match(hostCli.buildCommand('codex', 'do X').cmd, /^codex exec ".*"$/);
+    assert.deepStrictEqual(hostCli.buildCommand('claudecode', 'do X').argv, ['claude', '-p', 'do X', '--permission-mode', 'acceptEdits']);
+    assert.deepStrictEqual(hostCli.buildCommand('gemini', 'do X').argv, ['gemini', '--yolo', '-p', 'do X']);
+    assert.deepStrictEqual(hostCli.buildCommand('codex', 'do X').argv, ['codex', 'exec', 'do X']);
     assert.ok(hostCli.buildCommand('eclipse', 'do X').error, 'unknown ide → error');
 });
 
 test('host-cli.buildCommand --yolo bỏ qua mọi permission', () => {
     // claude: mặc định acceptEdits → yolo dùng --dangerously-skip-permissions
-    assert.match(hostCli.buildCommand('claudecode', 'do X', { yolo: true }).cmd,
-        /^claude -p ".*" --dangerously-skip-permissions$/);
-    assert.doesNotMatch(hostCli.buildCommand('claudecode', 'do X', { yolo: true }).cmd, /acceptEdits/);
+    assert.deepStrictEqual(hostCli.buildCommand('claudecode', 'do X', { yolo: true }).argv,
+        ['claude', '-p', 'do X', '--dangerously-skip-permissions']);
     // codex: yolo thêm bypass approvals/sandbox
-    assert.match(hostCli.buildCommand('codex', 'do X', { yolo: true }).cmd,
-        /^codex exec --dangerously-bypass-approvals-and-sandbox ".*"$/);
+    assert.deepStrictEqual(hostCli.buildCommand('codex', 'do X', { yolo: true }).argv,
+        ['codex', 'exec', '--dangerously-bypass-approvals-and-sandbox', 'do X']);
     // antigravity: đã skip sẵn, yolo không đổi
-    assert.match(hostCli.buildCommand('antigravity', 'do X', { yolo: true }).cmd,
-        /^agy --dangerously-skip-permissions -p ".*"$/);
-    // mặc định (không yolo) vẫn an toàn
-    assert.match(hostCli.buildCommand('claudecode', 'do X').cmd, /--permission-mode acceptEdits$/);
+    assert.deepStrictEqual(hostCli.buildCommand('antigravity', 'do X', { yolo: true }).argv,
+        ['agy', '--dangerously-skip-permissions', '-p', 'do X']);
 });
 
 test('host-cli.create({yolo}) truyền cờ xuống runStep', () => {
-    let captured = '';
-    const runner = (cmd) => { captured = cmd; return { exitCode: 0, stdout: 'ok', stderr: '' }; };
+    let captured = null;
+    const runner = (argv) => { captured = argv; return { exitCode: 0, stdout: 'ok', stderr: '' }; };
     const p = hostCli.create({ ide: 'claudecode', runCommand: runner, yolo: true });
     p.runStep('cook', { projectDir: '/tmp', workflowPath: 'wf.md', sharedBrief: 'b' });
-    assert.match(captured, /--dangerously-skip-permissions/);
+    assert.ok(captured.includes('--dangerously-skip-permissions'));
 });
 
 test('host-cli.runStep uses injected runner + maps exit code', async () => {
     const captured = {};
-    const runner = (cmd) => { captured.cmd = cmd; return { exitCode: 0, stdout: 'ok', stderr: '', timedOut: false }; };
+    const runner = (argv) => { captured.argv = argv; return { exitCode: 0, stdout: 'ok', stderr: '', timedOut: false }; };
     const p = hostCli.create({ ide: 'gemini', runCommand: runner });
     const r = await p.runStep('cook', { projectDir: '/x', workflowPath: '/wf.md' });
     assert.strictEqual(r.ok, true);
-    assert.match(captured.cmd, /^gemini --yolo -p/);
+    assert.deepStrictEqual(captured.argv, ['gemini', '--yolo', '-p', captured.argv[3]]);
 });
 
 test('host-cli.runStep: claude not found → exit 127', async () => {
