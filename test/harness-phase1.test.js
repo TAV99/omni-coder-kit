@@ -231,3 +231,113 @@ test('loop live: budget cuts an otherwise-infinite COOK (no-op provider) → pau
     assert.strictEqual(final.status, 'paused');
     assert.ok(readEvents(dir).some((e) => e.type === 'pause' && /iterations/.test(e.reason)));
 });
+
+test('loop live: old startedAt in state does not trigger wallclock insta-pause', async () => {
+    const dir = tmpProject();
+    writeTodo(dir, '- [x] task done\n');
+    
+    // Create state with an old startedAt (e.g. 2 hours ago)
+    const { createState, saveState } = require('../lib/harness/state');
+    const state = createState({ provider: 'dry-run', from: 'COOK' });
+    state.startedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    saveState(dir, state);
+
+    // Run harness. It should complete without immediately pausing because elapsedMs is measured relative to runStartedAt.
+    const final = await runHarness(dir, {
+        provider: 'dry-run',
+        runPipeline: passGate
+    });
+
+    assert.strictEqual(final.state, 'DOC');
+    assert.strictEqual(final.status, 'paused'); // Pauses before SHIP as expected, not because of wallclock budget.
+    const events = readEvents(dir);
+    const wallclockPause = events.some((e) => e.type === 'pause' && /thời gian|wallclock/i.test(e.reason));
+    assert.ok(!wallclockPause, 'should not pause due to wallclock budget');
+});
+
+test('loop live: budget overrides maxWallclockMs are respected', async () => {
+    const dir = tmpProject();
+    writeTodo(dir, '- [ ] incomplete task\n');
+
+    // Limit budget to 1ms maxWallclockMs
+    const final = await runHarness(dir, {
+        from: 'COOK',
+        provider: 'dry-run',
+        runPipeline: passGate,
+        budget: { maxWallclockMs: 1 }
+    });
+
+    assert.strictEqual(final.status, 'paused');
+    const events = readEvents(dir);
+    const wallclockPause = events.some((e) => e.type === 'pause' && /thời gian|wallclock/i.test(e.reason));
+    assert.ok(wallclockPause, 'should pause due to wallclock budget');
+});
+
+test('loop live: resume multiple times resets wallclock window each time', async () => {
+    const dir = tmpProject();
+    writeTodo(dir, '- [x] a\n'); // task already done
+
+    // First run: from COOK, goes to DOC and pauses awaiting approval
+    const final = await runHarness(dir, {
+        from: 'COOK',
+        provider: 'dry-run',
+        runPipeline: passGate,
+        budget: { maxWallclockMs: 10000 }
+    });
+    assert.strictEqual(final.state, 'DOC');
+    assert.strictEqual(final.status, 'paused');
+
+    // Simulate 2 hours elapsed since the first run started
+    const { saveState } = require('../lib/harness/state');
+    final.startedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    saveState(dir, final);
+
+    // Second run (resume): should also not pause immediately on start
+    const final2 = await runHarness(dir, {
+        provider: 'dry-run',
+        runPipeline: passGate,
+        budget: { maxWallclockMs: 10000 }
+    });
+    assert.strictEqual(final2.state, 'DOC');
+    assert.strictEqual(final2.status, 'paused');
+    
+    const events = readEvents(dir);
+    const wallclockPause = events.some((e) => e.type === 'pause' && /thời gian|wallclock/i.test(e.reason));
+    assert.ok(!wallclockPause, 'should not pause due to wallclock budget on resume');
+});
+
+test('cli run.js maps --max-time to budget.maxWallclockMs in handleRun and handleAccept', async (t) => {
+    const loopModule = require('../lib/harness/loop');
+    
+    const mute = () => {
+        const origLog = console.log;
+        const origErr = console.error;
+        console.log = () => {};
+        console.error = () => {};
+        return {
+            restore() { console.log = origLog; console.error = origErr; }
+        };
+    };
+
+    let passedOpts = [];
+    t.mock.method(loopModule, 'runHarness', async (projectDir, opts) => {
+        passedOpts.push(opts);
+        return { status: 'done', state: 'DONE' };
+    });
+
+    // Delete run command cache to ensure it loads the mocked loopModule exports
+    delete require.cache[require.resolve('../lib/commands/run')];
+    const runCmd = require('../lib/commands/run');
+
+    const m = mute();
+    try {
+        await runCmd.handleRun({ maxTime: '5', provider: 'dry-run', dryRun: false });
+        await runCmd.handleAccept({ maxTime: '10', accept: 'host-cli:claudecode' });
+    } finally {
+        m.restore();
+    }
+
+    assert.strictEqual(passedOpts.length, 2);
+    assert.deepStrictEqual(passedOpts[0].budget, { maxWallclockMs: 300000 });
+    assert.deepStrictEqual(passedOpts[1].budget, { maxWallclockMs: 600000 });
+});

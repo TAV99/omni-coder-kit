@@ -62,6 +62,7 @@ const run = program
     .option('--spec <file>', 'Đọc file spec/Q&A khách hàng → sinh .omni/sdlc/requirements.md trước khi chạy')
     .option('--accept <specs>', 'Provider participants cho acceptance debate (mặc định = --debate)')
     .option('--max-accept-rounds <n>', 'Số vòng ACCEPTANCE → COOK trước BLOCKED (mặc định 3)')
+    .option('--max-time <minutes>', 'Ngân sách thời gian mỗi phiên chạy (phút, mặc định 30)')
     .option('--yolo', 'Mọi host-cli agent bỏ qua MỌI permission (claude/codex dùng --dangerously-skip-permissions như agy). Cho autonomous run; harness vẫn chặn lệnh nguy hiểm.')
     .option('--stream', 'Đẩy raw output của agent ra terminal (prefix │) realtime. Heartbeat ⏳ luôn bật dù không có cờ này.')
     .action(handleRun);
@@ -84,6 +85,7 @@ run.command('stats')
 run.command('accept')
     .description('Chạy state ACCEPTANCE riêng trên build hiện tại (CI: exit 0 nếu 100% met)')
     .option('--accept <specs>', 'Provider participants cho acceptance debate')
+    .option('--max-time <minutes>', 'Ngân sách thời gian mỗi phiên chạy (phút, mặc định 30)')
     .option('--yolo', 'Agent bỏ qua mọi permission (xem `omni run --help`)')
     .action(handleAccept);
 

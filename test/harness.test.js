@@ -125,6 +125,10 @@ test('budget: checkBudget stops on iterations / fix / wallclock', () => {
     assert.match(budget.checkBudget({ iterations: 3, fixAttempts: 0 }, b, { elapsedMs: 0 }).reason, /iterations/);
     assert.match(budget.checkBudget({ iterations: 0, fixAttempts: 2, cycle: 1 }, b, { elapsedMs: 0 }).reason, /fix/);
     assert.match(budget.checkBudget({ iterations: 0, fixAttempts: 0 }, b, { elapsedMs: 2000 }).reason, /thời gian/);
+
+    // Bỏ fallback startedAt -> gọi không truyền elapsedMs + startedAt cũ -> KHÔNG stop.
+    const oldStartedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    assert.strictEqual(budget.checkBudget({ iterations: 0, fixAttempts: 0, startedAt: oldStartedAt }, b).stop, false);
 });
 
 // --- loop / planner --------------------------------------------------------

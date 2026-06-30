@@ -33,10 +33,17 @@ test('omni run --help: has Phase-4 flags + acceptance subcommand', () => {
     assert.match(stdout, /--spec </);
     assert.match(stdout, /--accept </);
     assert.match(stdout, /--max-accept-rounds </);
+    assert.match(stdout, /--max-time </);
     // Subcommands gate/log/stats/accept
     for (const sub of ['gate', 'log', 'stats', 'accept']) {
         assert.match(stdout, new RegExp(`^\\s+${sub}\\b`, 'm'), `run should list subcommand ${sub}`);
     }
+});
+
+test('omni run accept --help: has --max-time flag', () => {
+    const { code, stdout } = run(['run', 'accept', '--help']);
+    assert.strictEqual(code, 0);
+    assert.match(stdout, /--max-time </);
 });
 
 test('omni skills --help: lists `add` and `doctor` subcommands', () => {
