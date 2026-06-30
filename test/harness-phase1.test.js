@@ -429,3 +429,106 @@ test('loop live: successful step resets consecutiveTimeouts', async (t) => {
     assert.strictEqual(final.status, 'paused');
     assert.strictEqual(final.consecutiveTimeouts, 0);
 });
+
+test('loop: freshStart: true overrides saved BLOCKED state', async () => {
+    const { saveState } = require('../lib/harness/state');
+    const { runHarness } = require('../lib/harness/loop');
+
+    const dir = tmpProject();
+    
+    // Save a state as BLOCKED
+    const blockedState = {
+        state: 'BLOCKED',
+        status: 'blocked',
+        provider: 'dry-run',
+        fixAttempts: 3,
+        consecutiveTimeouts: 2,
+        cycle: 2,
+    };
+    saveState(dir, blockedState);
+
+    // runHarness with freshStart: true and from: CHECK
+    const final = await runHarness(dir, {
+        from: 'CHECK',
+        freshStart: true,
+        provider: 'dry-run',
+        runPipeline: passGate,
+    });
+
+    // It should have overwritten state to CHECK, then run (plan to ACCEPTANCE -> DOC -> paused)
+    assert.strictEqual(final.state, 'DOC');
+    assert.strictEqual(final.status, 'paused');
+    assert.strictEqual(final.fixAttempts, 0);
+    assert.strictEqual(final.consecutiveTimeouts, 0);
+    assert.strictEqual(final.cycle, 1);
+});
+
+test('loop: freshStart: false (default) loads saved state', async () => {
+    const { saveState } = require('../lib/harness/state');
+    const { runHarness } = require('../lib/harness/loop');
+
+    const dir = tmpProject();
+    
+    // Save a state as BLOCKED
+    const blockedState = {
+        state: 'BLOCKED',
+        status: 'blocked',
+        provider: 'dry-run',
+        fixAttempts: 3,
+        consecutiveTimeouts: 2,
+        cycle: 2,
+    };
+    saveState(dir, blockedState);
+
+    // runHarness with freshStart: false, should load and exit immediately because BLOCKED is terminal
+    const final = await runHarness(dir, {
+        from: 'CHECK',
+        freshStart: false,
+        provider: 'dry-run',
+        runPipeline: passGate,
+    });
+
+    assert.strictEqual(final.state, 'BLOCKED');
+    assert.strictEqual(final.status, 'blocked');
+    assert.strictEqual(final.fixAttempts, 3);
+});
+
+test('cli run.js sets freshStart properly based on from and resume options', async (t) => {
+    const loopModule = require('../lib/harness/loop');
+    
+    const mute = () => {
+        const origLog = console.log;
+        const origErr = console.error;
+        console.log = () => {};
+        console.error = () => {};
+        return {
+            restore() { console.log = origLog; console.error = origErr; }
+        };
+    };
+
+    let passedOpts = [];
+    t.mock.method(loopModule, 'runHarness', async (projectDir, opts) => {
+        passedOpts.push(opts);
+        return { status: 'done', state: 'DONE' };
+    });
+
+    delete require.cache[require.resolve('../lib/commands/run')];
+    const runCmd = require('../lib/commands/run');
+
+    const m = mute();
+    try {
+        // 1. from without resume -> freshStart: true
+        await runCmd.handleRun({ from: 'CHECK', provider: 'dry-run', dryRun: false });
+        // 2. resume only -> freshStart: false
+        await runCmd.handleRun({ resume: true, provider: 'dry-run', dryRun: false });
+        // 3. both from and resume -> freshStart: false
+        await runCmd.handleRun({ from: 'CHECK', resume: true, provider: 'dry-run', dryRun: false });
+    } finally {
+        m.restore();
+    }
+
+    assert.strictEqual(passedOpts.length, 3);
+    assert.strictEqual(passedOpts[0].freshStart, true);
+    assert.strictEqual(passedOpts[1].freshStart, false);
+    assert.strictEqual(passedOpts[2].freshStart, false);
+});
