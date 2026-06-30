@@ -60,6 +60,7 @@ const run = program
     .option('--debate-rounds <n>', 'Số vòng tranh luận (mặc định 2)')
     // Phase-4 ------------------------------------------------------------------
     .option('--spec <file>', 'Đọc file spec/Q&A khách hàng → sinh .omni/sdlc/requirements.md trước khi chạy')
+    .option('--reintake', 'Ghi đè requirements.md kể cả khi đã tồn tại (hoặc tự động làm nếu file cũ thoái hoá/rác)')
     .option('--accept <specs>', 'Provider participants cho acceptance debate (mặc định = --debate)')
     .option('--max-accept-rounds <n>', 'Số vòng ACCEPTANCE → COOK trước BLOCKED (mặc định 3)')
     .option('--max-time <minutes>', 'Ngân sách thời gian mỗi phiên chạy (phút, mặc định 30)')

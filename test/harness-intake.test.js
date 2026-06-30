@@ -116,7 +116,7 @@ test('buildRequirements: provider with no usable output → fallback checklist s
     const provider = { async runStep() { return { output: 'I think...' }; } };
     const res = await intake.buildRequirements({
         projectDir: dir,
-        specText: 'Yêu cầu 1\nYêu cầu 2',
+        specText: '- Yêu cầu 1\n- Yêu cầu 2',
         provider,
     });
     assert.ok(res.count >= 1);
@@ -125,9 +125,64 @@ test('buildRequirements: provider with no usable output → fallback checklist s
     assert.match(items[0].id, /^R\d+$/);
 });
 
-test('extractChecklist / fallbackChecklist helpers', () => {
+test('extractChecklist / deriveRequirements helpers', () => {
     assert.strictEqual(intake.extractChecklist('no rows here'), null);
     const ok = intake.extractChecklist('- [ ] R1 | x | test: agent');
     assert.match(ok, /R1/);
-    assert.match(intake.fallbackChecklist(''), /R1/);
+    const fallback = intake.deriveRequirements('/tmp-nonexistent', '- Req 1');
+    assert.match(fallback, /R1 \| Req 1/);
+});
+
+test('deriveRequirements: parses design-spec.md if present', () => {
+    const dir = tmp();
+    // Write a fake design-spec.md
+    fs.mkdirSync(path.join(dir, '.omni', 'sdlc'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.omni', 'sdlc', 'design-spec.md'), 
+        '# Design Spec\n\n- [func] Quản lý hoá đơn\n- [auth] Đăng nhập Google\n- Not a requirement\n', 
+        'utf-8'
+    );
+
+    const checklist = intake.deriveRequirements(dir, '');
+    assert.match(checklist, /R1 \| \[func\] Quản lý hoá đơn/);
+    assert.match(checklist, /R2 \| \[auth\] Đăng nhập Google/);
+    assert.doesNotMatch(checklist, /Not a requirement/);
+});
+
+test('deriveRequirements: filters specText when design-spec.md is absent', () => {
+    const dir = tmp();
+    const spec = '# Customer Requirements\n\n> Note: some metadata\n---\n- Real req 1\n1. Real req 2\n| not a req |';
+    const checklist = intake.deriveRequirements(dir, spec);
+    assert.match(checklist, /R1 \| Real req 1/);
+    assert.match(checklist, /R2 \| Real req 2/);
+    assert.doesNotMatch(checklist, /Customer Requirements/);
+    assert.doesNotMatch(checklist, /Note:/);
+});
+
+test('isDegenerate helper', () => {
+    assert.strictEqual(intake.isDegenerate([]), true);
+    assert.strictEqual(intake.isDegenerate([{ text: '(TODO: định nghĩa yêu cầu)' }]), true);
+    assert.strictEqual(intake.isDegenerate([
+        { text: '# Customer Requirements' },
+        { text: '---' }
+    ]), true);
+    assert.strictEqual(intake.isDegenerate([
+        { text: 'Tính tiền điện' }
+    ]), false);
+});
+
+test('buildRequirements: degenerate requirements.md is auto-regenerated', async () => {
+    const dir = tmp();
+    // Write a degenerate requirements.md
+    fs.mkdirSync(path.join(dir, '.omni', 'sdlc'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.omni', 'sdlc', 'requirements.md'),
+        '# Requirements\n\n- [ ] R1 | # Title | test: agent\n- [ ] R2 | --- | test: agent\n',
+        'utf-8'
+    );
+
+    const provider = { async runStep() { return { output: '- [ ] R1 | Real req | test: agent' }; } };
+    const res = await intake.buildRequirements({ projectDir: dir, specText: '- Real req', provider });
+    // Since existing was degenerate, it should NOT skip (so skipped should be undefined)
+    assert.ok(!res.skipped);
+    const items = intake.parseRequirements(dir);
+    assert.strictEqual(items[0].text, 'Real req');
 });
