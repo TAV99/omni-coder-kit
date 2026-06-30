@@ -70,3 +70,31 @@ describe('FIX 3 — no-progress escalates to BLOCKED (not wallclock)', () => {
         assert.ok(noProg.every((v) => v === 0), `noProgress stayed 0: ${noProg}`);
     });
 });
+
+describe('FIX 4 — empty-task guard stops early', () => {
+    test('COOK with empty todo.md → BLOCKED immediately, no CHECK/FIX churn', async () => {
+        const dir = tmp();
+        writeTodo(dir, '\n'); // todo.md exists but has 0 tasks
+        let gateCalls = 0;
+        const countingGate = () => { gateCalls++; return { passed: true, results: [], failures: [] }; };
+        const final = await runHarness(dir, {
+            from: 'COOK', provider: 'dry-run', runPipeline: countingGate,
+        });
+        assert.equal(final.state, 'BLOCKED');
+        assert.equal(final.status, 'blocked');
+        assert.equal(gateCalls, 0, 'must not run the gate when there are no tasks');
+
+        const evs = readEvents(dir);
+        const blocked = evs.find((e) => e.type === 'blocked');
+        assert.match(blocked.reason, /Chưa có task/);
+        // Never entered the cook/check/fix churn.
+        assert.ok(!evs.some((e) => e.type === 'step-start' && e.step === 'cook'));
+    });
+
+    test('missing todo.md entirely → BLOCKED with guidance', async () => {
+        const dir = tmp(); // no .omni/sdlc/todo.md at all
+        const final = await runHarness(dir, { from: 'COOK', provider: 'dry-run', runPipeline: () => ({ passed: true, results: [], failures: [] }) });
+        assert.equal(final.status, 'blocked');
+        assert.match(readEvents(dir).find((e) => e.type === 'blocked').reason, /om:plan|--spec/);
+    });
+});
