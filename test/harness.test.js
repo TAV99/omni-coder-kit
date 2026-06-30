@@ -115,6 +115,8 @@ test('budget: createBudget validates positive numbers', () => {
     assert.strictEqual(budget.createBudget({ maxIterations: 5 }).maxIterations, 5);
     assert.throws(() => budget.createBudget({ maxFixAttempts: 0 }), /số dương/);
     assert.throws(() => budget.createBudget({ maxIterations: -1 }), /số dương/);
+    assert.throws(() => budget.createBudget({ maxConsecutiveTimeouts: 0 }), /số dương/);
+    assert.strictEqual(budget.createBudget().maxConsecutiveTimeouts, 2);
 });
 
 test('budget: checkBudget stops on iterations / fix / wallclock', () => {

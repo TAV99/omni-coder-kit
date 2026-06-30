@@ -343,3 +343,89 @@ test('cli run.js maps --max-time and --step-timeout in handleRun and handleAccep
     assert.deepStrictEqual(passedOpts[1].budget, { maxWallclockMs: 600000 });
     assert.strictEqual(passedOpts[1].stepTimeoutMs, 240000);
 });
+
+test('loop live: consecutive timeouts trigger BLOCKED early', async (t) => {
+    const providers = require('../lib/harness/providers');
+    const originalGetProvider = providers.getProvider;
+    
+    t.mock.method(providers, 'getProvider', (name, opts) => {
+        if (name === 'timeout-provider') {
+            return {
+                name: 'timeout-provider',
+                async runStep(step, ctx) {
+                    return {
+                        ok: false,
+                        exitCode: 124,
+                        summary: `timeout-provider timed out`,
+                        durationMs: 50,
+                        timedOut: true,
+                        timeoutMs: opts.timeoutMs || 600000,
+                    };
+                }
+            };
+        }
+        return originalGetProvider(name, opts);
+    });
+
+    // Reload loop module to bind the mocked getProvider
+    delete require.cache[require.resolve('../lib/harness/loop')];
+    const { runHarness } = require('../lib/harness/loop');
+
+    const dir = tmpProject();
+    writeTodo(dir, '- [ ] timeout task\n');
+
+    const final = await runHarness(dir, {
+        from: 'COOK',
+        provider: 'timeout-provider',
+        runPipeline: passGate,
+        budget: { maxConsecutiveTimeouts: 2 }
+    });
+
+    assert.strictEqual(final.state, 'BLOCKED');
+    assert.strictEqual(final.status, 'blocked');
+    assert.strictEqual(final.consecutiveTimeouts, 2);
+
+    const events = readEvents(dir);
+    const blockedEvent = events.find((e) => e.type === 'blocked');
+    assert.ok(blockedEvent);
+    assert.match(blockedEvent.reason, /timeout 2 lần liên tiếp/i);
+});
+
+test('loop live: successful step resets consecutiveTimeouts', async (t) => {
+    const providers = require('../lib/harness/providers');
+    const originalGetProvider = providers.getProvider;
+    
+    let callCount = 0;
+    t.mock.method(providers, 'getProvider', (name, opts) => {
+        if (name === 'mixed-provider') {
+            return {
+                name: 'mixed-provider',
+                async runStep(step, ctx) {
+                    callCount++;
+                    if (callCount === 1) {
+                        return { ok: false, exitCode: 124, summary: `timed out`, durationMs: 10, timedOut: true, timeoutMs: 600000 };
+                    }
+                    return { ok: true, exitCode: 0, summary: `success`, durationMs: 10 };
+                }
+            };
+        }
+        return originalGetProvider(name, opts);
+    });
+
+    delete require.cache[require.resolve('../lib/harness/loop')];
+    const { runHarness } = require('../lib/harness/loop');
+
+    const dir = tmpProject();
+    writeTodo(dir, '- [ ] task 1\n- [ ] task 2\n');
+
+    const final = await runHarness(dir, {
+        from: 'COOK',
+        provider: 'mixed-provider',
+        runPipeline: passGate,
+        budget: { maxConsecutiveTimeouts: 2, maxIterations: 3 }
+    });
+
+    assert.strictEqual(final.state, 'COOK');
+    assert.strictEqual(final.status, 'paused');
+    assert.strictEqual(final.consecutiveTimeouts, 0);
+});
