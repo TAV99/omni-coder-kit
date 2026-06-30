@@ -136,3 +136,40 @@ describe('promptFor anchoring (via runStep / buildCommand)', () => {
         assert.doesNotMatch(built.cmd, /scratch directory/);
     });
 });
+
+describe('promptFor wording - playbook instruction', () => {
+    test('promptFor contains read & do NOT execute instructions, drops execute wording', () => {
+        const prompt = hostCli.promptFor('fix', {
+            workflowPath: '.omni/workflows/debugger-workflow.md',
+            projectDir: '/p',
+            sharedBrief: 'my brief'
+        });
+
+        // KHÔNG chứa wording cũ
+        assert.doesNotMatch(prompt, /run ALL files/);
+        assert.doesNotMatch(prompt, /execute the >om:/);
+
+        // CÓ chứa wording mới để ngăn chặn execution của .md
+        assert.match(prompt, /do NOT run or execute that file/i);
+        assert.match(prompt, /READ/);
+        assert.match(prompt, /FOLLOWING/);
+
+        // Vẫn chứa các thông tin quan trọng khác
+        assert.match(prompt, /\.omni\/workflows\/debugger-workflow\.md/);
+        assert.match(prompt, /\/p/);
+        assert.match(prompt, /do NOT use any scratch/);
+        assert.match(prompt, /Do not summarize/);
+        assert.match(prompt, /my brief/);
+    });
+
+    test('promptFor without projectDir has no dirLine but still has READ/do NOT run/FOLLOW', () => {
+        const prompt = hostCli.promptFor('cook', {
+            workflowPath: '.omni/workflows/coder-execution.md'
+        });
+
+        assert.doesNotMatch(prompt, /Your working directory is/);
+        assert.match(prompt, /READ/);
+        assert.match(prompt, /do NOT run or execute/i);
+        assert.match(prompt, /FOLLOW/);
+    });
+});
