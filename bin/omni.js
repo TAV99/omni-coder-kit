@@ -63,6 +63,7 @@ const run = program
     .option('--accept <specs>', 'Provider participants cho acceptance debate (mặc định = --debate)')
     .option('--max-accept-rounds <n>', 'Số vòng ACCEPTANCE → COOK trước BLOCKED (mặc định 3)')
     .option('--yolo', 'Mọi host-cli agent bỏ qua MỌI permission (claude/codex dùng --dangerously-skip-permissions như agy). Cho autonomous run; harness vẫn chặn lệnh nguy hiểm.')
+    .option('--stream', 'Đẩy raw output của agent ra terminal (prefix │) realtime. Heartbeat ⏳ luôn bật dù không có cờ này.')
     .action(handleRun);
 
 run.command('gate')
@@ -73,6 +74,7 @@ run.command('gate')
 run.command('log')
     .description('In nhật ký event của lần chạy harness gần nhất (.omni/run/events.ndjson)')
     .option('--limit <n>', 'Số event cuối cần in (mặc định 50)')
+    .option('--follow', 'Theo dõi live (tail -f): in event mới khi xuất hiện (Ctrl-C để dừng)')
     .action(handleTrace);
 
 run.command('stats')
