@@ -64,7 +64,9 @@ const run = program
     .option('--max-accept-rounds <n>', 'Số vòng ACCEPTANCE → COOK trước BLOCKED (mặc định 3)')
     .option('--max-time <minutes>', 'Ngân sách thời gian mỗi phiên chạy (phút, mặc định 30)')
     .option('--yolo', 'Mọi host-cli agent bỏ qua MỌI permission (claude/codex dùng --dangerously-skip-permissions như agy). Cho autonomous run; harness vẫn chặn lệnh nguy hiểm.')
-    .option('--stream', 'Đẩy raw output của agent ra terminal (prefix │) realtime. Heartbeat ⏳ luôn bật dù không có cờ này.')
+    .option('--stream', 'Đẩy raw output của agent ra terminal (prefix │) realtime. Tắt spinner heartbeat (output cuộn).')
+    .option('--no-progress', 'Tắt spinner heartbeat; chỉ in lỗi + task xong (alias: --quiet)')
+    .option('--quiet', 'Bí danh của --no-progress')
     .action(handleRun);
 
 run.command('gate')
@@ -87,6 +89,8 @@ run.command('accept')
     .option('--accept <specs>', 'Provider participants cho acceptance debate')
     .option('--max-time <minutes>', 'Ngân sách thời gian mỗi phiên chạy (phút, mặc định 30)')
     .option('--yolo', 'Agent bỏ qua mọi permission (xem `omni run --help`)')
+    .option('--no-progress', 'Tắt spinner heartbeat; chỉ in lỗi + task xong')
+    .option('--quiet', 'Bí danh của --no-progress')
     .action(handleAccept);
 
 // -- 3) skills + subcommands -------------------------------------------------
