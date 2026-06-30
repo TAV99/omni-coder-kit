@@ -306,7 +306,7 @@ test('loop live: resume multiple times resets wallclock window each time', async
     assert.ok(!wallclockPause, 'should not pause due to wallclock budget on resume');
 });
 
-test('cli run.js maps --max-time to budget.maxWallclockMs in handleRun and handleAccept', async (t) => {
+test('cli run.js maps --max-time and --step-timeout in handleRun and handleAccept', async (t) => {
     const loopModule = require('../lib/harness/loop');
     
     const mute = () => {
@@ -331,13 +331,15 @@ test('cli run.js maps --max-time to budget.maxWallclockMs in handleRun and handl
 
     const m = mute();
     try {
-        await runCmd.handleRun({ maxTime: '5', provider: 'dry-run', dryRun: false });
-        await runCmd.handleAccept({ maxTime: '10', accept: 'host-cli:claudecode' });
+        await runCmd.handleRun({ maxTime: '5', stepTimeout: '2', provider: 'dry-run', dryRun: false });
+        await runCmd.handleAccept({ maxTime: '10', stepTimeout: '4', accept: 'host-cli:claudecode' });
     } finally {
         m.restore();
     }
 
     assert.strictEqual(passedOpts.length, 2);
     assert.deepStrictEqual(passedOpts[0].budget, { maxWallclockMs: 300000 });
+    assert.strictEqual(passedOpts[0].stepTimeoutMs, 120000);
     assert.deepStrictEqual(passedOpts[1].budget, { maxWallclockMs: 600000 });
+    assert.strictEqual(passedOpts[1].stepTimeoutMs, 240000);
 });
