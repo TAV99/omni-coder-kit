@@ -30,13 +30,15 @@ test('host-cli.buildCommand antigravity → agy headless one-shot', () => {
 });
 
 test('host-cli antigravity --model: opt-in only (default omits it)', () => {
-    // explicit model → flag emitted before -p
+    // explicit model → flag emitted before -p (raw buildCommand has no
+    // --print-timeout since printTimeoutSec is only injected through create()).
     const withModel = hostCli.buildCommand('antigravity', 'x', { model: 'gemini-3-pro' });
     assert.match(withModel.cmd, /^agy --dangerously-skip-permissions --model gemini-3-pro -p ".*"$/);
-    // 'auto' preset maps per step; default (no modelByStep) stays unchanged
+    // 'auto' preset maps per step; create() also injects --print-timeout
+    // (SPEC-FIX-ANTIGRAVITY-WORKSPACE) — assert the model flag is still there.
     const auto = hostCli.create({ ide: 'antigravity', modelByStep: 'auto' });
-    assert.match(auto.buildCommand('cook', {}).cmd, /--model gemini-3-pro -p/);
-    assert.match(auto.buildCommand('map', {}).cmd, /--model gemini-3-flash -p/);
+    assert.match(auto.buildCommand('cook', {}).cmd, /--model gemini-3-pro/);
+    assert.match(auto.buildCommand('map', {}).cmd, /--model gemini-3-flash/);
     const def = hostCli.create({ ide: 'antigravity' });
     assert.ok(!def.buildCommand('cook', {}).cmd.includes('--model'), 'default omits --model');
 });
