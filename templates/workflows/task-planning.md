@@ -35,7 +35,12 @@ Before decomposing tasks, scan available skills:
 For EACH component, create tasks that are:
 - **Atomic:** One task = one clear deliverable (a file, a function, a migration)
 - **Estimable:** Each task should take < 20 minutes of coding. **IMPORTANT (Token Optimization):** Merge trivial tasks (e.g., small styling tweaks, renaming variables, adding comments, minor copy edits) into single, larger logical tasks to avoid loop execution overhead. Aim for tasks that take 10-20 minutes of active coding.
-- **Ordered:** Dependencies first. Extended ordering: DB → Cache → Queue/Worker → API → Realtime → UI. Specifics: cache layer before API endpoints (API may use cache), queue/worker before features that send async tasks, realtime setup before UI components that consume realtime data.
+- **Strictly Ordered (Dependency-First):** Order tasks by dependencies. Perform base and foundational tasks first, then business logic, then UI components, and finally responsiveness/effects. Follow this extended ordering chain: DB → Cache → Queue/Worker → API → Realtime → UI.
+  - **Foundational Layer first:** Mock database/DB, schemas, migrations, service API configurations. Specifically: cache layer before API endpoints (API may use cache), queue/worker before features that send async tasks, realtime setup before UI components that consume realtime data.
+  - **Business Logic Layer next:** Service layers, controllers, API routes.
+  - **UI/UX Layer next:** HTML structure, core UI components, view states.
+  - **Transitions, Responsive & Polish last:** Responsive styling, animations, view transitions, dark mode toggle.
+  This strict progression prevents the Coder agent from refactoring already written files due to foundational changes later in the run.
 - **Testable:** Each task has an implicit verification (compiles, returns expected data, renders)
 - **Skill-tagged:** Each task MUST specify which installed skill(s) the agent should apply during execution. Any frontend UI/UX task **must** be tagged with the selected local design skill name (e.g., `@skill:minimalist-ui`, `@skill:industrial-brutalist-ui`, `@skill:high-end-visual-design`, or `@skill:design-taste-frontend` as default) to guarantee visual design guidelines are enforced during execution.
 
