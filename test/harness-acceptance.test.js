@@ -167,9 +167,43 @@ test('runAcceptance: skips debate/evaluation for already met requirements', asyn
     assert.strictEqual(res.allMet, false);
     assert.strictEqual(res.failed.length, 1);
     assert.strictEqual(res.failed[0], 'R2');
-    
     const r1 = res.report.find(r => r.id === 'R1');
     assert.ok(r1);
     assert.strictEqual(r1.met, true);
     assert.match(r1.evidence, /Already marked as met/);
+});
+
+test('runAcceptance: 1 participant → runs single-agent audit directly without debate', async () => {
+    const dir = tmp();
+    writeReqs(dir, '- [ ] R1 | single agent check | test: agent\n');
+    const reqs = intake.parseRequirements(dir);
+    
+    let runStepCalled = false;
+    const fakeProvider = {
+        runStep: async (step, ctx) => {
+            runStepCalled = true;
+            assert.strictEqual(step, 'debate');
+            assert.match(ctx.sharedBrief, /single agent check/);
+            return {
+                exitCode: 0,
+                summary: 'VERDICT: PASS\nLooks good.',
+            };
+        }
+    };
+    
+    const singleParticipant = [
+        { id: 'host-cli:claudecode', host: 'claudecode', provider: fakeProvider }
+    ];
+    
+    const res = await acceptance.runAcceptance({
+        projectDir: dir,
+        requirements: reqs,
+        runDebate: () => { throw new Error('runDebate should not be called'); },
+        participants: singleParticipant,
+    });
+    
+    assert.strictEqual(runStepCalled, true);
+    assert.strictEqual(res.allMet, true);
+    assert.strictEqual(res.failed.length, 0);
+    assert.match(res.report[0].evidence, /single-agent audit: host=claudecode verdict=pass/);
 });
