@@ -38,11 +38,11 @@ function captureConsole(fn) {
 }
 
 describe('handleRunEvent — suppressed events (spinner path)', () => {
-    test('transition (non-milestone) → no stopAndLog/setLabel/stop', () => {
+    test('transition (non-milestone) → only setLabel, no stopAndLog/stop', () => {
         const sp = fakeSpinner();
         const ctx = createRunEventCtx(tmp());
         handleRunEvent({ type: 'transition', from: 'COOK', to: 'CHECK' }, sp, ctx);
-        assert.deepEqual(sp.calls, []);
+        assert.deepEqual(sp.calls, [['setLabel', 'CHECK']]);
     });
 
     test('gate passed → no stopAndLog', () => {
@@ -196,7 +196,7 @@ describe('handleRunEvent — surfaced events', () => {
         assert.match(s[1], /chưa đạt: R3/);
     });
 
-    test('transition to ACCEPTANCE/DOC/SHIP → milestone line via stopAndLog', () => {
+    test('transition to ACCEPTANCE/DOC/SHIP → milestone line via stopAndLog + setLabel', () => {
         for (const to of ['ACCEPTANCE', 'DOC', 'SHIP']) {
             const sp = fakeSpinner();
             const ctx = createRunEventCtx(tmp());
@@ -204,6 +204,7 @@ describe('handleRunEvent — surfaced events', () => {
             const stops = sp.calls.filter((c) => c[0] === 'stopAndLog');
             assert.equal(stops.length, 1, `to=${to}`);
             assert.match(stops[0][1], new RegExp(`Chuyển sang ${to}`));
+            assert.deepEqual(sp.calls[0], ['setLabel', to]);
         }
     });
 
