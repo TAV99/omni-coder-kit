@@ -55,6 +55,7 @@ After a verified fix (Step 5 shows PASS), automatically execute the [>om:learn] 
 - If the fix fails or creates new errors, go back to Step 2 (no learn — nothing to record yet).
 
 **Rules:**
+- **Surgical Edits:** Strongly prefer scoped edit tools (like `replace_file_content` or `multi_replace_file_content`) to modify files rather than completely overwriting them (using `write_to_file` with `Overwrite:true`), especially for large files. Overwriting full files wastes tokens, causes latency, and risks erasing existing working logic or introducing regressions.
 - NEVER apply a "shotgun fix" (changing multiple things hoping one works). One hypothesis, one fix, one verification.
 - If the bug is in a dependency or external service, report it — do not monkey-patch.
 - If fixing requires adding new packages, ASK first.

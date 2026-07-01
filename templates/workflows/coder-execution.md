@@ -38,7 +38,7 @@ For the current task:
 1. State what you will do and which files will be affected (scope declaration).
 2. Scope lock: only create/modify files declared in 3.1. Zero exceptions — no cleanup, no refactoring, no "improvements".
 3. Write the minimum code to complete the task. Follow the Simplicity First principle.
-4. After writing code, verify it works (compile check, quick test, or logical validation).
+4. Local Syntax Verification: Before completing the task, run a quick syntax check, linter, typecheck, or local dry-run (e.g. npm run lint, eslint, eslint --fix, python -m py_compile, or local dev server check) on the modified files to catch basic issues like missing brackets or wrong imports early.
 5. **Doubt Gate (non-trivial tasks only):** before marking done, if this task meets a non-trivial trigger (branching logic, boundary crossing, unverifiable invariant, irreversible blast radius — see Doubt Gate below), run the doubt cycle. For irreversible/security-sensitive changes, escalate instead of self-reviewing. Trivial tasks skip this.
 6. Mark the task as done: change `- [ ]` to `- [x]` in `.omni/sdlc/todo.md`.
 
@@ -81,6 +81,7 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
 
 **Rules:**
 - ONE task at a time. Do not batch multiple tasks unless the user explicitly asks.
+- **Surgical Edits:** Strongly prefer scoped edit tools (like `replace_file_content` or `multi_replace_file_content`) to modify files rather than completely overwriting them (using `write_to_file` with `Overwrite:true`), especially for large files. Overwriting full files wastes tokens, causes latency, and risks erasing existing working logic or introducing regressions.
 - **Surgical Context:** For files > 200 lines, use grep/search to locate target code first. Read only the relevant section (±20 lines around target), not the entire file.
 - Follow the tech stack rules from `.omni/sdlc/design-spec.md` and any installed skills.
 - If a task is blocked (depends on something not yet built) or marked `[BLOCKED]`, SKIP it and move to the next non-blocked task. Note the skip reason.
