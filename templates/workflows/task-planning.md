@@ -33,8 +33,9 @@ Before decomposing tasks, scan available skills:
 
 **Step 4: Decompose into Micro-Tasks**
 For EACH component, create tasks that are:
-- **Atomic:** One task = one clear deliverable (a file, a function, a migration)
-- **Estimable:** Each task should take < 20 minutes of coding. **IMPORTANT (Token Optimization):** Merge trivial tasks (e.g., small styling tweaks, renaming variables, adding comments, minor copy edits) into single, larger logical tasks to avoid loop execution overhead. Aim for tasks that take 10-20 minutes of active coding.
+- **Atomic:** One task = one clear logical deliverable (e.g., a cohesive set of files representing a single module or service class).
+- **Task Grouping (Layer/Component):** Group tightly coupled tasks together by layer or component to avoid context switching. For example, instead of splitting "Tạo file rooms.json" and "Tạo dịch vụ db.js" into two separate tasks, group them into a single task: "Thiết lập tầng dữ liệu giả (Data Mocking Layer)".
+- **Estimable:** Each task should take 10-20 minutes of active coding. Merge trivial tasks (e.g., small styling tweaks, renaming variables, adding comments, minor copy edits) into single, larger logical tasks to avoid loop execution overhead.
 - **Strictly Ordered (Dependency-First):** Order tasks by dependencies. Perform base and foundational tasks first, then business logic, then UI components, and finally responsiveness/effects. Follow this extended ordering chain: DB → Cache → Queue/Worker → API → Realtime → UI.
   - **Foundational Layer first:** Mock database/DB, schemas, migrations, service API configurations. Specifically: cache layer before API endpoints (API may use cache), queue/worker before features that send async tasks, realtime setup before UI components that consume realtime data.
   - **Business Logic Layer next:** Service layers, controllers, API routes.
