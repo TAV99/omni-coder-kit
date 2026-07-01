@@ -59,8 +59,12 @@ Display extraction result to user:
 ### Step 2: Adaptive Questions (only ask what's missing)
 - Each question targets 1 empty or ambiguous slot.
 - Prefer multiple-choice format when possible.
-- If project has UI (`ui_hint` is not "API only"), merge 1 visual direction question into this flow:
-  "Style hướng nào? (a) Modern minimal (b) Bold/creative (c) Corporate/clean (d) Để tôi chọn theo context"
+- If project has UI (`ui_hint` is not "API only"), merge 1 visual direction question into this flow to determine the visual skill mapping:
+  "Style hướng nào?
+   (a) Minimalist / Editorial -> maps to local skill `minimalist-ui` (warm monochrome, flat bento, no heavy shadows)
+   (b) Industrial Brutalist -> maps to local skill `industrial-brutalist-ui` (rigid grids, bold mono type, hard shadows, military vibe)
+   (c) High-End Visual/Motion -> maps to local skill `high-end-visual-design` (fluid motion, spatial depth, premium cards)
+   (d) General Anti-Slop (Default) -> maps to local skill `design-taste-frontend` (modern SaaS visual guidelines, avoids AI purple/mesh)"
 - **Soft gate:** Always ask at least 1 question, even if all slots are filled — use it for edge case probing or scope confirmation.
 - **Backend complexity probe:** If `backendComplexity` from DNA is ambiguous (some signals but unclear severity), use 1 question slot:
   > "Tôi thấy dự án có [detected signals]. Backend cần xử lý phức tạp đến mức nào?"
@@ -142,7 +146,7 @@ Wait for user to pick an approach before proceeding to Phase 2. If user agrees w
 | Goal | [1 sentence] |
 | Users | [role1, role2, ...] |
 | Tech Stack | [frontend], [backend], [db], [deploy] ([1-line justification]) |
-| UI Style | [style] or "API only" |
+| UI Style | [style] (must specify one of: minimalist-ui, industrial-brutalist-ui, high-end-visual-design, design-taste-frontend) or "API only" |
 | Backend DNA | [simple/moderate/complex] — [detected patterns] (omit if simple) |
 | Constraints | [list] |
 ```
@@ -180,7 +184,7 @@ Each requirement is a bullet with a category tag. Available tags: `[func]`, `[au
   - [infra] Cache layer — Redis for session + API response, TTL 5min listings, TTL 1hr static config
 
 ### Visual (UI projects only)
-- [ui] Design style, color palette, typography, layout pattern
+- [ui] Design style, color palette, typography, layout pattern mapping to the selected visual skill (e.g. minimalist-ui, industrial-brutalist-ui, high-end-visual-design, design-taste-frontend)
 ```
 
 **Rules for requirements:**
@@ -190,6 +194,7 @@ Each requirement is a bullet with a category tag. Available tags: `[func]`, `[au
 - `[data]` items should list actual field names, not just "user table".
 - `[api]` items should include method, path, and auth level.
 - `[infra]` items should specify the pattern, technology choice, and concrete scaling/failure behavior.
+- `[ui]` items must explicitly reference the chosen design skill guidelines (`minimalist-ui`, `industrial-brutalist-ui`, `high-end-visual-design`, or `design-taste-frontend`) to ensure visual compliance.
 
 ### Part C: Generate `.omni/sdlc/content-source.md` (UI projects only)
 If the project has UI (`ui_hint` is not "API only"), generate `.omni/sdlc/content-source.md` alongside `.omni/sdlc/design-spec.md`:

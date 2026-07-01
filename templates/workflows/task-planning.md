@@ -29,15 +29,15 @@ If the spec uses the old prose format (no tags), fall back to manual grouping:
 Before decomposing tasks, scan available skills:
 - Read `.omni/manifest.json` → `skills.external[]` for installed skill names.
 - Read skill files in `.agents/skills/` or `.claude/skills/` to understand each skill's capability.
-- Build a **skill map**: which skill applies to which type of work (e.g., `supabase-postgres-best-practices` → DB tasks, `vercel-react-best-practices` → React components, `systematic-debugging` → complex logic).
+- Build a **skill map**: which skill applies to which type of work (e.g., `supabase-postgres-best-practices` → DB tasks, `vercel-react-best-practices` → React components, `systematic-debugging` → complex logic). Specifically, scan for local visual design skills: `minimalist-ui`, `industrial-brutalist-ui`, `high-end-visual-design`, or `design-taste-frontend`.
 
 **Step 4: Decompose into Micro-Tasks**
 For EACH component, create tasks that are:
 - **Atomic:** One task = one clear deliverable (a file, a function, a migration)
-- **Estimable:** Each task should take < 20 minutes of coding
+- **Estimable:** Each task should take < 20 minutes of coding. **IMPORTANT (Token Optimization):** Merge trivial tasks (e.g., small styling tweaks, renaming variables, adding comments, minor copy edits) into single, larger logical tasks to avoid loop execution overhead. Aim for tasks that take 10-20 minutes of active coding.
 - **Ordered:** Dependencies first. Extended ordering: DB → Cache → Queue/Worker → API → Realtime → UI. Specifics: cache layer before API endpoints (API may use cache), queue/worker before features that send async tasks, realtime setup before UI components that consume realtime data.
 - **Testable:** Each task has an implicit verification (compiles, returns expected data, renders)
-- **Skill-tagged:** Each task MUST specify which installed skill(s) the agent should apply during execution
+- **Skill-tagged:** Each task MUST specify which installed skill(s) the agent should apply during execution. Any frontend UI/UX task **must** be tagged with the selected local design skill name (e.g., `@skill:minimalist-ui`, `@skill:industrial-brutalist-ui`, `@skill:high-end-visual-design`, or `@skill:design-taste-frontend` as default) to guarantee visual design guidelines are enforced during execution.
 
 **Step 5: Classify Tasks — Infra vs Code**
 For each task, determine if it is **infra** (run once, no code to write) or **code** (needs implementation):
@@ -105,7 +105,7 @@ Output code tasks using this exact format:
 
 ## 1. [Component/Module Name]
 - [ ] Task description (specific file or function) `@skill:skill-name`
-- [ ] Task description `@skill:skill-name`
+- [ ] Build visual layouts for page/widget `@skill:minimalist-ui` (or chosen style)
 - [ ] Task with multiple skills `@skill:skill-a` `@skill:skill-b`
 ...
 
