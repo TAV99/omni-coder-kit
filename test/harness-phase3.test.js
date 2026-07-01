@@ -25,24 +25,24 @@ function tmp() { return fs.mkdtempSync(path.join(os.tmpdir(), 'omni-p3-')); }
 // --- 3a: Antigravity host ---------------------------------------------------
 
 test('host-cli.buildCommand antigravity → agy headless one-shot', () => {
-    const built = hostCli.buildCommand('antigravity', 'do X');
+    const built = hostCli.buildCommand('antigravity', 'do X', { skipPTY: true });
     assert.deepStrictEqual(built.argv, ['agy', '--dangerously-skip-permissions', '-p', 'do X']);
 });
 
 test('host-cli antigravity --model: opt-in only (default omits it)', () => {
-    const withModel = hostCli.buildCommand('antigravity', 'x', { model: 'gemini-3-pro' });
+    const withModel = hostCli.buildCommand('antigravity', 'x', { model: 'gemini-3-pro', skipPTY: true });
     assert.deepStrictEqual(withModel.argv, ['agy', '--dangerously-skip-permissions', '--model', 'gemini-3-pro', '-p', 'x']);
     
-    const auto = hostCli.create({ ide: 'antigravity', modelByStep: 'auto' });
+    const auto = hostCli.create({ ide: 'antigravity', modelByStep: 'auto', skipPTY: true });
     assert.ok(auto.buildCommand('cook', {}).argv.includes('gemini-3-pro'));
     assert.ok(auto.buildCommand('map', {}).argv.includes('gemini-3-flash'));
     
-    const def = hostCli.create({ ide: 'antigravity' });
+    const def = hostCli.create({ ide: 'antigravity', skipPTY: true });
     assert.ok(!def.buildCommand('cook', {}).argv.includes('--model'), 'default omits --model');
 });
 
 test('getProviderFromSpec parses name:ide', () => {
-    const a = getProviderFromSpec('host-cli:antigravity');
+    const a = getProviderFromSpec('host-cli:antigravity', { skipPTY: true });
     assert.strictEqual(a.host, 'antigravity');
     assert.strictEqual(a.provider.name, 'host-cli');
     assert.strictEqual(a.provider.buildCommand('debate', 'x').argv[0], 'agy');

@@ -65,7 +65,7 @@ test('host-cli.buildCommand --yolo bỏ qua mọi permission', () => {
     assert.deepStrictEqual(hostCli.buildCommand('codex', 'do X', { yolo: true }).argv,
         ['codex', 'exec', '--dangerously-bypass-approvals-and-sandbox', 'do X']);
     // antigravity: đã skip sẵn, yolo không đổi
-    assert.deepStrictEqual(hostCli.buildCommand('antigravity', 'do X', { yolo: true }).argv,
+    assert.deepStrictEqual(hostCli.buildCommand('antigravity', 'do X', { yolo: true, skipPTY: true }).argv,
         ['agy', '--dangerously-skip-permissions', '-p', 'do X']);
 });
 
