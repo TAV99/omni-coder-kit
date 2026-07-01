@@ -45,6 +45,11 @@ For each task, determine if it is **infra** (run once, no code to write) or **co
 - **Code:** create files, write functions, implement endpoints, build components, write tests — anything that requires writing or modifying source code.
 - **`[infra]` tag tasks** are classified flexibly: pure config (Redis setup, queue connection, WebSocket server init) → `setup.sh`. Tasks requiring code (worker logic, event handlers, cache invalidation logic) → `.omni/sdlc/todo.md` with `@skill:` tags. Classify based on task nature, not hardcoded rules.
 
+> [!CAUTION]
+> **CRITICAL INFRA SAFETY GUARD (Prevent Overwriting Custom Code/Styles):**
+> When generating `setup.sh` that initializes templates (e.g. using `create-vite`, `create-next-app`), **NEVER** use generic overwrite commands (like `rsync -a` or `cp -r`) that blindly overwrite pre-existing files in the directory. You must verify if code or custom styles (such as `src/index.css`, `src/App.css`, `src/App.jsx`) already exist in the workspace. If they do, configure `setup.sh` to selectively merge package dependencies and configure bundlers without overwriting pre-existing designs/code. If any stylesheet is temporarily replaced, you must add an explicit task in `todo.md` to restore the design layout to conform with the specification.
+
+
 If infra tasks exist, generate `setup.sh` — a single bash script that executes all infra tasks in order with built-in verification:
 ```bash
 #!/bin/bash
