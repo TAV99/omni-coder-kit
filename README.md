@@ -225,7 +225,7 @@ your-project/
 
 Dự án được phát triển và tối ưu dựa trên ý tưởng từ:
 - [antigravity-kit](https://github.com/vudovn/antigravity-kit)
-- [karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills)
+- [karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills)
 - Claudekit
 
 ---
