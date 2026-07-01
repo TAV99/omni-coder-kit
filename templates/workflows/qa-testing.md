@@ -116,6 +116,7 @@ When >om:check is triggered automatically from >om:cook's quality gate:
 **Rules:**
 - **No command = No PASS.** Every P0-P3 verdict requires a shell command with exit code. "Code looks correct" is NOT verification.
 - **Quiet execution.** Use `--silent`, `-q`, `--quiet`, `2>&1 | tail -n` to minimize terminal output in context. Only capture what determines PASS/FAIL.
+- **Fast Unit Tests:** Ensure unit tests run extremely fast (ideally < 5 seconds) by mocking heavy dependencies, databases, network calls, and unrelated modules. A test suite that runs too slow delays the check gate feedback loop.
 - If you cannot test something (e.g., needs real API key, hardware), mark SKIP with the reason.
 - If the project has no test framework set up, recommend one appropriate for the stack but do NOT install it without asking.
 - For UI: you MUST start the dev server and interact with the feature. Screenshots or browser tool output count as evidence.
