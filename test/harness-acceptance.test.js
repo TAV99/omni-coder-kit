@@ -147,3 +147,29 @@ test('runAcceptance: emits acceptance + per-req events', async () => {
     assert.strictEqual(finalEv.allMet, true);
     assert.strictEqual(finalEv.total, 2);
 });
+
+test('runAcceptance: skips debate/evaluation for already met requirements', async () => {
+    const dir = tmp();
+    // One requirement already met [x], one pending [ ]
+    writeReqs(dir, [
+        '- [x] R1 | met requirement | test: agent',
+        '- [ ] R2 | pending requirement | test: agent',
+    ].join('\n'));
+    
+    const reqs = intake.parseRequirements(dir);
+    
+    // We pass failing debate, but R1 should be preserved as PASS because it is already marked met.
+    const res = await acceptance.runAcceptance({
+        projectDir: dir, requirements: reqs,
+        runDebate: failDebate, participants: PARTICIPANTS,
+    });
+    
+    assert.strictEqual(res.allMet, false);
+    assert.strictEqual(res.failed.length, 1);
+    assert.strictEqual(res.failed[0], 'R2');
+    
+    const r1 = res.report.find(r => r.id === 'R1');
+    assert.ok(r1);
+    assert.strictEqual(r1.met, true);
+    assert.match(r1.evidence, /Already marked as met/);
+});

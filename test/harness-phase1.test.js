@@ -463,7 +463,7 @@ test('loop: freshStart: true overrides saved BLOCKED state', async () => {
     assert.strictEqual(final.cycle, 1);
 });
 
-test('loop: freshStart: false (default) loads saved state', async () => {
+test('loop: freshStart: false (default) loads saved state and recovers from BLOCKED', async () => {
     const { saveState } = require('../lib/harness/state');
     const { runHarness } = require('../lib/harness/loop');
 
@@ -480,7 +480,8 @@ test('loop: freshStart: false (default) loads saved state', async () => {
     };
     saveState(dir, blockedState);
 
-    // runHarness with freshStart: false, should load and exit immediately because BLOCKED is terminal
+    // runHarness with freshStart: false, should load BLOCKED state and recover
+    // to CHECK (new behavior: BLOCKED → CHECK with counter reset).
     const final = await runHarness(dir, {
         from: 'CHECK',
         freshStart: false,
@@ -488,9 +489,10 @@ test('loop: freshStart: false (default) loads saved state', async () => {
         runPipeline: passGate,
     });
 
-    assert.strictEqual(final.state, 'BLOCKED');
-    assert.strictEqual(final.status, 'blocked');
-    assert.strictEqual(final.fixAttempts, 3);
+    // After recovery: BLOCKED → CHECK (pass) → ACCEPTANCE (no reqs) → DOC → paused
+    assert.notStrictEqual(final.state, 'BLOCKED', 'should have recovered from BLOCKED');
+    assert.strictEqual(final.fixAttempts, 0, 'fixAttempts should be reset on recovery');
+    assert.strictEqual(final.consecutiveTimeouts, 0, 'timeouts should be reset on recovery');
 });
 
 test('cli run.js sets freshStart properly based on from and resume options', async (t) => {

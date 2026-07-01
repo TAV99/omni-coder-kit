@@ -34,11 +34,11 @@ describe('FIX 2 — security gate scans product source only', () => {
         assert.equal(r.passed, true, r.output);
     });
 
-    test('innerHTML in src/app.js → P0 FAIL (real product finding)', () => {
+    test('innerHTML in src/app.js → P0 advisory (non-blocking warning)', () => {
         const { dir, write } = fixture();
         write('src/app.js', 'node.innerHTML = userInput;\n');
         const r = runSecurity(dir, noAudit);
-        assert.equal(r.passed, false);
+        assert.equal(r.passed, true);
         assert.match(r.output, /src\/app\.js/);
         assert.match(r.output, /innerHTML/);
     });

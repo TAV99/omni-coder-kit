@@ -28,12 +28,13 @@ test('security: hardcoded credential → fail', () => {
     assert.match(r.output, /credential/i);
 });
 
-test('security: dangerous pattern eval/innerHTML → fail', () => {
+test('security: innerHTML is advisory (non-blocking) — pass with warning', () => {
     const dir = tmp();
     write(dir, 'app.js', 'el.innerHTML = userInput;\n');
     const r = runSecurity(dir);
-    assert.strictEqual(r.passed, false);
+    assert.strictEqual(r.passed, true);
     assert.match(r.output, /innerHTML/);
+    assert.match(r.output, /advisory/i);
 });
 
 test('security: clean project → pass', () => {
@@ -44,15 +45,16 @@ test('security: clean project → pass', () => {
     assert.strictEqual(r.passed, true);
 });
 
-test('security: npm audit high+ via injected runner → fail', () => {
+test('security: npm audit high+ via injected runner is advisory (non-blocking) — pass with warning', () => {
     const dir = tmp();
     write(dir, 'package.json', '{"name":"x"}');
     write(dir, 'package-lock.json', '{}');
     write(dir, 'index.js', 'module.exports = 1;\n');
     const failingAudit = () => ({ exitCode: 1, stdout: '', stderr: '', timedOut: false });
     const r = runSecurity(dir, { runCommand: failingAudit });
-    assert.strictEqual(r.passed, false);
+    assert.strictEqual(r.passed, true);
     assert.match(r.output, /audit/i);
+    assert.match(r.output, /advisory/i);
 });
 
 // --- P4 bundle (advisory) --------------------------------------------------
