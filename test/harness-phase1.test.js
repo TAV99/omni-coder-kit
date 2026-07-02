@@ -333,15 +333,25 @@ test('cli run.js maps --max-time and --step-timeout in handleRun and handleAccep
     try {
         await runCmd.handleRun({ maxTime: '5', stepTimeout: '2', provider: 'dry-run', dryRun: false });
         await runCmd.handleAccept({ maxTime: '10', stepTimeout: '4', accept: 'host-cli:claudecode' });
+        // Test when maxTime is omitted but stepTimeout is provided -> defaults to stepTimeout * 3
+        await runCmd.handleRun({ stepTimeout: '10', provider: 'dry-run', dryRun: false });
+        await runCmd.handleAccept({ stepTimeout: '5', accept: 'host-cli:claudecode' });
     } finally {
         m.restore();
     }
 
-    assert.strictEqual(passedOpts.length, 2);
+    assert.strictEqual(passedOpts.length, 4);
     assert.deepStrictEqual(passedOpts[0].budget, { maxWallclockMs: 300000 });
     assert.strictEqual(passedOpts[0].stepTimeoutMs, 120000);
     assert.deepStrictEqual(passedOpts[1].budget, { maxWallclockMs: 600000 });
     assert.strictEqual(passedOpts[1].stepTimeoutMs, 240000);
+
+    // 10m * 3 = 30m -> 1,800,000 ms
+    assert.deepStrictEqual(passedOpts[2].budget, { maxWallclockMs: 1800000 });
+    assert.strictEqual(passedOpts[2].stepTimeoutMs, 600000);
+    // 5m * 3 = 15m -> 900,000 ms
+    assert.deepStrictEqual(passedOpts[3].budget, { maxWallclockMs: 900000 });
+    assert.strictEqual(passedOpts[3].stepTimeoutMs, 300000);
 });
 
 test('loop live: consecutive timeouts trigger BLOCKED early', async (t) => {

@@ -177,3 +177,53 @@ describe('promptFor wording - playbook instruction', () => {
         assert.match(prompt, /FOLLOW/);
     });
 });
+
+describe('create() — per-step default timeouts and overrides', () => {
+    test('when timeoutMs is not provided, defaults vary per step', async () => {
+        const seen = [];
+        const fakeRun = (argv, opts) => { seen.push({ argv, opts }); return { exitCode: 0, stdout: '', stderr: '', timedOut: false }; };
+        
+        // plan step should default to 20 minutes (1200000 ms)
+        const provPlan = hostCli.create({ ide: 'antigravity', runCommand: fakeRun });
+        await provPlan.runStep('plan', { projectDir: '/p' });
+        assert.strictEqual(seen[0].opts.timeoutMs, 20 * 60 * 1000);
+        // print-timeout derived: 1200s - 30s = 1170s
+        assert.ok(seen[0].argv.includes('1170s'));
+
+        // cook step should default to 25 minutes (1500000 ms)
+        const provCook = hostCli.create({ ide: 'antigravity', runCommand: fakeRun });
+        await provCook.runStep('cook', { projectDir: '/p' });
+        assert.strictEqual(seen[1].opts.timeoutMs, 25 * 60 * 1000);
+        // print-timeout derived: 1500s - 30s = 1470s
+        assert.ok(seen[1].argv.includes('1470s'));
+
+        // check step should default to 12 minutes (720000 ms)
+        const provCheck = hostCli.create({ ide: 'antigravity', runCommand: fakeRun });
+        await provCheck.runStep('check', { projectDir: '/p' });
+        assert.strictEqual(seen[2].opts.timeoutMs, 12 * 60 * 1000);
+        // print-timeout derived: 720s - 30s = 690s
+        assert.ok(seen[2].argv.includes('690s'));
+
+        // unknown/fallback step should default to 10 minutes (600000 ms)
+        const provUnknown = hostCli.create({ ide: 'antigravity', runCommand: fakeRun });
+        await provUnknown.runStep('unknown', { projectDir: '/p' });
+        assert.strictEqual(seen[3].opts.timeoutMs, 10 * 60 * 1000);
+        // print-timeout derived: 600s - 30s = 570s
+        assert.ok(seen[3].argv.includes('570s'));
+    });
+
+    test('when timeoutMs is provided as a number, it overrides uniformly across all steps', async () => {
+        const seen = [];
+        const fakeRun = (argv, opts) => { seen.push({ argv, opts }); return { exitCode: 0, stdout: '', stderr: '', timedOut: false }; };
+        const prov = hostCli.create({ ide: 'antigravity', timeoutMs: 5 * 60 * 1000, runCommand: fakeRun });
+
+        await prov.runStep('plan', { projectDir: '/p' });
+        assert.strictEqual(seen[0].opts.timeoutMs, 5 * 60 * 1000);
+        assert.ok(seen[0].argv.includes('270s'));
+
+        await prov.runStep('cook', { projectDir: '/p' });
+        assert.strictEqual(seen[1].opts.timeoutMs, 5 * 60 * 1000);
+        assert.ok(seen[1].argv.includes('270s'));
+    });
+});
+
