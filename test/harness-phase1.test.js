@@ -91,6 +91,42 @@ test('build-test.detectCommands on empty project → all null', () => {
     assert.deepStrictEqual(buildTest.detectCommands(tmpProject()), { dev: null, build: null, test: null, lint: null });
 });
 
+test('build-test.detectCommands with pubspec.yaml → Flutter commands', () => {
+    const dir = tmpProject();
+    fs.writeFileSync(path.join(dir, 'pubspec.yaml'), 'name: my_app\n', 'utf-8');
+    assert.deepStrictEqual(buildTest.detectCommands(dir), {
+        dev: 'flutter run',
+        build: 'flutter build apk',
+        test: 'flutter test',
+        lint: 'flutter analyze',
+    });
+});
+
+test('build-test.detectCommands with requirements.txt → Python commands', () => {
+    const dir = tmpProject();
+    fs.writeFileSync(path.join(dir, 'requirements.txt'), 'pygame>=2.0\n', 'utf-8');
+    fs.writeFileSync(path.join(dir, 'main.py'), 'print("hello")\n', 'utf-8');
+    const cmds = buildTest.detectCommands(dir);
+    assert.strictEqual(cmds.dev, 'python main.py');
+    assert.strictEqual(cmds.test, 'python -m unittest discover');
+});
+
+test('build-test.detectCommands Python pytest vs unittest detection', () => {
+    const dir = tmpProject();
+    fs.writeFileSync(path.join(dir, 'app.py'), '', 'utf-8');
+    fs.mkdirSync(path.join(dir, 'tests'));
+    const cmds = buildTest.detectCommands(dir);
+    assert.strictEqual(cmds.test, 'pytest');
+});
+
+test('build-test.detectCommands Python fallback to unittest', () => {
+    const dir = tmpProject();
+    fs.writeFileSync(path.join(dir, 'app.py'), '', 'utf-8');
+    const cmds = buildTest.detectCommands(dir);
+    assert.strictEqual(cmds.test, 'python -m unittest discover');
+    assert.strictEqual(cmds.dev, 'python app.py');
+});
+
 test('build-test.runGateCommand skips when no command', () => {
     const r = buildTest.runGateCommand(tmpProject(), 'test');
     assert.strictEqual(r.ran, false);

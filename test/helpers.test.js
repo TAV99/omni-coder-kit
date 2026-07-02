@@ -480,4 +480,60 @@ describe('detectDNA', () => {
             fs.rmSync(tmpDir, { recursive: true, force: true });
         }
     });
+
+    it('detects pygame as UI DNA', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dna-test-'));
+        try {
+            fs.writeFileSync(path.join(tmpDir, 'requirements.txt'), 'pygame>=2.5\nrequests\n');
+            const dna = detectDNA(tmpDir);
+            assert.equal(dna.hasUI, true);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('detects django as backend + API DNA', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dna-test-'));
+        try {
+            fs.writeFileSync(path.join(tmpDir, 'requirements.txt'), 'django>=4.2\n');
+            const dna = detectDNA(tmpDir);
+            assert.equal(dna.hasBackend, true);
+            assert.equal(dna.hasAPI, true);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('detects PyQt6 from pyproject.toml', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dna-test-'));
+        try {
+            fs.writeFileSync(path.join(tmpDir, 'pyproject.toml'), '[project]\ndependencies = ["PyQt6>=6.5"]\n');
+            const dna = detectDNA(tmpDir);
+            assert.equal(dna.hasUI, true);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('detects pubspec.yaml as UI DNA', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dna-test-'));
+        try {
+            fs.writeFileSync(path.join(tmpDir, 'pubspec.yaml'), 'name: my_app\n');
+            const dna = detectDNA(tmpDir);
+            assert.equal(dna.hasUI, true);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    it('filters out comments from requirements.txt', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dna-test-'));
+        try {
+            fs.writeFileSync(path.join(tmpDir, 'requirements.txt'), '# pygame is good\nrequests\n');
+            const dna = detectDNA(tmpDir);
+            assert.equal(dna.hasUI, false);
+        } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
 });

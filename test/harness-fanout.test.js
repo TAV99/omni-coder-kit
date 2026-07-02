@@ -52,6 +52,9 @@ test('fanout: default CHECK_LENSES = code-review/security/test', () => {
 
 test('host-cli.buildCommand per ide', () => {
     assert.deepStrictEqual(hostCli.buildCommand('claudecode', 'do X').argv, ['claude', '-p', 'do X', '--permission-mode', 'acceptEdits']);
+    assert.deepStrictEqual(hostCli.buildCommand('opencode', 'do X').argv, ['opencode', '-p', 'do X', '--permission-mode', 'acceptEdits']);
+    assert.deepStrictEqual(hostCli.buildCommand('open-claude', 'do X').argv, ['open-claude', '-p', 'do X', '--permission-mode', 'acceptEdits']);
+    assert.deepStrictEqual(hostCli.buildCommand('openclaude', 'do X').argv, ['openclaude', '-p', 'do X', '--permission-mode', 'acceptEdits']);
     assert.deepStrictEqual(hostCli.buildCommand('gemini', 'do X').argv, ['gemini', '--yolo', '-p', 'do X']);
     assert.deepStrictEqual(hostCli.buildCommand('codex', 'do X').argv, ['codex', 'exec', 'do X']);
     assert.ok(hostCli.buildCommand('eclipse', 'do X').error, 'unknown ide → error');

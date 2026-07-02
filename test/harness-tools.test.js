@@ -78,3 +78,123 @@ test('shell.isDenied blocks plain git push (no-push invariant)', () => {
     assert.ok(!shell.isDenied('git commit -m "x"'));
     assert.ok(!shell.isDenied('git status --porcelain'));
 });
+
+// --- shell.isAgentCommand for extended CLIs -------------------------------
+
+test('shell.isAgentCommand recognizes extended CLIs', () => {
+    assert.ok(shell.isAgentCommand('opencode'));
+    assert.ok(shell.isAgentCommand('open-claude'));
+    assert.ok(shell.isAgentCommand('openclaude'));
+    assert.ok(shell.isAgentCommand('OpenCode')); // case-insensitive
+    assert.ok(!shell.isAgentCommand('unknowncli'));
+});
+
+// --- PROMPT_PATTERNS --------------------------------------------------------
+
+test('PROMPT_PATTERNS matches true positives', () => {
+    const positives = [
+        'Do you want to allow access? [y/N]',
+        'Are you sure you want to continue?',
+        'Proceed? (y/n)',
+        'Press Y to continue',
+        'Type "yes" to confirm deletion',
+        'Allow network access? [y/N]',
+        'approve this action? y/N',
+    ];
+    for (const input of positives) {
+        assert.ok(shell.PROMPT_PATTERNS.some(re => re.test(input)), `Expected match for: ${input}`);
+    }
+});
+
+test('PROMPT_PATTERNS rejects false positives', () => {
+    const negatives = [
+        'Tests confirmed passing',
+        'Execute migration step 3...',
+        'Make sure all files are saved',
+        'Proceed to next step',
+        '5 tests confirmed. All green.',
+        'Permission denied: /usr/local/bin',
+        'confirm: 5 records inserted',
+        'Running execute_query()...',
+    ];
+    for (const input of negatives) {
+        assert.ok(!shell.PROMPT_PATTERNS.some(re => re.test(input)), `Expected NO match for: ${input}`);
+    }
+});
+
+// --- runCommandAsync auto-approve ------------------------------------------
+
+test('runCommandAsync auto-approve writes y\\n to stdin on match', async () => {
+    let stdinWritten = '';
+    const fake = () => {
+        const child = new (require('events').EventEmitter)();
+        child.stdout = new (require('events').EventEmitter)();
+        child.stderr = new (require('events').EventEmitter)();
+        child.stdin = {
+            writable: true,
+            write: (data) => {
+                stdinWritten += data;
+            }
+        };
+        child.kill = () => {};
+        setImmediate(() => {
+            child.stdout.emit('data', Buffer.from('Are you sure? [y/N] '));
+            child.emit('close', 0, null);
+        });
+        return child;
+    };
+
+    const res = await shell.runCommandAsync('echo hi', { spawnFn: fake, autoApprove: true });
+    assert.strictEqual(res.exitCode, 0);
+    assert.strictEqual(stdinWritten, 'y\n');
+});
+
+test('runCommandAsync auto-approve disabled prevents auto-approve', async () => {
+    let stdinWritten = '';
+    const fake = () => {
+        const child = new (require('events').EventEmitter)();
+        child.stdout = new (require('events').EventEmitter)();
+        child.stderr = new (require('events').EventEmitter)();
+        child.stdin = {
+            writable: true,
+            write: (data) => {
+                stdinWritten += data;
+            }
+        };
+        child.kill = () => {};
+        setImmediate(() => {
+            child.stdout.emit('data', Buffer.from('Are you sure? [y/N] '));
+            child.emit('close', 0, null);
+        });
+        return child;
+    };
+
+    const res = await shell.runCommandAsync('echo hi', { spawnFn: fake, autoApprove: false });
+    assert.strictEqual(res.exitCode, 0);
+    assert.strictEqual(stdinWritten, '');
+});
+
+test('runCommandAsync auto-approve matches stderr prompts too', async () => {
+    let stdinWritten = '';
+    const fake = () => {
+        const child = new (require('events').EventEmitter)();
+        child.stdout = new (require('events').EventEmitter)();
+        child.stderr = new (require('events').EventEmitter)();
+        child.stdin = {
+            writable: true,
+            write: (data) => {
+                stdinWritten += data;
+            }
+        };
+        child.kill = () => {};
+        setImmediate(() => {
+            child.stderr.emit('data', Buffer.from('Allow connection? [y/N] '));
+            child.emit('close', 0, null);
+        });
+        return child;
+    };
+
+    const res = await shell.runCommandAsync('echo hi', { spawnFn: fake, autoApprove: true });
+    assert.strictEqual(res.exitCode, 0);
+    assert.strictEqual(stdinWritten, 'y\n');
+});

@@ -123,6 +123,22 @@ test('runDebate: both agree → consensus agree, early-stops after round 0', asy
     assert.strictEqual(res.rounds, 1); // converged immediately
 });
 
+test('runDebate: summary extraction filters out VERDICT/PASS/FAIL lines', async () => {
+    const dir = tmp();
+    const runStep = async (p) => ({
+        id: p.id,
+        ok: true,
+        verdict: 'pass',
+        position: 'VERDICT: PASS\nPASS\nThis is the actual summary line.\nSome more text here.',
+        confidence: 0.5
+    });
+    const res = await runDebate({ projectDir: dir, claim: { question: 'q' }, participants: parts, rounds: 1, runStep });
+    assert.strictEqual(res.consensus, 'agree');
+    const evs = readEvents(dir).filter(e => e.type === 'debate');
+    assert.strictEqual(evs.length, 1);
+    assert.strictEqual(evs[0].participants[0].summary, 'This is the actual summary line.');
+});
+
 test('runDebate: same-host participants → warning', async () => {
     const dir = tmp();
     const sameHost = [{ id: 'a', host: 'claudecode' }, { id: 'b', host: 'claudecode' }];
