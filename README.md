@@ -114,5 +114,16 @@ your-project/
 
 ---
 
+## 💖 Nguồn cảm hứng
+
+Dự án được phát triển và tối ưu dựa trên ý tưởng từ:
+- [antigravity-kit](https://github.com/vudovn/antigravity-kit)
+- [karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills)
+- [superpowers](https://github.com/obra/superpowers/)
+- [taste-skill](https://github.com/Leonxlnx/taste-skill)
+- Claudekit
+
+---
+
 ## 📄 Giấy phép
 Mã nguồn được phân phối dưới giấy phép **ISC**. Phát triển và duy trì bởi **TAV** (tav99.dev@gmail.com).
