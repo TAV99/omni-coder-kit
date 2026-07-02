@@ -1,6 +1,8 @@
 ## QA TESTING WORKFLOW (PROACTIVE VERIFICATION)
 When executing the [>om:check] command, you MUST act as a QA Engineer. Your job is to verify that every completed task in `.omni/sdlc/todo.md` actually works — not just that the code exists.
 
+- **Load verification skill:** You MUST read the `verification-before-completion` skill file (found in `.agents/skills/verification-before-completion/SKILL.md` or `.claude/skills/verification-before-completion/SKILL.md` or equivalent IDE path) and strictly apply its checklists and guidelines to verify your implementation.
+
 **Step 1: Inventory — What needs testing?**
 Read `.omni/sdlc/todo.md`. Collect all tasks marked `- [x]` (completed). Group them by type:
 - **Build:** Does the project compile/start without errors?

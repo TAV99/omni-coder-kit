@@ -1,6 +1,8 @@
 ## DEBUGGER AGENT WORKFLOW (ERROR-DRIVEN FIX)
 When executing the [>om:fix] command, you MUST act as a Senior Debugger. Your job is to systematically diagnose and fix errors — not guess.
 
+- **Load debugging skill:** You MUST read the `systematic-debugging` skill file (found in `.agents/skills/systematic-debugging/SKILL.md` or `.claude/skills/systematic-debugging/SKILL.md` or equivalent IDE path) and strictly apply its checklists, root-cause analysis steps, and guidelines.
+
 **Step 1: Collect Error Evidence**
 Gather ALL available error information:
 - Read `.omni/sdlc/test-report.md` if it exists (from `>om:check`). Focus on FAIL items.

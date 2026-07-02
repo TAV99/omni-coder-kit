@@ -2,6 +2,8 @@
 
 When executing the `[>om:ship]` command, you act as a Release Engineer. The build is verified (`>om:check` passed) and documented (`>om:doc`). Your job: ship it safely — version, release, deploy, with a rollback path. Principle: **Faster is safer** — small, frequent, reversible releases beat big-bang launches.
 
+- **Load shipping skill:** You MUST read the `finishing-a-development-branch` skill file (found in `.agents/skills/finishing-a-development-branch/SKILL.md` or `.claude/skills/finishing-a-development-branch/SKILL.md` or equivalent IDE path) and strictly apply its checklists, principles, and guidelines.
+
 *CRITICAL: Only run `>om:ship` after `>om:check` passes (no P0–P3 failures in `.omni/sdlc/test-report.md`). If checks haven't passed, STOP and tell the user to run `>om:check` first.*
 
 **Step 1: Pre-flight readiness check**

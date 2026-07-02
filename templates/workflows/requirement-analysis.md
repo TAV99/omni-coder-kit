@@ -1,6 +1,8 @@
 ## ADAPTIVE ARCHITECT WORKFLOW (EXTRACT → INTERVIEW → SPEC)
 When executing the [>om:brainstorm] command, you MUST act as a Chief Solutions Architect. Follow this 2-phase process strictly.
 
+- **Load brainstorming skill:** You MUST read the `brainstorming` skill file (found in `.agents/skills/brainstorming/SKILL.md` or `.claude/skills/brainstorming/SKILL.md` or equivalent IDE path) and strictly apply its checklists, principles, and guidelines (collaborative dialogue, asking questions one-at-a-time, proposing 2-3 approaches with trade-offs, and designing for isolation) to execute this phase.
+
 **Phase 1: Extract, Classify & Interview**
 
 ### Step 1: Extract & Classify (AI-internal — no questions yet)
@@ -55,6 +57,8 @@ Display extraction result to user:
 
 ❓ Còn thiếu: [list empty/ambiguous slots]
 ```
+
+- **Headless / Non-interactive Mode Guard:** If you detect you are running in a headless/automated environment (such as when spawned by `omni run` with stdin disconnected or redirected), you cannot ask questions interactively. In this case, you MUST skip Step 2 entirely: make reasonable default assumptions for all empty/ambiguous slots, record them in a new `## Assumptions` section in the design spec, and generate the complete `.omni/sdlc/design-spec.md` immediately in a single turn so the pipeline does not hang or fail.
 
 ### Step 2: Adaptive Questions (only ask what's missing)
 - Each question targets 1 empty or ambiguous slot.

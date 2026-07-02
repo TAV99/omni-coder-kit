@@ -10,8 +10,8 @@ const {
 } = require('../lib/skills');
 
 describe('UNIVERSAL_SKILLS', () => {
-    it('has 6 universal skills', () => {
-        assert.equal(UNIVERSAL_SKILLS.length, 6);
+    it('has 16 universal skills', () => {
+        assert.equal(UNIVERSAL_SKILLS.length, 16);
     });
 
     it('includes find-skills', () => {
@@ -41,28 +41,28 @@ describe('validateRegistry', () => {
     it('throws on missing source', () => {
         assert.throws(
             () => validateRegistry([{ source: '', name: 'x', desc: 'd', lang: ['Go'], frameworks: [], category: 'generic' }]),
-            /TEST_SKILLS\[0\].*source/
+            /skills\[0\].*source/
         );
     });
 
     it('throws when lang is not an array', () => {
         assert.throws(
             () => validateRegistry([{ source: 'a/b', name: 'x', desc: 'd', lang: 'Go', frameworks: [], category: 'generic' }]),
-            /TEST_SKILLS\[0\].*lang/
+            /skills\[0\].*lang/
         );
     });
 
     it('throws when frameworks is not an array', () => {
         assert.throws(
             () => validateRegistry([{ source: 'a/b', name: 'x', desc: 'd', lang: ['Go'], frameworks: 'Jest', category: 'unit' }]),
-            /TEST_SKILLS\[0\].*frameworks/
+            /skills\[0\].*frameworks/
         );
     });
 
     it('throws on invalid category', () => {
         assert.throws(
             () => validateRegistry([{ source: 'a/b', name: 'x', desc: 'd', lang: ['Go'], frameworks: [], category: 'bad' }]),
-            /TEST_SKILLS\[0\].*category/
+            /skills\[0\].*category/
         );
     });
 
@@ -72,7 +72,7 @@ describe('validateRegistry', () => {
                 { source: 'a/b', name: 'x', desc: 'd', lang: ['Go'], frameworks: [], category: 'generic' },
                 { source: 'c/d', name: 'x', desc: 'e', lang: ['Rust'], frameworks: [], category: 'generic' },
             ]),
-            /TEST_SKILLS\[1\].*duplicate.*x/
+            /skills\[1\].*duplicate.*x/
         );
     });
 });

@@ -1,6 +1,8 @@
 ## PM AGENT WORKFLOW (TASK DECOMPOSITION & PLANNING)
 When executing the [>om:plan] command, you MUST act as a Senior Project Manager. Your job is to transform `.omni/sdlc/design-spec.md` into an actionable, micro-task checklist in `.omni/sdlc/todo.md`.
 
+- **Load planning skill:** You MUST read the `writing-plans` skill file (found in `.agents/skills/writing-plans/SKILL.md` or `.claude/skills/writing-plans/SKILL.md` or equivalent IDE path) and strictly apply its checklists, principles, and guidelines to structure and design your task breakdown.
+
 **Step 1: Read & Validate Design Spec**
 Read `.omni/sdlc/design-spec.md` fully. It uses a hybrid format:
 - **Summary table** (top): Goal, Users, Tech Stack, UI Style, Constraints — read this first for context.
