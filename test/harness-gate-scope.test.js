@@ -39,7 +39,7 @@ describe('FIX 2 — security gate scans product source only', () => {
         write('src/app.js', 'node.innerHTML = userInput;\n');
         const r = runSecurity(dir, noAudit);
         assert.equal(r.passed, true);
-        assert.match(r.output, /src\/app\.js/);
+        assert.match(r.output, /src[/\\]app\.js/);
         assert.match(r.output, /innerHTML/);
     });
 
@@ -63,6 +63,6 @@ describe('FIX 2 — content gate uses the same scope', () => {
         write('src/page.md', 'Lorem ipsum dolor\n');
         const dirty = runContent(dir);
         assert.equal(dirty.passed, false);
-        assert.match(dirty.output, /src\/page\.md/);
+        assert.match(dirty.output, /src[/\\]page\.md/);
     });
 });

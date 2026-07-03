@@ -20,15 +20,15 @@ test('Antigravity Overlay Integration', async (t) => {
     await t.test('buildAntigravityCommands returns correct mapping', () => {
         const commands = buildAntigravityCommands('antigravity');
         assert.ok(commands, 'Should return commands');
-        assert.ok(commands['om:cook.md'], 'Should contain om:cook.md');
-        assert.ok(commands['om:cook.md'].includes('templates/overlays/antigravity/commands/om:cook.md'), 'Path should be correct');
+        assert.ok(commands['om-cook.md'], 'Should contain om-cook.md');
+        assert.ok(commands['om-cook.md'].replace(/\\/g, '/').includes('templates/overlays/antigravity/commands/om-cook.md'), 'Path should be correct');
     });
 
     await t.test('buildAntigravityWorkflows returns correct mapping', () => {
         const workflows = buildAntigravityWorkflows('antigravity');
         assert.ok(workflows, 'Should return workflows');
         assert.ok(workflows['coder-execution.md'], 'Should contain coder-execution.md');
-        assert.ok(workflows['coder-execution.md'].includes('templates/overlays/antigravity/workflows/coder-execution.md'), 'Path should be correct');
+        assert.ok(workflows['coder-execution.md'].replace(/\\/g, '/').includes('templates/overlays/antigravity/workflows/coder-execution.md'), 'Path should be correct');
     });
 
     await t.test('buildAntigravityHooks uses verified Gemini/agy schema (AfterTool, not PostToolUse)', () => {
@@ -91,9 +91,9 @@ test('Antigravity Overlay Integration', async (t) => {
         assert.strictEqual(buildAntigravitySkills('claudecode'), null);
     });
 
-    await t.test('om:ship command exists in antigravity overlay', () => {
+    await t.test('om-ship command exists in antigravity overlay', () => {
         const commands = buildAntigravityCommands('antigravity');
-        assert.ok(commands['om:ship.md'], 'Should contain om:ship.md');
+        assert.ok(commands['om-ship.md'], 'Should contain om-ship.md');
     });
 
     await t.test('buildAntigravityRules returns correct rules', () => {

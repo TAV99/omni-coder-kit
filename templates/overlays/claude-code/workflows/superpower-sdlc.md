@@ -5,21 +5,21 @@ This project uses a linear progression SDLC workflow. You are only allowed to ch
 
 | Command | Slash | Agent Strategy | Workflow File |
 |---------|-------|---------------|---------------|
-| `>om:go` | `/om:go` | Main session (chain) | `.omni/workflows/go.md` |
-| `>om:intake` | `/om:intake` | Main session | `.omni/workflows/intake.md` |
-| `>om:accept` | `/om:accept` | Main session + sub-agents (debate) | `.omni/workflows/acceptance.md` |
-| `>om:onboard` | `/om:onboard` | Main session | `.omni/workflows/onboard-workflow.md` |
-| `>om:brainstorm` | `/om:brainstorm` | Main session | `.omni/workflows/requirement-analysis.md` |
-| `>om:equip` | `/om:equip` | Main session | `.omni/workflows/skill-manager.md` |
-| `>om:plan` | `/om:plan` | Main session | `.omni/workflows/task-planning.md` |
-| `>om:cook` | `/om:cook` | Main → sub-agents (parallel) | `.omni/workflows/coder-execution.md` |
-| `>om:check` | `/om:check` | Main session | `.omni/workflows/qa-testing.md` |
-| `>om:fix` | `/om:fix` | Main session | `.omni/workflows/debugger-workflow.md` |
-| `>om:doc` | `/om:doc` | Main session | `.omni/workflows/documentation-writer.md` |
+| `>om:go` | `/om-go` | Main session (chain) | `.omni/workflows/go.md` |
+| `>om:intake` | `/om-intake` | Main session | `.omni/workflows/intake.md` |
+| `>om:accept` | `/om-accept` | Main session + sub-agents (debate) | `.omni/workflows/acceptance.md` |
+| `>om:onboard` | `/om-onboard` | Main session | `.omni/workflows/onboard-workflow.md` |
+| `>om:brainstorm` | `/om-brainstorm` | Main session | `.omni/workflows/requirement-analysis.md` |
+| `>om:equip` | `/om-equip` | Main session | `.omni/workflows/skill-manager.md` |
+| `>om:plan` | `/om-plan` | Main session | `.omni/workflows/task-planning.md` |
+| `>om:cook` | `/om-cook` | Main → sub-agents (parallel) | `.omni/workflows/coder-execution.md` |
+| `>om:check` | `/om-check` | Main session | `.omni/workflows/qa-testing.md` |
+| `>om:fix` | `/om-fix` | Main session | `.omni/workflows/debugger-workflow.md` |
+| `>om:doc` | `/om-doc` | Main session | `.omni/workflows/documentation-writer.md` |
 
 ### Agent Strategy Guide
 - **Main session:** Execute directly in current conversation. Suitable for interactive workflows (brainstorm, fix) and workflows needing full project context (doc, check).
-- **Main → sub-agents (parallel):** Main session analyzes dependency graph, then dispatches General sub-agents with worktree isolation for independent tasks. Used by `/om:cook` only.
+- **Main → sub-agents (parallel):** Main session analyzes dependency graph, then dispatches General sub-agents with worktree isolation for independent tasks. Used by `/om-cook` only.
 - **Agent Teams (experimental):** Main session creates a team of specialist teammates that can communicate with each other via shared task list and direct messaging. Best for code review, competing hypothesis debugging, and cross-layer feature development.
 
 ### Command Descriptions

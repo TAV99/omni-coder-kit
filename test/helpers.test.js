@@ -296,7 +296,7 @@ describe('classifySource', () => {
     it('classifies relative .md path as local', () => {
         const r = classifySource('./my-skills/react.md');
         assert.equal(r.type, 'local');
-        assert.ok(r.value.endsWith('my-skills/react.md'));
+        assert.ok(r.value.replace(/\\/g, '/').endsWith('my-skills/react.md'));
     });
 
     it('classifies absolute .md path as local', () => {

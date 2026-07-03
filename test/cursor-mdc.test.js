@@ -6,7 +6,7 @@ const path = require('path');
 const CURSOR_RULES_DIR = path.join(__dirname, '..', 'templates', 'overlays', 'cursor', 'rules');
 
 function parseMdcFrontmatter(content) {
-    const match = content.match(/^---\n([\s\S]*?)\n---/);
+    const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!match) return null;
     const fm = {};
     for (const line of match[1].split('\n')) {

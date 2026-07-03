@@ -48,7 +48,7 @@ function buildWorkflows(ide, target = null, options = {}) {
                 if (!options.subagents && f === 'coder-execution.md'
                     && path.basename(overlayDir) === 'claude-code') continue;
                 const overlayPath = path.join(overlayWorkflowDir, f);
-                const firstLine = fs.readFileSync(overlayPath, 'utf-8').split('\n', 1)[0];
+                const firstLine = fs.readFileSync(overlayPath, 'utf-8').split('\n', 1)[0].trim();
                 if (firstLine === '<!-- augment -->' && files[f]) {
                     files[f] = [files[f], overlayPath];
                 } else {
@@ -260,7 +260,7 @@ function simulateInit(ide, opts = {}) {
             const registered = [];
             for (const [name, srcPath] of Object.entries(slashCommands)) {
                 const baseName = name.replace('.md', '');
-                const cleanName = baseName.replace('om:', '');
+                const cleanName = baseName.replace('om:', '').replace('om-', '');
                 fs.copyFileSync(srcPath, path.join(agentsWorkflowsDir, name));
                 fs.copyFileSync(srcPath, path.join(agentsWorkflowsDir, `om-${cleanName}.md`));
                 fs.copyFileSync(srcPath, path.join(agentsWorkflowsDir, `${cleanName}.md`));
@@ -347,20 +347,20 @@ describe('E2E: claudecode init', () => {
         assert.ok(fs.existsSync(cmdsDir));
         const cmds = fs.readdirSync(cmdsDir).filter(f => f.endsWith('.md'));
         assert.equal(cmds.length, 14);
-        assert.ok(cmds.includes('om:go.md'));
-        assert.ok(cmds.includes('om:intake.md'));
-        assert.ok(cmds.includes('om:accept.md'));
-        assert.ok(cmds.includes('om:onboard.md'));
-        assert.ok(cmds.includes('om:brainstorm.md'));
-        assert.ok(cmds.includes('om:cook.md'));
-        assert.ok(cmds.includes('om:plan.md'));
-        assert.ok(cmds.includes('om:check.md'));
-        assert.ok(cmds.includes('om:fix.md'));
-        assert.ok(cmds.includes('om:doc.md'));
-        assert.ok(cmds.includes('om:ship.md'));
-        assert.ok(cmds.includes('om:equip.md'));
-        assert.ok(cmds.includes('om:learn.md'));
-        assert.ok(cmds.includes('om:map.md'));
+        assert.ok(cmds.includes('om-go.md'));
+        assert.ok(cmds.includes('om-intake.md'));
+        assert.ok(cmds.includes('om-accept.md'));
+        assert.ok(cmds.includes('om-onboard.md'));
+        assert.ok(cmds.includes('om-brainstorm.md'));
+        assert.ok(cmds.includes('om-cook.md'));
+        assert.ok(cmds.includes('om-plan.md'));
+        assert.ok(cmds.includes('om-check.md'));
+        assert.ok(cmds.includes('om-fix.md'));
+        assert.ok(cmds.includes('om-doc.md'));
+        assert.ok(cmds.includes('om-ship.md'));
+        assert.ok(cmds.includes('om-equip.md'));
+        assert.ok(cmds.includes('om-learn.md'));
+        assert.ok(cmds.includes('om-map.md'));
     });
 
     it('creates .claude/settings.json with advanced setup', () => {
@@ -411,7 +411,7 @@ describe('Claude Code overlay content integrity', () => {
         const content = fs.readFileSync(
             path.join(TEMPLATES, 'overlays', 'claude-code', 'workflows', 'superpower-sdlc.md'), 'utf-8'
         );
-        assert.ok(content.includes('/om:') || content.includes('>om:'));
+        assert.ok(content.includes('/om-') || content.includes('>om-'));
     });
 
     it('all 9 slash command files reference workflow paths', () => {
@@ -663,11 +663,11 @@ describe('E2E: antigravity init', () => {
         try {
             const workflowsDir = path.join(advancedResult.tmpDir, '.agents', 'workflows');
             assert.ok(fs.existsSync(workflowsDir), '.agents/workflows/ should exist');
-            const expectedCommands = [
-                'om:brainstorm.md', 'om-brainstorm.md', 'brainstorm.md',
-                'om:plan.md', 'om-plan.md', 'plan.md',
-                'om:cook.md', 'om-cook.md', 'cook.md'
-            ];
+             const expectedCommands = [
+                 'om-brainstorm.md', 'brainstorm.md',
+                 'om-plan.md', 'plan.md',
+                 'om-cook.md', 'cook.md'
+             ];
             for (const cmd of expectedCommands) {
                 assert.ok(fs.existsSync(path.join(workflowsDir, cmd)), `${cmd} should exist`);
             }
@@ -1119,13 +1119,13 @@ describe('buildSettings', () => {
 describe('Claude Code overlay template files exist', () => {
     const requiredFiles = [
         'overlays/claude-code/settings.template.json',
-        'overlays/claude-code/commands/om:brainstorm.md',
-        'overlays/claude-code/commands/om:cook.md',
-        'overlays/claude-code/commands/om:plan.md',
-        'overlays/claude-code/commands/om:check.md',
-        'overlays/claude-code/commands/om:fix.md',
-        'overlays/claude-code/commands/om:doc.md',
-        'overlays/claude-code/commands/om:equip.md',
+        'overlays/claude-code/commands/om-brainstorm.md',
+        'overlays/claude-code/commands/om-cook.md',
+        'overlays/claude-code/commands/om-plan.md',
+        'overlays/claude-code/commands/om-check.md',
+        'overlays/claude-code/commands/om-fix.md',
+        'overlays/claude-code/commands/om-doc.md',
+        'overlays/claude-code/commands/om-equip.md',
         'overlays/claude-code/workflows/coder-execution.md',
         'overlays/claude-code/workflows/superpower-sdlc.md',
     ];

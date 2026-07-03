@@ -289,9 +289,9 @@ describe('Knowledge Base — command registry includes >om:learn', () => {
 });
 
 describe('Knowledge Base — Claude Code slash command', () => {
-    const cmdPath = path.join(TEMPLATES, 'overlays', 'claude-code', 'commands', 'om:learn.md');
+    const cmdPath = path.join(TEMPLATES, 'overlays', 'claude-code', 'commands', 'om-learn.md');
 
-    it('om:learn.md slash command exists', () => {
+    it('om-learn.md slash command exists', () => {
         assert.ok(fs.existsSync(cmdPath));
     });
 

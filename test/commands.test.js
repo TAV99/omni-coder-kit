@@ -134,8 +134,8 @@ describe('handleCommands', () => {
         try {
             handleCommands();
             const output = cap.lines.join('\n');
-            assert.ok(output.includes('/om:brainstorm'), 'should contain /om:brainstorm');
-            assert.ok(output.includes('/om:cook'), 'should contain /om:cook');
+            assert.ok(output.includes('/om-brainstorm'), 'should contain /om-brainstorm');
+            assert.ok(output.includes('/om-cook'), 'should contain /om-cook');
         } finally {
             cap.restore();
         }

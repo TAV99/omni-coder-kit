@@ -53,6 +53,6 @@ test('>om:ship: đăng ký trong superpower-sdlc + slash command claude-code', (
     assert.match(sdlc, /\[>om:ship\]/, 'superpower-sdlc phải liệt kê >om:ship');
     assert.match(sdlc, />om:doc → >om:ship/, 'pipeline diagram phải kết thúc bằng ship');
 
-    const slash = path.join(__dirname, '..', 'templates', 'overlays', 'claude-code', 'commands', 'om:ship.md');
-    assert.ok(fs.existsSync(slash), 'thiếu slash command om:ship.md');
+    const slash = path.join(__dirname, '..', 'templates', 'overlays', 'claude-code', 'commands', 'om-ship.md');
+    assert.ok(fs.existsSync(slash), 'thiếu slash command om-ship.md');
 });
