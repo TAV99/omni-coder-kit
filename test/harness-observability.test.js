@@ -166,7 +166,7 @@ describe('OBS-3 — runCommandAsync + heartbeat ticker', () => {
         assert.equal(spawned, false);
     });
 
-    test('runCommandAsync: array argv -> spawns directly (no shell)', async () => {
+    test('runCommandAsync: array argv -> spawns with shell only on Windows', async () => {
         let seenArgs = null;
         let seenOpts = null;
         const fake = (cmd, args, opts) => {
@@ -177,7 +177,8 @@ describe('OBS-3 — runCommandAsync + heartbeat ticker', () => {
         const res = await runCommandAsync(['printf', '%s', 'he`ho`llo'], { spawnFn: fake });
         assert.equal(res.exitCode, 0);
         assert.deepEqual(seenArgs, ['%s', 'he`ho`llo']);
-        assert.ok(!seenOpts.shell, 'shell option should be false/undefined');
+        const isWin = process.platform === 'win32';
+        assert.strictEqual(!!seenOpts.shell, isWin, `shell option should be ${isWin} on ${process.platform}`);
     });
 
     test('runCommandAsync: string cmd -> spawns with shell: true', async () => {
