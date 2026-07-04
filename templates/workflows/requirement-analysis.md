@@ -62,7 +62,8 @@ Display extraction result to user:
 
 ### Step 2: Adaptive Questions (only ask what's missing)
 - Each question targets 1 empty or ambiguous slot.
-- Prefer multiple-choice format when possible.
+- Prefer multiple-choice format when possible. **Guardrail:** Luôn thêm tuỳ chọn `(d) Khác (mô tả ngắn gọn trong 1-2 câu)` để giới hạn độ dài nếu user tự viết.
+- **Plain Language Rule:** Các lựa chọn đưa ra cần sử dụng ngôn ngữ dễ hiểu, đời thường nhất. Hạn chế lạm dụng thuật ngữ chuyên môn quá nhiều, chỉ giữ lại các từ chuyên ngành bắt buộc hoặc kiến thức mới không thể dịch sát nghĩa.
 - If project has UI (`ui_hint` is not "API only"), merge 1 visual direction question into this flow to determine the visual skill mapping:
   "Style hướng nào?
    (a) Minimalist / Editorial -> maps to local skill `minimalist-ui` (warm monochrome, flat bento, no heavy shadows)
@@ -81,7 +82,9 @@ Display extraction result to user:
 - **Question Format Rule:** Mỗi câu hỏi AI đặt ra cho user PHẢI có đủ 3 phần:
   1. **Mô tả ngắn** — giải thích tại sao cần thông tin này (1 câu)
   2. **Gợi ý trả lời** — hướng dẫn user nên trả lời ở dạng nào
-  3. **Ví dụ cụ thể** — 2-3 mẫu trả lời theo scenario khác nhau
+  3. **Ví dụ cụ thể** — 2-3 mẫu trả lời theo scenario khác nhau (dùng ngôn ngữ dễ hiểu)
+
+- **Anti-Context-Drift Rule (Bảo vệ Scope):** Nếu người dùng trả lời lan man, lạc đề hoặc văn bản tự do quá dài, AI PHẢI (1) Tự động trích xuất ý chính khớp với slot đang hỏi, (2) Bỏ qua mọi thông tin thừa, (3) Chốt lại ngắn gọn (vd: "Đã chốt [Slot] là..."), và (4) Ngay lập tức chuyển sang câu hỏi cho slot tiếp theo. Tuyệt đối không chat hùa theo hoặc mở rộng thảo luận.
 
 - **Mẫu câu hỏi:** Đọc `.omni/workflows/interview-examples.md` khi cần tham khảo mẫu câu hỏi cho từng slot. AI điều chỉnh theo ngữ cảnh, không copy nguyên văn.
 
