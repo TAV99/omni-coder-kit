@@ -6,9 +6,10 @@
 ## Phase 1: Research & Plan
 1. Analyze `.omni/sdlc/todo.md` and identify the NEXT uncompleted task (`- [ ]`).
 2. Read `.omni/sdlc/design-spec.md` for context; if `.omni/knowledge/project-map.md` exists, use it to locate files instead of scanning.
-3. For independent, parallelizable subtasks, spawn **native subagents** via `/agents` (Agent Manager). Each subagent runs in its own isolated context/worktree to avoid context bloat.
-4. Keep **orchestration depth = 1**: a subagent does the work and returns; it does not spawn further subagents. Merge results back at the main agent.
-5. Use `ctrl+j` to teleport into a running subagent and `ctrl+k` to approve its proposed actions.
+3. **MANDATORY SKILL FETCH:** If the task has `@skill:skill-name` tag(s), you MUST call your file reading tool (`view_file` or `read_file`) to open and inspect `.agents/skills/<skill-name>/SKILL.md` before writing any code. Do NOT code based on memory.
+4. For independent, parallelizable subtasks, spawn **native subagents** via `/agents` (Agent Manager). Each subagent runs in its own isolated context/worktree to avoid context bloat.
+5. Keep **orchestration depth = 1**: a subagent does the work and returns; it does not spawn further subagents. Merge results back at the main agent.
+6. Use `ctrl+j` to teleport into a running subagent and `ctrl+k` to approve its proposed actions.
 
 ## Phase 2: Implementation (ONE task at a time)
 1. State scope (files affected) then apply code changes surgically (smallest diff that satisfies the task). Scope-lock: no cleanup/refactor ngoài task.

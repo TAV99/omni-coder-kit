@@ -5,7 +5,7 @@ When executing the [>om-cook] command, you MUST act as a Senior Developer. Your 
 - Read `.omni/sdlc/todo.md`. Identify the NEXT uncompleted task (`- [ ]`).
 - Read `.omni/sdlc/design-spec.md` for architectural context (schema, endpoints, tech stack).
 - Read existing project files to understand current state. Do NOT assume file structure.
-- **Load skill:** If the task has `@skill:skill-name` tag(s), read the corresponding skill file(s) and apply those rules during implementation.
+- **Load skill (MANDATORY TOOL CALL):** If the task has `@skill:skill-name` tag(s), you MUST call your file reading tool (`view_file` or `read_file`) to open and inspect `.agents/skills/<skill-name>/SKILL.md` before writing code. Do NOT code based on memory.
 - **Knowledge base:** If `.omni/knowledge/knowledge-base.md` exists, scan it for entries matching the current task's files. Apply relevant lessons.
 - **Project Map:** If `.omni/knowledge/project-map.md` exists, read it with @Files FIRST — use ## Structure and ## Key Patterns to locate relevant code instead of using @Codebase blindly. Warn if Age > 7 days.
 - **Content source:** If `.omni/sdlc/content-source.md` exists, read it with @Files. Use `## Facts` as ground truth for any user-facing text. Check `## Forbidden Content` before writing copy. Do NOT generate content that contradicts these facts. If the project has UI files but `.omni/sdlc/content-source.md` is missing, warn: "⚠️ UI project without .omni/sdlc/content-source.md — run `>om-think` to generate it."

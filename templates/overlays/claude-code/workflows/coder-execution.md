@@ -5,7 +5,7 @@ When executing the [>om-cook] command, you MUST act as a Senior Developer and Or
 - Read `.omni/sdlc/todo.md`. Collect ALL uncompleted tasks (`- [ ]`).
 - Read `.omni/sdlc/design-spec.md` for architectural context (schema, endpoints, tech stack).
 - Read existing project files to understand current state. Do NOT assume file structure.
-- **Load skills:** For tasks with `@skill:skill-name` tag(s), note which skill files need to be passed to sub-agents.
+- **Load skills (MANDATORY TOOL CALL):** For tasks with `@skill:skill-name` tag(s), you MUST call your file reading tool (`view_file` or `read_file`) to open and inspect `.agents/skills/<skill-name>/SKILL.md` before writing code or passing skill instructions to sub-agents. Do NOT code based on memory.
 - **Content source:** If `.omni/sdlc/content-source.md` exists, read it. Include relevant facts in sub-agent prompts for tasks that generate user-facing text (UI copy, README, landing pages). Pass `## Forbidden Content` rules to ALL sub-agents. If the project has UI files but `.omni/sdlc/content-source.md` is missing, warn: "⚠️ UI project without .omni/sdlc/content-source.md — run `/om-think` to generate it."
 - **Project Map:** If `.omni/knowledge/project-map.md` exists, read it FIRST to locate relevant modules and understand architecture. Warn if Age > 7 days. Fill `[PENDING]`/`[NEW]` markers opportunistically for files touched during tasks.
 - **Infra pre-check:** If `setup.sh` exists in the project root, verify infrastructure is ready before coding:

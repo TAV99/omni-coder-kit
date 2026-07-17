@@ -7,7 +7,7 @@ When executing `>om-cook` in Codex CLI, act as a Senior Developer. Implement tas
 - Read `.omni/sdlc/todo.md` and identify the next unchecked task.
 - Read `.omni/sdlc/design-spec.md` for architecture and constraints.
 - Read relevant files before editing. Do not assume file structure.
-- If the task has `@skill:name` tags, load the installed skill instructions before coding.
+- If the task has `@skill:name` tags, you MUST call your file reading tool (`view_file` or `read_file`) to open and inspect `.agents/skills/<name>/SKILL.md` before coding. Do NOT code based on memory.
 - If `.omni/knowledge/project-map.md` exists, read it first to understand project structure. Warn if Age > 7 days.
 - If `.omni/sdlc/todo.md` does not exist, stop and tell the user to run `>om-plan` first.
 
