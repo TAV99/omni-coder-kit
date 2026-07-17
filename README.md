@@ -28,24 +28,24 @@ Yêu cầu [Node.js](https://nodejs.org/) >= 16.0.0.
 
 Omni-Coder Kit hỗ trợ 2 cách tiếp cận linh hoạt tùy theo thói quen lập trình của bạn:
 
-### Cách 1: Chế độ tương tác trong Chat (`>om:`) — Dành cho AI IDE
-Sử dụng trực tiếp trong khung chat của các AI IDE (như Cursor, Windsurf, Claude Code, Antigravity) bằng cách bắt đầu câu lệnh bằng tiền tố `>om:` (hoặc `/om:` trên Claude Code). 
+### Cách 1: Chế độ tương tác trong Chat (`>om-`) — Dành cho AI IDE
+Sử dụng trực tiếp trong khung chat của các AI IDE (như Cursor, Windsurf, Claude Code, Antigravity) bằng cách bắt đầu câu lệnh bằng tiền tố `>om-` (hoặc `/om:` trên Claude Code). 
 
 AI sẽ tự động đọc hướng dẫn trong thư mục `.omni/workflows/` để tuân thủ quy trình thiết kế, lập kế hoạch, code và test.
 
 #### 1. Lập trình nhanh (One-shot)
 Gõ lệnh này trong chat để AI tự thực hiện toàn bộ quy trình SDLC (Brainstorm → Plan → Cook → Check → Doc) chỉ với một yêu cầu:
 ```text
->om:go Xây dựng trang Landing Page giới thiệu dịch vụ bằng HTML/CSS sạch
+>om-go Xây dựng trang Landing Page giới thiệu dịch vụ bằng HTML/CSS sạch
 ```
 
 #### 2. Lập trình từng bước (Tự kiểm soát)
 Nếu bạn muốn tự kiểm soát từng giai đoạn, hãy chat với AI theo trình tự:
-*   **Thiết kế & Brainstorm:** `>om:brainstorm Xây dựng tính năng đăng nhập`
-*   **Lập kế hoạch:** `>om:plan` (AI tạo danh sách việc cần làm trong `todo.md`)
-*   **Viết code:** `>om:cook` (AI lập trình và kiểm tra cú pháp)
-*   **Kiểm tra:** `>om:check` (AI tự chạy linter, build, và test tự động)
-*   **Tài liệu:** `>om:doc` (AI cập nhật README, API docs)
+*   **Thiết kế & Brainstorm:** `>om-think Xây dựng tính năng đăng nhập`
+*   **Lập kế hoạch:** `>om-plan` (AI tạo danh sách việc cần làm trong `todo.md`)
+*   **Viết code:** `>om-cook` (AI lập trình và kiểm tra cú pháp)
+*   **Kiểm tra:** `>om-check` (AI tự chạy linter, build, và test tự động)
+*   **Tài liệu:** `>om-doc` (AI cập nhật README, API docs)
 
 ---
 
@@ -67,20 +67,20 @@ omni run --spec spec.md
 
 ## 🛠️ Tra cứu nhanh danh sách lệnh
 
-### 1. Lệnh trong khung Chat (`>om:`)
+### 1. Lệnh trong khung Chat (`>om-`)
 Khi chat với AI trong IDE, hãy gõ các lệnh sau ở đầu câu để định hướng hành vi của AI:
 
 | Lệnh | Vai trò | Output/Hành động của AI |
 | :--- | :--- | :--- |
-| `>om:go` | **Chạy tự động** | Tự đi qua toàn bộ các bước SDLC để hoàn thành yêu cầu của bạn. |
-| `>om:brainstorm`| Kiến trúc sư | Khảo sát yêu cầu, sinh đặc tả thiết kế (`design-spec.md`). |
-| `>om:plan` | Quản lý dự án | Phân tách thiết kế thành danh sách task trong (`todo.md`). |
-| `>om:cook` | Lập trình viên | Viết code chuẩn xác (surgical), tự kiểm tra cú pháp sau mỗi file. |
-| `>om:check` | Kỹ sư QA | Chạy test, kiểm tra bảo mật P0-P5 và xuất (`test-report.md`). |
-| `>om:fix` | Kỹ sư Debug | Phân tích lỗi từ test-report và sửa lỗi khoanh vùng. |
-| `>om:accept` | Nghiệm thu | Đối chiếu sản phẩm thực tế với checklist yêu cầu khách hàng. |
-| `>om:doc` | Viết tài liệu | Cập nhật tài liệu kỹ thuật và hướng dẫn sử dụng. |
-| `>om:learn` | Học máy | Lưu lại bài học kinh nghiệm sửa lỗi vào `knowledge-base.md`. |
+| `>om-go` | **Chạy tự động** | Tự đi qua toàn bộ các bước SDLC để hoàn thành yêu cầu của bạn. |
+| `>om-think`| Kiến trúc sư | Khảo sát yêu cầu, sinh đặc tả thiết kế (`design-spec.md`). |
+| `>om-plan` | Quản lý dự án | Phân tách thiết kế thành danh sách task trong (`todo.md`). |
+| `>om-cook` | Lập trình viên | Viết code chuẩn xác (surgical), tự kiểm tra cú pháp sau mỗi file. |
+| `>om-check` | Kỹ sư QA | Chạy test, kiểm tra bảo mật P0-P5 và xuất (`test-report.md`). |
+| `>om-fix` | Kỹ sư Debug | Phân tích lỗi từ test-report và sửa lỗi khoanh vùng. |
+| `>om-pass` | Nghiệm thu | Đối chiếu sản phẩm thực tế với checklist yêu cầu khách hàng. |
+| `>om-doc` | Viết tài liệu | Cập nhật tài liệu kỹ thuật và hướng dẫn sử dụng. |
+| `>om-memo` | Học máy | Lưu lại bài học kinh nghiệm sửa lỗi vào `knowledge-base.md`. |
 
 ### 2. Lệnh trong CLI Terminal
 Chạy trực tiếp từ shell hệ thống của bạn:
@@ -107,7 +107,7 @@ your-project/
 │   ├── run/                        # [Harness] Lưu log hoạt động, trạng thái chạy tự động
 │   │   ├── state.json              # Trạng thái hiện tại (để resume)
 │   │   └── events.ndjson           # Lịch sử chi tiết các sự kiện thực thi
-│   ├── workflows/                  # Các file chỉ dẫn luồng SDLC nạp vào AI khi chat >om:
+│   ├── workflows/                  # Các file chỉ dẫn luồng SDLC nạp vào AI khi chat >om-
 │   ├── sdlc/                       # Output của quá trình phát triển (todo.md, design-spec.md...)
 │   └── knowledge/                  # Bản đồ codebase và tri thức sửa lỗi (knowledge-base.md)
 ```

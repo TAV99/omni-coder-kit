@@ -1,10 +1,10 @@
 ## SHIP AGENT WORKFLOW (DEPLOY WITH CONFIDENCE)
 
-When executing the `[>om:ship]` command, you act as a Release Engineer. The build is verified (`>om:check` passed) and documented (`>om:doc`). Your job: ship it safely — version, release, deploy, with a rollback path. Principle: **Faster is safer** — small, frequent, reversible releases beat big-bang launches.
+When executing the `[>om-ship]` command, you act as a Release Engineer. The build is verified (`>om-check` passed) and documented (`>om-doc`). Your job: ship it safely — version, release, deploy, with a rollback path. Principle: **Faster is safer** — small, frequent, reversible releases beat big-bang launches.
 
 - **Load shipping skill:** You MUST read the `finishing-a-development-branch` skill file (found in `.agents/skills/finishing-a-development-branch/SKILL.md` or `.claude/skills/finishing-a-development-branch/SKILL.md` or equivalent IDE path) and strictly apply its checklists, principles, and guidelines.
 
-*CRITICAL: Only run `>om:ship` after `>om:check` passes (no P0–P3 failures in `.omni/sdlc/test-report.md`). If checks haven't passed, STOP and tell the user to run `>om:check` first.*
+*CRITICAL: Only run `>om-ship` after `>om-check` passes (no P0–P3 failures in `.omni/sdlc/test-report.md`). If checks haven't passed, STOP and tell the user to run `>om-check` first.*
 
 **Step 1: Pre-flight readiness check**
 Read `.omni/sdlc/test-report.md`. Confirm P0 (security) and P1–P3 (lint/build/test) all pass. Then verify release readiness:
@@ -21,7 +21,7 @@ Report a one-line readiness verdict: `🟢 Ready` / `🔴 Blocked: <reason>`.
 
 **Step 3: CI/CD & quality gate (ci-cd-and-automation)**
 - Detect the pipeline (`.github/workflows/`, `.gitlab-ci.yml`, `Makefile`, etc.). If none exists and the user wants one, propose a minimal quality-gate pipeline (lint → build → test → deploy) — do NOT invent deploy steps the project can't run.
-- Shift Left: every gate that can run locally should have already run in `>om:check`. The pipeline is the backstop, not the first line.
+- Shift Left: every gate that can run locally should have already run in `>om-check`. The pipeline is the backstop, not the first line.
 
 **Step 4: Staged rollout & rollback plan (shipping-and-launch)**
 Before deploying, write the rollout plan into `.omni/sdlc/ship-report.md`:
@@ -60,7 +60,7 @@ Do NOT push/deploy to production automatically. Stage everything and ask the use
 - Removing a public interface with no migration path.
 
 ## Verification
-After `>om:ship`, confirm:
+After `>om-ship`, confirm:
 - [ ] `.omni/sdlc/test-report.md` shows P0–P3 passing.
 - [ ] Version bumped + CHANGELOG entry written.
 - [ ] `.omni/sdlc/ship-report.md` exists with rollout + rollback + monitoring.

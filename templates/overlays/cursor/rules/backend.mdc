@@ -21,4 +21,4 @@ alwaysApply: false
 - Use @Codebase to find existing patterns before creating new ones.
 
 ## Reminder
-When you finish modifying API endpoints, suggest: "Run `>om:check` to validate API changes."
+When you finish modifying API endpoints, suggest: "Run `>om-check` to validate API changes."

@@ -302,42 +302,42 @@ describe('generateMapSkeleton', () => {
         }
     });
 
-    it('CLI-aware hint: claudecode → /om:map', () => {
+    it('CLI-aware hint: claudecode → /om-map', () => {
         const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-skel-'));
         try {
             fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ name: 'a' }));
             const scan = scanProject(tmp);
             const md = generateMapSkeleton(scan, 'a', { ide: 'claudecode' });
-            assert.ok(md.includes('/om:map'), 'expected /om:map hint');
+            assert.ok(md.includes('/om-map'), 'expected /om-map hint');
             assert.ok(md.includes('(Claude Code)'));
         } finally {
             fs.rmSync(tmp, { recursive: true, force: true });
         }
     });
 
-    it('CLI-aware hint: dual → /om:map', () => {
+    it('CLI-aware hint: dual → /om-map', () => {
         const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-skel-'));
         try {
             fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ name: 'a' }));
             const scan = scanProject(tmp);
             const md = generateMapSkeleton(scan, 'a', { ide: 'dual' });
-            assert.ok(md.includes('/om:map'));
+            assert.ok(md.includes('/om-map'));
         } finally {
             fs.rmSync(tmp, { recursive: true, force: true });
         }
     });
 
-    it('CLI-aware hint: gemini and default → >om:map', () => {
+    it('CLI-aware hint: gemini and default → >om-map', () => {
         const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-skel-'));
         try {
             fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ name: 'a' }));
             const scan = scanProject(tmp);
             const gemini = generateMapSkeleton(scan, 'a', { ide: 'gemini' });
-            assert.ok(gemini.includes('>om:map'));
-            assert.ok(!gemini.includes('/om:map'));
-            // backward-compatible: no opts → >om:map
+            assert.ok(gemini.includes('>om-map'));
+            assert.ok(!gemini.includes('/om-map'));
+            // backward-compatible: no opts → >om-map
             const legacy = generateMapSkeleton(scan, 'a');
-            assert.ok(legacy.includes('>om:map'));
+            assert.ok(legacy.includes('>om-map'));
         } finally {
             fs.rmSync(tmp, { recursive: true, force: true });
         }

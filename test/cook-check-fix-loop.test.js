@@ -200,7 +200,7 @@ describe('Systematic Debugging — hypotheses step', () => {
     });
 });
 
-// ─── Knowledge Base (>om:learn) ─────────────────────────────────────────────
+// ─── Knowledge Base (>om-memo) ─────────────────────────────────────────────
 
 describe('Knowledge Base — knowledge-learn.md workflow', () => {
     const content = fs.readFileSync(
@@ -232,7 +232,7 @@ describe('Knowledge Base — knowledge-learn.md workflow', () => {
     });
 });
 
-describe('Knowledge Base — auto-trigger from >om:fix', () => {
+describe('Knowledge Base — auto-trigger from >om-fix', () => {
     const content = fs.readFileSync(
         path.join(TEMPLATES, 'workflows', 'debugger-workflow.md'), 'utf-8'
     );
@@ -241,8 +241,8 @@ describe('Knowledge Base — auto-trigger from >om:fix', () => {
         assert.ok(content.includes('Step 6: Auto-Learn'));
     });
 
-    it('triggers >om:learn workflow automatically', () => {
-        assert.ok(content.includes('execute the [>om:learn] workflow'));
+    it('triggers >om-memo workflow automatically', () => {
+        assert.ok(content.includes('execute the [>om-memo] workflow'));
     });
 
     it('only triggers on PASS (not on failed fix)', () => {
@@ -269,29 +269,29 @@ describe('Knowledge Base — read in cook and fix', () => {
     });
 });
 
-describe('Knowledge Base — command registry includes >om:learn', () => {
+describe('Knowledge Base — command registry includes >om-memo', () => {
     const { buildCommandRegistry } = require('../lib/init/strategies');
 
-    it('Claude Code registry has >om:learn', () => {
+    it('Claude Code registry has >om-memo', () => {
         const output = buildCommandRegistry('claudecode');
-        assert.ok(output.includes('`>om:learn` | `/om:learn`'));
+        assert.ok(output.includes('`>om-memo` | `/om-memo`'));
     });
 
-    it('Gemini registry has >om:learn', () => {
+    it('Gemini registry has >om-memo', () => {
         const output = buildCommandRegistry('gemini');
-        assert.ok(output.includes('`>om:learn` | `.omni/workflows/knowledge-learn.md` | Main session | `save_memory`'));
+        assert.ok(output.includes('`>om-memo` | `.omni/workflows/knowledge-learn.md` | Main session | `save_memory`'));
     });
 
-    it('generic registry has >om:learn', () => {
+    it('generic registry has >om-memo', () => {
         const output = buildCommandRegistry('generic');
-        assert.ok(output.includes('`>om:learn` | `.omni/workflows/knowledge-learn.md` | Learner'));
+        assert.ok(output.includes('`>om-memo` | `.omni/workflows/knowledge-learn.md` | Learner'));
     });
 });
 
 describe('Knowledge Base — Claude Code slash command', () => {
-    const cmdPath = path.join(TEMPLATES, 'overlays', 'claude-code', 'commands', 'om-learn.md');
+    const cmdPath = path.join(TEMPLATES, 'overlays', 'claude-code', 'commands', 'om-memo.md');
 
-    it('om-learn.md slash command exists', () => {
+    it('om-memo.md slash command exists', () => {
         assert.ok(fs.existsSync(cmdPath));
     });
 

@@ -1,20 +1,20 @@
 ## STRICT WORKFLOW COMMANDS (GEMINI CLI ENHANCED)
 This project uses a linear progression SDLC workflow. You are only allowed to change states upon receiving the corresponding command.
 
-> Gemini CLI users: type `>om:*` as normal chat text.
+> Gemini CLI users: type `>om-*` as normal chat text.
 
 | Command | Agent Strategy | Workflow File | Gemini-Native Tools |
 |---------|---------------|---------------|---------------------|
-| `>om:go` | Main session (chain) | `.omni/workflows/go.md` | All-in-one pipeline (requirements-aware) |
-| `>om:intake` | Main session | `.omni/workflows/intake.md` | `ask_user`, `save_memory` |
-| `>om:accept` | Main session | `.omni/workflows/acceptance.md` | `run_shell_command` + cross-model debate |
-| `>om:brainstorm` | Main session | `.omni/workflows/requirement-analysis.md` | `ask_user`, `save_memory` |
-| `>om:equip` | Main session | `.omni/workflows/skill-manager.md` | `google_web_search` |
-| `>om:plan` | Main session | `.omni/workflows/task-planning.md` | `tracker_create_task` |
-| `>om:cook` | Main session | `.omni/workflows/coder-execution.md` | `tracker_update_task`, `enter_plan_mode` |
-| `>om:check` | Main session | `.omni/workflows/qa-testing.md` | `run_shell_command` |
-| `>om:fix` | Main session | `.omni/workflows/debugger-workflow.md` | `systematic-debugging` skill |
-| `>om:doc` | Main session | `.omni/workflows/documentation-writer.md` | `read_file` |
+| `>om-go` | Main session (chain) | `.omni/workflows/go.md` | All-in-one pipeline (requirements-aware) |
+| `>om-spec` | Main session | `.omni/workflows/intake.md` | `ask_user`, `save_memory` |
+| `>om-pass` | Main session | `.omni/workflows/acceptance.md` | `run_shell_command` + cross-model debate |
+| `>om-think` | Main session | `.omni/workflows/requirement-analysis.md` | `ask_user`, `save_memory` |
+| `>om-skill` | Main session | `.omni/workflows/skill-manager.md` | `google_web_search` |
+| `>om-plan` | Main session | `.omni/workflows/task-planning.md` | `tracker_create_task` |
+| `>om-cook` | Main session | `.omni/workflows/coder-execution.md` | `tracker_update_task`, `enter_plan_mode` |
+| `>om-check` | Main session | `.omni/workflows/qa-testing.md` | `run_shell_command` |
+| `>om-fix` | Main session | `.omni/workflows/debugger-workflow.md` | `systematic-debugging` skill |
+| `>om-doc` | Main session | `.omni/workflows/documentation-writer.md` | `read_file` |
 
 ### Gemini Agent Strategy
 Gemini CLI operates in a single, high-context session. It does not use independent sub-agents like Claude Code. 
@@ -23,17 +23,17 @@ Gemini CLI operates in a single, high-context session. It does not use independe
 - **Persistence:** Use `save_memory` (project scope) for architectural decisions that should survive across restarts.
 
 ### Command Descriptions
-- **[>om:brainstorm]:** Solutions Architect. Uses `ask_user` for adaptive interviewing. Outputs `.omni/sdlc/design-spec.md`.
-- **[>om:equip]:** Skill Manager. Search and proposes expert skills from skills.sh. **Note:** Gemini `--yolo` sandbox blocks `npx` network calls. If install fails, output commands for user to run in terminal.
-- **[>om:plan]:** PM Agent. Transforms `.omni/sdlc/design-spec.md` into `.omni/sdlc/todo.md` AND initializes Gemini `tracker_create_task` for each item.
-- **[>om:cook]:** Coder Agent. Executes tasks from `.omni/sdlc/todo.md`. Updates task status via `tracker_update_task`.
-- **[>om:check]:** QA Tester Agent. Runs validation pipeline.
-- **[>om:fix]:** Debugger Agent. Systematic debugging and surgical fixes.
-- **[>om:doc]:** Technical Writer Agent. Generates documentation in Vietnamese.
+- **[>om-think]:** Solutions Architect. Uses `ask_user` for adaptive interviewing. Outputs `.omni/sdlc/design-spec.md`.
+- **[>om-skill]:** Skill Manager. Search and proposes expert skills from skills.sh. **Note:** Gemini `--yolo` sandbox blocks `npx` network calls. If install fails, output commands for user to run in terminal.
+- **[>om-plan]:** PM Agent. Transforms `.omni/sdlc/design-spec.md` into `.omni/sdlc/todo.md` AND initializes Gemini `tracker_create_task` for each item.
+- **[>om-cook]:** Coder Agent. Executes tasks from `.omni/sdlc/todo.md`. Updates task status via `tracker_update_task`.
+- **[>om-check]:** QA Tester Agent. Runs validation pipeline.
+- **[>om-fix]:** Debugger Agent. Systematic debugging and surgical fixes.
+- **[>om-doc]:** Technical Writer Agent. Generates documentation in Vietnamese.
 
 ## AUTOMATED QUALITY PIPELINE
 Standard 3 quality cycles (cook → check → fix), then a single **ACCEPTANCE** stage before doc when `.omni/sdlc/requirements.md` exists:
 ```
->om:cook → >om:check → [>om:fix ↔ >om:check ≤3] → … (3 cycles) … → ACCEPTANCE → >om:doc
+>om-cook → >om-check → [>om-fix ↔ >om-check ≤3] → … (3 cycles) … → ACCEPTANCE → >om-doc
 ```
 ACCEPTANCE grades each requirement hybrid (shell-test or agent+debate cross-model); unmet → loop back to COOK with `[ACCEPT] R<id>` targets up to `--max-accept-rounds` (default 3). Ship is **gated by 100% requirements met** when requirements.md is present. Gemini's high context window allows comprehensive analysis during these cycles.

@@ -95,6 +95,6 @@ describe('FIX 4 — empty-task guard stops early', () => {
         const dir = tmp(); // no .omni/sdlc/todo.md at all
         const final = await runHarness(dir, { from: 'COOK', provider: 'dry-run', runPipeline: () => ({ passed: true, results: [], failures: [] }) });
         assert.equal(final.status, 'blocked');
-        assert.match(readEvents(dir).find((e) => e.type === 'blocked').reason, /om:plan|--spec/);
+        assert.match(readEvents(dir).find((e) => e.type === 'blocked').reason, /om-plan|--spec/);
     });
 });

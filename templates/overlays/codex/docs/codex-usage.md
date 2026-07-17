@@ -2,35 +2,35 @@
 
 Omni-Coder Kit supports Codex CLI through `AGENTS.md`, lazy-loaded `.omni/workflows/`, and optional `.codex/` project configuration.
 
-## Stable Omni Commands (`$om:*` alias supported)
+## Stable Omni Commands (`$om-*` alias supported)
 
 Type these commands as normal chat text in Codex:
 
 | Command | Workflow |
 |---------|----------|
-| `>om:onboard` | Legacy project onboarding — reverse-engineer rules & skills |
-| `>om:brainstorm` | Requirements interview and design spec |
-| `>om:equip` | Skill discovery and installation guidance |
-| `>om:plan` | `.omni/sdlc/design-spec.md` to `.omni/sdlc/todo.md` |
-| `>om:cook` | Surgical task execution |
-| `>om:check` | Validation and feature verification |
-| `>om:fix` | Systematic debugging |
-| `>om:doc` | Documentation from implemented code |
-| `>om:learn` | Capture lessons learned from recent fixes |
-| `>om:map` | Refresh project map from current codebase |
+| `>om-scan` | Legacy project onboarding — reverse-engineer rules & skills |
+| `>om-think` | Requirements interview and design spec |
+| `>om-skill` | Skill discovery and installation guidance |
+| `>om-plan` | `.omni/sdlc/design-spec.md` to `.omni/sdlc/todo.md` |
+| `>om-cook` | Surgical task execution |
+| `>om-check` | Validation and feature verification |
+| `>om-fix` | Systematic debugging |
+| `>om-doc` | Documentation from implemented code |
+| `>om-memo` | Capture lessons learned from recent fixes |
+| `>om-map` | Refresh project map from current codebase |
 
-You can also invoke the same workflows with `$om:*` aliases in normal chat text:
+You can also invoke the same workflows with `$om-*` aliases in normal chat text:
 
 ```text
-$om:brainstorm
-$om:plan
-$om:cook
-$om:check
+$om-think
+$om-plan
+$om-cook
+$om-check
 ```
 
-Use inline backticks or fenced code blocks when you want to mention `$om:*` literally (for example: `` `$om:plan` ``) without triggering command routing.
+Use inline backticks or fenced code blocks when you want to mention `$om-*` literally (for example: `` `$om-plan` ``) without triggering command routing.
 
-Codex CLI documents built-in slash commands such as `/plan`, `/review`, `/permissions`, `/agent`, `/mcp`, and `/plugins`. Project-defined custom `/om:*` slash commands are not used by this overlay because Codex does not currently document a stable project-level custom slash command directory like Claude Code's `.claude/commands/`.
+Codex CLI documents built-in slash commands such as `/plan`, `/review`, `/permissions`, `/agent`, `/mcp`, and `/plugins`. Project-defined custom `/om-*` slash commands are not used by this overlay because Codex does not currently document a stable project-level custom slash command directory like Claude Code's `.claude/commands/`.
 
 ## Launch Examples
 
@@ -38,7 +38,7 @@ Codex CLI documents built-in slash commands such as `/plan`, `/review`, `/permis
 codex
 codex --profile omni_safe
 codex --profile omni_full_auto
-codex exec "Read AGENTS.md, then run >om:check against the current repository state."
+codex exec "Read AGENTS.md, then run >om-check against the current repository state."
 ```
 
 Use `omni_full_auto` only in repositories and sandboxes you trust. The profile removes approval prompts but keeps Codex in the workspace-write sandbox.

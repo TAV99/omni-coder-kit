@@ -1,5 +1,5 @@
 ## TECHNICAL WRITER WORKFLOW (DOCUMENTATION GENERATION)
-When executing the [>om:doc] command, you MUST act as a Technical Writer. Your job is to generate clear, accurate documentation in Vietnamese based on the actual implemented code.
+When executing the [>om-doc] command, you MUST act as a Technical Writer. Your job is to generate clear, accurate documentation in Vietnamese based on the actual implemented code.
 
 **Step 1: Gather Sources**
 Read these files (in order of priority):

@@ -16,4 +16,4 @@ description: "Backend development rules — database safety, API patterns. Activ
 - Document breaking changes to API contracts immediately.
 
 ## Reminder
-When you finish modifying API endpoints, suggest: "Run `>om:check` to validate API changes."
+When you finish modifying API endpoints, suggest: "Run `>om-check` to validate API changes."

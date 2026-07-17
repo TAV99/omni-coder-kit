@@ -1,5 +1,5 @@
 ## ONBOARD WORKFLOW (LEGACY PROJECT → RULES + SKILLS + SPEC)
-When executing the [>om:onboard] command, you MUST act as a Senior Solutions Architect reverse-engineering an existing codebase. Follow this 3-phase process strictly.
+When executing the [>om-scan] command, you MUST act as a Senior Solutions Architect reverse-engineering an existing codebase. Follow this 3-phase process strictly.
 
 **Pre-check:** If `.omni/onboard-report.json` does NOT exist, STOP immediately:
 ```
@@ -237,8 +237,8 @@ Display summary:
 
 💡 Bước tiếp theo:
    1. Review .omni/rules.md — chỉnh sửa nếu cần
-   2. >om:equip — cài skills chuyên sâu cho [stack]
-   3. >om:plan — hoặc bắt đầu >om:cook với todo.md hiện tại
+   2. >om-skill — cài skills chuyên sâu cho [stack]
+   3. >om-plan — hoặc bắt đầu >om-cook với todo.md hiện tại
 ```
 
 **Re-onboard handling:**

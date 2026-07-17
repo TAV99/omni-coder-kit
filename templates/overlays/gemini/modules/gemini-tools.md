@@ -9,8 +9,8 @@
 ## Agent Skills Alignment
 Gemini Agent Skills and Omni skills serve different roles:
 - **Gemini skills** (`.gemini/skills/`): Domain-specific expertise activated on-demand via `activate_skill`. Best for security auditing, deployment automation, migration guides.
-- **Omni skills** (`.omni/skills/`): Workflow-level skills referenced by `@skill:name` tags in todo.md. Integrated with the SDLC pipeline (`>om:equip` discovers and installs them).
-- Both systems coexist. Gemini skills use progressive disclosure (load when needed). Omni skills are injected into sub-agent prompts during `>om:cook`.
+- **Omni skills** (`.omni/skills/`): Workflow-level skills referenced by `@skill:name` tags in todo.md. Integrated with the SDLC pipeline (`>om-skill` discovers and installs them).
+- Both systems coexist. Gemini skills use progressive disclosure (load when needed). Omni skills are injected into sub-agent prompts during `>om-cook`.
 
 ## Model Recommendations
 - **Gemini 3.5 Flash** — Default. Extremely fast and highly capable for most coding and debugging tasks.
@@ -26,7 +26,7 @@ This GEMINI.md uses `@file.md` imports for modular configuration.
 
 ## Memory Partitioning
 - Gemini Auto Memory Inbox is separate from `.omni/` project state
-- `.omni/knowledge/` is for workflow-captured lessons (via `>om:learn`)
+- `.omni/knowledge/` is for workflow-captured lessons (via `>om-memo`)
 - Gemini memories are for session context and cross-restart persistence
 - Use `save_memory` with project scope for architectural decisions
 

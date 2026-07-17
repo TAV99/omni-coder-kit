@@ -1,10 +1,10 @@
-## ACCEPTANCE WORKFLOW (>om:accept) — Đối chiếu sản phẩm vs requirements.md, lặp tới 100%
+## ACCEPTANCE WORKFLOW (>om-pass) — Đối chiếu sản phẩm vs requirements.md, lặp tới 100%
 
-> Phase-4. Đầu vào: `.omni/sdlc/requirements.md` (do `>om:intake` hoặc `omni run --spec` sinh). Mục tiêu: chứng minh **từng yêu cầu** đã đạt, hoặc xác định cái chưa đạt + nguyên nhân + việc cần làm tiếp.
+> Phase-4. Đầu vào: `.omni/sdlc/requirements.md` (do `>om-spec` hoặc `omni run --spec` sinh). Mục tiêu: chứng minh **từng yêu cầu** đã đạt, hoặc xác định cái chưa đạt + nguyên nhân + việc cần làm tiếp.
 
 ### Khi nào kích hoạt
 - Tự động: harness sau khi state `CHECK` pass và còn tồn tại `requirements.md` → chuyển vào state `ACCEPTANCE`.
-- Thủ công: user gõ `>om:accept` (chấm trên build hiện tại) hoặc `omni run accept` (CI-friendly).
+- Thủ công: user gõ `>om-pass` (chấm trên build hiện tại) hoặc `omni run accept` (CI-friendly).
 - Nếu không có `requirements.md` → BỎ QUA acceptance, chuyển thẳng DOC (giữ tương thích dự án cũ).
 
 ### Bước thực hiện (cho từng requirement R<id>)

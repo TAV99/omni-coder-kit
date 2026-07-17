@@ -8,9 +8,9 @@ If ANY failure is detected during P0-P3 checks or Feature Verification, you MUST
 2.  **Report in `.omni/sdlc/test-report.md`:** (Standard procedure from above)
 
 ### Gemini CLI: Auto Fix/Check Tracking
-When detection triggers `>om:fix`, update the Gemini Task Tracker:
-- Set bug task to `IN_PROGRESS` during `>om:fix`.
-- Set bug task to `DONE` only after a successful `>om:check` re-run.
+When detection triggers `>om-fix`, update the Gemini Task Tracker:
+- Set bug task to `IN_PROGRESS` during `>om-fix`.
+- Set bug task to `DONE` only after a successful `>om-check` re-run.
 
 **Gemini Rules:**
 - A release/cycle is only considered successful when ALL `[BUG]` tasks in the Gemini Task Tracker are marked as `DONE`.
