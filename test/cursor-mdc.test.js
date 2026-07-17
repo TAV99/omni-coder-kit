@@ -78,11 +78,11 @@ describe('Cursor MDC rule templates', () => {
         assert.ok(content.includes('Surgical Changes'));
     });
 
-    it('workflow-commands.mdc references >om: commands', () => {
+    it('workflow-commands.mdc references >om- commands', () => {
         const content = fs.readFileSync(path.join(CURSOR_RULES_DIR, 'workflow-commands.mdc'), 'utf-8');
-        assert.ok(content.includes('>om:brainstorm'));
-        assert.ok(content.includes('>om:cook'));
-        assert.ok(content.includes('>om:check'));
+        assert.ok(content.includes('>om-think'));
+        assert.ok(content.includes('>om-cook'));
+        assert.ok(content.includes('>om-check'));
         assert.ok(content.includes('@Files'));
     });
 
@@ -96,6 +96,6 @@ describe('Cursor MDC rule templates', () => {
     it('agent-mode.mdc references cook-check-fix loop', () => {
         const content = fs.readFileSync(path.join(CURSOR_RULES_DIR, 'agent-mode.mdc'), 'utf-8');
         assert.ok(content.includes('quality') || content.includes('Quality'));
-        assert.ok(content.includes('>om:fix') || content.includes('>om:check'));
+        assert.ok(content.includes('>om-fix') || content.includes('>om-check'));
     });
 });

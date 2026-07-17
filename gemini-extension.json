@@ -1,0 +1,22 @@
+{
+  "name": "omni-coder-kit",
+  "version": "2.7.2",
+  "description": "Omni-Coder Kit — SDLC mindset, workflow commands, and skills for agy.",
+  "contextFileName": "AGENTS.md",
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ]
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropic/mcp-github"
+      ]
+    }
+  }
+}

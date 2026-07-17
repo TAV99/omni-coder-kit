@@ -4,29 +4,29 @@ This project uses Omni-Coder Kit with Codex CLI.
 
 ## Stable Omni Workflow Commands
 
-Type these commands as normal chat text (`>om:*` or `$om:*`):
+Type these commands as normal chat text (`>om-*` or `$om-*`):
 
 | Command | Workflow File | Purpose |
 |---------|---------------|---------|
-| `>om:go` | `.omni/workflows/go.md` | One-shot full pipeline (requirements-aware) |
-| `>om:intake` | `.omni/workflows/intake.md` | Spec/Q&A → `.omni/sdlc/requirements.md` |
-| `>om:accept` | `.omni/workflows/acceptance.md` | Hybrid acceptance: test/agent+debate → conformance.md (lặp tới 100%) |
-| `>om:onboard` | `.omni/workflows/onboard-workflow.md` | Legacy project onboarding |
-| `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Requirements interview and design spec |
-| `>om:equip` | `.omni/workflows/skill-manager.md` | Skill discovery |
-| `>om:plan` | `.omni/workflows/task-planning.md` | Convert spec to `.omni/sdlc/todo.md` |
-| `>om:cook` | `.omni/workflows/coder-execution.md` | Implement tasks |
-| `>om:check` | `.omni/workflows/qa-testing.md` | Validate work |
-| `>om:fix` | `.omni/workflows/debugger-workflow.md` | Diagnose and fix failures |
-| `>om:doc` | `.omni/workflows/documentation-writer.md` | Write docs from code |
-| `>om:learn` | `.omni/workflows/knowledge-learn.md` | Capture lessons learned from recent fixes |
-| `>om:map` | `.omni/workflows/project-map.md` | Refresh project map from current codebase |
+| `>om-go` | `.omni/workflows/go.md` | One-shot full pipeline (requirements-aware) |
+| `>om-spec` | `.omni/workflows/intake.md` | Spec/Q&A → `.omni/sdlc/requirements.md` |
+| `>om-pass` | `.omni/workflows/acceptance.md` | Hybrid acceptance: test/agent+debate → conformance.md (lặp tới 100%) |
+| `>om-scan` | `.omni/workflows/onboard-workflow.md` | Legacy project onboarding |
+| `>om-think` | `.omni/workflows/requirement-analysis.md` | Requirements interview and design spec |
+| `>om-skill` | `.omni/workflows/skill-manager.md` | Skill discovery |
+| `>om-plan` | `.omni/workflows/task-planning.md` | Convert spec to `.omni/sdlc/todo.md` |
+| `>om-cook` | `.omni/workflows/coder-execution.md` | Implement tasks |
+| `>om-check` | `.omni/workflows/qa-testing.md` | Validate work |
+| `>om-fix` | `.omni/workflows/debugger-workflow.md` | Diagnose and fix failures |
+| `>om-doc` | `.omni/workflows/documentation-writer.md` | Write docs from code |
+| `>om-memo` | `.omni/workflows/knowledge-learn.md` | Capture lessons learned from recent fixes |
+| `>om-map` | `.omni/workflows/project-map.md` | Refresh project map from current codebase |
 
-Codex currently provides built-in slash commands, not project-defined custom `/om:*` slash command files. Use `>om:*` so the model receives the Omni command as text.
+Codex currently provides built-in slash commands, not project-defined custom `/om-*` slash command files. Use `>om-*` so the model receives the Omni command as text.
 
 Alias rules for Codex:
-- Treat `$om:<cmd>` as `>om:<cmd>` in normal chat text.
-- Ignore `$om:*` inside inline backticks and fenced code blocks.
+- Treat `$om:<cmd>` as `>om-<cmd>` in normal chat text.
+- Ignore `$om-*` inside inline backticks and fenced code blocks.
 - If multiple valid commands appear, execute only the first valid command in non-code text order.
 
 ## Codex Native Commands
@@ -48,4 +48,4 @@ Use Codex native commands when they fit the task:
 - `AGENTS.md` stays compact and points here for details.
 - `.omni/workflows/` contains long-form workflow instructions.
 - `.codex/config.toml` and `.codex/hooks.json` are optional advanced setup files.
-- Hooks are reminders and guardrails. They do not replace `>om:check` or verification.
+- Hooks are reminders and guardrails. They do not replace `>om-check` or verification.

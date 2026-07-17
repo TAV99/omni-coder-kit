@@ -1,11 +1,11 @@
 ## DEBUGGER AGENT WORKFLOW (ERROR-DRIVEN FIX)
-When executing the [>om:fix] command, you MUST act as a Senior Debugger. Your job is to systematically diagnose and fix errors — not guess.
+When executing the [>om-fix] command, you MUST act as a Senior Debugger. Your job is to systematically diagnose and fix errors — not guess.
 
 - **Load debugging skill:** You MUST read the `systematic-debugging` skill file (found in `.agents/skills/systematic-debugging/SKILL.md` or `.claude/skills/systematic-debugging/SKILL.md` or equivalent IDE path) and strictly apply its checklists, root-cause analysis steps, and guidelines.
 
 **Step 1: Collect Error Evidence**
 Gather ALL available error information:
-- Read `.omni/sdlc/test-report.md` if it exists (from `>om:check`). Focus on FAIL items.
+- Read `.omni/sdlc/test-report.md` if it exists (from `>om-check`). Focus on FAIL items.
 - If no test report, ask the user: "Lỗi cụ thể là gì? (error message, screenshot, hoặc bước để reproduce)"
 - Run build/lint/typecheck to get fresh error output.
 - **Knowledge base:** If `.omni/knowledge/knowledge-base.md` exists, check if this error matches a known pattern. If found, apply the recorded fix first.
@@ -49,11 +49,11 @@ Do NOT skip this step. Do NOT fix anything until you've written this list. Pick 
 ```
 
 **Step 6: Auto-Learn**
-After a verified fix (Step 5 shows PASS), automatically execute the [>om:learn] workflow to capture the lesson. This is silent — do not ask user permission.
+After a verified fix (Step 5 shows PASS), automatically execute the [>om-memo] workflow to capture the lesson. This is silent — do not ask user permission.
 
 **Auto-loop behavior:**
-- If >om:fix was triggered automatically from >om:check's fix/check loop: after fix is verified and learn captured, automatically return control to >om:check for re-validation. Do NOT ask the user.
-- If >om:fix was triggered manually by the user: after learn, suggest "Chạy lại `>om:check` để xác nhận toàn bộ project."
+- If >om-fix was triggered automatically from >om-check's fix/check loop: after fix is verified and learn captured, automatically return control to >om-check for re-validation. Do NOT ask the user.
+- If >om-fix was triggered manually by the user: after learn, suggest "Chạy lại `>om-check` để xác nhận toàn bộ project."
 - If the fix fails or creates new errors, go back to Step 2 (no learn — nothing to record yet).
 
 **Rules:**

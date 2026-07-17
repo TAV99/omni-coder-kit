@@ -1,19 +1,19 @@
 ## CODER AGENT WORKFLOW (SURGICAL TASK EXECUTION)
-When executing the [>om:cook] command, you MUST act as a Senior Developer. Your job is to implement tasks from `.omni/sdlc/todo.md` one by one, using Surgical Changes.
+When executing the [>om-cook] command, you MUST act as a Senior Developer. Your job is to implement tasks from `.omni/sdlc/todo.md` one by one, using Surgical Changes.
 
 **Step 1: Load Context**
 - Read `.omni/sdlc/todo.md`. Identify the NEXT uncompleted task (`- [ ]`).
 - Read `.omni/sdlc/design-spec.md` for architectural context (schema, endpoints, tech stack).
 - Read existing project files to understand current state. Do NOT assume file structure.
-- **Load skill:** You MUST read the `executing-plans`, `test-driven-development`, and `karpathy-guidelines` skill files from `.agents/skills/` or `.claude/skills/` (or equivalent IDE path) to guide your overall implementation methodology. Additionally, if the task has `@skill:skill-name` tag(s), read the corresponding specialized skill file(s) and apply those rules during implementation.
+- **Load skill (MANDATORY TOOL CALL):** You MUST call your file reading tool (`view_file` or `read_file`) to open and read `.agents/skills/executing-plans/SKILL.md`, `.agents/skills/test-driven-development/SKILL.md`, and `.agents/skills/karpathy-guidelines/SKILL.md` to guide your overall implementation methodology. Additionally, for any task with `@skill:skill-name` tag(s), you MUST call your file reading tool (`view_file` or `read_file`) to open and inspect the exact file at `.agents/skills/<skill-name>/SKILL.md` BEFORE writing code for that task. Do NOT rely on memory — inspect the current file directly.
 - **Knowledge base:** If `.omni/knowledge/knowledge-base.md` exists, scan it for entries matching the current task's files. Apply relevant lessons.
 - **Project Map:** If `.omni/knowledge/project-map.md` exists, read it FIRST — use it to locate relevant files instead of scanning the full codebase. If the map header shows Age > 7 days, warn: "⚠️ Project Map cũ [N] ngày. Chạy `omni map --refresh` để cập nhật." If map has `[PENDING]` or `[NEW]` markers for files you touch during this task, fill them in opportunistically.
-- **Content source:** If `.omni/sdlc/content-source.md` exists, read it. Use `## Facts` as ground truth for any user-facing text. Check `## Forbidden Content` before writing copy, labels, or descriptions. Do NOT generate content that contradicts these facts. If the project has UI files (HTML, JSX, TSX, Vue, Svelte) but `.omni/sdlc/content-source.md` is missing, warn: "⚠️ UI project without .omni/sdlc/content-source.md — run `>om:brainstorm` to generate it. Content accuracy cannot be verified."
+- **Content source:** If `.omni/sdlc/content-source.md` exists, read it. Use `## Facts` as ground truth for any user-facing text. Check `## Forbidden Content` before writing copy, labels, or descriptions. Do NOT generate content that contradicts these facts. If the project has UI files (HTML, JSX, TSX, Vue, Svelte) but `.omni/sdlc/content-source.md` is missing, warn: "⚠️ UI project without .omni/sdlc/content-source.md — run `>om-think` to generate it. Content accuracy cannot be verified."
 - **Infra pre-check:** If `setup.sh` exists in the project root, verify infrastructure is ready before coding:
   - Check: Docker running? DB accessible? `.env` exists? Dependencies installed?
-  - If any check fails → STOP. Tell the user: "Chạy `bash setup.sh` trước khi tiếp tục >om:cook."
+  - If any check fails → STOP. Tell the user: "Chạy `bash setup.sh` trước khi tiếp tục >om-cook."
   - If all checks pass or `setup.sh` does not exist → proceed normally.
-*CRITICAL: If `.omni/sdlc/todo.md` does not exist, STOP. Tell the user to run `>om:plan` first.*
+*CRITICAL: If `.omni/sdlc/todo.md` does not exist, STOP. Tell the user to run `>om-plan` first.*
 
 **Step 2: Dev Server Preflight (MANDATORY CHECKPOINT)**
 You MUST complete this step and report the result BEFORE writing any code in Step 3.
@@ -67,16 +67,16 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
 3. After every `checkpoint` tasks completed in the current cycle:
    ```
    🔄 Quality Gate — Cycle [N]/3 reached ([X]/[total] tasks done)
-      Auto-triggering >om:check...
+      Auto-triggering >om-check...
    ```
-   - Automatically execute the [>om:check] workflow (inline, no user prompt needed).
-   - If >om:check finds errors → automatically execute [>om:fix] → re-run [>om:check]. Max 3 fix attempts per cycle.
-   - If max attempts reached: mark failing task `[BLOCKED]` in `.omni/sdlc/todo.md`, escalate to user, then resume >om:cook for the next batch (skipping blocked tasks).
-   - Once >om:check passes, resume >om:cook for the next batch.
-4. After cycle 3 completes and >om:check passes:
+   - Automatically execute the [>om-check] workflow (inline, no user prompt needed).
+   - If >om-check finds errors → automatically execute [>om-fix] → re-run [>om-check]. Max 3 fix attempts per cycle.
+   - If max attempts reached: mark failing task `[BLOCKED]` in `.omni/sdlc/todo.md`, escalate to user, then resume >om-cook for the next batch (skipping blocked tasks).
+   - Once >om-check passes, resume >om-cook for the next batch.
+4. After cycle 3 completes and >om-check passes:
    ```
    ✅ All 3 quality cycles complete. [total] tasks done.
-      Project ready for >om:doc.
+      Project ready for >om-doc.
    ```
 
 **Rules:**

@@ -1,0 +1,51 @@
+# Omni-Coder Kit — agy / Gemini CLI permission policy (TOML policy engine)
+# Verified schema: [[rule]] with toolName/commandPrefix/commandRegex,
+# decision = "allow" | "deny" | "ask_user", priority 0-999, denyMessage, modes.
+# Apply via `/permissions` or place where your agy build reads policy rules.
+# Mirrors the harness deny-list (tools/shell.js) + YOLO 3-tier guardrails.
+
+# ── DENY: irreversible / destructive (highest priority) ──────────────────────
+[[rule]]
+commandPrefix = "rm -rf"
+decision = "deny"
+denyMessage = "Recursive force-delete is blocked by omni-coder-kit."
+priority = 100
+
+[[rule]]
+commandRegex = "git push .*--force"
+decision = "deny"
+denyMessage = "Force-push is blocked — open a PR instead."
+priority = 100
+
+[[rule]]
+commandPrefix = "git reset --hard"
+decision = "deny"
+denyMessage = "Hard reset discards work — stage/commit first."
+priority = 100
+
+# ── ASK: state-changing, reversible ──────────────────────────────────────────
+[[rule]]
+commandPrefix = "git commit"
+decision = "ask_user"
+priority = 50
+
+[[rule]]
+commandPrefix = "git push"
+decision = "ask_user"
+priority = 50
+
+[[rule]]
+commandRegex = "(npm|pnpm|yarn) (install|add|i)"
+decision = "ask_user"
+priority = 50
+
+# ── ALLOW: read-only / safe verification ─────────────────────────────────────
+[[rule]]
+commandRegex = "(npm|pnpm|yarn) (run )?(test|lint|build)"
+decision = "allow"
+priority = 10
+
+[[rule]]
+commandRegex = "git (status|diff|log|add)"
+decision = "allow"
+priority = 10

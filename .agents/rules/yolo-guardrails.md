@@ -1,0 +1,24 @@
+# YOLO Mode Safety Guardrails
+
+Even when running in YOLO mode (auto-approve terminal commands), you MUST print a clear warning or request explicit confirmation before executing any of these destructive operations:
+
+## Always Warn/Confirm Before
+- `rm -rf` or `rm -r` on directories
+- `git commit` or `git push` (unless explicitly ordered)
+- `git push --force` or `git push -f`
+- `git reset --hard`
+- `DROP TABLE`, `DROP DATABASE`
+- `DELETE FROM` without a WHERE clause
+- `TRUNCATE TABLE`
+- Database migrations without rollback scripts
+
+## Safe to Auto-Run
+- Linter, formatter, or type-checker commands: `npm run lint`, `npm run test`, `npm run build`, `npx tsc --noEmit`
+- Version control inspection: `git status`, `git diff`, `git log`
+- Starting or stopping the local development server
+
+## Warning Format
+```text
+⚠️ DESTRUCTIVE OPERATION DETECTED: [command]
+This action will [consequence]. Proceed? (y/n)
+```

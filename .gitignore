@@ -1,7 +1,7 @@
 node_modules/
 *.tgz
 
-# Omni-generated files (from omni init / >om: commands)
+# Omni-generated files (from omni init / >om-* commands)
 .omni/
 
 # IDE overlay outputs (from omni init advanced setup)

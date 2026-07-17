@@ -1,5 +1,5 @@
 ## PROJECT MAP WORKFLOW — CURSOR ENHANCED
-When executing [>om:map], act as a Senior Architect scanning the codebase.
+When executing [>om-map], act as a Senior Architect scanning the codebase.
 
 **Step 1: Load Skeleton**
 - Use @Files to read `.omni/knowledge/project-map.md`. If missing, tell the user to run `omni map` first.

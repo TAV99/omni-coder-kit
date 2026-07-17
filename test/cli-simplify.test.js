@@ -77,14 +77,14 @@ test('hidden alias `omni status` prints deprecation warning', () => {
     assert.match(stderr, /omni status.+đổi tên/);
 });
 
-test('handleCommands lists Phase-4 chat commands (>om:go, >om:intake, >om:accept)', () => {
+test('handleCommands lists Phase-4 chat commands (>om-go, >om-spec, >om-pass)', () => {
     const { handleCommands } = require('../lib/commands/status');
     const origLog = console.log;
     const lines = [];
     console.log = (...a) => lines.push(a.join(' '));
     try { handleCommands(); } finally { console.log = origLog; }
     const out = lines.join('\n');
-    for (const cmd of ['>om:go', '>om:intake', '>om:accept']) {
+    for (const cmd of ['>om-go', '>om-spec', '>om-pass']) {
         assert.ok(out.includes(cmd), `output should contain ${cmd}`);
     }
 });

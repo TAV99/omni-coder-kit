@@ -164,7 +164,7 @@ program.command('onboard', { hidden: true })
     .option('--refresh')
     .action(deprecate('onboard', 'init --onboard', handleOnboard));
 
-// `commands` still useful (lists chat-side >om: commands) — keep hidden + quiet.
+// `commands` still useful (lists chat-side >om- commands) — keep hidden + quiet.
 program.command('commands', { hidden: true })
     .action(handleCommands);
 

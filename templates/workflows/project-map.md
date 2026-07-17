@@ -1,5 +1,5 @@
 ## PROJECT MAP WORKFLOW (CODEBASE INTELLIGENCE)
-When executing the [>om:map] command, you MUST act as a Senior Architect performing codebase reconnaissance.
+When executing the [>om-map] command, you MUST act as a Senior Architect performing codebase reconnaissance.
 
 **Step 1: Load Skeleton**
 - Read `.omni/knowledge/project-map.md`. If it does not exist, STOP — tell the user to run `omni map` first to generate the skeleton.

@@ -1,5 +1,5 @@
 ## INTERVIEW QUESTION TEMPLATES (REFERENCE — read only when needed)
-Mẫu câu hỏi cho từng slot trong `>om:brainstorm`. AI điều chỉnh theo ngữ cảnh, không copy nguyên văn.
+Mẫu câu hỏi cho từng slot trong `>om-think`. AI điều chỉnh theo ngữ cảnh, không copy nguyên văn.
 
 **goal (mục tiêu):**
 > Tôi cần hiểu rõ mục tiêu chính để thiết kế đúng scope.

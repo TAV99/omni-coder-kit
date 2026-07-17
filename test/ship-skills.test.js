@@ -39,19 +39,19 @@ test('getShipSkillsForStack: universal — trả về khi có ngôn ngữ', () =
     assert.strictEqual(getShipSkillsForStack({ language: 'TypeScript' }).length, SHIP_SKILLS.length);
 });
 
-test('>om:ship: có workflow file shipping.md', () => {
+test('>om-ship: có workflow file shipping.md', () => {
     const wf = path.join(__dirname, '..', 'templates', 'workflows', 'shipping.md');
     assert.ok(fs.existsSync(wf), 'thiếu templates/workflows/shipping.md');
     const content = fs.readFileSync(wf, 'utf-8');
     assert.match(content, /SHIP AGENT WORKFLOW/);
     assert.match(content, /## Verification/);
-    assert.match(content, />om:check/, 'phải yêu cầu check pass trước');
+    assert.match(content, />om-check/, 'phải yêu cầu check pass trước');
 });
 
-test('>om:ship: đăng ký trong superpower-sdlc + slash command claude-code', () => {
+test('>om-ship: đăng ký trong superpower-sdlc + slash command claude-code', () => {
     const sdlc = fs.readFileSync(path.join(__dirname, '..', 'templates', 'workflows', 'superpower-sdlc.md'), 'utf-8');
-    assert.match(sdlc, /\[>om:ship\]/, 'superpower-sdlc phải liệt kê >om:ship');
-    assert.match(sdlc, />om:doc → >om:ship/, 'pipeline diagram phải kết thúc bằng ship');
+    assert.match(sdlc, /\[>om-ship\]/, 'superpower-sdlc phải liệt kê >om-ship');
+    assert.match(sdlc, />om-doc → >om-ship/, 'pipeline diagram phải kết thúc bằng ship');
 
     const slash = path.join(__dirname, '..', 'templates', 'overlays', 'claude-code', 'commands', 'om-ship.md');
     assert.ok(fs.existsSync(slash), 'thiếu slash command om-ship.md');

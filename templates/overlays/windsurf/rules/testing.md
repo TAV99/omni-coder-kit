@@ -20,4 +20,4 @@ description: "Testing rules — structure, coverage. Activates for test files."
 - Prefer dependency injection over monkey-patching.
 
 ## Reminder
-When you finish editing test files, suggest: "Run `>om:check` to validate the full test suite."
+When you finish editing test files, suggest: "Run `>om-check` to validate the full test suite."

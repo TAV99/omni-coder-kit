@@ -1,5 +1,5 @@
 ## KNOWLEDGE CAPTURE WORKFLOW (LEARN FROM FIXES)
-When executing the [>om:learn] command (or auto-triggered after a successful fix), capture the lesson learned.
+When executing the [>om-memo] command (or auto-triggered after a successful fix), capture the lesson learned.
 
 **Step 1: Analyze Recent Fix**
 - Read `git diff HEAD~1` (or the most recent fix diff if multiple commits).
@@ -32,7 +32,7 @@ Read `.omni/knowledge/knowledge-base.md` if it exists. Append a new entry in thi
 If `.omni/knowledge/knowledge-base.md` does not exist, create it with header:
 ```markdown
 # Knowledge Base — Project Lessons
-> Auto-captured by >om:learn. Max 20 entries — oldest removed when full.
+> Auto-captured by >om-memo. Max 20 entries — oldest removed when full.
 ```
 
 **Step 4: Enforce Max 20 Entries**
