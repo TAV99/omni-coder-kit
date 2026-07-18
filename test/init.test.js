@@ -154,7 +154,7 @@ describe('buildModeBlock', () => {
     it('auto contains equip→plan→cook auto-chain', () => {
         const b = buildModeBlock('auto');
         assert.ok(b.includes('Chế độ AUTO'));
-        assert.ok(/equip.*→.*plan.*→.*cook/s.test(b));
+        assert.ok(/skill.*→.*plan.*→.*cook/s.test(b));
     });
 
     it('manual contains MANUAL note and no auto-chain', () => {
@@ -184,7 +184,7 @@ describe('buildInitConfig run mode', () => {
         const result = buildInitConfig('claudecode', { ...DEFAULT_OPTS, mode: 'auto' });
         const main = result.files.find(f => f.path === 'CLAUDE.md');
         assert.ok(main.content.includes('Chế độ AUTO'));
-        assert.ok(/equip.*→.*plan.*→.*cook/s.test(main.content));
+        assert.ok(/skill.*→.*plan.*→.*cook/s.test(main.content));
         assert.equal(result.manifest.mode, 'auto');
     });
 

@@ -6,10 +6,10 @@ description: "Cascade integration — quality loop, multi-file protocol for Wind
 # Cascade Mode Rules
 
 ## Quality Loop (Cook-Check-Fix)
-When executing tasks via >om:cook:
+When executing tasks via >om-cook:
 - After every 1/3 of total tasks, automatically run lint and tests.
 - If tests fail, attempt to fix automatically (max 3 attempts).
-- If 3 fix attempts fail, STOP. Report the failure and suggest `>om:fix`.
+- If 3 fix attempts fail, STOP. Report the failure and suggest `>om-fix`.
 
 ## Multi-File Edit Protocol
 When a task requires editing more than 3 files:

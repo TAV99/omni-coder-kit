@@ -1,9 +1,9 @@
-## INTAKE WORKFLOW (>om:intake) — Spec → requirements.md
+## INTAKE WORKFLOW (>om-spec) — Spec → requirements.md
 
 > Phase-4. Mục tiêu: biến **spec / Q&A khách hàng** thành **hợp đồng yêu cầu nguyên tử** (kiểm chứng được), để vòng đời SDLC chấm điểm sản phẩm dựa trên nó tới khi đạt 100%.
 
 ### Khi nào kích hoạt
-- User gõ `>om:intake <dán spec/Q&A>` hoặc CLI chạy `omni run --spec <file>`.
+- User gõ `>om-spec <dán spec/Q&A>` hoặc CLI chạy `omni run --spec <file>`.
 - Nếu `.omni/sdlc/requirements.md` đã tồn tại → KHÔNG ghi đè. Báo "đã có requirements" và dừng.
 
 ### Bước thực hiện (BẮT BUỘC, không paraphrase)

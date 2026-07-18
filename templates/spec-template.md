@@ -7,7 +7,7 @@ Use this template to design software specifications that AI coding agents (speci
 ---
 
 ## 1. Metadata Block (AI Slots & DNA Profile)
-*This section matches the slots extracted during `>om:brainstorm` (Phase 1) and guides DNA classification.*
+*This section matches the slots extracted during `>om-think` (Phase 1) and guides DNA classification.*
 
 | Field | Value | Description / Instructions |
 | :--- | :--- | :--- |
@@ -40,7 +40,7 @@ Use this template to design software specifications that AI coding agents (speci
 ---
 
 ## 3. Atomic Requirements Checklist
-*This is the core contract. The intake engine (`>om:intake`) parses this section directly into `.omni/sdlc/requirements.md`. Keep each requirement atomic (one statement per bullet) and specify how the AI can verify it.*
+*This is the core contract. The intake engine (`>om-spec`) parses this section directly into `.omni/sdlc/requirements.md`. Keep each requirement atomic (one statement per bullet) and specify how the AI can verify it.*
 
 ### Core & Business Logic
 - [ ] R1 | **User Auth**: Users can register and sign in using email and password. | test: npm test -- tests/auth.test.js

@@ -25,6 +25,6 @@
 - Reuse existing code before creating new files.
 
 ## Token Discipline
-- Only read workflow files when the corresponding >om: command is invoked.
+- Only read workflow files when the corresponding >om- command is invoked.
 - Read once — don't re-read files unless they may have changed.
 - Use concise output: bullet points over paragraphs.

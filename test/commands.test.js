@@ -97,15 +97,15 @@ describe('handleStatus', () => {
 });
 
 describe('handleCommands', () => {
-    it('prints output containing all 9 >om: commands', () => {
+    it('prints output containing all 9 >om- commands', () => {
         const { handleCommands } = require('../lib/commands/status');
         const cap = captureConsole();
         try {
             handleCommands();
             const output = cap.lines.join('\n');
             const expected = [
-                '>om:brainstorm', '>om:equip', '>om:plan', '>om:cook',
-                '>om:check', '>om:fix', '>om:doc', '>om:learn', '>om:map',
+                '>om-think', '>om-skill', '>om-plan', '>om-cook',
+                '>om-check', '>om-fix', '>om-doc', '>om-memo', '>om-map',
             ];
             for (const cmd of expected) {
                 assert.ok(output.includes(cmd), `output should contain ${cmd}`);
@@ -134,7 +134,7 @@ describe('handleCommands', () => {
         try {
             handleCommands();
             const output = cap.lines.join('\n');
-            assert.ok(output.includes('/om-brainstorm'), 'should contain /om-brainstorm');
+            assert.ok(output.includes('/om-think'), 'should contain /om-think');
             assert.ok(output.includes('/om-cook'), 'should contain /om-cook');
         } finally {
             cap.restore();

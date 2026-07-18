@@ -105,22 +105,22 @@ function buildCommandRegistry(ide) {
     if (isClaudeCode) {
         return [
             '## WORKFLOW COMMANDS',
-            '> Claude Code: dung `/om:*` slash commands (auto-complete) hoac `>om:*` trong chat.',
+            '> Claude Code: dung `/om-*` slash commands (auto-complete) hoac `>om-*` trong chat.',
             '',
             '| Command | Slash | Workflow File |',
-            '| `>om:brainstorm` | `/om:brainstorm` | `.omni/workflows/requirement-analysis.md` |',
-            '| `>om:cook` | `/om:cook` | `.omni/workflows/coder-execution.md` |',
+            '| `>om-think` | `/om-think` | `.omni/workflows/requirement-analysis.md` |',
+            '| `>om-cook` | `/om-cook` | `.omni/workflows/coder-execution.md` |',
         ].join('\n');
     }
 
     if (isCodex) {
         return [
             '## WORKFLOW COMMANDS',
-            '> Codex CLI: type `>om:*` as normal chat text.',
+            '> Codex CLI: type `>om-*` as normal chat text.',
             '',
             '| Command | Workflow File | Role |',
-            '| `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` | Architect |',
-            '| `>om:cook` | `.omni/workflows/coder-execution.md` | Coder |',
+            '| `>om-think` | `.omni/workflows/requirement-analysis.md` | Architect |',
+            '| `>om-cook` | `.omni/workflows/coder-execution.md` | Coder |',
             '',
             '- Use `/plan` for Codex-native planning before edits.',
             '- Use `/review` for Codex-native review of current changes.',
@@ -129,8 +129,8 @@ function buildCommandRegistry(ide) {
 
     return [
         '## WORKFLOW COMMANDS',
-        '| `>om:brainstorm` | `.omni/workflows/requirement-analysis.md` |',
-        '| `>om:cook` | `.omni/workflows/coder-execution.md` |',
+        '| `>om-think` | `.omni/workflows/requirement-analysis.md` |',
+        '| `>om-cook` | `.omni/workflows/coder-execution.md` |',
     ].join('\n');
 }
 
@@ -383,9 +383,9 @@ describe('E2E: codex init', () => {
 
         assert.ok(fs.existsSync(agentsPath));
         const agents = fs.readFileSync(agentsPath, 'utf-8');
-        assert.ok(agents.includes('>om:brainstorm'));
-        assert.ok(agents.includes('>om:cook'));
-        assert.ok(!agents.includes('/om:brainstorm'), 'codex AGENTS.md should NOT reference /om: slash commands');
+        assert.ok(agents.includes('>om-think'));
+        assert.ok(agents.includes('>om-cook'));
+        assert.ok(!agents.includes('/om-think'), 'codex AGENTS.md should NOT reference /om: slash commands');
         assert.ok(agents.includes('/plan'), 'should reference Codex native /plan');
 
         // Simulate manifest
@@ -521,7 +521,7 @@ describe('Codex workflow content integrity', () => {
         );
         assert.ok(content.includes('/plan'));
         assert.ok(content.includes('/review'));
-        assert.ok(content.includes('>om:'));
+        assert.ok(content.includes('>om-'));
     });
 
     it('codex config.toml has conservative defaults', () => {

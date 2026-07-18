@@ -1,15 +1,15 @@
 ## CODEX CODER WORKFLOW (SURGICAL TASK EXECUTION)
 
-When executing `>om:cook` in Codex CLI, act as a Senior Developer. Implement tasks from `.omni/sdlc/todo.md` one at a time unless the user explicitly asks for subagent delegation.
+When executing `>om-cook` in Codex CLI, act as a Senior Developer. Implement tasks from `.omni/sdlc/todo.md` one at a time unless the user explicitly asks for subagent delegation.
 
 ### Step 1: Load Context
 
 - Read `.omni/sdlc/todo.md` and identify the next unchecked task.
 - Read `.omni/sdlc/design-spec.md` for architecture and constraints.
 - Read relevant files before editing. Do not assume file structure.
-- If the task has `@skill:name` tags, load the installed skill instructions before coding.
+- If the task has `@skill:name` tags, you MUST call your file reading tool (`view_file` or `read_file`) to open and inspect `.agents/skills/<name>/SKILL.md` before coding. Do NOT code based on memory.
 - If `.omni/knowledge/project-map.md` exists, read it first to understand project structure. Warn if Age > 7 days.
-- If `.omni/sdlc/todo.md` does not exist, stop and tell the user to run `>om:plan` first.
+- If `.omni/sdlc/todo.md` does not exist, stop and tell the user to run `>om-plan` first.
 
 ### Step 2: Dev Server Preflight (MANDATORY CHECKPOINT)
 You MUST complete this step and report the result BEFORE writing any code.
@@ -66,8 +66,8 @@ The project runs exactly 3 quality cycles:
 
 1. Count total task checkboxes in `.omni/sdlc/todo.md`.
 2. Compute `checkpoint = ceil(total / 3)`.
-3. After each checkpoint, run `>om:check`.
-4. If blocking failures exist, run `>om:fix`, then rerun `>om:check`.
+3. After each checkpoint, run `>om-check`.
+4. If blocking failures exist, run `>om-fix`, then rerun `>om-check`.
 5. Max 3 fix attempts per cycle. If still failing: mark task `[BLOCKED]` in `.omni/sdlc/todo.md`, escalate to user, skip and continue.
 
 ### Rules

@@ -1,18 +1,18 @@
 ## CODER AGENT WORKFLOW — CLAUDE CODE ENHANCED (PARALLEL SUB-AGENT EXECUTION)
-When executing the [>om:cook] command, you MUST act as a Senior Developer and Orchestrator. Your job is to implement tasks from `.omni/sdlc/todo.md` using parallel sub-agents where possible.
+When executing the [>om-cook] command, you MUST act as a Senior Developer and Orchestrator. Your job is to implement tasks from `.omni/sdlc/todo.md` using parallel sub-agents where possible.
 
 **Step 1: Load Context**
 - Read `.omni/sdlc/todo.md`. Collect ALL uncompleted tasks (`- [ ]`).
 - Read `.omni/sdlc/design-spec.md` for architectural context (schema, endpoints, tech stack).
 - Read existing project files to understand current state. Do NOT assume file structure.
-- **Load skills:** For tasks with `@skill:skill-name` tag(s), note which skill files need to be passed to sub-agents.
-- **Content source:** If `.omni/sdlc/content-source.md` exists, read it. Include relevant facts in sub-agent prompts for tasks that generate user-facing text (UI copy, README, landing pages). Pass `## Forbidden Content` rules to ALL sub-agents. If the project has UI files but `.omni/sdlc/content-source.md` is missing, warn: "⚠️ UI project without .omni/sdlc/content-source.md — run `/om:brainstorm` to generate it."
+- **Load skills (MANDATORY TOOL CALL):** For tasks with `@skill:skill-name` tag(s), you MUST call your file reading tool (`view_file` or `read_file`) to open and inspect `.agents/skills/<skill-name>/SKILL.md` before writing code or passing skill instructions to sub-agents. Do NOT code based on memory.
+- **Content source:** If `.omni/sdlc/content-source.md` exists, read it. Include relevant facts in sub-agent prompts for tasks that generate user-facing text (UI copy, README, landing pages). Pass `## Forbidden Content` rules to ALL sub-agents. If the project has UI files but `.omni/sdlc/content-source.md` is missing, warn: "⚠️ UI project without .omni/sdlc/content-source.md — run `/om-think` to generate it."
 - **Project Map:** If `.omni/knowledge/project-map.md` exists, read it FIRST to locate relevant modules and understand architecture. Warn if Age > 7 days. Fill `[PENDING]`/`[NEW]` markers opportunistically for files touched during tasks.
 - **Infra pre-check:** If `setup.sh` exists in the project root, verify infrastructure is ready before coding:
   - Check: Docker running? DB accessible? `.env` exists? Dependencies installed?
-  - If any check fails → STOP. Tell the user: "Chạy `bash setup.sh` trước khi tiếp tục /om:cook."
+  - If any check fails → STOP. Tell the user: "Chạy `bash setup.sh` trước khi tiếp tục /om-cook."
   - If all checks pass or `setup.sh` does not exist → proceed normally.
-*CRITICAL: If `.omni/sdlc/todo.md` does not exist, STOP. Tell the user to run `/om:plan` first.*
+*CRITICAL: If `.omni/sdlc/todo.md` does not exist, STOP. Tell the user to run `/om-plan` first.*
 
 **Step 2: Dev Server Preflight (MANDATORY CHECKPOINT)**
 You MUST complete this step and report the result BEFORE writing any code in Step 3.
@@ -184,16 +184,16 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
 3. Count tasks completed (across all batches). When completed count reaches checkpoint:
    ```
    🔄 Quality Gate — Cycle [N]/3 reached ([X]/[total] tasks done)
-      Auto-triggering >om:check...
+      Auto-triggering >om-check...
    ```
-   - Automatically execute the [>om:check] workflow (inline, no user prompt needed).
-   - If >om:check finds errors → automatically execute [>om:fix] → re-run [>om:check]. Max 3 fix attempts per cycle.
-   - If max attempts reached: mark failing task `[BLOCKED]` in `.omni/sdlc/todo.md`, escalate to user, then resume >om:cook for the next batch (skipping blocked tasks).
-   - Once >om:check passes, resume >om:cook for the next batch.
-4. After cycle 3 completes and >om:check passes:
+   - Automatically execute the [>om-check] workflow (inline, no user prompt needed).
+   - If >om-check finds errors → automatically execute [>om-fix] → re-run [>om-check]. Max 3 fix attempts per cycle.
+   - If max attempts reached: mark failing task `[BLOCKED]` in `.omni/sdlc/todo.md`, escalate to user, then resume >om-cook for the next batch (skipping blocked tasks).
+   - Once >om-check passes, resume >om-cook for the next batch.
+4. After cycle 3 completes and >om-check passes:
    ```
    ✅ All 3 quality cycles complete. [total] tasks done.
-      Project ready for /om:doc.
+      Project ready for /om-doc.
    ```
 
 **Rules:**

@@ -1,5 +1,5 @@
 ## PROJECT MAP WORKFLOW — CLAUDE CODE ENHANCED
-When executing the [>om:map] command (or `/om:map` slash command), act as a Senior Architect performing codebase reconnaissance.
+When executing the [>om-map] command (or `/om-map` slash command), act as a Senior Architect performing codebase reconnaissance.
 
 **Step 1: Load Skeleton**
 - Read `.omni/knowledge/project-map.md`. If it does not exist, run `omni map` via Bash tool to generate the skeleton, then re-read.

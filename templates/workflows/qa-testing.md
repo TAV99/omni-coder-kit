@@ -1,5 +1,5 @@
 ## QA TESTING WORKFLOW (PROACTIVE VERIFICATION)
-When executing the [>om:check] command, you MUST act as a QA Engineer. Your job is to verify that every completed task in `.omni/sdlc/todo.md` actually works — not just that the code exists.
+When executing the [>om-check] command, you MUST act as a QA Engineer. Your job is to verify that every completed task in `.omni/sdlc/todo.md` actually works — not just that the code exists.
 
 - **Load verification skill:** You MUST read the `verification-before-completion` skill file (found in `.agents/skills/verification-before-completion/SKILL.md` or `.claude/skills/verification-before-completion/SKILL.md` or equivalent IDE path) and strictly apply its checklists and guidelines to verify your implementation.
 
@@ -22,7 +22,7 @@ Execute the full automated validation pipeline. Run checks in strict priority or
 
 **Evidence rule:** You MUST run a shell command for each P0-P3 check. "Code looks correct" is NOT verification. Use quiet flags to minimize output: `--silent`, `-q`, `--quiet`, `2>&1 | tail -5`. Only capture what's needed to determine PASS/FAIL.
 
-*If ANY blocking check (P0-P3) fails, STOP. Do NOT proceed to Feature Verification. Report failures and recommend `>om:fix`.*
+*If ANY blocking check (P0-P3) fails, STOP. Do NOT proceed to Feature Verification. Report failures and recommend `>om-fix`.*
 
 **P5: Content Validation (ADVISORY — runs after P0-P3 pass)**
 If `.omni/sdlc/content-source.md` exists:
@@ -44,7 +44,7 @@ If `.omni/sdlc/content-source.md` exists:
    Content issues: 3 (2 HIGH/MEDIUM, 1 LOW)
    ```
 4. **Severity enforcement:**
-   - **HIGH** (contradicts a Fact or matches Forbidden Content) → **BLOCKING.** Treat like a P0-P3 failure: STOP, report, recommend `>om:fix`.
+   - **HIGH** (contradicts a Fact or matches Forbidden Content) → **BLOCKING.** Treat like a P0-P3 failure: STOP, report, recommend `>om-fix`.
    - **MEDIUM** (fake/placeholder data not explicitly forbidden) → ADVISORY. Flag prominently but do not block.
    - **LOW** (minor placeholder like "Coming soon") → ADVISORY.
 
@@ -89,7 +89,7 @@ P4: PASS — ran: `npx depcheck`
 
 ## Summary
 Passed: Y/Z | Failed: N | Blocked: M
-[If FAIL] → >om:fix | [If all PASS] → >om:doc
+[If FAIL] → >om-fix | [If all PASS] → >om-doc
 ```
 
 **Report rules:**
@@ -99,10 +99,10 @@ Passed: Y/Z | Failed: N | Blocked: M
 - Feature verification Method column: must be a concrete action (`curl`, `browser`, `node -e`), not "read code".
 
 **Step 5: Auto Fix/Check Loop**
-When >om:check is triggered automatically from >om:cook's quality gate:
+When >om-check is triggered automatically from >om-cook's quality gate:
 - If ANY blocking check (P0–P3) or feature verification FAILS:
-  1. Automatically execute [>om:fix] with the failures from `.omni/sdlc/test-report.md`. No user prompt needed.
-  2. After >om:fix completes, re-run >om:check from Step 2.
+  1. Automatically execute [>om-fix] with the failures from `.omni/sdlc/test-report.md`. No user prompt needed.
+  2. After >om-fix completes, re-run >om-check from Step 2.
   3. Repeat until all checks PASS or **max 3 fix attempts** reached.
   4. If max attempts reached and errors remain:
      - Mark the failing task as `- [ ] [BLOCKED] ...` in `.omni/sdlc/todo.md`.
@@ -113,7 +113,7 @@ When >om:check is triggered automatically from >om:cook's quality gate:
           Tried: 1) [what you tried] 2) [what you tried] 3) [what you tried]
           Cần review thủ công từ người dùng.
        ```
-- If all checks PASS: return control to >om:cook for the next cycle (or finish if cycle 3).
+- If all checks PASS: return control to >om-cook for the next cycle (or finish if cycle 3).
 
 **Rules:**
 - **No command = No PASS.** Every P0-P3 verdict requires a shell command with exit code. "Code looks correct" is NOT verification.

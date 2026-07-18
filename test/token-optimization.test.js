@@ -93,19 +93,19 @@ describe('Token Optimization — context-aware verbosity', () => {
         assert.ok(content.includes('Context-Aware Verbosity'));
     });
 
-    it('defines terse mode for >om:cook', () => {
-        assert.ok(content.includes('>om:cook'));
+    it('defines terse mode for >om-cook', () => {
+        assert.ok(content.includes('>om-cook'));
         assert.ok(content.includes('Terse'));
     });
 
-    it('defines terse-on-pass for >om:check', () => {
-        assert.ok(content.includes('>om:check'));
+    it('defines terse-on-pass for >om-check', () => {
+        assert.ok(content.includes('>om-check'));
         assert.ok(content.includes('PASS'));
         assert.ok(content.includes('FAIL'));
     });
 
-    it('defines verbose mode for >om:brainstorm', () => {
-        assert.ok(content.includes('>om:brainstorm'));
+    it('defines verbose mode for >om-think', () => {
+        assert.ok(content.includes('>om-think'));
         assert.ok(content.includes('Verbose'));
     });
 

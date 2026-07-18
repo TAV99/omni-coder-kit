@@ -144,14 +144,14 @@ describe('promptFor anchoring (via runStep / buildCommand)', () => {
 describe('promptFor wording - playbook instruction', () => {
     test('promptFor contains read & do NOT execute instructions, drops execute wording', () => {
         const prompt = hostCli.promptFor('fix', {
-            workflowPath: '.omni/workflows/non-existent-debugger.md',
+            workflowPath: 'nonexistent-debugger.md',
             projectDir: '/p',
             sharedBrief: 'my brief'
         });
 
         // KHÔNG chứa wording cũ
         assert.doesNotMatch(prompt, /run ALL files/);
-        assert.doesNotMatch(prompt, /execute the >om:/);
+        assert.doesNotMatch(prompt, /execute the >om-/);
 
         // CÓ chứa wording mới để ngăn chặn execution của .md
         assert.match(prompt, /do NOT run or execute that file/i);
@@ -159,7 +159,7 @@ describe('promptFor wording - playbook instruction', () => {
         assert.match(prompt, /FOLLOWING/);
 
         // Vẫn chứa các thông tin quan trọng khác
-        assert.match(prompt, /\.omni\/workflows\/non-existent-debugger\.md/);
+        assert.match(prompt, /nonexistent-debugger\.md/);
         assert.match(prompt, /\/p/);
         assert.match(prompt, /do NOT use any scratch/);
         assert.match(prompt, /Do not summarize/);
@@ -168,7 +168,7 @@ describe('promptFor wording - playbook instruction', () => {
 
     test('promptFor without projectDir has no dirLine but still has READ/do NOT run/FOLLOW', () => {
         const prompt = hostCli.promptFor('cook', {
-            workflowPath: '.omni/workflows/non-existent-for-test.md'
+            workflowPath: 'nonexistent-playbook.md'
         });
 
         assert.doesNotMatch(prompt, /Your working directory is/);

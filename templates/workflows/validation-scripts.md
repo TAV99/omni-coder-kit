@@ -1,5 +1,5 @@
 ## VALIDATION SCRIPTS (AUTOMATED QUALITY GATES)
-When running `>om:check`, BEFORE feature verification, execute this pipeline in strict priority order. If a blocking check fails, STOP — do not run lower checks.
+When running `>om-check`, BEFORE feature verification, execute this pipeline in strict priority order. If a blocking check fails, STOP — do not run lower checks.
 
 ```
 P0: Security ──→ P1: Lint & Types ──→ P2: Build ──→ P3: Tests ──→ P4: Bundle (advisory)
@@ -46,4 +46,4 @@ Informational only. Report unused deps and large bundles.
 ### Rules
 - Adapt commands to actual toolchain (detect from package.json / pyproject.toml).
 - Tool not installed → mark SKIP, not FAIL. Do NOT install without asking.
-- If P0-P3 fails: mark test-report as FAIL, recommend `>om:fix`, skip feature verification.
+- If P0-P3 fails: mark test-report as FAIL, recommend `>om-fix`, skip feature verification.

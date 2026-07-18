@@ -348,18 +348,18 @@ describe('E2E: claudecode init', () => {
         const cmds = fs.readdirSync(cmdsDir).filter(f => f.endsWith('.md'));
         assert.equal(cmds.length, 14);
         assert.ok(cmds.includes('om-go.md'));
-        assert.ok(cmds.includes('om-intake.md'));
-        assert.ok(cmds.includes('om-accept.md'));
-        assert.ok(cmds.includes('om-onboard.md'));
-        assert.ok(cmds.includes('om-brainstorm.md'));
+        assert.ok(cmds.includes('om-spec.md'));
+        assert.ok(cmds.includes('om-pass.md'));
+        assert.ok(cmds.includes('om-scan.md'));
+        assert.ok(cmds.includes('om-think.md'));
         assert.ok(cmds.includes('om-cook.md'));
         assert.ok(cmds.includes('om-plan.md'));
         assert.ok(cmds.includes('om-check.md'));
         assert.ok(cmds.includes('om-fix.md'));
         assert.ok(cmds.includes('om-doc.md'));
         assert.ok(cmds.includes('om-ship.md'));
-        assert.ok(cmds.includes('om-equip.md'));
-        assert.ok(cmds.includes('om-learn.md'));
+        assert.ok(cmds.includes('om-skill.md'));
+        assert.ok(cmds.includes('om-memo.md'));
         assert.ok(cmds.includes('om-map.md'));
     });
 
@@ -664,7 +664,7 @@ describe('E2E: antigravity init', () => {
             const workflowsDir = path.join(advancedResult.tmpDir, '.agents', 'workflows');
             assert.ok(fs.existsSync(workflowsDir), '.agents/workflows/ should exist');
              const expectedCommands = [
-                 'om-brainstorm.md', 'brainstorm.md',
+                 'om-think.md', 'think.md',
                  'om-plan.md', 'plan.md',
                  'om-cook.md', 'cook.md'
              ];
@@ -1119,13 +1119,13 @@ describe('buildSettings', () => {
 describe('Claude Code overlay template files exist', () => {
     const requiredFiles = [
         'overlays/claude-code/settings.template.json',
-        'overlays/claude-code/commands/om-brainstorm.md',
+        'overlays/claude-code/commands/om-think.md',
         'overlays/claude-code/commands/om-cook.md',
         'overlays/claude-code/commands/om-plan.md',
         'overlays/claude-code/commands/om-check.md',
         'overlays/claude-code/commands/om-fix.md',
         'overlays/claude-code/commands/om-doc.md',
-        'overlays/claude-code/commands/om-equip.md',
+        'overlays/claude-code/commands/om-skill.md',
         'overlays/claude-code/workflows/coder-execution.md',
         'overlays/claude-code/workflows/superpower-sdlc.md',
     ];
