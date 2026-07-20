@@ -22,6 +22,17 @@ Yêu cầu [Node.js](https://nodejs.org/) >= 16.0.0.
    ```
    *(Hệ thống sẽ tự động nhận diện DNA dự án như ngôn ngữ, UI/Backend và thiết lập cấu hình tích hợp tương ứng cho các IDE/Agent trong máy bạn)*
 
+   Trong `omni init` bạn sẽ được hỏi **ẩn hay hiện** các file agent rules (`AGENTS.md`, `CLAUDE.md`, IDE dirs…) trên git:
+   - **Hiện (mặc định khuyến nghị):** commit được — share rules giữa máy/team.
+   - **Ẩn:** thêm block vào `.gitignore` — repo “sạch” dấu vết AI tooling. **Đánh đổi:** clone máy khác sẽ không có rules → cần `omni init` lại (và cấu hình rules lại).
+
+   Đổi sau init bằng CLI:
+   ```bash
+   omni agent-files status   # visible | hidden
+   omni agent-files hide     # ẩn qua .gitignore + cảnh báo trade-off
+   omni agent-files show     # gỡ block ẩn (không xoá file local)
+   ```
+
 ---
 
 ## 🚀 Hai cách sử dụng chính
@@ -95,11 +106,11 @@ Khi chat với AI trong IDE, hãy gõ các lệnh sau ở đầu câu để đ�
 ---
 
 ### 2. Lệnh trong CLI Terminal (`omni <nhóm>`)
-CLI gọn nhẹ với 5 nhóm lệnh điều khiển chính:
+CLI gọn nhẹ với các nhóm lệnh điều khiển chính:
 
 | Nhóm lệnh | Mô tả | Option / Subcommand hữu ích |
 | :--- | :--- | :--- |
-| `omni init` | Khởi tạo DNA dự án và cấu hình IDE thích hợp. | `--onboard` (ép quét codebase cũ), `--dry-run` |
+| `omni init` | Khởi tạo DNA dự án và cấu hình IDE thích hợp. | `--onboard` (ép quét codebase cũ), `--dry-run`; hỏi ẩn/hiện agent files |
 | `omni run` | Khởi chạy vòng lặp SDLC tự động từ terminal. | `--spec <file>`, `--resume`, `--dry-run`, `--yolo` |
 | `omni run gate` | Chạy độc lập Quality Pipeline P0-P5 (tiện cho CI/CD). | `--only <P0,P1,P3>` |
 | `omni run log` | Xem nhật ký sự kiện thực thi của phiên chạy gần nhất. | `--limit <n>`, `--follow` |
@@ -108,6 +119,7 @@ CLI gọn nhẹ với 5 nhóm lệnh điều khiển chính:
 | `omni skills` | Quản lý các bộ skill lập trình (cài đặt/kiểm tra). | Subcommand: `add <nguồn>`, `doctor` |
 | `omni map` | Tạo hoặc cập nhật sơ đồ tóm tắt mã nguồn dự án. | `--refresh` |
 | `omni rules` | Quản lý quy tắc cá nhân (Personal Rules sync). | `[action]`, `--dry-run` |
+| `omni agent-files` | Ẩn/hiện file agent (`AGENTS.md`, `CLAUDE.md`, IDE dirs…) khỏi git qua `.gitignore`. | `hide`, `show`, `status` |
 
 ---
 
@@ -138,7 +150,7 @@ your-project/
 │   ├── skills/                     # Các bộ kỹ năng chuyên sâu (TDD, debugging, visual UI...)
 │   └── workflows/                  # Chỉ dẫn luồng thực thi SDLC
 └── .omni/
-    ├── manifest.json               # Trạng thái IDE và danh sách skill đã cài
+    ├── manifest.json               # Trạng thái IDE, skill đã cài, agentFilesVisibility
     ├── run/                        # [Harness] Log hoạt động & state phiên chạy tự động
     │   ├── state.json              # Trạng thái hiện tại (để resume)
     │   └── events.ndjson           # Lịch sử sự kiện thực thi realtime
@@ -146,6 +158,8 @@ your-project/
     ├── sdlc/                       # Output quá trình phát triển (todo.md, design-spec.md...)
     └── knowledge/                  # Bản đồ codebase (project-map.md) & tri thức (knowledge-base.md)
 ```
+
+**Ẩn file agent khỏi git (tuỳ chọn):** nếu chọn *Ẩn* lúc `init` hoặc chạy `omni agent-files hide`, Omni thêm block có marker vào `.gitignore` (root config + IDE dirs như `.claude/`, `.agents/`, …). File vẫn tồn tại local — chỉ không commit. `omni agent-files show` gỡ block đó. File **đã track** trước đó cần bạn tự `git rm --cached` nếu muốn untrack.
 
 ---
 
