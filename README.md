@@ -97,13 +97,15 @@ Khi chat với AI trong IDE, hãy gõ các lệnh sau ở đầu câu để đ�
 ### 2. Lệnh trong CLI Terminal (`omni <nhóm>`)
 CLI gọn nhẹ với 5 nhóm lệnh điều khiển chính:
 
-| Nhóm lệnh | Mô tả | Option hữu ích |
+| Nhóm lệnh | Mô tả | Option / Subcommand hữu ích |
 | :--- | :--- | :--- |
 | `omni init` | Khởi tạo DNA dự án và cấu hình IDE thích hợp. | `--onboard` (ép quét codebase cũ), `--dry-run` |
 | `omni run` | Khởi chạy vòng lặp SDLC tự động từ terminal. | `--spec <file>`, `--resume`, `--dry-run`, `--yolo` |
 | `omni run gate` | Chạy độc lập Quality Pipeline P0-P5 (tiện cho CI/CD). | `--only <P0,P1,P3>` |
 | `omni run log` | Xem nhật ký sự kiện thực thi của phiên chạy gần nhất. | `--limit <n>`, `--follow` |
-| `omni skills` | Quản lý, cài đặt và kiểm tra các bộ skill lập trình. | `add <nguồn>`, `doctor` |
+| `omni run stats` | Tổng hợp token, chi phí và thời gian từ event log. | *(không)* |
+| `omni run accept` | Chạy riêng state ACCEPTANCE trên build hiện tại (CI). | `--accept <specs>`, `--yolo`, `--quiet` |
+| `omni skills` | Quản lý các bộ skill lập trình (cài đặt/kiểm tra). | Subcommand: `add <nguồn>`, `doctor` |
 | `omni map` | Tạo hoặc cập nhật sơ đồ tóm tắt mã nguồn dự án. | `--refresh` |
 | `omni rules` | Quản lý quy tắc cá nhân (Personal Rules sync). | `[action]`, `--dry-run` |
 
