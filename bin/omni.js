@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 'use strict';
 
-const chalk = require('chalk');
 const { program } = require('commander');
 
 const PKG = require('../package.json');
@@ -12,19 +11,9 @@ const { handleStatus, handleCommands } = require('../lib/commands/status');
 const { handleMap } = require('../lib/commands/map');
 const { handleUpdate } = require('../lib/commands/update');
 const { handleCustomize } = require('../lib/commands/customize');
-const { handleOnboard } = require('../lib/commands/onboard');
 const { handleDoctor } = require('../lib/commands/doctor');
 const { handleAgentFiles } = require('../lib/commands/agent-files');
 const { handleRun, handleTrace, handleGate, handleStats, handleAccept } = require('../lib/commands/run');
-
-// Wrap any legacy handler so calling it prints a single-line deprecation hint.
-// Hidden alias commands route through this so power-users learn the new name.
-function deprecate(oldCmd, newCmd, handler) {
-    return (...args) => {
-        console.error(chalk.yellow(`⚠  \`omni ${oldCmd}\` đã đổi tên → dùng \`omni ${newCmd}\`. (Lệnh cũ vẫn chạy.)`));
-        return handler(...args);
-    };
-}
 
 // `omni skills` no-arg = auto-equip + status (one-stop "show me my skills").
 async function handleSkillsDefault(options = {}) {
@@ -34,7 +23,7 @@ async function handleSkillsDefault(options = {}) {
 
 program
     .name('omni')
-    .description('Trình quản lý hệ tư tưởng Omni-Coder Kit (CLI gọn — 5 nhóm lệnh)')
+    .description('Trình quản lý hệ tư tưởng Omni-Coder Kit (CLI gọn — nhóm lệnh chính + harness)')
     .version(PKG.version);
 
 // -- 1) init -----------------------------------------------------------------
@@ -135,43 +124,9 @@ program
     .action(handleAgentFiles);
 
 // ---------------------------------------------------------------------------
-// Hidden aliases (backward-compat). Each prints a one-line deprecation hint
-// then delegates to the original handler — no feature is lost.
+// Hidden utility commands (not aliases of the main groups — power-user tools)
 // ---------------------------------------------------------------------------
 
-program.command('equip <source>', { hidden: true })
-    .option('-n, --name <name>')
-    .option('-f, --force')
-    .action(deprecate('equip', 'skills add', handleEquip));
-
-program.command('auto-equip', { hidden: true })
-    .option('-y, --yes')
-    .action(deprecate('auto-equip', 'skills', handleAutoEquip));
-
-program.command('status', { hidden: true })
-    .action(deprecate('status', 'skills', handleStatus));
-
-program.command('skills:doctor', { hidden: true })
-    .option('--offline')
-    .action(deprecate('skills:doctor', 'skills doctor', handleDoctor));
-
-program.command('gate', { hidden: true })
-    .option('--only <ids>')
-    .action(deprecate('gate', 'run gate', handleGate));
-
-program.command('trace', { hidden: true })
-    .option('--limit <n>')
-    .action(deprecate('trace', 'run log', handleTrace));
-
-program.command('stats', { hidden: true })
-    .action(deprecate('stats', 'run stats', handleStats));
-
-program.command('onboard', { hidden: true })
-    .option('--skip-init')
-    .option('--refresh')
-    .action(deprecate('onboard', 'init --onboard', handleOnboard));
-
-// `commands` still useful (lists chat-side >om- commands) — keep hidden + quiet.
 program.command('commands', { hidden: true })
     .action(handleCommands);
 

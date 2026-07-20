@@ -1,6 +1,16 @@
 node_modules/
 *.tgz
 
+# OS / editor noise
+.DS_Store
+**/.DS_Store
+
+# Accidental framework artifacts (this repo is a Node CLI, not Next.js)
+.next/
+out/
+next-env.d.ts
+.agents_backup/
+
 # Omni-generated files (from omni init / >om-* commands)
 .omni/
 

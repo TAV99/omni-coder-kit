@@ -1,6 +1,6 @@
 'use strict';
 
-// SPEC-CLI-SIMPLIFY — bề mặt CLI mới (5 lệnh + alias ẩn) + Phase-4 wiring.
+// SPEC-CLI-SIMPLIFY / v3.0 — bề mặt CLI chính + Phase-4 wiring (aliases removed).
 
 const { test } = require('node:test');
 const assert = require('node:assert');
@@ -14,16 +14,16 @@ function run(args, opts = {}) {
     return { code: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
-test('omni --help: shows exactly the 5 visible command groups', () => {
+test('omni --help: shows visible command groups', () => {
     const { code, stdout } = run(['--help']);
     assert.strictEqual(code, 0);
-    // Visible: init, run, skills, map, rules (+ implicit help).
-    for (const name of ['init', 'run', 'skills', 'map', 'rules']) {
+    // Visible: init, run, skills, map, rules, agent-files (+ implicit help).
+    for (const name of ['init', 'run', 'skills', 'map', 'rules', 'agent-files']) {
         assert.match(stdout, new RegExp(`^\\s+${name}\\b`, 'm'), `help should list ${name}`);
     }
-    // Hidden aliases must NOT appear in help.
+    // Removed 2.x aliases + hidden utils must NOT appear in top-level help.
     for (const name of ['equip', 'auto-equip', 'status', 'skills:doctor', 'gate', 'trace', 'stats', 'onboard', 'commands', 'update', 'customize']) {
-        assert.doesNotMatch(stdout, new RegExp(`^\\s+${name.replace(':', '\\:')}\\b`, 'm'), `hidden alias ${name} must not appear in help`);
+        assert.doesNotMatch(stdout, new RegExp(`^\\s+${name.replace(':', '\\:')}\\b`, 'm'), `${name} must not appear in help`);
     }
 });
 
@@ -61,20 +61,19 @@ test('omni run --dry-run shows ACCEPTANCE in the planned pipeline', () => {
     assert.match(stdout, /ACCEPTANCE/);
 });
 
-test('hidden alias `omni gate` prints deprecation warning + still executes', () => {
-    // gate exits 0 or 1 depending on project; we only care that the deprecation hint fires.
-    const { stderr } = run(['gate'], { cwd: __dirname });
-    assert.match(stderr, /omni gate.+đổi tên/);
+test('v3.0: removed aliases are unknown commands (not deprecated wrappers)', () => {
+    for (const name of ['gate', 'trace', 'status', 'equip', 'onboard', 'auto-equip']) {
+        const { code, stderr, stdout } = run([name], { cwd: __dirname });
+        assert.notStrictEqual(code, 0, `${name} should exit non-zero`);
+        const err = `${stderr}\n${stdout}`;
+        assert.match(err, /unknown command/i, `${name} should be unknown command`);
+    }
 });
 
-test('hidden alias `omni trace` prints deprecation warning', () => {
-    const { stderr } = run(['trace'], { cwd: __dirname });
-    assert.match(stderr, /omni trace.+đổi tên/);
-});
-
-test('hidden alias `omni status` prints deprecation warning', () => {
-    const { stderr } = run(['status'], { cwd: __dirname });
-    assert.match(stderr, /omni status.+đổi tên/);
+test('canonical replacements still work: run gate / skills doctor help', () => {
+    assert.strictEqual(run(['run', 'gate', '--help']).code, 0);
+    assert.strictEqual(run(['skills', 'doctor', '--help']).code, 0);
+    assert.strictEqual(run(['init', '--help']).code, 0);
 });
 
 test('handleCommands lists Phase-4 chat commands (>om-go, >om-spec, >om-pass)', () => {

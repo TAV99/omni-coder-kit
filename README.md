@@ -2,7 +2,7 @@
 
 **Omni-Coder Kit** là một bộ công cụ CLI giúp inject mindset phát triển phần mềm chuẩn mực (Karpathy Mindset), SDLC workflows và các kỹ năng chuyên sâu vào AI coding agents (Claude Code, Antigravity CLI, Cursor, Windsurf, Codex, Gemini CLI...). Công cụ này định hướng AI hoạt động với kỷ luật của một Senior Engineer, tuân thủ quy trình SDLC nghiêm ngặt và hạn chế tối đa lỗi ảo tưởng (hallucination).
 
-Trong phiên bản mới nhất (v2.7.2), Omni-Coder Kit hoạt động như một **Agent Harness & Loop Runtime** — tự lái vòng lặp SDLC: gọi LLM → thực thi quality gates (lint, build, test, security) → tự động sửa lỗi (fix loop) → tự động nghiệm thu (acceptance loop).
+Trong phiên bản mới nhất (**v3.0.0**), Omni-Coder Kit hoạt động như một **Agent Harness & Loop Runtime** — tự lái vòng lặp SDLC: gọi LLM → thực thi quality gates (lint, build, test, security) → tự động sửa lỗi (fix loop) → tự động nghiệm thu (acceptance loop).
 
 ---
 
@@ -120,6 +120,22 @@ CLI gọn nhẹ với các nhóm lệnh điều khiển chính:
 | `omni map` | Tạo hoặc cập nhật sơ đồ tóm tắt mã nguồn dự án. | `--refresh` |
 | `omni rules` | Quản lý quy tắc cá nhân (Personal Rules sync). | `[action]`, `--dry-run` |
 | `omni agent-files` | Ẩn/hiện file agent (`AGENTS.md`, `CLAUDE.md`, IDE dirs…) khỏi git qua `.gitignore`. | `hide`, `show`, `status` |
+
+#### Migration từ 2.x → 3.0 (breaking)
+
+Các **hidden aliases** CLI đã bị gỡ. Dùng lệnh canonical:
+
+| 2.x (đã xóa) | 3.0 |
+| :--- | :--- |
+| `omni equip <src>` | `omni skills add <src>` |
+| `omni auto-equip` / `omni status` | `omni skills` |
+| `omni skills:doctor` | `omni skills doctor` |
+| `omni gate` | `omni run gate` |
+| `omni trace` | `omni run log` |
+| `omni stats` | `omni run stats` |
+| `omni onboard` | `omni init --onboard` |
+
+Chat commands `>om-*` **không** đổi. Chi tiết release: `CHANGELOG.md`, checklist ship: `RELEASE.md`.
 
 ---
 
