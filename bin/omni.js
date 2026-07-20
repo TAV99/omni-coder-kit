@@ -14,6 +14,7 @@ const { handleUpdate } = require('../lib/commands/update');
 const { handleCustomize } = require('../lib/commands/customize');
 const { handleOnboard } = require('../lib/commands/onboard');
 const { handleDoctor } = require('../lib/commands/doctor');
+const { handleAgentFiles } = require('../lib/commands/agent-files');
 const { handleRun, handleTrace, handleGate, handleStats, handleAccept } = require('../lib/commands/run');
 
 // Wrap any legacy handler so calling it prints a single-line deprecation hint.
@@ -126,6 +127,12 @@ program
     .description('Quản lý personal rules (xem/sửa/sync/reset)')
     .option('--dry-run', 'Xem trước kết quả sync (không ghi)')
     .action(handleRules);
+
+// -- 6) agent-files (hide/show root agent config via .gitignore) -------------
+program
+    .command('agent-files [action]')
+    .description('Ẩn/hiện file agent (AGENTS.md, CLAUDE.md, …) khỏi git qua .gitignore')
+    .action(handleAgentFiles);
 
 // ---------------------------------------------------------------------------
 // Hidden aliases (backward-compat). Each prints a one-line deprecation hint
