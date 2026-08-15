@@ -1,28 +1,35 @@
+import { z } from "zod";
 import type { RunId, StepId } from "./ids";
 
-export type RunPhase =
-  | "INTAKE"
-  | "PLAN"
-  | "EXECUTE"
-  | "VERIFY"
-  | "FIX"
-  | "ACCEPT"
-  | "REWORK"
-  | "DOCUMENT"
-  | "READY"
-  | "BLOCKED"
-  | "CANCELLED";
+export const RunPhaseSchema = z.enum([
+  "INTAKE",
+  "PLAN",
+  "EXECUTE",
+  "VERIFY",
+  "FIX",
+  "ACCEPT",
+  "REWORK",
+  "DOCUMENT",
+  "READY",
+  "BLOCKED",
+  "CANCELLED",
+]);
 
-export type Capability =
-  | "workspace.read"
-  | "workspace.write"
-  | "shell"
-  | "structured-output"
-  | "streaming"
-  | "cancel"
-  | "native-resume"
-  | "usage"
-  | "subagents";
+export type RunPhase = z.infer<typeof RunPhaseSchema>;
+
+export const CapabilitySchema = z.enum([
+  "workspace.read",
+  "workspace.write",
+  "shell",
+  "structured-output",
+  "streaming",
+  "cancel",
+  "native-resume",
+  "usage",
+  "subagents",
+]);
+
+export type Capability = z.infer<typeof CapabilitySchema>;
 
 export type SideEffectClass = "read-only" | "workspace-write" | "external";
 
