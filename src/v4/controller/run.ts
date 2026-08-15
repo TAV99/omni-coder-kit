@@ -25,6 +25,29 @@ export class RunController {
       throw new Error("Run state is null, cannot advance before RunStarted");
     }
 
+    if (state.inFlight) {
+      const stepCompletedEvent: RunEvent = {
+        type: "StepCompleted",
+        eventId: asEventId(crypto.randomUUID()),
+        runId: this.runId,
+        sequence: state.sequence + 1,
+        timestamp: new Date().toISOString(),
+        stepId: state.inFlight.stepId,
+        result: {
+          status: "failed",
+          executionId: crypto.randomUUID(),
+          failure: {
+            code: "PROCESS_CRASH",
+            message: "Process crashed while step was in flight",
+            retryable: true,
+            signature: "process_crash"
+          }
+        }
+      };
+      await this.eventStorage.append(stepCompletedEvent);
+      return this.advance();
+    }
+
     if (state.phase === "READY" || state.phase === "BLOCKED" || state.phase === "CANCELLED") {
       throw new Error(`Cannot advance run in terminal phase: ${state.phase}`);
     }
