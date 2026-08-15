@@ -63,6 +63,7 @@ export function reduce(state: RunState | null, event: RunEvent): RunState {
       // On success, reset the failure trackers
       sameFailureCount = 0;
       lastFailureSignature = undefined;
+      attempt = 1;
     }
   }
 
