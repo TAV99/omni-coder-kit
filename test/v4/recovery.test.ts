@@ -57,7 +57,7 @@ test("RunController recovers from inFlight crash", async () => {
     
     // Events: 0(Started), 1(StepStarted), 2(Recovery Crash Completed), 3(StepStarted), 4(StepCompleted)
     assert.equal(state.sequence, 4);
-    assert.equal(state.attempt, 2); // crash was attempt 1, new execution is attempt 2
+    assert.equal(state.attempt, 1); // was attempt 2, but step succeeded so it resets to 1
     assert.equal(state.inFlight, undefined);
   } finally {
     await fs.rm(tmpdir, { recursive: true, force: true });

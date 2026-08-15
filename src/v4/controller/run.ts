@@ -85,7 +85,7 @@ export class RunController {
     }
 
     const policyPassed = this.policy.evaluateStep(result, state);
-    if (!policyPassed) {
+    if (!policyPassed && result.status === "succeeded") {
       result = {
         status: "failed",
         executionId: result.executionId || crypto.randomUUID(),
