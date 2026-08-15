@@ -66,14 +66,26 @@ export function reduce(state: RunState | null, event: RunEvent): RunState {
     }
   }
 
-  return {
+  const newState: any = {
     ...state,
     phase: nextPhase,
     sequence: event.sequence,
     updatedAt: event.timestamp,
-    inFlight,
     attempt,
     sameFailureCount,
-    lastFailureSignature,
   };
+
+  if (inFlight !== undefined) {
+    newState.inFlight = inFlight;
+  } else {
+    delete newState.inFlight;
+  }
+
+  if (lastFailureSignature !== undefined) {
+    newState.lastFailureSignature = lastFailureSignature;
+  } else {
+    delete newState.lastFailureSignature;
+  }
+
+  return newState as RunState;
 }
