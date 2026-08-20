@@ -51,6 +51,13 @@ export class DefaultPolicy implements Policy {
   }
 
   evaluatePreflight(input: PreflightInput): PreflightDecision {
+    if (!input.probe.available) {
+      return {
+        kind: "deny",
+        reason: `Adapter '${input.probe.adapterId}' is unavailable`,
+      };
+    }
+
     const probeCaps = new Set(input.probe.capabilities);
     for (const required of input.request.requiredCapabilities) {
       if (!probeCaps.has(required)) {

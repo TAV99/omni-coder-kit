@@ -10,9 +10,9 @@ import { FileEventStore } from "../../src/v4/storage/event-store";
 import { FileArtifactStore } from "../../src/v4/storage/artifact-store";
 import { FakeAdapter } from "../../src/v4/testing/fake-adapter";
 import { asArtifactId, asEventId, asRunId, asStepId } from "../../src/v4/contracts/ids";
-import type { StepRequest } from "../../src/v4/contracts/adapter";
+import type { StepRequest, AgentAdapter, AdapterProbe, AdapterContext } from "../../src/v4/contracts/adapter";
 
-function createTestController(projectDir: string, fakeAdapter: FakeAdapter, policy = createDefaultPolicy()) {
+function createTestController(projectDir: string, fakeAdapter: AgentAdapter, policy = createDefaultPolicy()) {
   let eventSeq = 0;
   return new RunController({
     adapter: fakeAdapter,
@@ -134,6 +134,94 @@ test("controller: preflight policy denial blocks without step.started or executi
     const events = await new FileEventStore({ projectDir: tmpdir }).read(runId);
     const eventTypes = events.map((e) => e.type);
     assert.deepEqual(eventTypes, ["run.created", "policy.decided", "run.blocked"]);
+  } finally {
+    await fs.rm(tmpdir, { recursive: true, force: true });
+  }
+});
+
+test("controller: unavailable adapter probe produces policy deny and blocks without adapter calls", async () => {
+  const tmpdir = await fs.mkdtemp(path.join(os.tmpdir(), "omni-v4-ctrl-unavail-"));
+  try {
+    const runId = asRunId("run-unavail");
+    const fakeAdapter = new FakeAdapter({
+      available: false,
+      outcomes: [],
+    });
+
+    const controller = createTestController(tmpdir, fakeAdapter);
+    await controller.start({ runId });
+
+    const req: StepRequest = {
+      runId,
+      stepId: asStepId("s-1"),
+      phase: "INTAKE",
+      operationId: "op-1",
+      workspaceDir: tmpdir,
+      prompt: "run",
+      requiredCapabilities: [], // no capabilities required
+      sideEffect: "read-only",
+      timeoutMs: 5000,
+    };
+
+    const state = await controller.executeNext(req);
+    assert.equal(state.phase, "BLOCKED");
+    assert.equal(fakeAdapter.calls.length, 0);
+
+    const events = await new FileEventStore({ projectDir: tmpdir }).read(runId);
+    const eventTypes = events.map((e) => e.type);
+    assert.deepEqual(eventTypes, ["run.created", "policy.decided", "run.blocked"]);
+  } finally {
+    await fs.rm(tmpdir, { recursive: true, force: true });
+  }
+});
+
+test("controller: authoritative deadline settles timeout and invokes cancel exactly once", async () => {
+  const tmpdir = await fs.mkdtemp(path.join(os.tmpdir(), "omni-v4-ctrl-timeout-"));
+  try {
+    const runId = asRunId("run-timeout");
+    let cancelCalls = 0;
+
+    // Adapter that ignores AbortSignal and hangs forever
+    const hangingAdapter: AgentAdapter = {
+      id: "fake",
+      async probe(): Promise<AdapterProbe> {
+        return {
+          adapterId: "fake",
+          available: true,
+          capabilities: ["workspace.read"],
+          diagnostics: [],
+        };
+      },
+      async execute(_req: StepRequest, _ctx: AdapterContext): Promise<any> {
+        return new Promise(() => {}); // Never resolves
+      },
+      async cancel(_operationId: string): Promise<void> {
+        cancelCalls++;
+      },
+    };
+
+    const controller = createTestController(tmpdir, hangingAdapter);
+    await controller.start({ runId });
+
+    const req: StepRequest = {
+      runId,
+      stepId: asStepId("s-1"),
+      phase: "INTAKE",
+      operationId: "op-1",
+      workspaceDir: tmpdir,
+      prompt: "hang",
+      requiredCapabilities: ["workspace.read"],
+      sideEffect: "read-only",
+      timeoutMs: 50, // Short 50ms deadline
+    };
+
+    const start = Date.now();
+    const state = await controller.executeNext(req);
+    const elapsed = Date.now() - start;
+
+    assert.ok(elapsed < 2000, `Execution took ${elapsed}ms; should have timed out within bounded time`);
+    assert.equal(cancelCalls, 1);
+    assert.equal(state.attempt, 2); // retry attempt tracked
   } finally {
     await fs.rm(tmpdir, { recursive: true, force: true });
   }

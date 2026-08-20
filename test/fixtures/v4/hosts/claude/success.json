@@ -1,0 +1,11 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 100,
+  "duration_api_ms": 80,
+  "num_turns": 1,
+  "result": "{\"status\":\"succeeded\",\"executionId\":\"exec-1\",\"summary\":\"ok\",\"artifacts\":[],\"evidence\":[]}",
+  "session_id": "00000000-0000-0000-0000-000000000002",
+  "total_cost_usd": 0.001
+}

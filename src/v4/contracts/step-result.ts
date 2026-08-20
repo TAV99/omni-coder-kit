@@ -3,16 +3,16 @@ import { ArtifactClaimSchema, type ArtifactClaim } from "./artifact";
 import { EvidenceSchema, type Evidence } from "./evidence";
 
 export interface NormalizedUsage {
-  readonly inputTokens?: number;
-  readonly outputTokens?: number;
-  readonly cachedInputTokens?: number;
-  readonly totalTokens?: number;
-  readonly costUsd?: number;
+  readonly inputTokens?: number | undefined;
+  readonly outputTokens?: number | undefined;
+  readonly cachedInputTokens?: number | undefined;
+  readonly totalTokens?: number | undefined;
+  readonly costUsd?: number | undefined;
 }
 
 export interface NativeExecutionMetadata {
-  readonly sessionId?: string;
-  readonly usage?: NormalizedUsage;
+  readonly sessionId?: string | undefined;
+  readonly usage?: NormalizedUsage | undefined;
 }
 
 export type AgentStepOutcome =
@@ -46,7 +46,7 @@ export type AgentStepOutcome =
     };
 
 export type StepResult = AgentStepOutcome & {
-  readonly native?: NativeExecutionMetadata;
+  readonly native?: NativeExecutionMetadata | undefined;
 };
 
 export const NormalizedUsageSchema = z

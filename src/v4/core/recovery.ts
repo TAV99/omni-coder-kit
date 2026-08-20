@@ -1,6 +1,7 @@
 import type { EventId, RunId } from "../contracts/ids";
 import type { RunEvent } from "../contracts/event";
 import type { RunState } from "../contracts/run";
+import type { StepRequest } from "../contracts/adapter";
 import { replayRun } from "../storage/event-store";
 import type { RunControllerDeps } from "./controller";
 import { nextPhaseOnSuccess } from "./transitions";
@@ -104,30 +105,91 @@ export async function recoverRun(
     }
   }
 
-  // 2. step.succeeded without run.transitioned
+  // 2. step.succeeded without run.transitioned -> Roll forward if valid
   if (lastEvent.type === "step.succeeded") {
-    // Find matching step.started for workspaceDir
-    const startEvent = events.find(
-      (e) => e.type === "step.started" && e.payload.stepId === lastEvent.payload.stepId
+    const startEvent = [...events].reverse().find(
+      (e) =>
+        e.type === "step.started" &&
+        e.payload.stepId === lastEvent.payload.stepId &&
+        e.payload.operationId === lastEvent.payload.operationId
     );
-    const workspaceDir = startEvent && startEvent.type === "step.started" ? startEvent.payload.workspaceDir : "";
 
-    // Find all artifact.recorded for this step
+    if (!startEvent || startEvent.type !== "step.started") {
+      const blockedEvent: RunEvent = {
+        schemaVersion: 1,
+        eventId: deps.newEventId(),
+        runId,
+        sequence: currentSeq + 1,
+        at: deps.now(),
+        type: "run.blocked",
+        payload: {
+          reason: "Cannot find matching step.started for step.succeeded during recovery",
+          requiredAction: "Inspect event log integrity",
+          causedByEventId: lastEvent.eventId,
+        },
+      };
+      await deps.events.append(blockedEvent, currentSeq);
+      events = await deps.events.read(runId);
+      return {
+        kind: "blocked",
+        state: replayRun(events),
+        reason: "Cannot find matching step.started for step.succeeded during recovery",
+      };
+    }
+
+    const workspaceDir = startEvent.payload.workspaceDir;
+    const requiredArtifacts = lastEvent.payload.result.artifacts;
+
+    if (requiredArtifacts.length === 0) {
+      const blockedEvent: RunEvent = {
+        schemaVersion: 1,
+        eventId: deps.newEventId(),
+        runId,
+        sequence: currentSeq + 1,
+        at: deps.now(),
+        type: "run.blocked",
+        payload: {
+          reason: "step.succeeded produced zero artifacts; roll forward blocked",
+          requiredAction: "Rerun step with valid artifacts",
+          causedByEventId: lastEvent.eventId,
+        },
+      };
+      await deps.events.append(blockedEvent, currentSeq);
+      events = await deps.events.read(runId);
+      return {
+        kind: "blocked",
+        state: replayRun(events),
+        reason: "step.succeeded produced zero artifacts; roll forward blocked",
+      };
+    }
+
     const artifactEvents = events.filter(
-      (e) => e.type === "artifact.recorded" && e.payload.record.producerStepId === lastEvent.payload.stepId
+      (e) =>
+        e.type === "artifact.recorded" &&
+        e.payload.record.runId === runId &&
+        e.payload.record.producerStepId === lastEvent.payload.stepId
+    );
+
+    const recordedMap = new Map(
+      artifactEvents
+        .filter((e): e is RunEvent & { type: "artifact.recorded" } => e.type === "artifact.recorded")
+        .map((e) => [e.payload.record.artifactId, e.payload.record])
     );
 
     let allValid = true;
-    for (const artEv of artifactEvents) {
-      if (artEv.type === "artifact.recorded") {
-        const verifyRes = await deps.artifacts.verify({
-          workspaceDir,
-          record: artEv.payload.record,
-        });
-        if (!verifyRes.valid) {
-          allValid = false;
-          break;
-        }
+    for (const reqArt of requiredArtifacts) {
+      const record = recordedMap.get(reqArt.artifactId);
+      if (!record) {
+        allValid = false;
+        break;
+      }
+      const verifyRes = await deps.artifacts.verify({
+        workspaceDir,
+        record,
+      });
+      if (!verifyRes.valid) {
+        allValid = false;
+        break;
       }
     }
 
@@ -177,22 +239,50 @@ export async function recoverRun(
 
   // 3. step.failed without policy.decided
   if (lastEvent.type === "step.failed") {
-    const startEvent = events.find(
-      (e) => e.type === "step.started" && e.payload.stepId === lastEvent.payload.stepId
+    const startEvent = [...events].reverse().find(
+      (e) =>
+        e.type === "step.started" &&
+        e.payload.stepId === lastEvent.payload.stepId &&
+        e.payload.operationId === lastEvent.payload.operationId
     );
-    const dummyReq = {
+
+    if (!startEvent || startEvent.type !== "step.started") {
+      const blockedEvent: RunEvent = {
+        schemaVersion: 1,
+        eventId: deps.newEventId(),
+        runId,
+        sequence: currentSeq + 1,
+        at: deps.now(),
+        type: "run.blocked",
+        payload: {
+          reason: "Cannot find matching step.started for step.failed during recovery",
+          requiredAction: "Inspect event log integrity",
+          causedByEventId: lastEvent.eventId,
+        },
+      };
+      await deps.events.append(blockedEvent, currentSeq);
+      events = await deps.events.read(runId);
+      return {
+        kind: "blocked",
+        state: replayRun(events),
+        reason: "Cannot find matching step.started for step.failed during recovery",
+      };
+    }
+
+    const reconstructedReq: StepRequest = {
       runId,
-      stepId: lastEvent.payload.stepId,
-      phase: state.phase,
-      operationId: lastEvent.payload.operationId,
-      workspaceDir: startEvent && startEvent.type === "step.started" ? startEvent.payload.workspaceDir : "",
+      stepId: startEvent.payload.stepId,
+      phase: startEvent.payload.phase,
+      operationId: startEvent.payload.operationId,
+      workspaceDir: startEvent.payload.workspaceDir,
       prompt: "",
       requiredCapabilities: [],
-      sideEffect: startEvent && startEvent.type === "step.started" ? startEvent.payload.sideEffect : "read-only",
-      timeoutMs: 5000,
+      sideEffect: startEvent.payload.sideEffect,
+      timeoutMs: 30000,
     };
+
     const failDecision = deps.policy.decideFailure({
-      request: dummyReq as any,
+      request: reconstructedReq,
       failure: lastEvent.payload.result.failure,
       attempt: state.attempt,
       sameFailureCount: state.sameFailureCount,
@@ -246,32 +336,96 @@ export async function recoverRun(
     }
   }
 
-  // 4. policy.decided (failure) with block without run.blocked
-  if (
-    lastEvent.type === "policy.decided" &&
-    lastEvent.payload.stage === "failure" &&
-    lastEvent.payload.decision.kind === "block"
-  ) {
-    const blockedEvent: RunEvent = {
-      schemaVersion: 1,
-      eventId: deps.newEventId(),
-      runId,
-      sequence: currentSeq + 1,
-      at: deps.now(),
-      type: "run.blocked",
-      payload: {
-        reason: lastEvent.payload.decision.reason,
-        requiredAction: lastEvent.payload.decision.requiredAction,
-        causedByEventId: lastEvent.eventId,
-      },
-    };
-    await deps.events.append(blockedEvent, currentSeq);
-    events = await deps.events.read(runId);
-    return {
-      kind: "blocked",
-      state: replayRun(events),
-      reason: lastEvent.payload.decision.reason,
-    };
+  // 4. policy.decided cut-points
+  if (lastEvent.type === "policy.decided") {
+    if (lastEvent.payload.stage === "failure") {
+      if (lastEvent.payload.decision.kind === "retry") {
+        return {
+          kind: "rerun",
+          state,
+          previousOperationId: lastEvent.payload.operationId,
+        };
+      } else {
+        const blockedEvent: RunEvent = {
+          schemaVersion: 1,
+          eventId: deps.newEventId(),
+          runId,
+          sequence: currentSeq + 1,
+          at: deps.now(),
+          type: "run.blocked",
+          payload: {
+            reason: lastEvent.payload.decision.reason,
+            requiredAction: lastEvent.payload.decision.requiredAction,
+            causedByEventId: lastEvent.eventId,
+          },
+        };
+        await deps.events.append(blockedEvent, currentSeq);
+        events = await deps.events.read(runId);
+        return {
+          kind: "blocked",
+          state: replayRun(events),
+          reason: lastEvent.payload.decision.reason,
+        };
+      }
+    }
+
+    if (lastEvent.payload.stage === "preflight") {
+      if (lastEvent.payload.decision.kind === "deny") {
+        const blockedEvent: RunEvent = {
+          schemaVersion: 1,
+          eventId: deps.newEventId(),
+          runId,
+          sequence: currentSeq + 1,
+          at: deps.now(),
+          type: "run.blocked",
+          payload: {
+            reason: lastEvent.payload.decision.reason,
+            requiredAction: "Resolve preflight policy denial",
+            causedByEventId: lastEvent.eventId,
+          },
+        };
+        await deps.events.append(blockedEvent, currentSeq);
+        events = await deps.events.read(runId);
+        return {
+          kind: "blocked",
+          state: replayRun(events),
+          reason: lastEvent.payload.decision.reason,
+        };
+      } else {
+        return { kind: "continue", state };
+      }
+    }
+
+    if (lastEvent.payload.stage === "resume") {
+      if (lastEvent.payload.decision.kind === "retry") {
+        return {
+          kind: "rerun",
+          state,
+          previousOperationId: lastEvent.payload.operationId,
+        };
+      } else {
+        const blockedEvent: RunEvent = {
+          schemaVersion: 1,
+          eventId: deps.newEventId(),
+          runId,
+          sequence: currentSeq + 1,
+          at: deps.now(),
+          type: "run.blocked",
+          payload: {
+            reason: lastEvent.payload.decision.reason,
+            requiredAction: lastEvent.payload.decision.requiredAction,
+            causedByEventId: lastEvent.eventId,
+          },
+        };
+        await deps.events.append(blockedEvent, currentSeq);
+        events = await deps.events.read(runId);
+        return {
+          kind: "blocked",
+          state: replayRun(events),
+          reason: lastEvent.payload.decision.reason,
+        };
+      }
+    }
   }
 
   // 5. step.blocked without run.blocked

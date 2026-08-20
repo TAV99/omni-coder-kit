@@ -68,7 +68,30 @@ export class RunController {
     }
 
     const elevated = options?.elevatedPermissions ?? false;
-    const probe = await this.deps.adapter.probe();
+    let probe: import("../contracts/adapter").AdapterProbe;
+    try {
+      const rawProbe = await this.deps.adapter.probe();
+      probe = rawProbe;
+    } catch (err: any) {
+      probe = {
+        adapterId: this.deps.adapter.id,
+        available: false,
+        capabilities: [],
+        diagnostics: [`Probe failed with exception: ${err.message}`],
+      };
+    }
+
+    if (probe.adapterId !== this.deps.adapter.id) {
+      probe = {
+        adapterId: probe.adapterId,
+        available: false,
+        capabilities: [],
+        diagnostics: [
+          `Probe adapterId '${probe.adapterId}' does not match controller adapter '${this.deps.adapter.id}'`,
+        ],
+      };
+    }
+
     const preflight = this.deps.policy.evaluatePreflight({
       request,
       probe,
@@ -132,9 +155,19 @@ export class RunController {
     currentSequence = startEvent.sequence;
 
     const abortController = new AbortController();
-    const timeout = setTimeout(() => {
-      abortController.abort(new Error("Timeout"));
-    }, request.timeoutMs);
+    let timeoutId: NodeJS.Timeout | undefined;
+
+    const deadlinePromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(async () => {
+        abortController.abort(new Error("Timeout"));
+        try {
+          await this.deps.adapter.cancel(request.operationId);
+        } catch {
+          // Ignore cancellation errors on timeout
+        }
+        reject(new Error("Timeout"));
+      }, request.timeoutMs);
+    });
 
     let rawOutcome: unknown;
     let executionError: Error | undefined;
@@ -152,11 +185,16 @@ export class RunController {
           };
 
     try {
-      rawOutcome = await this.deps.adapter.execute(request, adapterContext);
+      rawOutcome = await Promise.race([
+        this.deps.adapter.execute(request, adapterContext),
+        deadlinePromise,
+      ]);
     } catch (err: any) {
       executionError = err instanceof Error ? err : new Error(String(err));
     } finally {
-      clearTimeout(timeout);
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
     }
 
     let parsedResult: StepResult;

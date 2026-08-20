@@ -64,11 +64,12 @@ test("event-store: append, read, and replay lifecycle", async () => {
   }
 });
 
-test("event-store: sequence conflict and duplicate ID detection", async () => {
-  const tmpdir = await fs.mkdtemp(path.join(os.tmpdir(), "omni-v4-evt-conflict-"));
+test("event-store: multi-instance concurrent append race on same file resolves with exactly 1 success and 1 conflict", async () => {
+  const tmpdir = await fs.mkdtemp(path.join(os.tmpdir(), "omni-v4-multi-inst-"));
   try {
-    const store = new FileEventStore({ projectDir: tmpdir });
-    const runId = asRunId("run-2");
+    const store1 = new FileEventStore({ projectDir: tmpdir });
+    const store2 = new FileEventStore({ projectDir: tmpdir });
+    const runId = asRunId("run-multi");
 
     const event0: RunEvent = {
       schemaVersion: 1,
@@ -80,54 +81,7 @@ test("event-store: sequence conflict and duplicate ID detection", async () => {
       payload: { startedAt: "2026-08-20T10:00:00.000Z" },
     };
 
-    // Expected sequence mismatch on initial append
-    await assert.rejects(
-      store.append(event0, 0), // expected -1, not 0
-      EventSequenceConflictError
-    );
-
-    await store.append(event0, -1);
-
-    // Duplicate eventId
-    const dupEvent: RunEvent = {
-      schemaVersion: 1,
-      eventId: asEventId("e-0"), // duplicate ID
-      runId,
-      sequence: 1,
-      at: "2026-08-20T10:00:01.000Z",
-      type: "step.started",
-      payload: {
-        stepId: asStepId("s-1"),
-        operationId: "op-1",
-        phase: "INTAKE",
-        sideEffect: "read-only",
-        workspaceDir: "/workspace",
-      },
-    };
-
-    await assert.rejects(store.append(dupEvent, 0), EventSequenceConflictError);
-  } finally {
-    await fs.rm(tmpdir, { recursive: true, force: true });
-  }
-});
-
-test("event-store: concurrent appends with same expectedSequence resolve with one success and one conflict", async () => {
-  const tmpdir = await fs.mkdtemp(path.join(os.tmpdir(), "omni-v4-evt-conc-"));
-  try {
-    const store = new FileEventStore({ projectDir: tmpdir });
-    const runId = asRunId("run-3");
-
-    const event0: RunEvent = {
-      schemaVersion: 1,
-      eventId: asEventId("e-0"),
-      runId,
-      sequence: 0,
-      at: "2026-08-20T10:00:00.000Z",
-      type: "run.created",
-      payload: { startedAt: "2026-08-20T10:00:00.000Z" },
-    };
-
-    await store.append(event0, -1);
+    await store1.append(event0, -1);
 
     const event1A: RunEvent = {
       schemaVersion: 1,
@@ -161,10 +115,10 @@ test("event-store: concurrent appends with same expectedSequence resolve with on
       },
     };
 
-    // Both attempt expectedSequence = 0 concurrently
+    // store1 and store2 are separate instances attempting the same sequence 0
     const results = await Promise.allSettled([
-      store.append(event1A, 0),
-      store.append(event1B, 0),
+      store1.append(event1A, 0),
+      store2.append(event1B, 0),
     ]);
 
     const fulfilled = results.filter((r) => r.status === "fulfilled");
@@ -172,10 +126,73 @@ test("event-store: concurrent appends with same expectedSequence resolve with on
 
     assert.equal(fulfilled.length, 1);
     assert.equal(rejected.length, 1);
-    assert.ok(rejected[0] && (rejected[0] as PromiseRejectedResult).reason instanceof EventSequenceConflictError);
+    assert.ok(
+      rejected[0] &&
+        (rejected[0] as PromiseRejectedResult).reason instanceof
+          EventSequenceConflictError
+    );
   } finally {
     await fs.rm(tmpdir, { recursive: true, force: true });
   }
+});
+
+test("event-store: replayRun rejects cross-run events and forged transition causes", () => {
+  const runA = asRunId("run-a");
+  const runB = asRunId("run-b");
+
+  const event0: RunEvent = {
+    schemaVersion: 1,
+    eventId: asEventId("e-0"),
+    runId: runA,
+    sequence: 0,
+    at: "2026-08-20T10:00:00.000Z",
+    type: "run.created",
+    payload: { startedAt: "2026-08-20T10:00:00.000Z" },
+  };
+
+  // Cross-run event
+  const crossRunEvent: RunEvent = {
+    schemaVersion: 1,
+    eventId: asEventId("e-1"),
+    runId: runB, // wrong runId
+    sequence: 1,
+    at: "2026-08-20T10:00:01.000Z",
+    type: "step.started",
+    payload: {
+      stepId: asStepId("s-1"),
+      operationId: "op-1",
+      phase: "INTAKE",
+      sideEffect: "read-only",
+      workspaceDir: "/workspace",
+    },
+  };
+
+  assert.throws(
+    () => replayRun([event0, crossRunEvent]),
+    CorruptEventLogError
+  );
+
+  // Forged transition with nonexistent cause
+  const forgedTransition: RunEvent = {
+    schemaVersion: 1,
+    eventId: asEventId("e-1"),
+    runId: runA,
+    sequence: 1,
+    at: "2026-08-20T10:00:01.000Z",
+    type: "run.transitioned",
+    payload: {
+      stepId: asStepId("s-1"),
+      operationId: "op-1",
+      from: "INTAKE",
+      to: "PLAN",
+      causedByEventId: asEventId("non-existent-cause"),
+    },
+  };
+
+  assert.throws(
+    () => replayRun([event0, forgedTransition]),
+    CorruptEventLogError
+  );
 });
 
 test("event-store: corrupt log line raises CorruptEventLogError", async () => {

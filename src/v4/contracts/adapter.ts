@@ -16,8 +16,8 @@ export const AdapterProbeSchema = z
 export interface AdapterProbe {
   readonly available: boolean;
   readonly adapterId: string;
-  readonly binary?: string;
-  readonly version?: string;
+  readonly binary?: string | undefined;
+  readonly version?: string | undefined;
   readonly capabilities: readonly Capability[];
   readonly diagnostics: readonly string[];
 }

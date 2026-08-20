@@ -117,7 +117,7 @@ test("recovery: workspace-write step inFlight recovers as blocked with no adapte
         payload: {
           stepId: asStepId("s-1"),
           operationId: "op-1",
-          phase: "EXECUTE",
+          phase: "INTAKE",
           sideEffect: "workspace-write",
           workspaceDir: tmpdir,
         },

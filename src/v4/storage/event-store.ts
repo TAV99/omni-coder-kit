@@ -25,31 +25,145 @@ export interface EventStore {
   read(runId: RunId): Promise<readonly RunEvent[]>;
 }
 
+// Module-scoped process-wide lock queue for CAS per normalized file path
+const processFileQueues = new Map<string, Promise<void>>();
+
+async function lockPath<T>(resolvedPath: string, fn: () => Promise<T>): Promise<T> {
+  const normalizedKey = path.normalize(path.resolve(resolvedPath));
+  const prev = processFileQueues.get(normalizedKey) ?? Promise.resolve();
+  let resolveLock!: () => void;
+  const next = new Promise<void>((res) => {
+    resolveLock = res;
+  });
+  processFileQueues.set(normalizedKey, next);
+
+  try {
+    await prev;
+    return await fn();
+  } finally {
+    resolveLock();
+    if (processFileQueues.get(normalizedKey) === next) {
+      processFileQueues.delete(normalizedKey);
+    }
+  }
+}
+
+export function validateEventHistory(events: readonly RunEvent[]): void {
+  if (events.length === 0) {
+    throw new CorruptEventLogError("Cannot replay empty event list");
+  }
+
+  const first = events[0]!;
+  if (first.type !== "run.created") {
+    throw new CorruptEventLogError(
+      `Initial event in log must be 'run.created', got '${first.type}'`
+    );
+  }
+
+  const expectedRunId = first.runId;
+  const eventsById = new Map<EventId, RunEvent>();
+
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i]!;
+
+    if (event.runId !== expectedRunId) {
+      throw new CorruptEventLogError(
+        `Cross-run event detected in log at sequence ${event.sequence}: expected runId '${expectedRunId}', got '${event.runId}'`
+      );
+    }
+
+    if (event.sequence !== i) {
+      throw new CorruptEventLogError(
+        `Non-consecutive sequence at index ${i}: expected ${i}, got ${event.sequence}`
+      );
+    }
+
+    if (eventsById.has(event.eventId)) {
+      throw new CorruptEventLogError(
+        `Duplicate eventId in event history: '${event.eventId}'`
+      );
+    }
+
+    eventsById.set(event.eventId, event);
+
+    if (event.type === "run.transitioned") {
+      const cause = eventsById.get(event.payload.causedByEventId);
+      if (!cause) {
+        throw new CorruptEventLogError(
+          `run.transitioned references nonexistent causedByEventId: '${event.payload.causedByEventId}'`
+        );
+      }
+      if (cause.runId !== expectedRunId) {
+        throw new CorruptEventLogError(
+          `run.transitioned references cause from different runId: '${cause.runId}'`
+        );
+      }
+      if (cause.type !== "step.succeeded") {
+        throw new CorruptEventLogError(
+          `run.transitioned causedByEventId must reference 'step.succeeded', got '${cause.type}'`
+        );
+      }
+      if (cause.sequence >= event.sequence) {
+        throw new CorruptEventLogError(
+          `run.transitioned cause must appear earlier in log`
+        );
+      }
+    }
+
+    if (event.type === "run.blocked") {
+      const cause = eventsById.get(event.payload.causedByEventId);
+      if (!cause) {
+        throw new CorruptEventLogError(
+          `run.blocked references nonexistent causedByEventId: '${event.payload.causedByEventId}'`
+        );
+      }
+      if (cause.runId !== expectedRunId) {
+        throw new CorruptEventLogError(
+          `run.blocked references cause from different runId: '${cause.runId}'`
+        );
+      }
+      const allowedCauses = [
+        "policy.decided",
+        "step.failed",
+        "step.blocked",
+        "step.interrupted",
+        "step.succeeded",
+        "run.created",
+      ];
+      if (!allowedCauses.includes(cause.type)) {
+        throw new CorruptEventLogError(
+          `run.blocked causedByEventId must reference a valid blocking cause, got '${cause.type}'`
+        );
+      }
+    }
+
+    if (event.type === "run.cancelled") {
+      const cause = eventsById.get(event.payload.causedByEventId);
+      if (!cause) {
+        throw new CorruptEventLogError(
+          `run.cancelled references nonexistent causedByEventId: '${event.payload.causedByEventId}'`
+        );
+      }
+      if (cause.runId !== expectedRunId) {
+        throw new CorruptEventLogError(
+          `run.cancelled references cause from different runId: '${cause.runId}'`
+        );
+      }
+      const allowedCauses = ["step.cancelled", "policy.decided", "run.created"];
+      if (!allowedCauses.includes(cause.type)) {
+        throw new CorruptEventLogError(
+          `run.cancelled causedByEventId must reference a valid cancellation cause, got '${cause.type}'`
+        );
+      }
+    }
+  }
+}
+
 export class FileEventStore implements EventStore {
   private readonly projectDir: string;
-  private readonly fileQueues = new Map<string, Promise<void>>();
 
   constructor(options: { readonly projectDir: string }) {
     this.projectDir = options.projectDir;
-  }
-
-  private async lockQueue<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    const prev = this.fileQueues.get(key) ?? Promise.resolve();
-    let resolveLock!: () => void;
-    const next = new Promise<void>((res) => {
-      resolveLock = res;
-    });
-    this.fileQueues.set(key, next);
-
-    try {
-      await prev;
-      return await fn();
-    } finally {
-      resolveLock();
-      if (this.fileQueues.get(key) === next) {
-        this.fileQueues.delete(key);
-      }
-    }
   }
 
   async append(event: RunEvent, expectedSequence: number): Promise<void> {
@@ -63,34 +177,44 @@ export class FileEventStore implements EventStore {
     const eventsPath = resolveEventsPath(this.projectDir, validatedEvent.runId);
     const runDir = resolveRunDir(this.projectDir, validatedEvent.runId);
 
-    await this.lockQueue(eventsPath, async () => {
+    await lockPath(eventsPath, async () => {
       await fs.mkdir(runDir, { recursive: true });
 
-      let currentSequence = -1;
-      const seenEventIds = new Set<EventId>();
-
+      const existingEvents: RunEvent[] = [];
+      let content = "";
       try {
-        const content = await fs.readFile(eventsPath, "utf-8");
-        const lines = content.split("\n").filter((line) => line.trim().length > 0);
-        for (const line of lines) {
-          let parsedJson: unknown;
-          try {
-            parsedJson = JSON.parse(line);
-          } catch {
-            throw new CorruptEventLogError(`Malformed JSON line in event log: ${line}`);
-          }
-          const parsedEvent = RunEventSchema.parse(parsedJson);
-          if (seenEventIds.has(parsedEvent.eventId)) {
-            throw new CorruptEventLogError(`Duplicate eventId in log: ${parsedEvent.eventId}`);
-          }
-          seenEventIds.add(parsedEvent.eventId);
-          currentSequence = parsedEvent.sequence;
-        }
+        content = await fs.readFile(eventsPath, "utf-8");
       } catch (err: any) {
         if (err.code !== "ENOENT") {
           throw err;
         }
       }
+
+      if (content.length > 0) {
+        const lines = content.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]!;
+          if (line.trim().length === 0) {
+            if (i === lines.length - 1) continue; // Trailing newline allowed
+            throw new CorruptEventLogError(`Interior blank line detected at line ${i + 1}`);
+          }
+          let parsedJson: unknown;
+          try {
+            parsedJson = JSON.parse(line);
+          } catch {
+            throw new CorruptEventLogError(`Malformed JSON line at line ${i + 1}`);
+          }
+          const parsedEvent = RunEventSchema.parse(parsedJson);
+          existingEvents.push(parsedEvent);
+        }
+
+        validateEventHistory(existingEvents);
+      }
+
+      const currentSequence =
+        existingEvents.length > 0
+          ? existingEvents[existingEvents.length - 1]!.sequence
+          : -1;
 
       if (currentSequence !== expectedSequence) {
         throw new EventSequenceConflictError(
@@ -98,11 +222,8 @@ export class FileEventStore implements EventStore {
         );
       }
 
-      if (seenEventIds.has(validatedEvent.eventId)) {
-        throw new EventSequenceConflictError(
-          `Duplicate eventId conflict: eventId '${validatedEvent.eventId}' already exists in log`
-        );
-      }
+      const fullList = [...existingEvents, validatedEvent];
+      validateEventHistory(fullList);
 
       const line = JSON.stringify(validatedEvent) + "\n";
       const fileHandle = await fs.open(eventsPath, "a");
@@ -129,12 +250,9 @@ export class FileEventStore implements EventStore {
 
     const lines = content.split("\n");
     const events: RunEvent[] = [];
-    const seenEventIds = new Set<EventId>();
-    let expectedSeq = 0;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!;
-      // Trailing empty lines at end of file are ignored
       if (line.trim().length === 0) {
         if (i === lines.length - 1) continue;
         throw new CorruptEventLogError(`Empty line found inside event log at line ${i + 1}`);
@@ -154,18 +272,11 @@ export class FileEventStore implements EventStore {
         throw new CorruptEventLogError(`Invalid event schema at line ${i + 1}: ${err.message}`);
       }
 
-      if (seenEventIds.has(event.eventId)) {
-        throw new CorruptEventLogError(`Duplicate eventId found in event log: ${event.eventId}`);
-      }
-      seenEventIds.add(event.eventId);
-
-      if (event.sequence !== expectedSeq) {
-        throw new CorruptEventLogError(
-          `Corrupt event log sequence: expected sequence ${expectedSeq}, found ${event.sequence}`
-        );
-      }
-      expectedSeq++;
       events.push(event);
+    }
+
+    if (events.length > 0) {
+      validateEventHistory(events);
     }
 
     return events;
@@ -173,13 +284,13 @@ export class FileEventStore implements EventStore {
 }
 
 export function replayRun(events: readonly RunEvent[]): RunState {
-  if (events.length === 0) {
-    throw new Error("Cannot replay empty event list");
-  }
+  validateEventHistory(events);
 
   const first = events[0]!;
   if (first.type !== "run.created") {
-    throw new Error(`Initial event in log must be 'run.created', got '${first.type}'`);
+    throw new CorruptEventLogError(
+      `Initial event in log must be 'run.created', got '${first.type}'`
+    );
   }
 
   let state = createInitialState({

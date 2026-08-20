@@ -20,8 +20,8 @@ export interface Evidence {
   readonly durationMs: number;
   readonly artifactIds: readonly ArtifactId[];
   readonly summary: string;
-  readonly command?: readonly string[];
-  readonly exitCode?: number;
+  readonly command?: readonly string[] | undefined;
+  readonly exitCode?: number | undefined;
 }
 
 export const EvidenceSchema = z

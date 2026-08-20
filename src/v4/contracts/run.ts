@@ -49,12 +49,14 @@ export interface RunState {
   readonly sequence: number;
   readonly attempt: number;
   readonly sameFailureCount: number;
-  readonly lastFailureSignature?: string;
-  readonly inFlight?: {
-    readonly stepId: StepId;
-    readonly operationId: string;
-    readonly sideEffect: SideEffectClass;
-  };
+  readonly lastFailureSignature?: string | undefined;
+  readonly inFlight?:
+    | {
+        readonly stepId: StepId;
+        readonly operationId: string;
+        readonly sideEffect: SideEffectClass;
+      }
+    | undefined;
   readonly startedAt: string;
   readonly updatedAt: string;
 }

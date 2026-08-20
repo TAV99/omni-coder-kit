@@ -1,0 +1,17 @@
+{
+  "type": "result",
+  "status": "success",
+  "structured_output": {
+    "status": "succeeded",
+    "executionId": "exec-1",
+    "summary": "Antigravity task completed",
+    "artifacts": [],
+    "evidence": []
+  },
+  "session_id": "00000000-0000-0000-0000-000000000003",
+  "usage": {
+    "input_tokens": 20,
+    "output_tokens": 10,
+    "total_tokens": 30
+  }
+}

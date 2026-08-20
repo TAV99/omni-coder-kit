@@ -525,7 +525,7 @@ export async function crashAfterStepStartedWorkspaceWrite(): Promise<FaultScenar
       payload: {
         stepId: asStepId("s-1"),
         operationId: "op-1",
-        phase: "EXECUTE",
+        phase: "INTAKE",
         sideEffect: "workspace-write",
         workspaceDir: tmpdir,
       },
@@ -583,7 +583,7 @@ export async function crashAfterStepStartedExternal(): Promise<FaultScenarioFixt
       payload: {
         stepId: asStepId("s-1"),
         operationId: "op-1",
-        phase: "EXECUTE",
+        phase: "INTAKE",
         sideEffect: "external",
         workspaceDir: tmpdir,
       },
@@ -641,7 +641,7 @@ export async function crashAfterArtifactRecorded(): Promise<FaultScenarioFixture
       payload: {
         stepId: asStepId("s-1"),
         operationId: "op-1",
-        phase: "EXECUTE",
+        phase: "INTAKE",
         sideEffect: "workspace-write",
         workspaceDir: tmpdir,
       },
@@ -871,8 +871,8 @@ export async function crashAfterRetryDecision(): Promise<FaultScenarioFixture> {
     expectedMaxAdapterCalls: 0,
     run: async () => {
       const res = await controller.resume(runId);
-      if (res.kind !== "continue" && res.kind !== "rerun") {
-        throw new Error(`Unexpected resume result: ${res.kind}`);
+      if (res.kind !== "rerun") {
+        throw new Error(`Unexpected resume result: expected 'rerun', got '${res.kind}'`);
       }
     },
     cleanup,
@@ -1162,19 +1162,59 @@ export async function crashAfterRunTransitioned(): Promise<FaultScenarioFixture>
       runId,
       sequence: 1,
       at: "2026-08-20T10:00:01.000Z",
+      type: "step.started",
+      payload: {
+        stepId: asStepId("s-1"),
+        operationId: "op-1",
+        phase: "INTAKE",
+        sideEffect: "read-only",
+        workspaceDir: tmpdir,
+      },
+    },
+    0
+  );
+  await eventStore.append(
+    {
+      schemaVersion: 1,
+      eventId: asEventId("e-2"),
+      runId,
+      sequence: 2,
+      at: "2026-08-20T10:00:02.000Z",
+      type: "step.succeeded",
+      payload: {
+        stepId: asStepId("s-1"),
+        operationId: "op-1",
+        result: {
+          status: "succeeded",
+          executionId: "op-1",
+          summary: "done",
+          artifacts: [],
+          evidence: [],
+        },
+      },
+    },
+    1
+  );
+  await eventStore.append(
+    {
+      schemaVersion: 1,
+      eventId: asEventId("e-3"),
+      runId,
+      sequence: 3,
+      at: "2026-08-20T10:00:03.000Z",
       type: "run.transitioned",
       payload: {
         stepId: asStepId("s-1"),
         operationId: "op-1",
         from: "INTAKE",
         to: "PLAN",
-        causedByEventId: asEventId("e-0"),
+        causedByEventId: asEventId("e-2"),
       },
     },
-    0
+    2
   );
 
-  let eventSeq = 1;
+  let eventSeq = 3;
   const controller = new RunController({
     adapter: new FakeAdapter({ outcomes: [] }),
     policy: createDefaultPolicy(),

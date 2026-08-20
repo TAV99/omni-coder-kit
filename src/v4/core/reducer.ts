@@ -34,6 +34,12 @@ export function createInitialState(input: {
 }
 
 export function reduceEvent(state: RunState, event: RunEvent): RunState {
+  if (event.runId !== state.runId) {
+    throw new InvalidStateError(
+      `Event runId mismatch: expected '${state.runId}', got '${event.runId}'`
+    );
+  }
+
   if (event.sequence !== state.sequence + 1) {
     throw new EventSequenceError(
       `Event sequence mismatch: expected ${state.sequence + 1}, got ${event.sequence}`
@@ -56,6 +62,11 @@ export function reduceEvent(state: RunState, event: RunEvent): RunState {
     }
 
     case "step.started": {
+      if (event.payload.phase !== state.phase) {
+        throw new InvalidStateError(
+          `step.started phase mismatch: expected '${state.phase}', got '${event.payload.phase}'`
+        );
+      }
       if (state.inFlight) {
         throw new InvalidStateError(
           `Cannot start step '${event.payload.stepId}'; step '${state.inFlight.stepId}' is already in flight`
@@ -69,13 +80,39 @@ export function reduceEvent(state: RunState, event: RunEvent): RunState {
       break;
     }
 
-    case "artifact.recorded":
+    case "artifact.recorded": {
+      if (event.payload.record.runId !== state.runId) {
+        throw new InvalidStateError(
+          `artifact.recorded runId mismatch: expected '${state.runId}', got '${event.payload.record.runId}'`
+        );
+      }
+      if (!state.inFlight || event.payload.record.producerStepId !== state.inFlight.stepId) {
+        throw new InvalidStateError(
+          `artifact.recorded producerStepId '${event.payload.record.producerStepId}' does not match in-flight step '${state.inFlight?.stepId}'`
+        );
+      }
+      break;
+    }
+
     case "policy.decided": {
-      // These events do not change phase, inFlight, or failure counters directly
+      // Policy decision does not change phase or attempt counters directly
       break;
     }
 
     case "step.succeeded": {
+      if (!state.inFlight) {
+        throw new InvalidStateError("step.succeeded received with no step in flight");
+      }
+      if (event.payload.stepId !== state.inFlight.stepId) {
+        throw new InvalidStateError(
+          `step.succeeded stepId '${event.payload.stepId}' does not match in-flight step '${state.inFlight.stepId}'`
+        );
+      }
+      if (event.payload.result.executionId !== state.inFlight.operationId) {
+        throw new InvalidStateError(
+          `step.succeeded executionId '${event.payload.result.executionId}' does not match in-flight operation '${state.inFlight.operationId}'`
+        );
+      }
       nextInFlight = undefined;
       nextSameFailureCount = 0;
       nextLastFailureSignature = undefined;
@@ -83,6 +120,19 @@ export function reduceEvent(state: RunState, event: RunEvent): RunState {
     }
 
     case "step.failed": {
+      if (!state.inFlight) {
+        throw new InvalidStateError("step.failed received with no step in flight");
+      }
+      if (event.payload.stepId !== state.inFlight.stepId) {
+        throw new InvalidStateError(
+          `step.failed stepId '${event.payload.stepId}' does not match in-flight step '${state.inFlight.stepId}'`
+        );
+      }
+      if (event.payload.result.executionId !== state.inFlight.operationId) {
+        throw new InvalidStateError(
+          `step.failed executionId '${event.payload.result.executionId}' does not match in-flight operation '${state.inFlight.operationId}'`
+        );
+      }
       nextInFlight = undefined;
       const signature = event.payload.result.failure.signature;
       if (state.lastFailureSignature === signature) {
@@ -98,6 +148,19 @@ export function reduceEvent(state: RunState, event: RunEvent): RunState {
     case "step.blocked":
     case "step.cancelled":
     case "step.interrupted": {
+      if (!state.inFlight) {
+        throw new InvalidStateError(`${event.type} received with no step in flight`);
+      }
+      if (event.payload.stepId !== state.inFlight.stepId) {
+        throw new InvalidStateError(
+          `${event.type} stepId '${event.payload.stepId}' does not match in-flight step '${state.inFlight.stepId}'`
+        );
+      }
+      if (event.payload.operationId !== state.inFlight.operationId) {
+        throw new InvalidStateError(
+          `${event.type} operationId '${event.payload.operationId}' does not match in-flight operation '${state.inFlight.operationId}'`
+        );
+      }
       nextInFlight = undefined;
       break;
     }
@@ -146,8 +209,8 @@ export function reduceEvent(state: RunState, event: RunEvent): RunState {
     sequence: number;
     attempt: number;
     sameFailureCount: number;
-    lastFailureSignature?: string;
-    inFlight?: typeof nextInFlight;
+    lastFailureSignature?: string | undefined;
+    inFlight?: typeof nextInFlight | undefined;
     startedAt: string;
     updatedAt: string;
   } = {
