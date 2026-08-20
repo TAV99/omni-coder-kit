@@ -1,43 +1,50 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FakeAdapter } from "../../src/v4/adapters/fake";
-import type { StepResult } from "../../src/v4/contracts/step-result";
-import type { RunState } from "../../src/v4/contracts/run";
-import { asRunId } from "../../src/v4/contracts/ids";
+import { FakeAdapter } from "../../src/v4/testing/fake-adapter";
+import { asRunId, asStepId } from "../../src/v4/contracts/ids";
+import type { StepRequest } from "../../src/v4/contracts/adapter";
 
-test("FakeAdapter returns queued results and throws when exhausted", async () => {
-  const result1: StepResult = {
-    status: "succeeded",
-    executionId: "exec1",
-    summary: "first",
-    artifacts: [],
-    evidence: []
-  };
-  
-  const result2: StepResult = {
-    status: "failed",
-    executionId: "exec2",
-    failure: { code: "ERR", message: "second", retryable: false, signature: "sig" }
+const dummyReq: StepRequest = {
+  runId: asRunId("run-1"),
+  stepId: asStepId("step-1"),
+  phase: "INTAKE",
+  operationId: "op-1",
+  workspaceDir: "/w",
+  prompt: "test",
+  requiredCapabilities: ["workspace.read"],
+  sideEffect: "read-only",
+  timeoutMs: 5000,
+};
+
+test("fake-adapter: probe, queued outcomes, and cancel tracking", async () => {
+  const customErr = new Error("simulated failure");
+  const adapter = new FakeAdapter({
+    id: "test-fake",
+    available: true,
+    capabilities: ["workspace.read"],
+    outcomes: [
+      { kind: "return", value: { status: "succeeded", executionId: "op-1" } },
+      { kind: "throw", error: customErr },
+    ],
+  });
+
+  const probe = await adapter.probe();
+  assert.equal(probe.adapterId, "test-fake");
+  assert.equal(probe.available, true);
+
+  const ctx = {
+    signal: new AbortController().signal,
+    elevatedPermissions: false,
   };
 
-  const adapter = new FakeAdapter([result1, result2]);
-  
-  const state: RunState = {
-    schemaVersion: 1,
-    runId: asRunId("r1"),
-    phase: "EXECUTE",
-    sequence: 0,
-    attempt: 1,
-    sameFailureCount: 0,
-    startedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+  const res1 = await adapter.execute(dummyReq, ctx);
+  assert.deepEqual(res1, { status: "succeeded", executionId: "op-1" });
 
-  const r1 = await adapter.executeStep(state);
-  assert.equal(r1.executionId, "exec1");
-  
-  const r2 = await adapter.executeStep(state);
-  assert.equal(r2.executionId, "exec2");
-  
-  await assert.rejects(adapter.executeStep(state), /FakeAdapter queue is empty/);
+  await assert.rejects(adapter.execute(dummyReq, ctx), (err) => err === customErr);
+
+  // Queue exhausted -> error
+  await assert.rejects(adapter.execute(dummyReq, ctx), /No queued FakeOutcome remaining/);
+
+  await adapter.cancel("exec-123");
+  assert.deepEqual(adapter.cancelledExecutionIds, ["exec-123"]);
 });

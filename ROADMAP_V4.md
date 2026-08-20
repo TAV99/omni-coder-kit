@@ -326,6 +326,13 @@ INTAKE -> PLAN -> EXECUTE -> VERIFY -> ACCEPT -> DOCUMENT -> READY
 - Policy package.
 - Fault-injection test infrastructure.
 
+**P0 Implementation Evidence (2026-08-20):**
+- `npm run typecheck:v4`: PASSED (0 errors, strict mode)
+- `npm run test:v4`: PASSED (34/34 tests passing across contracts, transitions, policy, storage, controller, recovery, and fault-injection)
+- `npm run build:v4`: PASSED (produces CommonJS build in `dist-v4`)
+- `npm test`: PASSED (all 976 existing v3 tests pass + 34 v4 tests pass = 1010 total passing tests)
+- Single-process append-only durability validated on Windows (Node.js 20+). Cross-process concurrent file locking is unsupported in P0. No external agent adapters claimed yet.
+
 ### Milestone 2: Codex Adapter
 
 **Target duration:** active month 4

@@ -1,17 +1,40 @@
 import { z } from "zod";
 import { asArtifactId, asStepId, type ArtifactId, type StepId } from "./ids";
 
-export const EvidenceSchema = z.object({
-  schemaVersion: z.literal(1),
-  kind: z.enum(["command", "artifact", "agent-judgement", "policy"]),
-  producerStepId: z.string().transform(asStepId),
-  method: z.string(),
-  startedAt: z.string().datetime(),
-  durationMs: z.number().nonnegative(),
-  artifactIds: z.array(z.string().transform(asArtifactId)),
-  summary: z.string(),
-  command: z.array(z.string()).optional(),
-  exitCode: z.number().int().optional(),
-}).strict();
+export const EVIDENCE_KINDS = [
+  "command",
+  "artifact",
+  "agent-judgement",
+  "policy",
+] as const;
 
-export type Evidence = z.infer<typeof EvidenceSchema>;
+export const EvidenceKindSchema = z.enum(EVIDENCE_KINDS);
+export type EvidenceKind = z.infer<typeof EvidenceKindSchema>;
+
+export interface Evidence {
+  readonly schemaVersion: 1;
+  readonly kind: EvidenceKind;
+  readonly producerStepId: StepId;
+  readonly method: string;
+  readonly startedAt: string;
+  readonly durationMs: number;
+  readonly artifactIds: readonly ArtifactId[];
+  readonly summary: string;
+  readonly command?: readonly string[];
+  readonly exitCode?: number;
+}
+
+export const EvidenceSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    kind: EvidenceKindSchema,
+    producerStepId: z.string().min(1).transform(asStepId),
+    method: z.string().min(1),
+    startedAt: z.string().datetime(),
+    durationMs: z.number().nonnegative(),
+    artifactIds: z.array(z.string().min(1).transform(asArtifactId)).readonly(),
+    summary: z.string(),
+    command: z.array(z.string()).readonly().optional(),
+    exitCode: z.number().int().optional(),
+  })
+  .strict();

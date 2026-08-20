@@ -134,13 +134,13 @@ export interface EventStore {
 
 export interface ArtifactStore {
   record(input: ArtifactRecordInput): Promise<ArtifactRecord>;
-  verify(record: ArtifactRecord): Promise<ArtifactVerification>;
+  verify(input: ArtifactVerificationInput): Promise<ArtifactVerification>;
 }
 
 export interface Policy {
-  evaluatePreflight(input: PreflightInput): PolicyDecision;
-  decideFailure(input: FailureInput): PolicyDecision;
-  decideResume(input: ResumeInput): PolicyDecision;
+  evaluatePreflight(input: PreflightInput): PreflightDecision;
+  decideFailure(input: FailureInput): FailureDecision;
+  decideResume(input: ResumeInput): ResumeDecision;
 }
 ```
 
@@ -374,7 +374,7 @@ Run `git diff --check` and report suggested message `docs(v4): record kernel arc
 
 **Interfaces:**
 - Consumes: Zod 4.
-- Produces: `RunId`, `StepId`, `EventId`, `ArtifactId`, `RunPhase`, `Capability`, `Evidence`, `ArtifactClaim`, `ArtifactRecord`, `StepResult`, and their boundary schemas.
+- Produces: `RunId`, `StepId`, `EventId`, `ArtifactId`, `RunPhase`, `Capability`, `Evidence`, `ArtifactClaim`, `ArtifactRecord`, `AgentStepOutcome`, `NormalizedUsage`, `NativeExecutionMetadata`, `StepResult`, and their boundary schemas.
 
 - [ ] **Step 1: Extend failing tests for all result variants**
 
@@ -382,6 +382,7 @@ Add tests that assert:
 
 ```ts
 import {
+  AgentStepOutcomeSchema,
   StepResultSchema,
   asArtifactId,
   asStepId,
@@ -401,6 +402,17 @@ test("StepResultSchema accepts a complete success", () => {
 
 test("StepResultSchema rejects prose-only success", () => {
   assert.throws(() => StepResultSchema.parse({ ok: true, summary: "done" }));
+});
+
+test("AgentStepOutcomeSchema rejects adapter-owned native metadata", () => {
+  assert.throws(() => AgentStepOutcomeSchema.parse({
+    status: "succeeded",
+    executionId: "exec-1",
+    summary: "done",
+    artifacts: [],
+    evidence: [],
+    native: { sessionId: "fabricated" },
+  }));
 });
 
 test("StepResultSchema rejects failure without a stable signature", () => {
@@ -435,7 +447,7 @@ export interface RunState {
 }
 ```
 
-- [ ] **Step 3: Implement evidence and artifact contracts**
+- [ ] **Step 3: Implement evidence, artifact, and native-metadata contracts**
 
 Use these exact public shapes:
 
@@ -470,25 +482,37 @@ export interface ArtifactRecord {
   readonly sizeBytes: number;
   readonly recordedAt: string;
 }
+
+export interface NormalizedUsage {
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly cachedInputTokens?: number;
+  readonly totalTokens?: number;
+  readonly costUsd?: number;
+}
+
+export interface NativeExecutionMetadata {
+  readonly sessionId?: string;
+  readonly usage?: NormalizedUsage;
+}
 ```
 
 `ArtifactClaim` is the only artifact shape an adapter may return. It is an untrusted claim about a workspace-relative path; it must not contain `runId`, `producerStepId`, checksum, size, or timestamps. The controller and `ArtifactStore` are authoritative for those fields.
 
-Reject absolute paths and `..` segments in claims and records. Reject negative durations, negative sizes, and malformed SHA-256 strings at the relevant schema boundaries.
+Reject absolute paths and `..` segments in claims and records. Reject negative durations, negative sizes, malformed SHA-256 strings, non-integer or negative token counts, and non-finite or negative cost values at the relevant schema boundaries. Native metadata is adapter-owned and must never be accepted from the model-facing structured result.
 
 - [ ] **Step 4: Implement the step-result discriminated union**
 
-Use the exact variants:
+Define the model-facing result separately from adapter-owned metadata:
 
 ```ts
-export type StepResult =
+export type AgentStepOutcome =
   | {
       readonly status: "succeeded";
       readonly executionId: string;
       readonly summary: string;
       readonly artifacts: readonly ArtifactClaim[];
       readonly evidence: readonly Evidence[];
-      readonly nativeSessionId?: string;
     }
   | {
       readonly status: "failed";
@@ -511,13 +535,17 @@ export type StepResult =
       readonly executionId: string;
       readonly reason: string;
     };
+
+export type StepResult = AgentStepOutcome & {
+  readonly native?: NativeExecutionMetadata;
+};
 ```
 
-Create matching strict Zod schemas. Unknown fields must be rejected.
+Create matching strict `AgentStepOutcomeSchema` and `StepResultSchema`. Build both from the same strict variant fragments so status and error semantics cannot drift. `AgentStepOutcomeSchema` must reject `native`; `StepResultSchema` permits adapter-derived `native` on every status variant. Unknown fields must be rejected.
 
 - [ ] **Step 5: Export the contract surface**
 
-`src/v4/contracts/index.ts` exports only public types, schemas, and ID conversion functions. `src/v4/index.ts` re-exports `./contracts` and `V4_SCHEMA_VERSION`.
+`src/v4/contracts/index.ts` exports only public types, schemas, and ID conversion functions. `src/v4/index.ts` re-exports `./contracts` and `V4_SCHEMA_VERSION`. P1 host JSON Schema generation must use `AgentStepOutcomeSchema`, never `StepResultSchema`.
 
 - [ ] **Step 6: Verify boundaries and type narrowing**
 
@@ -593,19 +621,54 @@ export interface AgentAdapter {
 }
 ```
 
-- [ ] **Step 3: Implement policy contracts**
+`operationId` is the controller-generated execution correlation ID. Every returned `AgentStepOutcome.executionId` must equal `request.operationId`; a mismatch is malformed output. The controller uses the same ID for `step.started`, terminal events, cancellation, recovery, and native adapter cancellation.
 
-Use a single decision union:
+- [ ] **Step 3: Implement stage-specific policy contracts**
+
+Use decisions that cannot be returned from the wrong policy stage:
 
 ```ts
-export type PolicyDecision =
+export type PreflightDecision =
   | { readonly kind: "allow" }
-  | { readonly kind: "retry"; readonly delayMs: number }
-  | { readonly kind: "block"; readonly reason: string; readonly requiredAction: string }
   | { readonly kind: "deny"; readonly reason: string };
+
+export type FailureDecision =
+  | { readonly kind: "retry"; readonly delayMs: number }
+  | { readonly kind: "block"; readonly reason: string; readonly requiredAction: string };
+
+export type ResumeDecision = FailureDecision;
+export type PolicyDecision = PreflightDecision | FailureDecision;
+
+export interface PreflightInput {
+  readonly request: StepRequest;
+  readonly probe: AdapterProbe;
+  readonly elevatedPermissions: boolean;
+}
+
+export interface FailureInput {
+  readonly request: StepRequest;
+  readonly failure: Extract<AgentStepOutcome, { status: "failed" }>["failure"];
+  readonly attempt: number;
+  readonly sameFailureCount: number;
+}
+
+export interface ResumeInput {
+  readonly runId: RunId;
+  readonly phase: RunPhase;
+  readonly stepId: StepId;
+  readonly operationId: string;
+  readonly sideEffect: SideEffectClass;
+  readonly attempt: number;
+}
+
+export interface Policy {
+  evaluatePreflight(input: PreflightInput): PreflightDecision;
+  decideFailure(input: FailureInput): FailureDecision;
+  decideResume(input: ResumeInput): ResumeDecision;
+}
 ```
 
-Define `PreflightInput`, `FailureInput`, `ResumeInput`, and the `Policy` interface shown in the locked surface. `ResumeInput` must include the in-flight side-effect class.
+`decideFailure` is called only after the durable `step.failed` event has been replayed, so its counters come from state rather than caller guesses.
 
 - [ ] **Step 4: Implement event contracts**
 
@@ -621,13 +684,30 @@ export type RunEventType =
   | "step.cancelled"
   | "step.interrupted"
   | "artifact.recorded"
-  | "policy.denied"
+  | "policy.decided"
   | "run.transitioned"
   | "run.blocked"
   | "run.cancelled";
 ```
 
-Every `RunEvent` contains `schemaVersion`, `eventId`, `runId`, `sequence`, `at`, `type`, and type-specific `payload`. Use Zod schemas for disk validation.
+Every `RunEvent` contains `schemaVersion`, `eventId`, `runId`, `sequence`, `at`, `type`, and a strict type-specific payload. Lock these payloads:
+
+| Event | Required payload |
+|---|---|
+| `run.created` | `{ startedAt }` |
+| `step.started` | `{ stepId, operationId, phase, sideEffect, workspaceDir }` |
+| `artifact.recorded` | `{ record: ArtifactRecord }` |
+| `step.succeeded` | `{ stepId, operationId, result: Extract<StepResult, { status: "succeeded" }> }` |
+| `step.failed` | `{ stepId, operationId, result: Extract<StepResult, { status: "failed" }> }` |
+| `step.blocked` | `{ stepId, operationId, result: Extract<StepResult, { status: "blocked" }> }` |
+| `step.cancelled` | `{ stepId, operationId, result: Extract<StepResult, { status: "cancelled" }> }` |
+| `step.interrupted` | `{ stepId, operationId, sideEffect, reason }` |
+| `policy.decided` | strict union of `{ stage: "preflight", stepId, operationId, decision: PreflightDecision }`, `{ stage: "failure", stepId, operationId, decision: FailureDecision }`, or `{ stage: "resume", stepId, operationId, decision: ResumeDecision }` |
+| `run.transitioned` | `{ stepId, operationId, from, to, causedByEventId }` |
+| `run.blocked` | `{ reason, requiredAction, causedByEventId }` |
+| `run.cancelled` | `{ reason, causedByEventId }` |
+
+Use Zod schemas for disk validation. Require non-empty IDs/messages, valid timestamps, non-negative sequence, and exact payload keys. `causedByEventId` must reference an earlier event in the same run during replay validation.
 
 - [ ] **Step 5: Verify no `any` leaks through public contracts**
 
@@ -689,8 +769,11 @@ At minimum assert:
 - `step.failed` clears `inFlight`, increments `attempt`, and updates the failure signature/count.
 - `step.succeeded` clears `inFlight` but does not change phase.
 - Only `run.transitioned` changes phase.
+- `run.blocked` moves any non-terminal phase to `BLOCKED`; `run.cancelled` moves any non-terminal phase to `CANCELLED`.
+- `policy.decided` and `artifact.recorded` do not mutate phase or `inFlight`.
 - A non-consecutive sequence throws `EventSequenceError`.
 - A transition not allowed by the table throws `TransitionError`.
+- `run.transitioned.causedByEventId` must reference the matching earlier `step.succeeded` event with the same `stepId` and `operationId`.
 - Events after `READY` are rejected except a duplicate-detection path handled by storage.
 
 - [ ] **Step 4: Implement the pure reducer**
@@ -791,8 +874,18 @@ Cover:
 - `read` validates every line with `RunEventSchema`.
 - Expected sequence mismatch rejects before writing.
 - Duplicate `eventId` rejects.
+- Two concurrent appends with the same expected sequence result in exactly one success and one `EventSequenceConflictError`.
 - A malformed or truncated final line raises `CorruptEventLogError`.
 - Two sequential appends replay to the same state as direct reduction.
+
+Use this exact construction and sequence convention:
+
+```ts
+const store = new FileEventStore({ projectDir });
+await store.append(event, expectedSequence);
+```
+
+`expectedSequence` means the caller's last durable sequence: `-1` for an empty log, `0` after `run.created`, and so on. Require `event.sequence === expectedSequence + 1` before writing.
 
 - [ ] **Step 2: Implement path containment**
 
@@ -800,7 +893,7 @@ Cover:
 
 - [ ] **Step 3: Implement durable append**
 
-Open with append mode, write one buffer, call `filehandle.sync()`, then close in `finally`. In this single-process P0 implementation, use the expected sequence as optimistic concurrency control. Do not add a lock service.
+Serialize read-check-append operations per resolved event-log path with a process-local promise queue. Inside that critical section, verify the last sequence and duplicate ID, open with append mode, write one buffer, call `filehandle.sync()`, then close in `finally`. This provides single-process compare-and-append semantics; explicitly document that cross-process writers are unsupported in P0. Do not add an external lock service.
 
 - [ ] **Step 4: Implement validated read and replay**
 
@@ -848,16 +941,24 @@ Cover:
 
 ```ts
 export interface ArtifactRecordInput {
+  readonly workspaceDir: string;
   readonly runId: RunId;
   readonly producerStepId: StepId;
   readonly claim: ArtifactClaim;
   readonly recordedAt: string;
 }
 
+export interface ArtifactVerificationInput {
+  readonly workspaceDir: string;
+  readonly record: ArtifactRecord;
+}
+
 export type ArtifactVerification =
   | { readonly valid: true }
   | { readonly valid: false; readonly reason: "missing" | "checksum-mismatch" | "path-escape" };
 ```
+
+`FileArtifactStore` has no hidden workspace root. Both methods resolve and realpath the explicit `workspaceDir`, so recovery can re-verify a durable record using the workspace stored in the matching `step.started` event.
 
 - [ ] **Step 3: Implement recording and verification**
 
@@ -949,6 +1050,7 @@ The test must create a temporary workspace, real artifact file, fake success res
 
 ```text
 run.created
+policy.decided
 step.started
 artifact.recorded
 step.succeeded
@@ -959,7 +1061,7 @@ Assert phase moves from `INTAKE` to `PLAN` only after checksum verification.
 
 - [ ] **Step 2: Write controller tests for every non-success path**
 
-Assert no `run.transitioned` event and no phase change for:
+Assert no normal `run.transitioned` event for:
 
 - Adapter throws.
 - Adapter returns malformed output.
@@ -970,8 +1072,12 @@ Assert no `run.transitioned` event and no phase change for:
 - Artifact checksum is stale.
 - Evidence points to an artifact absent from the success result.
 - Evidence has the wrong `producerStepId`.
+- Empty artifacts, empty evidence, duplicate artifact IDs, or an artifact not referenced by any evidence.
+- `result.executionId !== request.operationId`.
 - Adapter probe lacks a required capability.
 - Elevated permissions are requested but policy denies them.
+
+Assert exact terminal semantics: retryable failure plus `retry` policy remains in the same phase; `blocked`, a failure policy `block`, missing capability, and denied elevation end in `BLOCKED`; cancellation ends in `CANCELLED`. Preflight denial must append `policy.decided` then `run.blocked` without `step.started` or adapter execution.
 
 - [ ] **Step 3: Implement constructor and public methods**
 
@@ -1000,19 +1106,19 @@ export class RunController {
 
 1. Replay current state.
 2. Require `request.phase === state.phase`.
-3. Probe adapter.
-4. Ask policy to evaluate availability, capabilities, and permissions.
+3. Probe adapter and evaluate preflight policy.
+4. Append a `policy.decided` preflight event. On `deny`, append `run.blocked`, return replayed state, and never append `step.started`.
 5. Append `step.started` before invoking the adapter.
-6. Execute with an `AbortController` timeout.
-7. Parse returned `unknown` through `StepResultSchema`.
-8. On success, validate every `ArtifactClaim`, then call `artifacts.record({ runId: request.runId, producerStepId: request.stepId, claim, recordedAt: now() })` so trusted run/producer/checksum/size metadata is created outside the adapter.
-9. Immediately call `artifacts.verify(record)` for every returned record; verify each evidence item has `producerStepId === request.stepId` and references only artifact IDs recorded from this success result.
-10. Append one `artifact.recorded` event per validated `ArtifactRecord`.
-11. Append the terminal step event.
-12. Append `run.transitioned` only for valid success.
+6. Execute with an `AbortController` timeout; use `request.operationId` as the adapter execution/cancellation correlation ID.
+7. Parse returned `unknown` through `StepResultSchema` and require `result.executionId === request.operationId`.
+8. For `succeeded`, require at least one claim and evidence item; reject duplicate artifact IDs; validate every `ArtifactClaim`; then call `artifacts.record({ workspaceDir: request.workspaceDir, runId: request.runId, producerStepId: request.stepId, claim, recordedAt: now() })` so trusted run/producer/checksum/size metadata is created outside the adapter.
+9. Immediately call `artifacts.verify({ workspaceDir: request.workspaceDir, record })` for every returned record. Require every evidence item to have `producerStepId === request.stepId`, reference only recorded IDs, and require every recorded artifact to be referenced by at least one evidence item.
+10. Append one `artifact.recorded` event per validated `ArtifactRecord`, then append `step.succeeded`, then append `run.transitioned` with `causedByEventId` pointing to that success event.
+11. For `failed`—including normalized throw, timeout, malformed output, or correlation mismatch—append `step.failed`, replay counters, call `policy.decideFailure`, and append a `policy.decided` failure event. Return the same phase for `retry`; append `run.blocked` for `block`.
+12. For `blocked`, append `step.blocked` then `run.blocked`. For `cancelled`, append `step.cancelled` then `run.cancelled`.
 13. Replay and return state.
 
-Convert thrown errors and timeouts to structured `step.failed` events with stable signatures; do not allow them to escape after the start event is durable unless event persistence itself fails.
+Convert thrown errors, timeouts, schema errors, and correlation mismatches to structured failed results with stable signatures. Do not allow them to escape after the start event is durable unless event persistence itself fails. A controller call performs at most one adapter execution; a `retry` decision never loops internally.
 
 - [ ] **Step 5: Verify no direct phase mutation exists**
 
@@ -1045,11 +1151,15 @@ Report suggested message `feat(v4): enforce evidence-gated execution`. Do not co
 
 - [ ] **Step 1: Write crash-recovery tests**
 
-Create logs ending after `step.started` for each side-effect class and assert:
+Create logs ending at each durable cut point and assert:
 
-- `read-only`: policy permits retry and recovery appends `step.interrupted`; returned directive is `rerun` with the same operation ID.
+- After `step.started` or one/more `artifact.recorded` events, `read-only` policy permits retry, recovery appends `step.interrupted` plus `policy.decided`, and the directive is `rerun` referencing the previous operation ID.
 - `workspace-write`: recovery appends `run.blocked`; adapter is not called.
 - `external`: recovery appends `run.blocked`; adapter is not called.
+- After `step.succeeded` but before `run.transitioned`, recovery re-verifies all referenced `ArtifactRecord`s and appends the missing transition without executing the adapter. A missing/changed artifact appends `run.blocked` instead.
+- After `step.failed` but before `policy.decided`, recovery calls `decideFailure` from replayed counters and persists the decision without executing the adapter.
+- After a failure `policy.decided` with `retry`, recovery returns `rerun`; with `block`, recovery appends the missing `run.blocked`.
+- After `step.blocked` or `step.cancelled`, recovery appends the missing `run.blocked` or `run.cancelled` respectively.
 - Complete success followed by transition resumes at the new phase with no new event.
 - Corrupt log rejects recovery and writes nothing further.
 
@@ -1058,19 +1168,21 @@ Create logs ending after `step.started` for each side-effect class and assert:
 ```ts
 export type ResumeResult =
   | { readonly kind: "continue"; readonly state: RunState }
-  | { readonly kind: "rerun"; readonly state: RunState; readonly operationId: string }
+  | { readonly kind: "rerun"; readonly state: RunState; readonly previousOperationId: string }
   | { readonly kind: "blocked"; readonly state: RunState; readonly reason: string };
 ```
 
+`rerun` never reuses an execution ID automatically. The caller must construct a new `StepRequest` with a fresh `operationId`; `previousOperationId` exists only for audit/native-resume decisions.
+
 - [ ] **Step 3: Implement recovery without hidden execution**
 
-`resume` may append recovery events, but it must never invoke `adapter.execute`. A caller must explicitly call `executeNext` after receiving `rerun`.
+`resume` may append recovery, policy, and missing terminal events, but it must never invoke `adapter.execute`. A caller must explicitly call `executeNext` after receiving `rerun`. Every appended recovery event must point to an existing same-run step/operation and use the next expected sequence.
 
 - [ ] **Step 4: Verify protected side effects are not duplicated**
 
 Run `npm run test:v4`.
 
-Expected: fake adapter call count stays `0` in interrupted workspace-write and external tests.
+Expected: fake adapter call count stays `0` in every recovery test, including roll-forward after durable success.
 
 - [ ] **Step 5: Prepare the commit checkpoint**
 
@@ -1103,9 +1215,17 @@ export const faultScenarios = {
   modifiedArtifact,
   truncatedEventLog,
   duplicateEvent,
-  interruptedReadOnly,
-  interruptedWorkspaceWrite,
-  interruptedExternal,
+  crashAfterStepStartedReadOnly,
+  crashAfterStepStartedWorkspaceWrite,
+  crashAfterStepStartedExternal,
+  crashAfterArtifactRecorded,
+  crashAfterStepSucceeded,
+  crashAfterStepFailed,
+  crashAfterRetryDecision,
+  crashAfterBlockDecision,
+  crashAfterStepBlocked,
+  crashAfterStepCancelled,
+  crashAfterRunTransitioned,
 } as const;
 ```
 
@@ -1152,6 +1272,18 @@ Confirm there is no production adapter, dashboard, cloud service, deployment, au
 Report suggested message `test(v4): prove P0 correctness and recovery gates`. Do not commit without explicit permission.
 
 ## P0 Handoff Notes for Lower-Capability Agents
+
+- Dispatch exactly one numbered task per fresh agent using this template:
+
+```text
+Implement only Task <N> from plans/v4/2026-08-15-p0-correctness-safety.md.
+Read the plan's Goal, Architecture, Global Constraints, locked interfaces, then Task <N> completely.
+Assume Tasks <1..N-1> are the only available dependencies; do not work on subsequent tasks.
+Follow every checkbox in order: failing test -> observed failure -> minimal implementation -> targeted tests -> P0 regression commands.
+Do not rename/widen a public contract, weaken an assertion, add a dependency, or touch v3 unless Task <N> explicitly requires it.
+Do not commit or push. At the checkpoint, report: changed files; exact commands and exit codes; pass/fail counts; unresolved risks; suggested commit message.
+If an earlier interface is missing or differs, stop and return BLOCKED with the exact file, symbol, compiler/test error, and smallest proposed correction. Do not invent a local workaround.
+```
 
 - Execute tasks strictly in numeric order.
 - Do not start P1 until Task 12 passes completely.

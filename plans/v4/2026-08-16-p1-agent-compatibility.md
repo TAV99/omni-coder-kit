@@ -11,15 +11,15 @@
 ## Global Constraints
 
 - Complete and verify every task in `plans/v4/2026-08-15-p0-correctness-safety.md` first.
-- Do not rename or widen the P0 `AgentAdapter`, `StepRequest`, `AdapterContext`, `StepResult`, `AdapterProbe`, or capability contracts.
+- Do not rename or widen the P0 `AgentAdapter`, `StepRequest`, `AdapterContext`, `AgentStepOutcome`, `StepResult`, `AdapterProbe`, or capability contracts.
 - Treat stdout, stderr, exit codes, session IDs, JSONL events, version strings, and help text as untrusted input.
 - Never construct a shell command string. Pass `command` and `args` separately with `shell: false`.
 - Never add elevated flags unless `AdapterContext.elevatedPermissions === true` and central policy already returned `allow`.
 - A process exit code of `0` is necessary but not sufficient for success.
 - A final prose message is never sufficient for success.
-- Parse native output into an Omni `StepResult`, then let the P0 controller validate it again.
-- Map a proven native session/conversation ID to `StepResult.nativeSessionId`; if the nested result already contains a different ID, reject it as malformed.
-- During P1, usage/cost/duration fields are validated only for smoke evidence and are not added to the P0 result contract. Do not advertise the `usage` capability until a later telemetry interface is approved.
+- Parse model-authored structured output through `AgentStepOutcomeSchema`, derive native session/usage only from trusted CLI envelope/events, combine them into an Omni `StepResult`, then let the P0 controller validate it again.
+- Never accept `native` metadata from model-authored structured output. Host parsers own `StepResult.native` and normalize only fields proven by native output.
+- Advertise `usage` only when the current version probe and parser fixtures prove at least one normalized usage field can be populated from native output.
 - Put model names, native flags, CLI output quirks, and version handling inside the relevant adapter directory.
 - Default host configuration must not commit, push, publish, deploy, access unrelated directories, or bypass sandbox/permissions.
 - Live agent smoke tests require explicit user approval because they use network/model quota and modify a temporary workspace.
@@ -28,7 +28,7 @@
 
 ## Verified Planning Baseline
 
-These versions and flags were observed locally on 2026-08-16. Implementation agents must re-run the listed help commands and update `compatibility/v4/hosts.json` when the installed version differs.
+These versions and required flags were re-verified locally on 2026-08-20. Implementation agents must still re-run the listed help commands and update `compatibility/v4/hosts.json` when the installed version differs.
 
 | Host | Observed version | Verification command | Structured output | Safe workspace mode |
 |---|---:|---|---|---|
@@ -69,6 +69,7 @@ src/v4/
   adapters/
     shared/
       host-invocation.ts
+      prompt.ts
       permission-mode.ts
       result-schema.ts
       adapter-failure.ts
@@ -121,21 +122,44 @@ export interface ProcessRequest {
   readonly signal?: AbortSignal;
 }
 
-export interface ProcessResult {
-  readonly exitCode: number | null;
-  readonly signal: NodeJS.Signals | null;
+export interface ProcessOutput {
   readonly stdout: string;
   readonly stderr: string;
   readonly durationMs: number;
-  readonly timedOut: boolean;
-  readonly aborted: boolean;
 }
+
+export type ProcessResult =
+  | (ProcessOutput & {
+      readonly termination: "exited";
+      readonly exitCode: number;
+      readonly signal: null;
+    })
+  | (ProcessOutput & {
+      readonly termination: "signalled";
+      readonly exitCode: null;
+      readonly signal: NodeJS.Signals;
+    })
+  | (ProcessOutput & {
+      readonly termination: "timed-out" | "aborted" | "output-limit";
+      readonly exitCode: null;
+      readonly signal: NodeJS.Signals | null;
+    })
+  | (ProcessOutput & {
+      readonly termination: "spawn-error";
+      readonly exitCode: null;
+      readonly signal: null;
+      readonly error: { readonly code: string; readonly message: string };
+    });
 
 export interface ProcessRunner {
   run(request: ProcessRequest): Promise<ProcessResult>;
 }
 
-export type CompatibilityStatus = "first-class" | "experimental" | "unavailable";
+export type CompatibilityStatus =
+  | "first-class"
+  | "experimental"
+  | "incompatible"
+  | "unavailable";
 
 export interface HostCompatibilityResult {
   readonly hostId: "codex" | "claude" | "antigravity";
@@ -143,6 +167,9 @@ export interface HostCompatibilityResult {
   readonly installedVersion?: string;
   readonly verifiedVersion?: string;
   readonly missingFlags: readonly string[];
+  readonly contractVerified: boolean;
+  readonly liveSmokeVerified: boolean;
+  readonly platformVerified: boolean;
   readonly diagnostics: readonly string[];
 }
 ```
@@ -183,6 +210,10 @@ if (mode === "echo") {
   process.exit(7);
 } else if (mode === "wait") {
   setInterval(() => {}, 1000);
+} else if (mode === "flood") {
+  process.stdout.write("x".repeat(11 * 1024 * 1024));
+} else if (mode === "signal" && process.platform !== "win32") {
+  process.kill(process.pid, "SIGTERM");
 } else {
   process.stderr.write("unknown fixture mode");
   process.exit(2);
@@ -191,7 +222,7 @@ if (mode === "echo") {
 
 - [ ] **Step 2: Write process runner tests**
 
-Assert arguments containing spaces and shell metacharacters arrive unchanged; stdin is written and closed; stdout/stderr remain separate; exit code `7` is preserved; timeout and external abort terminate the child; nonexistent binaries produce a non-success result; and `shell` cannot be enabled because it is absent from `ProcessRequest`.
+Assert arguments containing spaces and shell metacharacters arrive unchanged; stdin is written and closed; stdout/stderr remain separate; exit code `7` is preserved; timeout, external abort, output overflow, and nonexistent binary each produce the exact distinct `termination`; and `shell` cannot be enabled because it is absent from `ProcessRequest`. Test `signalled` on non-Windows only and state the platform condition in the test name.
 
 - [ ] **Step 3: Implement `NodeProcessRunner`**
 
@@ -207,7 +238,7 @@ spawn(request.command, [...request.args], {
 });
 ```
 
-Bound stdout and stderr to 10 MiB each. When either limit is exceeded, terminate the child and return a non-success result. Use one cleanup function for timer, abort listener, and child listeners; never resolve twice.
+Bound stdout and stderr to 10 MiB each. When either limit is exceeded, terminate the child and return `termination: "output-limit"`. Return spawn failures as `termination: "spawn-error"`; do not reject the promise for expected process outcomes. Use one cleanup function for timer, abort listener, and child listeners; never resolve twice. Parsers may inspect native output only when `termination === "exited" && exitCode === 0`.
 
 - [ ] **Step 4: Verify on Windows**
 
@@ -245,28 +276,37 @@ Create `compatibility/v4/hosts.json`:
 ```json
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-16",
+  "verifiedAt": "2026-08-20",
   "hosts": {
     "codex": {
       "binary": "codex",
       "verifiedVersion": "0.147.0",
       "versionArgs": ["--version"],
       "helpArgs": ["exec", "--help"],
-      "requiredFlags": ["--json", "--output-schema", "--sandbox", "--cd"]
+      "requiredFlags": ["--json", "--strict-config", "--ignore-user-config", "--output-schema", "--output-last-message", "--sandbox", "--approve-for-me", "--cd"],
+      "contractVerified": false,
+      "liveSmokeVerified": false,
+      "verifiedPlatforms": []
     },
     "claude": {
       "binary": "claude",
       "verifiedVersion": "2.1.185",
       "versionArgs": ["--version"],
       "helpArgs": ["--help"],
-      "requiredFlags": ["--print", "--output-format", "--json-schema", "--permission-mode"]
+      "requiredFlags": ["--print", "--output-format", "--json-schema", "--permission-mode", "--allowedTools", "--session-id"],
+      "contractVerified": false,
+      "liveSmokeVerified": false,
+      "verifiedPlatforms": []
     },
     "antigravity": {
       "binary": "agy",
       "verifiedVersion": "1.1.13",
       "versionArgs": ["--version"],
       "helpArgs": ["--help"],
-      "requiredFlags": ["--print", "--output-format", "--json-schema", "--mode", "--sandbox", "--add-dir"]
+      "requiredFlags": ["--print", "--output-format", "--json-schema", "--mode", "--sandbox", "--add-dir", "--print-timeout"],
+      "contractVerified": false,
+      "liveSmokeVerified": false,
+      "verifiedPlatforms": []
     }
   }
 }
@@ -278,11 +318,12 @@ Update values only from actual probe output.
 
 Cover malformed manifest rejection, missing binary, missing required flag, exact verified version, newer unverified version, and stderr-only version output.
 
-Status rules:
+Status rules, evaluated in this order:
 
 - `unavailable`: binary cannot launch.
-- `experimental`: binary launches but version differs or a required flag is missing.
-- `first-class`: installed version equals verified version and every required flag is present.
+- `incompatible`: version cannot be parsed or any required flag is missing.
+- `experimental`: binary/flags are usable, but version differs, contract/live-smoke evidence is absent, or the current `` `${process.platform}-${process.arch}` `` key is not in `verifiedPlatforms`.
+- `first-class`: installed version equals verified version, every required flag is present, both evidence booleans are true, and the current platform is recorded.
 
 - [ ] **Step 4: Implement strict parsing and probes**
 
@@ -290,7 +331,7 @@ Use Zod for disk JSON. Extract the first `x.y.z` sequence from combined stdout/s
 
 - [ ] **Step 5: Document promotion behavior**
 
-State in `compatibility/v4/README.md` that changing `verifiedVersion` requires contract tests and an approved smoke run; editing JSON alone is not evidence.
+State in `compatibility/v4/README.md` that changing `verifiedVersion`, either evidence boolean, or `verifiedPlatforms` requires exact contract commands and an approved smoke run recorded in the README. Editing JSON alone is not evidence; review must reject evidence bits without a matching dated record.
 
 - [ ] **Step 6: Verify and checkpoint**
 
@@ -302,6 +343,7 @@ Run `npm run test:v4` and `npm run typecheck:v4`. Report suggested message `feat
 
 **Files:**
 - Create: `src/v4/adapters/shared/host-invocation.ts`
+- Create: `src/v4/adapters/shared/prompt.ts`
 - Create: `src/v4/adapters/shared/permission-mode.ts`
 - Create: `src/v4/adapters/shared/result-schema.ts`
 - Create: `src/v4/adapters/shared/adapter-failure.ts`
@@ -310,7 +352,7 @@ Run `npm run test:v4` and `npm run typecheck:v4`. Report suggested message `feat
 
 **Interfaces:**
 - Consumes: P0 schemas and `AgentAdapter`.
-- Produces: `HostInvocation`, `AdapterPermissionMode`, `createStepResultJsonSchema`, failure builders, and `runAdapterContractSuite(factory)`.
+- Produces: `HostInvocation`, `renderAgentPrompt`, `AdapterPermissionMode`, `createAgentStepOutcomeJsonSchema`, failure builders, and `runAdapterContractSuite(factory)`.
 
 - [ ] **Step 1: Define the host-neutral invocation contract**
 
@@ -325,7 +367,15 @@ export interface HostInvocation {
 
 Keep this type in `adapters/shared`; no host adapter may import a command type from another host directory.
 
-- [ ] **Step 2: Define permission resolution**
+- [ ] **Step 2: Define the shared agent protocol prompt**
+
+```ts
+export function renderAgentPrompt(request: StepRequest): string;
+```
+
+Return a fixed control preamble followed by one compact JSON object containing `protocol: "omni-v4"`, `executionId: request.operationId`, `stepId`, `phase`, `workspaceDir`, and `task: request.prompt`. The preamble must require: work only inside `workspaceDir`; return exactly one `AgentStepOutcome`; echo the exact execution ID; use workspace-relative artifact claims; set every evidence `producerStepId` to the provided step ID; and never emit `native` metadata. Test quotes, newlines, shell metacharacters, and instruction-like task text: they must remain inside the serialized `task` value and must not add argv entries.
+
+- [ ] **Step 3: Define permission resolution**
 
 ```ts
 export type AdapterPermissionMode = "read-only" | "workspace-write" | "elevated";
@@ -338,17 +388,17 @@ export function resolvePermissionMode(
 
 Rules: explicit elevated context selects elevated; read-only selects read-only; workspace-write selects workspace-write; external without elevated approval throws `AdapterPolicyError`.
 
-- [ ] **Step 3: Generate host JSON Schema from the P0 boundary**
+- [ ] **Step 4: Generate model-facing JSON Schema from the P0 boundary**
 
-Implement `createStepResultJsonSchema()` using Zod 4 JSON Schema generation from `StepResultSchema`. Return a fresh plain object. Test all four status variants and required `failure.signature`.
+Implement `createAgentStepOutcomeJsonSchema()` using Zod 4 JSON Schema generation from `AgentStepOutcomeSchema`. Return a fresh plain object. Test all four status variants, required `failure.signature`, strict rejection of `native`, and absence of adapter-owned session/usage fields from the emitted JSON Schema.
 
-- [ ] **Step 4: Add consistent adapter failures**
+- [ ] **Step 5: Add consistent adapter failures**
 
 ```ts
 export function processFailure(input: {
   executionId: string;
   hostId: string;
-  code: "BINARY_MISSING" | "CLI_EXIT" | "TIMEOUT" | "ABORTED" | "OUTPUT_LIMIT";
+  code: "BINARY_MISSING" | "SPAWN_ERROR" | "CLI_EXIT" | "SIGNAL" | "TIMEOUT" | "ABORTED" | "OUTPUT_LIMIT";
   message: string;
   retryable: boolean;
 }): StepResult;
@@ -362,11 +412,11 @@ export function malformedOutputFailure(
 
 Derive stable signatures from host ID, code, and normalized detail; exclude timestamps and temporary paths.
 
-- [ ] **Step 5: Implement the shared contract suite**
+- [ ] **Step 6: Implement the shared contract suite**
 
-The reusable suite must assert probe behavior; safe mode contains no dangerous flag; explicit elevated mode contains exactly the expected elevated flag; non-zero exit, timeout, abort, and malformed output are non-success; valid structured success passes `StepResultSchema`; and cancellation is idempotent.
+The reusable suite must assert probe behavior; safe mode contains no dangerous flag; explicit elevated mode contains exactly the expected elevated flag; non-zero exit, timeout, abort, and malformed output are non-success; model output containing `native` is rejected; valid structured success plus native metadata passes `StepResultSchema`; and cancellation is idempotent.
 
-- [ ] **Step 6: Verify and checkpoint**
+- [ ] **Step 7: Verify and checkpoint**
 
 Run `npm run test:v4` and `npm run typecheck:v4`. Report suggested message `feat(v4): standardize adapter safety contracts`. Do not commit without explicit permission.
 
@@ -404,7 +454,7 @@ export function parseCodexExecution(input: {
 }): StepResult;
 ```
 
-Safe workspace-write argv must contain `exec --json --strict-config --ignore-user-config --output-schema <schemaPath> --output-last-message <resultPath> --sandbox workspace-write --approve-for-me --cd <workspaceDir> -`. Supply prompt through stdin.
+Safe workspace-write argv must contain `exec --json --strict-config --ignore-user-config --output-schema <schemaPath> --output-last-message <resultPath> --sandbox workspace-write --approve-for-me --cd <workspaceDir> -`. Supply `renderAgentPrompt(request)` through stdin.
 
 Read-only uses `--sandbox read-only` and omits `--approve-for-me`. Elevated uses `--dangerously-bypass-approvals-and-sandbox` and omits sandbox/approve flags. No mode adds `--dangerously-bypass-hook-trust`.
 
@@ -421,11 +471,11 @@ Store the final schema-valid `StepResult` in a separate result-file fixture.
 
 - [ ] **Step 3: Write parser rejection tests**
 
-Reject non-zero exit even with a good result file; missing/invalid result file; schema-invalid result; malformed JSONL; and missing completion event. Map a proven thread ID to `nativeSessionId`. Validate usage event shapes when present, but do not add them to `StepResult`.
+Reject non-zero exit even with a good result file; missing/invalid result file; schema-invalid result; malformed JSONL; and missing completion event. Parse the result file through `AgentStepOutcomeSchema`. Map a proven thread ID and normalized token counters from JSONL into `StepResult.native`.
 
 - [ ] **Step 4: Implement without prose fallback**
 
-Parse JSONL only for completion/session diagnostics and parse only the result file for the final structured result. Never interpret the last stdout line as success. Usage is recorded only by the approved smoke-evidence task.
+Parse JSONL only for completion/session/usage metadata and parse only the result file for the model-authored outcome. Never interpret the last stdout line as success and never accept `native` fields from the result file.
 
 - [ ] **Step 5: Verify and checkpoint**
 
@@ -447,7 +497,7 @@ Run `npm run test:v4` and `npm run typecheck:v4`. Report suggested message `feat
 
 - [ ] **Step 1: Write adapter lifecycle tests**
 
-Using an injected fake runner and temporary directory, test probe, execute, timeout, abort, cancellation, result/schema-file cleanup, and session ID propagation.
+Using an injected fake runner and temporary directory, test probe, execute, timeout, abort, cancellation, result/schema-file cleanup, session ID propagation, and exact correlation `result.executionId === request.operationId`.
 
 - [ ] **Step 2: Implement the constructor surface**
 
@@ -470,11 +520,11 @@ export class CodexAdapter implements AgentAdapter {
 
 - [ ] **Step 3: Map capabilities conservatively**
 
-Advertise `workspace.read`, `workspace.write`, `shell`, `structured-output`, `streaming`, `cancel`, and `native-resume` only when their required flags are present. Do not advertise `usage` or `subagents` during P1.
+Advertise `workspace.read`, `workspace.write`, `shell`, `structured-output`, `streaming`, `cancel`, `native-resume`, and `usage` only when their required flags and parser fixtures are present. Do not advertise `subagents` during P1.
 
 - [ ] **Step 4: Implement execution cleanup**
 
-For each call, write a unique schema file and result file inside `tempDir/<executionId>`. Remove both in `finally`. Track active executions in a `Map<string, AbortController>` so `cancel` is idempotent.
+For each call, derive a filesystem-safe directory name as lower-case SHA-256 of `request.operationId`; write unique schema/result files only inside that directory and remove them in `finally`. Never use the raw operation ID as a path segment. Track active executions in a `Map<string, AbortController>` keyed by `request.operationId`; combine the local signal with `context.signal`, and make `cancel(operationId)` idempotent.
 
 - [ ] **Step 5: Pass the shared suite unchanged**
 
@@ -535,7 +585,7 @@ export const DEFAULT_CLAUDE_TOOL_POLICY: ClaudeToolPolicy = {
 export function buildClaudeInvocation(input: {
   readonly request: StepRequest;
   readonly mode: AdapterPermissionMode;
-  readonly jsonSchema: Readonly<Record<string, unknown>>;
+  readonly outcomeJsonSchema: Readonly<Record<string, unknown>>;
   readonly toolPolicy: ClaudeToolPolicy;
   readonly newSessionId: string;
   readonly resumeSessionId?: string;
@@ -556,12 +606,14 @@ Safe workspace-write invocation must contain:
 ```text
 claude --print --output-format json --json-schema <minifiedSchema>
 --permission-mode acceptEdits --allowedTools <commaSeparatedTools>
---session-id <uuid> <prompt>
+--session-id <uuid> <renderedPrompt>
 ```
 
 Read-only uses `--permission-mode plan` and only read tools. Elevated contains `--dangerously-skip-permissions` only when explicitly selected. Do not treat `--allow-dangerously-skip-permissions` as elevation; it only enables a later option.
 
 Resume mode replaces `--session-id <uuid>` with `--resume <sessionId>`.
+
+Pass the complete `renderAgentPrompt(request)` as one argv element. Tests must prove task text containing spaces or shell metacharacters never creates additional args.
 
 - [ ] **Step 3: Add sanitized result fixtures**
 
@@ -585,7 +637,7 @@ Support a future `structured_output` field by preferring it when present. Reject
 
 - [ ] **Step 4: Write parser tests before implementation**
 
-Reject non-zero exit, `is_error: true`, non-success subtype, invalid envelope, invalid nested JSON, and schema-invalid result. Map the envelope session ID to `nativeSessionId`; reject a conflicting nested ID. Validate cost, duration, and turn-count field types, but record their values only in approved smoke evidence.
+Reject non-zero exit, `is_error: true`, non-success subtype, invalid envelope, invalid nested JSON, and schema-invalid result. Parse the nested result through `AgentStepOutcomeSchema`; therefore any model-authored `native` field is invalid. Map the envelope session ID, cost, and any proven token counters into `StepResult.native`; duration and turn count remain parser diagnostics/smoke evidence because they are not usage counters.
 
 - [ ] **Step 5: Implement strict parsing**
 
@@ -610,7 +662,7 @@ Run `npm run test:v4` and `npm run typecheck:v4`. Report suggested message `feat
 
 - [ ] **Step 1: Write adapter lifecycle tests**
 
-Using a fake runner, verify probe, tool-policy mapping, JSON parsing, timeout, abort, cancellation, native session resume, and that usage/cost fields cannot influence success.
+Using a fake runner, verify probe, tool-policy mapping, JSON parsing, timeout, abort, cancellation keyed by `request.operationId`, exact result correlation, native session resume, native usage/cost normalization, and that these fields cannot turn a failed outcome into success.
 
 - [ ] **Step 2: Implement the constructor surface**
 
@@ -634,6 +686,8 @@ export class ClaudeCodeAdapter implements AgentAdapter {
 - [ ] **Step 3: Advertise capabilities from actual configuration**
 
 Do not advertise `shell` when `shellPatterns` is empty. Do not advertise `workspace.write` when write tools are absent. Advertise native resume only when `--resume` is present in the current help output.
+
+Maintain a `Map<string, AbortController>` keyed by `request.operationId`, combine its signal with `context.signal`, delete the entry in `finally`, and make `cancel(operationId)` idempotent. Pass `request.operationId` to the parser as `executionId`; never accept a different model-authored value.
 
 - [ ] **Step 4: Pass the shared suite unchanged**
 
@@ -671,7 +725,7 @@ Use these exact public signatures:
 export function buildAntigravityInvocation(input: {
   readonly request: StepRequest;
   readonly mode: AdapterPermissionMode;
-  readonly jsonSchema: Readonly<Record<string, unknown>>;
+  readonly outcomeJsonSchema: Readonly<Record<string, unknown>>;
   readonly printTimeoutMs: number;
   readonly model?: string;
 }): HostInvocation;
@@ -687,12 +741,14 @@ Safe workspace-write invocation must contain:
 ```text
 agy --sandbox --mode accept-edits --add-dir <workspaceDir>
 --output-format json --json-schema <minifiedSchema>
---print-timeout <duration> --print <prompt>
+--print-timeout <duration> --print <renderedPrompt>
 ```
 
 Read-only uses `--sandbox --mode plan`. Elevated contains `--dangerously-skip-permissions` only when explicitly selected. Every mode includes `--add-dir <workspaceDir>`; reject a missing/non-directory workspace before building argv.
 
 Do not hard-code model IDs. Accept an optional model from adapter options and add `--model` only when provided.
+
+Pass the complete `renderAgentPrompt(request)` as one argv element after `--print`; do not concatenate it into a shell string.
 
 - [ ] **Step 2: Capture the native envelope before promotion**
 
@@ -702,11 +758,11 @@ The parser may accept either a direct `StepResult` object or one envelope contai
 
 - [ ] **Step 3: Write rejection tests**
 
-Reject timeout, process non-zero, invalid JSON, explicit error envelope, missing final structured result, and schema-invalid result. Map a proven conversation/session ID to `nativeSessionId`; reject a conflicting nested ID.
+Reject timeout, process non-zero, invalid JSON, explicit error envelope, missing final structured result, and schema-invalid result. Parse the structured candidate through `AgentStepOutcomeSchema`; map only native-envelope conversation/session and usage fields into `StepResult.native`.
 
 - [ ] **Step 4: Implement strict parser and dual timeout input**
 
-The builder accepts both `timeoutMs` and computed `printTimeoutMs`. Validate that native print timeout is at least 30 seconds below the outer process timeout, with a 30-second minimum.
+The builder accepts both `timeoutMs` and computed `printTimeoutMs`. Require outer `timeoutMs > 30_000`; compute native timeout as `Math.max(30_000, timeoutMs - 30_000)` and require it to remain strictly below the outer timeout.
 
 - [ ] **Step 5: Verify and checkpoint**
 
@@ -727,7 +783,7 @@ Run `npm run test:v4` and `npm run typecheck:v4`. Report suggested message `feat
 
 - [ ] **Step 1: Write lifecycle and workspace tests**
 
-Assert unavailable binary, version mismatch, missing workspace, missing `--add-dir`, safe mode, explicit elevation, timeout, cancellation, malformed native output, and valid structured success.
+Assert unavailable binary, version mismatch, missing workspace, missing `--add-dir`, safe mode, explicit elevation, timeout, cancellation keyed by `request.operationId`, exact result correlation, malformed native output, and valid structured success.
 
 - [ ] **Step 2: Implement the constructor surface**
 
@@ -751,11 +807,13 @@ export class AntigravityAdapter implements AgentAdapter {
 
 - [ ] **Step 3: Use two timeout boundaries**
 
-Set native `--print-timeout` at least 30 seconds below `StepRequest.timeoutMs`, with a 30-second floor. The process runner remains the authoritative outer timeout. If `timeoutMs <= 60_000`, use native 30 seconds and outer requested timeout; do not let native timeout exceed outer timeout.
+Require `StepRequest.timeoutMs > 30_000`. Set native `--print-timeout` to `Math.max(30_000, timeoutMs - 30_000)`; the process runner remains the authoritative outer timeout. Reject rather than silently rewriting an outer timeout of 30 seconds or less.
+
+Maintain a `Map<string, AbortController>` keyed by `request.operationId`, combine its signal with `context.signal`, delete the entry in `finally`, and make `cancel(operationId)` idempotent. Pass the same operation ID into the parser as `executionId`.
 
 - [ ] **Step 4: Map capabilities conservatively**
 
-Advertise workspace, structured output, cancel, and native resume only when current help/fixtures prove them. Do not advertise `usage` during P1. Do not advertise `subagents` merely because Antigravity has Manager View; P1 tests only headless adapter behavior.
+Advertise workspace, structured output, cancel, native resume, and usage only when current help/fixtures prove them. Do not advertise `subagents` merely because Antigravity has Manager View; P1 tests only headless adapter behavior.
 
 - [ ] **Step 5: Pass the shared suite unchanged**
 
@@ -786,7 +844,7 @@ Report suggested message `feat(v4): add contract-tested Antigravity adapter`. Do
 
 - [ ] **Step 1: Write registry tests**
 
-Assert known IDs construct the correct adapter, unknown IDs throw `UnsupportedAdapterError`, unavailable binaries are listed but cannot start, and experimental adapters require explicit `allowExperimental: true`.
+Assert known IDs construct the correct adapter, unknown IDs throw `UnsupportedAdapterError`, unavailable/incompatible adapters are listed but cannot start, experimental adapters require explicit `allowExperimental: true`, and only fully evidenced current-platform entries are first-class.
 
 - [ ] **Step 2: Implement the exact registry input**
 
@@ -799,13 +857,31 @@ export interface AdapterRegistryOptions {
   readonly compatibilityManifestPath: string;
   readonly allowExperimental: boolean;
 }
+
+export type AdapterHostOptions =
+  | { readonly hostId: "codex"; readonly tempDir: string }
+  | { readonly hostId: "claude"; readonly toolPolicy?: ClaudeToolPolicy }
+  | {
+      readonly hostId: "antigravity";
+      readonly model?: string;
+      readonly printTimeoutMs?: number;
+    };
+
+export function createAdapter(
+  options: AdapterRegistryOptions,
+  host: AdapterHostOptions,
+): Promise<AgentAdapter>;
+
+export function listAdapterStatuses(
+  options: Omit<AdapterRegistryOptions, "allowExperimental">,
+): Promise<readonly HostCompatibilityResult[]>;
 ```
 
-Host-specific optional configuration is supplied through a separate discriminated `AdapterHostOptions` union; do not add a bag of `unknown` options.
+Do not add a bag of `unknown` host options. `createAdapter` probes before construction; it rejects `unavailable`, and rejects `experimental` unless `allowExperimental` is exactly `true`.
 
 - [ ] **Step 3: Enforce status before construction**
 
-Do not defer unavailable/experimental rejection until the first model call. Probe, compute status, and reject before returning an executable adapter.
+Do not defer status rejection until the first model call. Probe and compute status before returning an executable adapter. Always reject unavailable/incompatible; reject experimental unless explicitly allowed.
 
 - [ ] **Step 4: Keep core vendor-neutral**
 
@@ -879,11 +955,11 @@ For each approved host assert:
 - Omni result passes `StepResultSchema`.
 - Artifact checksum verifies.
 - P0 controller advances exactly one phase.
-- Version/session and available usage/cost fields are recorded as smoke evidence where present; only session is mapped into the runtime `StepResult`.
+- Version/session and available usage/cost fields are recorded as smoke evidence; session and normalized usage are also present in `StepResult.native` when the host proves them.
 
 - [ ] **Step 5: Promote only evidence-backed adapters**
 
-Set a host to first-class only after its shared contract suite and live smoke both pass on the recorded version. Keep every other host experimental and state the missing evidence in `compatibility/v4/README.md`.
+After both gates pass on the exact recorded version, set `contractVerified: true`, `liveSmokeVerified: true`, and add the exact platform key such as `win32-x64` to `verifiedPlatforms`. Keep every other usable host experimental and state the missing evidence in `compatibility/v4/README.md`. Any later `verifiedVersion` change resets both booleans and the platform list before new evidence is collected.
 
 - [ ] **Step 6: Update roadmap evidence**
 
@@ -949,6 +1025,18 @@ Confirm P1 did not add cloud services, UI, deployment, automatic commit/push, pr
 Report suggested message `test(v4): complete P1 adapter compatibility gates`. Do not commit without explicit permission.
 
 ## P1 Handoff Notes for Lower-Capability Agents
+
+- Dispatch exactly one numbered task per fresh agent using this template:
+
+```text
+Implement only Task <N> from plans/v4/2026-08-16-p1-agent-compatibility.md.
+First verify the complete P0 gate is green. Then read this plan's Goal, Architecture, Global Constraints, stable interfaces, and Task <N> completely.
+Assume only earlier-numbered P1 tasks exist. Keep all host quirks inside that host directory and use shared helpers unchanged.
+Follow every checkbox in order: failing test -> observed failure -> minimal implementation -> targeted tests -> full required gates.
+Do not run a live model/smoke test without explicit cost/network approval. Do not commit, push, publish, or deploy.
+At the checkpoint, report: changed files; sanitized argv; exact commands and exit codes; pass/fail counts; compatibility status/evidence; suggested commit message.
+If CLI help/version or a P0 contract differs, stop and return BLOCKED with exact output and the smallest host-local correction. Never weaken the shared contract suite.
+```
 
 - Execute tasks strictly in numeric order and keep one host active at a time.
 - Do not modify P0 contracts to accommodate a host quirk; isolate the quirk in that host's builder or parser.

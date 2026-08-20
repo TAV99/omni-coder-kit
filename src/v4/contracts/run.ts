@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { RunId, StepId } from "./ids";
 
-export const RunPhaseSchema = z.enum([
+export const RUN_PHASES = [
   "INTAKE",
   "PLAN",
   "EXECUTE",
@@ -13,11 +13,12 @@ export const RunPhaseSchema = z.enum([
   "READY",
   "BLOCKED",
   "CANCELLED",
-]);
+] as const;
 
+export const RunPhaseSchema = z.enum(RUN_PHASES);
 export type RunPhase = z.infer<typeof RunPhaseSchema>;
 
-export const CapabilitySchema = z.enum([
+export const CAPABILITIES = [
   "workspace.read",
   "workspace.write",
   "shell",
@@ -27,11 +28,19 @@ export const CapabilitySchema = z.enum([
   "native-resume",
   "usage",
   "subagents",
-]);
+] as const;
 
+export const CapabilitySchema = z.enum(CAPABILITIES);
 export type Capability = z.infer<typeof CapabilitySchema>;
 
-export type SideEffectClass = "read-only" | "workspace-write" | "external";
+export const SIDE_EFFECT_CLASSES = [
+  "read-only",
+  "workspace-write",
+  "external",
+] as const;
+
+export const SideEffectClassSchema = z.enum(SIDE_EFFECT_CLASSES);
+export type SideEffectClass = z.infer<typeof SideEffectClassSchema>;
 
 export interface RunState {
   readonly schemaVersion: 1;
