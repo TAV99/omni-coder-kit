@@ -7,8 +7,16 @@ export function asRunId(id: string): RunId {
   if (!id || typeof id !== "string" || id.trim().length === 0) {
     throw new Error("RunId must be a non-empty string");
   }
-  if (id.includes("/") || id.includes("\\")) {
-    throw new Error("RunId cannot contain path separators");
+  if (
+    id.includes("/") ||
+    id.includes("\\") ||
+    id.includes(":") ||
+    id === "." ||
+    id === ".." ||
+    id.startsWith(".") ||
+    id.includes("..")
+  ) {
+    throw new Error("RunId cannot contain path separators or dot traversal segments");
   }
   return id as RunId;
 }

@@ -50,7 +50,6 @@ export async function recoverRun(
       payload: {
         stepId,
         operationId,
-        sideEffect,
         reason: "Process interrupted while step was in flight",
       },
     };
@@ -438,8 +437,8 @@ export async function recoverRun(
       at: deps.now(),
       type: "run.blocked",
       payload: {
-        reason: lastEvent.payload.result.reason,
-        requiredAction: lastEvent.payload.result.requiredAction,
+        reason: lastEvent.payload.reason,
+        requiredAction: "User intervention required",
         causedByEventId: lastEvent.eventId,
       },
     };
@@ -448,7 +447,7 @@ export async function recoverRun(
     return {
       kind: "blocked",
       state: replayRun(events),
-      reason: lastEvent.payload.result.reason,
+      reason: lastEvent.payload.reason,
     };
   }
 
@@ -462,7 +461,7 @@ export async function recoverRun(
       at: deps.now(),
       type: "run.cancelled",
       payload: {
-        reason: lastEvent.payload.result.reason,
+        reason: lastEvent.payload.reason,
         causedByEventId: lastEvent.eventId,
       },
     };
@@ -471,6 +470,430 @@ export async function recoverRun(
     return {
       kind: "continue",
       state: replayRun(events),
+    };
+  }
+
+  // 7. quality.completed without run.routed or run.blocked
+  if (lastEvent.type === "quality.completed") {
+    if (!deps.bundles) {
+      const blockedEvent: RunEvent = {
+        schemaVersion: 1,
+        eventId: deps.newEventId(),
+        runId,
+        sequence: currentSeq + 1,
+        at: deps.now(),
+        type: "run.blocked",
+        payload: {
+          reason: "QUALITY_RECOVERY_UNSAFE: Evidence bundle store is required to verify completed quality cycle",
+          requiredAction: "Provide evidence bundle store to recovery controller",
+          causedByEventId: lastEvent.eventId,
+        },
+      };
+      await deps.events.append(blockedEvent, currentSeq);
+      events = await deps.events.read(runId);
+      return {
+        kind: "blocked",
+        state: replayRun(events),
+        reason: blockedEvent.payload.reason,
+      };
+    }
+
+    try {
+      const bundle = await deps.bundles.readBundle(runId, lastEvent.payload.cycleId);
+      if (
+        bundle.runId !== runId ||
+        bundle.cycleId !== lastEvent.payload.cycleId ||
+        bundle.decision.kind !== lastEvent.payload.decision.kind
+      ) {
+        throw new Error("Evidence bundle identity or decision mismatch against quality.completed event");
+      }
+
+      const decision = lastEvent.payload.decision;
+      if (decision.kind === "advance") {
+        if (
+          bundle.routeIntent.kind !== "advance" ||
+          bundle.routeIntent.from !== state.phase ||
+          bundle.routeIntent.to !== decision.to ||
+          bundle.routeIntent.causedByEventId !== lastEvent.eventId
+        ) {
+          throw new Error("Evidence bundle routeIntent semantic mismatch for advance decision");
+        }
+        const routedEvent: RunEvent = {
+          schemaVersion: 1,
+          eventId: deps.newEventId(),
+          runId,
+          sequence: currentSeq + 1,
+          at: deps.now(),
+          type: "run.routed",
+          payload: {
+            from: state.phase,
+            to: decision.to,
+            causedByEventId: lastEvent.eventId,
+          },
+        };
+        await deps.events.append(routedEvent, currentSeq);
+        events = await deps.events.read(runId);
+        return {
+          kind: "continue",
+          state: replayRun(events),
+        };
+      } else if (decision.kind === "block") {
+        if (
+          bundle.routeIntent.kind !== "block" ||
+          bundle.routeIntent.from !== state.phase ||
+          bundle.routeIntent.reason !== decision.reason ||
+          bundle.routeIntent.requiredAction !== decision.requiredAction ||
+          bundle.routeIntent.causedByEventId !== lastEvent.eventId
+        ) {
+          throw new Error("Evidence bundle routeIntent semantic mismatch for block decision");
+        }
+        const blockedEvent: RunEvent = {
+          schemaVersion: 1,
+          eventId: deps.newEventId(),
+          runId,
+          sequence: currentSeq + 1,
+          at: deps.now(),
+          type: "run.blocked",
+          payload: {
+            reason: decision.reason,
+            requiredAction: decision.requiredAction,
+            causedByEventId: lastEvent.eventId,
+          },
+        };
+        await deps.events.append(blockedEvent, currentSeq);
+        events = await deps.events.read(runId);
+        return {
+          kind: "blocked",
+          state: replayRun(events),
+          reason: decision.reason,
+        };
+      } else if (decision.kind === "repair") {
+        // Cannot roll forward repair directly from quality.completed; authorized cause must be repair.decided
+        const blockedEvent: RunEvent = {
+          schemaVersion: 1,
+          eventId: deps.newEventId(),
+          runId,
+          sequence: currentSeq + 1,
+          at: deps.now(),
+          type: "run.blocked",
+          payload: {
+            reason: "QUALITY_RECOVERY_UNSAFE: Quality cycle completed with repair decision but repair.decided event was not durably recorded",
+            requiredAction: "Resume run to re-evaluate quality cycle or record repair.decided event",
+            causedByEventId: lastEvent.eventId,
+          },
+        };
+        await deps.events.append(blockedEvent, currentSeq);
+        events = await deps.events.read(runId);
+        return {
+          kind: "blocked",
+          state: replayRun(events),
+          reason: blockedEvent.payload.reason,
+        };
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const blockedEvent: RunEvent = {
+        schemaVersion: 1,
+        eventId: deps.newEventId(),
+        runId,
+        sequence: currentSeq + 1,
+        at: deps.now(),
+        type: "run.blocked",
+        payload: {
+          reason: `QUALITY_RECOVERY_UNSAFE: Missing or corrupt authorized evidence bundle: ${errMsg}`,
+          requiredAction: "Inspect quality evidence bundle storage",
+          causedByEventId: lastEvent.eventId,
+        },
+      };
+      await deps.events.append(blockedEvent, currentSeq);
+      events = await deps.events.read(runId);
+      return {
+        kind: "blocked",
+        state: replayRun(events),
+        reason: blockedEvent.payload.reason,
+      };
+    }
+  }
+
+  // 8. repair.decided cut point without run.routed
+  if (lastEvent.type === "repair.decided") {
+    if (!deps.bundles) {
+      const blockedEvent: RunEvent = {
+        schemaVersion: 1,
+        eventId: deps.newEventId(),
+        runId,
+        sequence: currentSeq + 1,
+        at: deps.now(),
+        type: "run.blocked",
+        payload: {
+          reason: "QUALITY_RECOVERY_UNSAFE: Evidence bundle store is required to verify repair decision",
+          requiredAction: "Provide evidence bundle store to recovery controller",
+          causedByEventId: lastEvent.eventId,
+        },
+      };
+      await deps.events.append(blockedEvent, currentSeq);
+      events = await deps.events.read(runId);
+      return {
+        kind: "blocked",
+        state: replayRun(events),
+        reason: blockedEvent.payload.reason,
+      };
+    }
+
+    try {
+      const bundle = await deps.bundles.readBundle(runId, lastEvent.payload.cycleId);
+      if (
+        bundle.runId !== runId ||
+        bundle.cycleId !== lastEvent.payload.cycleId ||
+        bundle.decision.kind !== "repair" ||
+        bundle.routeIntent.kind !== "repair" ||
+        bundle.routeIntent.from !== state.phase ||
+        bundle.routeIntent.to !== bundle.decision.to ||
+        bundle.routeIntent.attempt !== lastEvent.payload.attempt ||
+        JSON.stringify(bundle.routeIntent.requirementIds) !== JSON.stringify(lastEvent.payload.requirementIds) ||
+        JSON.stringify(bundle.decision.requirementIds) !== JSON.stringify(lastEvent.payload.requirementIds) ||
+        bundle.routeIntent.causedByEventId !== lastEvent.eventId
+      ) {
+        throw new Error("Evidence bundle identity or routeIntent semantic mismatch against repair.decided event");
+      }
+
+      if (bundle.repairHistory.length === 0) {
+        throw new Error("Evidence bundle repair history is empty for repair.decided event");
+      }
+
+      const latest = bundle.repairHistory[bundle.repairHistory.length - 1]!;
+      if (
+        latest.attempt !== lastEvent.payload.attempt ||
+        latest.cycleId !== lastEvent.payload.cycleId ||
+        JSON.stringify(latest.requirementIds) !== JSON.stringify(lastEvent.payload.requirementIds)
+      ) {
+        throw new Error("Evidence bundle repair history mismatch against repair.decided event");
+      }
+
+      const routedEvent: RunEvent = {
+        schemaVersion: 1,
+        eventId: deps.newEventId(),
+        runId,
+        sequence: currentSeq + 1,
+        at: deps.now(),
+        type: "run.routed",
+        payload: {
+          from: state.phase,
+          to: bundle.routeIntent.to,
+          causedByEventId: lastEvent.eventId,
+        },
+      };
+      await deps.events.append(routedEvent, currentSeq);
+      events = await deps.events.read(runId);
+      return {
+        kind: "continue",
+        state: replayRun(events),
+      };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const blockedEvent: RunEvent = {
+        schemaVersion: 1,
+        eventId: deps.newEventId(),
+        runId,
+        sequence: currentSeq + 1,
+        at: deps.now(),
+        type: "run.blocked",
+        payload: {
+          reason: `QUALITY_RECOVERY_UNSAFE: Missing or corrupt authorized evidence bundle for repair decision: ${errMsg}`,
+          requiredAction: "Inspect quality evidence bundle storage",
+          causedByEventId: lastEvent.eventId,
+        },
+      };
+      await deps.events.append(blockedEvent, currentSeq);
+      events = await deps.events.read(runId);
+      return {
+        kind: "blocked",
+        state: replayRun(events),
+        reason: blockedEvent.payload.reason,
+      };
+    }
+  }
+
+  // 9. In-flight / interrupted quality cycle without completion (R34, R35, R36, R37, R38)
+  const lastQualityStart = [...events].reverse().find((e) => e.type === "quality.started");
+  if (lastQualityStart && lastQualityStart.type === "quality.started") {
+    const qualityStartSeq = lastQualityStart.sequence;
+    const cycleId = lastQualityStart.payload.cycleId;
+
+    if (!deps.gateRegistry) {
+      const blockedEvent: RunEvent = {
+        schemaVersion: 1,
+        eventId: deps.newEventId(),
+        runId,
+        sequence: currentSeq + 1,
+        at: deps.now(),
+        type: "run.blocked",
+        payload: {
+          reason: "QUALITY_RECOVERY_UNSAFE: Quality gate registry is required for recovery of in-flight quality gates",
+          requiredAction: "Provide gate registry to recovery controller",
+          causedByEventId: lastQualityStart.eventId,
+        },
+      };
+      await deps.events.append(blockedEvent, currentSeq);
+      events = await deps.events.read(runId);
+      return {
+        kind: "blocked",
+        state: replayRun(events),
+        reason: blockedEvent.payload.reason,
+      };
+    }
+
+    // Check if there are quality events with conflicting/ambiguous cycle IDs (R38)
+    const subsequentQualityEvents = events.slice(qualityStartSeq + 1);
+    for (const ev of subsequentQualityEvents) {
+      const evCycleId =
+        ev.type === "gate.started"
+          ? ev.payload.cycleId
+          : ev.type === "gate.completed"
+          ? ev.payload.result.cycleId
+          : undefined;
+      if (evCycleId !== undefined && evCycleId !== cycleId) {
+        const blockedEvent: RunEvent = {
+          schemaVersion: 1,
+          eventId: deps.newEventId(),
+          runId,
+          sequence: currentSeq + 1,
+          at: deps.now(),
+          type: "run.blocked",
+          payload: {
+            reason: `QUALITY_RECOVERY_UNSAFE: Ambiguous quality cycle correlation ('${evCycleId}' !== '${cycleId}')`,
+            requiredAction: "Inspect event log for cross-cycle corruption",
+            causedByEventId: ev.eventId,
+          },
+        };
+        await deps.events.append(blockedEvent, currentSeq);
+        events = await deps.events.read(runId);
+        return {
+          kind: "blocked",
+          state: replayRun(events),
+          reason: blockedEvent.payload.reason,
+        };
+      }
+    }
+
+    // Track active and completed gates strictly by cycleId + gateId + operationId
+    const startedGates = new Map<string, { gateId: import("../contracts/quality").GateId; opId: string; eventId: EventId }>();
+    for (const ev of subsequentQualityEvents) {
+      if (ev.type === "gate.started") {
+        const key = `${ev.payload.gateId}:${ev.payload.operationId}`;
+        if (startedGates.has(key)) {
+          const blockedEvent: RunEvent = {
+            schemaVersion: 1,
+            eventId: deps.newEventId(),
+            runId,
+            sequence: currentSeq + 1,
+            at: deps.now(),
+            type: "run.blocked",
+            payload: {
+              reason: `QUALITY_RECOVERY_UNSAFE: Duplicate in-flight gate.started for gate '${ev.payload.gateId}' (operation '${ev.payload.operationId}')`,
+              requiredAction: "Inspect event log for duplicate gate execution",
+              causedByEventId: ev.eventId,
+            },
+          };
+          await deps.events.append(blockedEvent, currentSeq);
+          events = await deps.events.read(runId);
+          return {
+            kind: "blocked",
+            state: replayRun(events),
+            reason: blockedEvent.payload.reason,
+          };
+        }
+        startedGates.set(key, {
+          gateId: ev.payload.gateId,
+          opId: ev.payload.operationId,
+          eventId: ev.eventId,
+        });
+      } else if (ev.type === "gate.completed") {
+        const key = `${ev.payload.result.gateId}:${ev.payload.result.operationId}`;
+        if (!startedGates.has(key)) {
+          const blockedEvent: RunEvent = {
+            schemaVersion: 1,
+            eventId: deps.newEventId(),
+            runId,
+            sequence: currentSeq + 1,
+            at: deps.now(),
+            type: "run.blocked",
+            payload: {
+              reason: `QUALITY_RECOVERY_UNSAFE: gate.completed for gate '${ev.payload.result.gateId}' has no matching gate.started in cycle`,
+              requiredAction: "Inspect event log for gate correlation failure",
+              causedByEventId: ev.eventId,
+            },
+          };
+          await deps.events.append(blockedEvent, currentSeq);
+          events = await deps.events.read(runId);
+          return {
+            kind: "blocked",
+            state: replayRun(events),
+            reason: blockedEvent.payload.reason,
+          };
+        }
+        startedGates.delete(key);
+      }
+    }
+
+    // Validate in-flight gates against registry
+    if (startedGates.size > 0) {
+      for (const inFlight of startedGates.values()) {
+        const def = deps.gateRegistry.getGate(inFlight.gateId);
+        if (!def) {
+          const blockedEvent: RunEvent = {
+            schemaVersion: 1,
+            eventId: deps.newEventId(),
+            runId,
+            sequence: currentSeq + 1,
+            at: deps.now(),
+            type: "run.blocked",
+            payload: {
+              reason: `QUALITY_RECOVERY_UNSAFE: Missing gate definition for in-flight gate '${inFlight.gateId}'`,
+              requiredAction: "Verify quality gate configuration",
+              causedByEventId: inFlight.eventId,
+            },
+          };
+          await deps.events.append(blockedEvent, currentSeq);
+          events = await deps.events.read(runId);
+          return {
+            kind: "blocked",
+            state: replayRun(events),
+            reason: blockedEvent.payload.reason,
+          };
+        }
+
+        if (def.sideEffect === "workspace-write" && !def.retrySafe) {
+          const blockedEvent: RunEvent = {
+            schemaVersion: 1,
+            eventId: deps.newEventId(),
+            runId,
+            sequence: currentSeq + 1,
+            at: deps.now(),
+            type: "run.blocked",
+            payload: {
+              reason: `QUALITY_RECOVERY_UNSAFE: Workspace-write gate '${inFlight.gateId}' is not retry-safe`,
+              requiredAction: "Manual recovery required for non-retry-safe workspace modifications",
+              causedByEventId: inFlight.eventId,
+            },
+          };
+          await deps.events.append(blockedEvent, currentSeq);
+          events = await deps.events.read(runId);
+          return {
+            kind: "blocked",
+            state: replayRun(events),
+            reason: blockedEvent.payload.reason,
+          };
+        }
+      }
+    }
+
+    const inFlightEntry = startedGates.values().next().value;
+    const previousOperationId = inFlightEntry?.opId ?? `quality-cycle-${cycleId}`;
+    return {
+      kind: "rerun",
+      state,
+      previousOperationId,
     };
   }
 

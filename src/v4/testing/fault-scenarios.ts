@@ -828,7 +828,6 @@ export async function crashAfterRetryDecision(): Promise<FaultScenarioFixture> {
       payload: {
         stepId: asStepId("s-1"),
         operationId: "op-1",
-        sideEffect: "read-only",
         reason: "crash",
       },
     },
@@ -1027,12 +1026,7 @@ export async function crashAfterStepBlocked(): Promise<FaultScenarioFixture> {
       payload: {
         stepId: asStepId("s-1"),
         operationId: "op-1",
-        result: {
-          status: "blocked",
-          executionId: "op-1",
-          reason: "blocked by user",
-          requiredAction: "action",
-        },
+        reason: "blocked by user",
       },
     },
     1
@@ -1106,11 +1100,7 @@ export async function crashAfterStepCancelled(): Promise<FaultScenarioFixture> {
       payload: {
         stepId: asStepId("s-1"),
         operationId: "op-1",
-        result: {
-          status: "cancelled",
-          executionId: "op-1",
-          reason: "cancelled by user",
-        },
+        reason: "cancelled by user",
       },
     },
     1

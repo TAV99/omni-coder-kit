@@ -12,6 +12,8 @@ export interface NormalizedUsage {
 
 export interface NativeExecutionMetadata {
   readonly sessionId?: string | undefined;
+  readonly cliVersion?: string | undefined;
+  readonly model?: string | undefined;
   readonly usage?: NormalizedUsage | undefined;
 }
 
@@ -62,6 +64,8 @@ export const NormalizedUsageSchema = z
 export const NativeExecutionMetadataSchema = z
   .object({
     sessionId: z.string().min(1).optional(),
+    cliVersion: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
     usage: NormalizedUsageSchema.optional(),
   })
   .strict();

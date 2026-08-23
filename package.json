@@ -17,7 +17,8 @@
     "test": "node -c bin/omni.js && node --test test/*.test.js test/**/*.test.js && npm run test:v4",
     "build:v4": "tsc -p tsconfig.v4.json",
     "typecheck:v4": "tsc -p tsconfig.v4.json --noEmit",
-    "test:v4": "node scripts/run-v4-tests.cjs"
+    "test:v4": "node scripts/run-v4-tests.cjs",
+    "benchmark:v4": "node scripts/run-benchmark.cjs"
   },
   "keywords": [
     "ai",

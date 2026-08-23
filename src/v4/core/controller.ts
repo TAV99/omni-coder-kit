@@ -17,6 +17,8 @@ export interface RunControllerDeps {
   readonly artifacts: ArtifactStore;
   readonly now: () => string;
   readonly newEventId: () => EventId;
+  readonly bundles?: import("../quality/evidence-bundle-store").EvidenceBundleStorePort | undefined;
+  readonly gateRegistry?: import("../quality/gate-registry").GateRegistry | undefined;
 }
 
 export class RunController {
@@ -460,7 +462,7 @@ export class RunController {
         payload: {
           stepId: request.stepId,
           operationId: request.operationId,
-          result: parsedResult,
+          reason: parsedResult.reason,
         },
       };
       await this.deps.events.append(stepBlockedEvent, currentSequence);
@@ -497,7 +499,7 @@ export class RunController {
         payload: {
           stepId: request.stepId,
           operationId: request.operationId,
-          result: parsedResult,
+          reason: parsedResult.reason,
         },
       };
       await this.deps.events.append(stepCancelledEvent, currentSequence);

@@ -11,6 +11,22 @@ import {
   type FailureDecision,
   type ResumeDecision,
 } from "./policy";
+import {
+  GateIdSchema,
+  RequirementIdSchema,
+  QualityCycleIdSchema,
+  GateResultSchema,
+  QualityEvidenceSchema,
+  RequirementVerdictSchema,
+  QualityDecisionSchema,
+  type GateId,
+  type RequirementId,
+  type QualityCycleId,
+  type GateResult,
+  type QualityEvidence,
+  type RequirementVerdict,
+  type QualityDecision,
+} from "./quality";
 
 const BaseEventFields = {
   schemaVersion: z.literal(1),
@@ -70,11 +86,7 @@ export const StepBlockedPayloadSchema = z
   .object({
     stepId: z.string().min(1).transform(asStepId),
     operationId: z.string().min(1),
-    result: StepResultSchema.and(
-      z.object({
-        status: z.literal("blocked"),
-      })
-    ),
+    reason: z.string().min(1),
   })
   .strict();
 
@@ -82,11 +94,7 @@ export const StepCancelledPayloadSchema = z
   .object({
     stepId: z.string().min(1).transform(asStepId),
     operationId: z.string().min(1),
-    result: StepResultSchema.and(
-      z.object({
-        status: z.literal("cancelled"),
-      })
-    ),
+    reason: z.string().min(1),
   })
   .strict();
 
@@ -94,7 +102,6 @@ export const StepInterruptedPayloadSchema = z
   .object({
     stepId: z.string().min(1).transform(asStepId),
     operationId: z.string().min(1),
-    sideEffect: SideEffectClassSchema,
     reason: z.string().min(1),
   })
   .strict();
@@ -151,6 +158,61 @@ export const RunCancelledPayloadSchema = z
   })
   .strict();
 
+export const QualityStartedPayloadSchema = z
+  .object({
+    cycleId: QualityCycleIdSchema,
+    phase: RunPhaseSchema,
+    startedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const GateStartedPayloadSchema = z
+  .object({
+    cycleId: QualityCycleIdSchema,
+    gateId: GateIdSchema,
+    operationId: z.string().min(1),
+    startedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const GateCompletedPayloadSchema = z
+  .object({
+    result: GateResultSchema,
+    evidence: QualityEvidenceSchema.optional(),
+  })
+  .strict();
+
+export const RequirementEvaluatedPayloadSchema = z
+  .object({
+    verdict: RequirementVerdictSchema,
+  })
+  .strict();
+
+export const QualityCompletedPayloadSchema = z
+  .object({
+    cycleId: QualityCycleIdSchema,
+    decision: QualityDecisionSchema,
+    completedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const RepairDecidedPayloadSchema = z
+  .object({
+    cycleId: QualityCycleIdSchema,
+    requirementIds: z.array(RequirementIdSchema).min(1).readonly(),
+    attempt: z.number().int().positive(),
+    reason: z.string().min(1),
+  })
+  .strict();
+
+export const RunRoutedPayloadSchema = z
+  .object({
+    from: RunPhaseSchema,
+    to: RunPhaseSchema,
+    causedByEventId: z.string().min(1).transform(asEventId),
+  })
+  .strict();
+
 export type RunEventType =
   | "run.created"
   | "step.started"
@@ -163,7 +225,14 @@ export type RunEventType =
   | "policy.decided"
   | "run.transitioned"
   | "run.blocked"
-  | "run.cancelled";
+  | "run.cancelled"
+  | "quality.started"
+  | "gate.started"
+  | "gate.completed"
+  | "requirement.evaluated"
+  | "quality.completed"
+  | "repair.decided"
+  | "run.routed";
 
 export type RunEvent =
   | {
@@ -209,7 +278,7 @@ export type RunEvent =
       readonly payload: {
         readonly stepId: StepId;
         readonly operationId: string;
-        readonly result: Extract<StepResult, { status: "succeeded" }>;
+        readonly result: StepResult & { readonly status: "succeeded" };
       };
     }
   | {
@@ -222,7 +291,7 @@ export type RunEvent =
       readonly payload: {
         readonly stepId: StepId;
         readonly operationId: string;
-        readonly result: Extract<StepResult, { status: "failed" }>;
+        readonly result: StepResult & { readonly status: "failed" };
       };
     }
   | {
@@ -235,7 +304,7 @@ export type RunEvent =
       readonly payload: {
         readonly stepId: StepId;
         readonly operationId: string;
-        readonly result: Extract<StepResult, { status: "blocked" }>;
+        readonly reason: string;
       };
     }
   | {
@@ -248,7 +317,7 @@ export type RunEvent =
       readonly payload: {
         readonly stepId: StepId;
         readonly operationId: string;
-        readonly result: Extract<StepResult, { status: "cancelled" }>;
+        readonly reason: string;
       };
     }
   | {
@@ -261,7 +330,6 @@ export type RunEvent =
       readonly payload: {
         readonly stepId: StepId;
         readonly operationId: string;
-        readonly sideEffect: SideEffectClass;
         readonly reason: string;
       };
     }
@@ -331,6 +399,96 @@ export type RunEvent =
         readonly reason: string;
         readonly causedByEventId: EventId;
       };
+    }
+  | {
+      readonly schemaVersion: 1;
+      readonly eventId: EventId;
+      readonly runId: RunId;
+      readonly sequence: number;
+      readonly at: string;
+      readonly type: "quality.started";
+      readonly payload: {
+        readonly cycleId: QualityCycleId;
+        readonly phase: RunPhase;
+        readonly startedAt: string;
+      };
+    }
+  | {
+      readonly schemaVersion: 1;
+      readonly eventId: EventId;
+      readonly runId: RunId;
+      readonly sequence: number;
+      readonly at: string;
+      readonly type: "gate.started";
+      readonly payload: {
+        readonly cycleId: QualityCycleId;
+        readonly gateId: GateId;
+        readonly operationId: string;
+        readonly startedAt: string;
+      };
+    }
+  | {
+      readonly schemaVersion: 1;
+      readonly eventId: EventId;
+      readonly runId: RunId;
+      readonly sequence: number;
+      readonly at: string;
+      readonly type: "gate.completed";
+      readonly payload: {
+        readonly result: GateResult;
+        readonly evidence?: QualityEvidence | undefined;
+      };
+    }
+  | {
+      readonly schemaVersion: 1;
+      readonly eventId: EventId;
+      readonly runId: RunId;
+      readonly sequence: number;
+      readonly at: string;
+      readonly type: "requirement.evaluated";
+      readonly payload: {
+        readonly verdict: RequirementVerdict;
+      };
+    }
+  | {
+      readonly schemaVersion: 1;
+      readonly eventId: EventId;
+      readonly runId: RunId;
+      readonly sequence: number;
+      readonly at: string;
+      readonly type: "quality.completed";
+      readonly payload: {
+        readonly cycleId: QualityCycleId;
+        readonly decision: QualityDecision;
+        readonly completedAt: string;
+      };
+    }
+  | {
+      readonly schemaVersion: 1;
+      readonly eventId: EventId;
+      readonly runId: RunId;
+      readonly sequence: number;
+      readonly at: string;
+      readonly type: "repair.decided";
+      readonly payload: {
+        readonly cycleId: QualityCycleId;
+        readonly requirementIds: readonly RequirementId[];
+        readonly attempt: number;
+        readonly reason: string;
+      };
+    }
+  | {
+      readonly schemaVersion: 1;
+      readonly eventId: EventId;
+      readonly runId: RunId;
+      readonly sequence: number;
+      readonly at: string;
+      readonly type: "run.routed";
+      readonly payload: {
+        readonly from: RunPhase;
+        readonly to: RunPhase;
+        readonly causedByEventId: EventId;
+      };
     };
 
 export const RunEventSchema: z.ZodType<RunEvent> = z.discriminatedUnion("type", [
@@ -346,4 +504,11 @@ export const RunEventSchema: z.ZodType<RunEvent> = z.discriminatedUnion("type", 
   z.object({ ...BaseEventFields, type: z.literal("run.transitioned"), payload: RunTransitionedPayloadSchema }).strict(),
   z.object({ ...BaseEventFields, type: z.literal("run.blocked"), payload: RunBlockedPayloadSchema }).strict(),
   z.object({ ...BaseEventFields, type: z.literal("run.cancelled"), payload: RunCancelledPayloadSchema }).strict(),
+  z.object({ ...BaseEventFields, type: z.literal("quality.started"), payload: QualityStartedPayloadSchema }).strict(),
+  z.object({ ...BaseEventFields, type: z.literal("gate.started"), payload: GateStartedPayloadSchema }).strict(),
+  z.object({ ...BaseEventFields, type: z.literal("gate.completed"), payload: GateCompletedPayloadSchema }).strict(),
+  z.object({ ...BaseEventFields, type: z.literal("requirement.evaluated"), payload: RequirementEvaluatedPayloadSchema }).strict(),
+  z.object({ ...BaseEventFields, type: z.literal("quality.completed"), payload: QualityCompletedPayloadSchema }).strict(),
+  z.object({ ...BaseEventFields, type: z.literal("repair.decided"), payload: RepairDecidedPayloadSchema }).strict(),
+  z.object({ ...BaseEventFields, type: z.literal("run.routed"), payload: RunRoutedPayloadSchema }).strict(),
 ]);

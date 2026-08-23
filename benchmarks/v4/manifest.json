@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "case-01-pass-all",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/pass-all",
+      "adapter": "fake",
+      "expected": {
+        "finalPhase": "DOCUMENT",
+        "acceptanceStatus": "accepted",
+        "minPassedGates": 1
+      },
+      "tags": ["deterministic", "happy-path"],
+      "description": "All mandatory quality gates pass cleanly and run advances to DOCUMENT"
+    },
+    {
+      "id": "case-02-config-missing",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/config-missing",
+      "adapter": "fake",
+      "expected": {
+        "finalPhase": "BLOCKED",
+        "acceptanceStatus": "none"
+      },
+      "tags": ["deterministic", "error-handling"],
+      "description": "Missing quality.json fails closed and blocks the run immediately"
+    },
+    {
+      "id": "case-03-mandatory-failed",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/gate-failed",
+      "adapter": "fake",
+      "expected": {
+        "finalPhase": "FIX",
+        "acceptanceStatus": "rejected"
+      },
+      "tags": ["deterministic", "quality-gate"],
+      "description": "Mandatory gate nonzero exit rejects requirements and routes to FIX"
+    },
+    {
+      "id": "case-04-mandatory-skipped",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/gate-nonpass",
+      "adapter": "fake",
+      "expected": {
+        "finalPhase": "FIX",
+        "acceptanceStatus": "inconclusive"
+      },
+      "tags": ["deterministic", "dag"],
+      "description": "Failed upstream dependency causes dependent gate to be skipped and marked inconclusive"
+    },
+    {
+      "id": "case-05-mandatory-inconclusive",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/evidence-invalid",
+      "adapter": "fake",
+      "expected": {
+        "finalPhase": "FIX",
+        "acceptanceStatus": "inconclusive"
+      },
+      "tags": ["deterministic", "evidence"],
+      "description": "Process timeout or spawn error reports inconclusive and requests repair"
+    },
+    {
+      "id": "case-06-repair-progress-success",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/repair-progress",
+      "adapter": "fake",
+      "scenario": "repair-progress",
+      "expected": {
+        "finalPhase": "DOCUMENT",
+        "acceptanceStatus": "accepted",
+        "maxRepairs": 2
+      },
+      "tags": ["deterministic", "repair"],
+      "description": "Initial failure is repaired on second cycle, allowing advance to DOCUMENT"
+    },
+    {
+      "id": "case-07-repair-no-progress",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/repair-no-progress",
+      "adapter": "fake",
+      "scenario": "repair-no-progress",
+      "expected": {
+        "finalPhase": "BLOCKED",
+        "acceptanceStatus": "rejected"
+      },
+      "tags": ["deterministic", "repair-loop"],
+      "description": "Identical failures across cycles trigger REPAIR_NO_PROGRESS and block"
+    },
+    {
+      "id": "case-08-crash-resume",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/crash-resume",
+      "adapter": "fake",
+      "scenario": "crash-resume",
+      "expected": {
+        "finalPhase": "ACCEPT",
+        "acceptanceStatus": "accepted",
+        "recoveryExpected": true
+      },
+      "tags": ["deterministic", "recovery"],
+      "description": "Crash after quality.completed rolls forward deterministically on recovery"
+    },
+    {
+      "id": "case-09-concurrency-locks",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/concurrency-locks",
+      "adapter": "fake",
+      "liveModelCostOptIn": false,
+      "expected": {
+        "finalPhase": "DOCUMENT",
+        "acceptanceStatus": "accepted",
+        "minPassedGates": 2,
+        "minPeakParallelism": 2
+      },
+      "tags": ["deterministic", "concurrency"],
+      "description": "Independent gates execute with bounded parallelism respecting concurrency locks"
+    },
+    {
+      "id": "case-10-budget-modes",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/budget-modes",
+      "adapter": "fake",
+      "expected": {
+        "finalPhase": "DOCUMENT",
+        "acceptanceStatus": "accepted",
+        "budgetBreached": true
+      },
+      "tags": ["deterministic", "budget"],
+      "description": "Report-only budget limit breach is recorded in metrics without blocking run"
+    },
+    {
+      "id": "case-11-false-success-prevention",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/false-success",
+      "adapter": "fake",
+      "expected": {
+        "finalPhase": "FIX",
+        "acceptanceStatus": "rejected",
+        "falseSuccess": false
+      },
+      "tags": ["deterministic", "trustworthy-evidence"],
+      "description": "Prose claims cannot fake acceptance when quality gates fail"
+    },
+    {
+      "id": "case-12-omni-self-dogfood",
+      "enabled": true,
+      "projectKind": "omni",
+      "adapter": "fake",
+      "liveModelCostOptIn": false,
+      "expected": {
+        "finalPhase": "DOCUMENT",
+        "acceptanceStatus": "accepted"
+      },
+      "tags": ["dogfood", "omni-self"],
+      "description": "Omni v4 self-dogfood verification in isolated temporary workspace"
+    },
+    {
+      "id": "case-13-workspace-serialization",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/workspace-serialization",
+      "adapter": "fake",
+      "liveModelCostOptIn": false,
+      "expected": {
+        "finalPhase": "DOCUMENT",
+        "acceptanceStatus": "accepted",
+        "minPassedGates": 4,
+        "maxPeakParallelism": 1
+      },
+      "tags": ["deterministic", "concurrency", "workspace-write"],
+      "description": "Workspace write gates execute sequentially under mutual exclusion lock"
+    },
+    {
+      "id": "case-14-budget-mandatory-breach",
+      "enabled": true,
+      "projectKind": "fixture",
+      "fixturePath": "benchmarks/v4/fixtures/budget-mandatory",
+      "adapter": "fake",
+      "liveModelCostOptIn": false,
+      "expected": {
+        "finalPhase": "BLOCKED",
+        "acceptanceStatus": "none",
+        "budgetBreached": true
+      },
+      "tags": ["deterministic", "budget", "mandatory-enforcement"],
+      "description": "Mandatory budget limit breach blocks execution and halts run immediately"
+    },
+    {
+      "id": "case-15-external-js-slot",
+      "enabled": false,
+      "projectKind": "javascript",
+      "repositoryPath": "external/sample-js-repo",
+      "adapter": "fake",
+      "liveModelCostOptIn": false,
+      "expected": {
+        "finalPhase": "DOCUMENT",
+        "acceptanceStatus": "accepted"
+      },
+      "tags": ["future-slot", "javascript"],
+      "description": "Future slot for full-stack JavaScript repository dogfood",
+      "baselineNotes": "Requires Node 20+, express/react dependencies, and npm test baseline pass",
+      "gateMapping": {
+        "build": "npm run build",
+        "test": "npm test",
+        "lint": "npm run lint"
+      },
+      "activationChecklist": [
+        "Clone target repository to local path",
+        "Map package.json scripts to quality.json gates",
+        "Verify baseline test passing rate",
+        "Enable case in manifest"
+      ]
+    },
+    {
+      "id": "case-16-external-non-js-slot",
+      "enabled": false,
+      "projectKind": "non-javascript",
+      "repositoryPath": "external/sample-rust-repo",
+      "adapter": "fake",
+      "liveModelCostOptIn": false,
+      "expected": {
+        "finalPhase": "DOCUMENT",
+        "acceptanceStatus": "accepted"
+      },
+      "tags": ["future-slot", "non-js"],
+      "description": "Future slot for non-JavaScript (Rust/Go/Python) repository dogfood",
+      "baselineNotes": "Requires cargo toolchain and cargo test suite passing cleanly",
+      "gateMapping": {
+        "build": "cargo check",
+        "test": "cargo test"
+      },
+      "activationChecklist": [
+        "Clone target repository to local path",
+        "Configure native build/test CLI gates",
+        "Verify compiler and toolchain availability",
+        "Enable case in manifest"
+      ]
+    },
+    {
+      "id": "case-17-external-unusual-tests-slot",
+      "enabled": false,
+      "projectKind": "unusual-tests",
+      "repositoryPath": "external/sample-custom-test-repo",
+      "adapter": "fake",
+      "liveModelCostOptIn": false,
+      "expected": {
+        "finalPhase": "DOCUMENT",
+        "acceptanceStatus": "accepted"
+      },
+      "tags": ["future-slot", "unusual-tests"],
+      "description": "Future slot for custom test runner / multi-repo configuration",
+      "baselineNotes": "Requires custom test harness wrapper and bounded output buffer",
+      "gateMapping": {
+        "test": "node test-harness.js --all"
+      },
+      "activationChecklist": [
+        "Configure custom runner wrapper script",
+        "Set outputSummaryBytes bounds appropriately",
+        "Enable case in manifest"
+      ]
+    }
+  ]
+}

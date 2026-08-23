@@ -129,6 +129,10 @@ export function validateEventHistory(events: readonly RunEvent[]): void {
         "step.interrupted",
         "step.succeeded",
         "run.created",
+        "quality.completed",
+        "quality.started",
+        "gate.started",
+        "gate.completed",
       ];
       if (!allowedCauses.includes(cause.type)) {
         throw new CorruptEventLogError(
@@ -154,6 +158,50 @@ export function validateEventHistory(events: readonly RunEvent[]): void {
         throw new CorruptEventLogError(
           `run.cancelled causedByEventId must reference a valid cancellation cause, got '${cause.type}'`
         );
+      }
+    }
+
+    if (event.type === "run.routed") {
+      const cause = eventsById.get(event.payload.causedByEventId);
+      if (!cause) {
+        throw new CorruptEventLogError(
+          `run.routed references nonexistent causedByEventId: '${event.payload.causedByEventId}'`
+        );
+      }
+      if (cause.runId !== expectedRunId) {
+        throw new CorruptEventLogError(
+          `run.routed references cause from different runId: '${cause.runId}'`
+        );
+      }
+      if (cause.type !== "quality.completed" && cause.type !== "repair.decided") {
+        throw new CorruptEventLogError(
+          `run.routed causedByEventId must reference 'quality.completed' or 'repair.decided', got '${cause.type}'`
+        );
+      }
+      if (cause.sequence >= event.sequence) {
+        throw new CorruptEventLogError(
+          `run.routed cause must appear earlier in log`
+        );
+      }
+      if (cause.type === "quality.completed") {
+        const dec = cause.payload.decision;
+        if (dec.kind === "advance") {
+          if (dec.to !== event.payload.to) {
+            throw new CorruptEventLogError(
+              `run.routed destination '${event.payload.to}' does not match quality advance target '${dec.to}'`
+            );
+          }
+        } else if (dec.kind === "repair") {
+          if (dec.to !== event.payload.to) {
+            throw new CorruptEventLogError(
+              `run.routed destination '${event.payload.to}' does not match quality repair target '${dec.to}'`
+            );
+          }
+        } else {
+          throw new CorruptEventLogError(
+            `run.routed cannot be caused by a quality.completed with 'block' decision`
+          );
+        }
       }
     }
   }

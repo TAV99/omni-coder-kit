@@ -1,7 +1,7 @@
 import type { RunEvent } from "../contracts/event";
 import type { RunId } from "../contracts/ids";
 import type { RunState } from "../contracts/run";
-import { isAllowedTransition, TransitionError } from "./transitions";
+import { isAllowedTransition, isAllowedQualityRoute, TransitionError } from "./transitions";
 
 export class EventSequenceError extends Error {
   constructor(message: string) {
@@ -162,6 +162,34 @@ export function reduceEvent(state: RunState, event: RunEvent): RunState {
         );
       }
       nextInFlight = undefined;
+      break;
+    }
+
+    case "quality.started":
+    case "gate.started":
+    case "gate.completed":
+    case "requirement.evaluated":
+    case "quality.completed":
+    case "repair.decided": {
+      // Quality cycle events do not mutate phase directly; state sequence and timestamp advance
+      break;
+    }
+
+    case "run.routed": {
+      if (event.payload.from !== state.phase) {
+        throw new TransitionError(
+          `Cannot route from '${event.payload.from}' because current phase is '${state.phase}'`
+        );
+      }
+      if (!isAllowedQualityRoute(event.payload.from, event.payload.to)) {
+        throw new TransitionError(
+          `Forbidden quality route: '${event.payload.from}' -> '${event.payload.to}'`
+        );
+      }
+      nextPhase = event.payload.to;
+      nextAttempt = 1;
+      nextSameFailureCount = 0;
+      nextLastFailureSignature = undefined;
       break;
     }
 
