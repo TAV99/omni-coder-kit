@@ -46,6 +46,8 @@ describe('Codex-Gemini MVP ai-flow.ps1 wrapper', () => {
     const preflightPath = path.join(taskRunDir, 'preflight.json');
     const contextPath = path.join(taskRunDir, 'context.json');
     const rawStdoutPath = path.join(taskRunDir, 'raw', 'scout.stdout.json');
+    const specPath = path.join(taskRunDir, 'spec.json');
+    const routePath = path.join(taskRunDir, 'route.json');
 
     afterEach(() => {
         if (fs.existsSync(taskRunDir)) {
@@ -123,6 +125,30 @@ describe('Codex-Gemini MVP ai-flow.ps1 wrapper', () => {
         const res = runFlow('scout', testTaskId, { OMNI_AGY_BIN: FAKE_AGY });
         assert.notEqual(res.status, 0);
         assert.equal(fs.existsSync(rawStdoutPath), false);
+    });
+
+    it('routes only bounded low-risk specs to Gemini Flash High', () => {
+        runFlow('new', testTaskId);
+        fs.writeFileSync(specPath, JSON.stringify({
+            in_scope: ['lib/a.js', 'test/a.test.js'],
+            validation_commands: ['node --test test/a.test.js'],
+            risk_flags: [],
+        }), 'utf8');
+
+        const res = runFlow('route', testTaskId);
+        assert.equal(res.status, 0);
+        const route = JSON.parse(fs.readFileSync(routePath, 'utf8'));
+        assert.equal(route.owner, 'gemini');
+        assert.equal(route.model, 'gemini-3.7-flash-high');
+
+        fs.writeFileSync(specPath, JSON.stringify({
+            in_scope: ['a', 'b', 'c', 'd'],
+            validation_commands: ['node --test'],
+            risk_flags: [],
+        }), 'utf8');
+        const oversized = runFlow('route', testTaskId);
+        assert.equal(oversized.status, 0);
+        assert.equal(JSON.parse(fs.readFileSync(routePath, 'utf8')).owner, 'codex');
     });
 
     it('scout writes context only from a successful structured agy result', () => {

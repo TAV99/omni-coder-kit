@@ -2,6 +2,7 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('path');
 
 const { buildInitConfig, buildModeBlock } = require('../lib/init');
@@ -31,6 +32,26 @@ describe('buildInitConfig return shape', () => {
     });
 });
 
+describe('dual-first onboarding contract', () => {
+    const initCommandSource = fs.readFileSync(path.join(__dirname, '..', 'lib', 'commands', 'init.js'), 'utf8');
+
+    it('puts Dual mode first and resolves the supported pair before SDLC mode', () => {
+        const dualMenuIndex = initCommandSource.indexOf("{ title: 'Dual mode — chọn cặp agent', value: 'dual' }");
+        const firstSingleAgentIndex = initCommandSource.indexOf("{ title: 'Claude Code (CLI) / OpenCode', value: 'claudecode' }");
+        const dualPairIndex = initCommandSource.indexOf('let dualPair');
+        const modePromptIndex = initCommandSource.indexOf("name: 'mode'");
+
+        assert.ok(dualMenuIndex >= 0, 'primary selector must expose Dual mode');
+        assert.ok(dualMenuIndex < firstSingleAgentIndex, 'Dual mode must be the first selector option');
+        assert.ok(dualPairIndex < modePromptIndex, 'pair selection must happen before SDLC mode');
+    });
+
+    it('offers only the implemented Codex plus Gemini pair', () => {
+        assert.match(initCommandSource, /Codex \+ Gemini qua Antigravity \(agy\).*codex-agy/s);
+        assert.doesNotMatch(initCommandSource, /Claude Code \+ Codex \(mặc định\)/);
+    });
+});
+
 // ─── Per-IDE config file tests ──────────────────────────────────
 
 describe('buildInitConfig per-IDE config files', () => {
@@ -47,6 +68,44 @@ describe('buildInitConfig per-IDE config files', () => {
         assert.ok(main, 'should have AGENTS.md');
     });
 
+    it('codex emits native skills for every Omni workflow entry point', () => {
+        const result = buildInitConfig('codex', DEFAULT_OPTS);
+        const expected = [
+            'om-go', 'om-think', 'om-spec', 'om-skill', 'om-plan', 'om-cook', 'om-check',
+            'om-fix', 'om-pass', 'om-doc', 'om-memo', 'om-map', 'om-ship',
+        ];
+
+        for (const name of expected) {
+            assert.ok(
+                result.files.some(f => f.path === path.join('.codex', 'skills', name, 'SKILL.md')),
+                `should emit native Codex skill ${name}`
+            );
+        }
+        assert.equal(
+            result.dirs.filter(d => d.startsWith(path.join('.codex', 'skills'))).length,
+            expected.length
+        );
+    });
+
+    it('native Codex skills route to workflow source without embedding it', () => {
+        const result = buildInitConfig('codex', DEFAULT_OPTS);
+        const think = result.files.find(f => f.path === path.join('.codex', 'skills', 'om-think', 'SKILL.md'));
+        const cook = result.files.find(f => f.path === path.join('.codex', 'skills', 'om-cook', 'SKILL.md'));
+
+        assert.match(think.content, /\.omni\/workflows\/requirement-analysis\.md/);
+        assert.match(cook.content, /\.omni\/workflows\/coder-execution\.md/);
+        assert.match(think.content, /read.*fully.*before/i);
+        assert.equal(think.content.includes('## Adaptive Interview'), false, 'must not duplicate workflow body');
+    });
+
+    it('Codex AGENTS.md prefers native $om-* skills and keeps >om-* as compatibility', () => {
+        const result = buildInitConfig('codex', DEFAULT_OPTS);
+        const agents = result.files.find(f => f.path === 'AGENTS.md');
+        assert.match(agents.content, /\$om-think/);
+        assert.match(agents.content, />om-think/);
+        assert.match(agents.content, /preferred.*native/i);
+    });
+
     it('dual produces both CLAUDE.md and AGENTS.md', () => {
         const result = buildInitConfig('dual', DEFAULT_OPTS);
         const claude = result.files.find(f => f.path === 'CLAUDE.md');
@@ -54,6 +113,10 @@ describe('buildInitConfig per-IDE config files', () => {
         assert.ok(claude, 'should have CLAUDE.md');
         assert.ok(agents, 'should have AGENTS.md');
         assert.ok(agents.content.includes('Codex CLI / Cross-tool'));
+        assert.ok(
+            result.files.some(f => f.path === path.join('.codex', 'skills', 'om-think', 'SKILL.md')),
+            'dual should also install native Codex skills'
+        );
     });
 
     it('dual codex-agy emits the native Codex worker integration', () => {
@@ -62,6 +125,17 @@ describe('buildInitConfig per-IDE config files', () => {
         assert.equal(result.manifest.workerProvider, 'antigravity');
         assert.ok(result.files.some(f => f.path === path.join('.codex', 'skills', 'omni-codex-gemini', 'SKILL.md')));
         assert.ok(result.files.some(f => f.path === path.join('.omni', 'codex-gemini', 'ai-flow.ps1')));
+    });
+
+    it('dual auto augments om-think with the Gemini routing handoff only for codex-agy', () => {
+        const auto = buildInitConfig('dual', { ...DEFAULT_OPTS, mode: 'auto', dualPair: 'codex-agy' });
+        const manual = buildInitConfig('dual', { ...DEFAULT_OPTS, mode: 'manual', dualPair: 'codex-agy' });
+        const autoThink = auto.files.find(f => f.path === path.join('.codex', 'skills', 'om-think', 'SKILL.md'));
+        const manualThink = manual.files.find(f => f.path === path.join('.codex', 'skills', 'om-think', 'SKILL.md'));
+
+        assert.match(autoThink.content, /Dual Auto Router/);
+        assert.match(autoThink.content, /gemini-3\.7-flash-high/);
+        assert.doesNotMatch(manualThink.content, /Dual Auto Router/);
     });
 
     it('codex-agy supplies a schema-constrained scout package', () => {
@@ -73,7 +147,7 @@ describe('buildInitConfig per-IDE config files', () => {
         assert.match(skill.content, /Codex is the manager/);
     });
 
-    it('dual without a pairing remains the Claude Code plus Codex default', () => {
+    it('dual without a pairing does not emit the Codex-Gemini worker integration', () => {
         const result = buildInitConfig('dual', DEFAULT_OPTS);
         assert.equal(result.manifest.dualPair, undefined);
         assert.equal(result.files.some(f => f.path.includes('omni-codex-gemini')), false);

@@ -19,6 +19,27 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path, $Content, [System.Text.UTF8Encoding]::new($false))
 }
 
+function Invoke-GeminiWorker {
+    param([string]$AgyBin, [string]$Mode, [string]$Prompt)
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    if ($AgyBin -match '\.ps1$') {
+        $psi.FileName = "powershell.exe"
+        $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$AgyBin`" --model gemini-3.7-flash-high --effort high --mode $Mode -p --output-format json `"$Prompt`""
+    } else {
+        $psi.FileName = $AgyBin
+        $psi.Arguments = "--model gemini-3.7-flash-high --effort high --mode $Mode -p --output-format json `"$Prompt`""
+    }
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $stdout = $proc.StandardOutput.ReadToEnd()
+    $stderr = $proc.StandardError.ReadToEnd()
+    $proc.WaitForExit()
+    return [ordered]@{ exit_code = $proc.ExitCode; stdout = $stdout; stderr = $stderr }
+}
+
 if ($TaskId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$') {
     [Console]::Error.WriteLine("Invalid task ID '$TaskId'. Must match ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     exit 1
@@ -298,8 +319,105 @@ switch ($Action.ToLower()) {
         exit 0
     }
 
+    "route" {
+        $specFile = Join-Path $runDir "spec.json"
+        if (-not (Test-Path $specFile)) {
+            [Console]::Error.WriteLine("Missing spec.json for task '$TaskId'. Codex must define bounded scope before routing.")
+            exit 1
+        }
+
+        try {
+            $spec = Get-Content $specFile -Raw | ConvertFrom-Json
+        } catch {
+            [Console]::Error.WriteLine("Malformed spec.json for task '$TaskId': $($_.Exception.Message)")
+            exit 1
+        }
+
+        $scope = @($spec.in_scope)
+        $validation = @($spec.validation_commands)
+        $risks = @($spec.risk_flags)
+        $hasBlockingRisk = $false
+        foreach ($risk in $risks) {
+            if ([string]$risk -match '(?i)architecture|security|migration|cross-module|ambiguous') {
+                $hasBlockingRisk = $true
+                break
+            }
+        }
+
+        $eligible = $scope.Count -gt 0 -and $scope.Count -le 3 -and $validation.Count -gt 0 -and -not $hasBlockingRisk
+        $owner = if ($eligible) { "gemini" } else { "codex" }
+        $reason = if ($eligible) {
+            "Bounded low-risk task with validation commands."
+        } elseif ($scope.Count -eq 0 -or $validation.Count -eq 0) {
+            "Incomplete spec: scope and validation commands are mandatory."
+        } elseif ($scope.Count -gt 3) {
+            "Scope exceeds the three-file Gemini limit."
+        } else {
+            "Task carries an architecture, security, migration, cross-module, or ambiguity risk."
+        }
+
+        $route = [ordered]@{
+            task_id = $TaskId
+            owner = $owner
+            model = if ($eligible) { "gemini-3.7-flash-high" } else { $null }
+            effort = if ($eligible) { "high" } else { $null }
+            token_budget = if ($eligible) { 12000 } else { $null }
+            allowed_files = $scope
+            reason = $reason
+        }
+        Write-Utf8NoBom -Path (Join-Path $runDir "route.json") -Content ($route | ConvertTo-Json -Depth 5)
+        Write-Host "Route for ${TaskId}: $owner. $reason"
+        exit 0
+    }
+
+    "implement" {
+        $preflightFile = Join-Path $runDir "preflight.json"
+        $routeFile = Join-Path $runDir "route.json"
+        $specFile = Join-Path $runDir "spec.json"
+        if (-not (Test-Path $preflightFile) -or -not (Test-Path $routeFile) -or -not (Test-Path $specFile)) {
+            [Console]::Error.WriteLine("implement requires preflight.json, route.json, and spec.json for task '$TaskId'.")
+            exit 1
+        }
+        $preflight = Get-Content $preflightFile -Raw | ConvertFrom-Json
+        $route = Get-Content $routeFile -Raw | ConvertFrom-Json
+        if ($preflight.status -ne "safe" -or $route.owner -ne "gemini") {
+            [Console]::Error.WriteLine("implement is allowed only for a safe Gemini-owned route.")
+            exit 1
+        }
+        $agyBin = if ($env:OMNI_AGY_BIN) { $env:OMNI_AGY_BIN } else { "agy" }
+        $prompt = (Get-Content (Join-Path $repoRoot ".omni\codex-gemini\prompts\implement.md") -Raw) + "`n`n## Task Spec`n" + (Get-Content $specFile -Raw)
+        try { $result = Invoke-GeminiWorker -AgyBin $agyBin -Mode "accept-edits" -Prompt $prompt } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
+        if ($result.exit_code -ne 0) { [Console]::Error.WriteLine("Gemini implement failed with exit code $($result.exit_code)"); exit $result.exit_code }
+        try { $parsed = $result.stdout | ConvertFrom-Json } catch { [Console]::Error.WriteLine("Gemini implement returned malformed JSON"); exit 1 }
+        if ($parsed.status -eq "error" -or (-not $parsed.structured_output -and $parsed.type -ne "result")) { [Console]::Error.WriteLine("Gemini implement returned an invalid envelope"); exit 1 }
+        $evidence = if ($parsed.structured_output) { $parsed.structured_output } else { $parsed }
+        Write-Utf8NoBom -Path (Join-Path $runDir "evidence.json") -Content ($evidence | ConvertTo-Json -Depth 10)
+        Write-Host "Gemini implementation evidence saved for $TaskId"
+        exit 0
+    }
+
+    "review" {
+        $preflightFile = Join-Path $runDir "preflight.json"
+        $routeFile = Join-Path $runDir "route.json"
+        $specFile = Join-Path $runDir "spec.json"
+        $evidenceFile = Join-Path $runDir "evidence.json"
+        if (-not (Test-Path $preflightFile) -or -not (Test-Path $routeFile) -or -not (Test-Path $specFile) -or -not (Test-Path $evidenceFile)) { [Console]::Error.WriteLine("review requires preflight, route, spec, and evidence artifacts."); exit 1 }
+        $preflight = Get-Content $preflightFile -Raw | ConvertFrom-Json; $route = Get-Content $routeFile -Raw | ConvertFrom-Json
+        if ($preflight.status -ne "safe" -or $route.owner -ne "gemini") { [Console]::Error.WriteLine("review is allowed only for a safe Gemini-owned route."); exit 1 }
+        $agyBin = if ($env:OMNI_AGY_BIN) { $env:OMNI_AGY_BIN } else { "agy" }
+        $prompt = (Get-Content (Join-Path $repoRoot ".omni\codex-gemini\prompts\review.md") -Raw) + "`n`n## Task Spec`n" + (Get-Content $specFile -Raw) + "`n`n## Evidence`n" + (Get-Content $evidenceFile -Raw)
+        try { $result = Invoke-GeminiWorker -AgyBin $agyBin -Mode "plan" -Prompt $prompt } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
+        if ($result.exit_code -ne 0) { [Console]::Error.WriteLine("Gemini review failed with exit code $($result.exit_code)"); exit $result.exit_code }
+        try { $parsed = $result.stdout | ConvertFrom-Json } catch { [Console]::Error.WriteLine("Gemini review returned malformed JSON"); exit 1 }
+        if ($parsed.status -eq "error" -or (-not $parsed.structured_output -and $parsed.type -ne "result")) { [Console]::Error.WriteLine("Gemini review returned an invalid envelope"); exit 1 }
+        $review = if ($parsed.structured_output) { $parsed.structured_output } else { $parsed }
+        Write-Utf8NoBom -Path (Join-Path $runDir "review.json") -Content ($review | ConvertTo-Json -Depth 10)
+        Write-Host "Gemini review saved for $TaskId"
+        exit 0
+    }
+
     Default {
-        [Console]::Error.WriteLine("Unsupported action '$Action'. MVP actions are: new, preflight, scout")
+        [Console]::Error.WriteLine("Unsupported action '$Action'. Supported actions are: new, preflight, scout, route, implement, review")
         exit 1
     }
 }
