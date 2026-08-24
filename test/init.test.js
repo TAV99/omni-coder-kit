@@ -56,6 +56,29 @@ describe('buildInitConfig per-IDE config files', () => {
         assert.ok(agents.content.includes('Codex CLI / Cross-tool'));
     });
 
+    it('dual codex-agy emits the native Codex worker integration', () => {
+        const result = buildInitConfig('dual', { ...DEFAULT_OPTS, dualPair: 'codex-agy' });
+        assert.equal(result.manifest.dualPair, 'codex-agy');
+        assert.equal(result.manifest.workerProvider, 'antigravity');
+        assert.ok(result.files.some(f => f.path === path.join('.codex', 'skills', 'omni-codex-gemini', 'SKILL.md')));
+        assert.ok(result.files.some(f => f.path === path.join('.omni', 'codex-gemini', 'ai-flow.ps1')));
+    });
+
+    it('codex-agy supplies a schema-constrained scout package', () => {
+        const result = buildInitConfig('dual', { ...DEFAULT_OPTS, dualPair: 'codex-agy' });
+        const contextSchema = result.files.find(f => f.path === path.join('.omni', 'codex-gemini', 'schemas', 'context.schema.json'));
+        assert.ok(contextSchema);
+        assert.match(contextSchema.content, /"exact_symbols"/);
+        const skill = result.files.find(f => f.path === path.join('.codex', 'skills', 'omni-codex-gemini', 'SKILL.md'));
+        assert.match(skill.content, /Codex is the manager/);
+    });
+
+    it('dual without a pairing remains the Claude Code plus Codex default', () => {
+        const result = buildInitConfig('dual', DEFAULT_OPTS);
+        assert.equal(result.manifest.dualPair, undefined);
+        assert.equal(result.files.some(f => f.path.includes('omni-codex-gemini')), false);
+    });
+
     it('cursor produces .cursorrules', () => {
         const result = buildInitConfig('cursor', DEFAULT_OPTS);
         const main = result.files.find(f => f.overwritePrompt && f.path === '.cursorrules');
