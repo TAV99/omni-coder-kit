@@ -110,7 +110,8 @@ CLI gọn nhẹ với các nhóm lệnh điều khiển chính:
 
 | Nhóm lệnh | Mô tả | Option / Subcommand hữu ích |
 | :--- | :--- | :--- |
-| `omni init` | Khởi tạo DNA dự án và cấu hình IDE thích hợp. | `--onboard` (ép quét codebase cũ), `--dry-run`; hỏi ẩn/hiện agent files |
+| `omni init` | Khởi tạo DNA dự án và cấu hình IDE thích hợp. | `--onboard` (ép quét codebase cũ), `--dry-run`; hỏi ẩn/hiện agent files; chọn chế độ Dual |
+| `omni dual` | Điều phối Codex + Gemini qua agy (cross-platform). | `new`, `run`, `resume`, `status`, `phase <phase>` |
 | `omni run` | Khởi chạy vòng lặp SDLC tự động từ terminal. | `--spec <file>`, `--resume`, `--dry-run`, `--yolo` |
 | `omni run gate` | Chạy độc lập Quality Pipeline P0-P5 (tiện cho CI/CD). | `--only <P0,P1,P3>` |
 | `omni run log` | Xem nhật ký sự kiện thực thi của phiên chạy gần nhất. | `--limit <n>`, `--follow` |
@@ -136,6 +137,60 @@ Các **hidden aliases** CLI đã bị gỡ. Dùng lệnh canonical:
 | `omni onboard` | `omni init --onboard` |
 
 Chat commands `>om-*` **không** đổi. Chi tiết release: `CHANGELOG.md`, checklist ship: `RELEASE.md`.
+
+---
+
+### Cách 3: Dual AUTO Authority Daemon — Codex + Gemini qua Agy
+
+Ở chế độ này, **Codex** giữ vai trò Architect, Router và Final QC; **Gemini 3.7 Flash High** qua `agy` đảm nhiệm các phần việc worker đủ điều kiện. Authority daemon giữ session, ownership, lease và quality gates bằng ledger hash-chain; Gemini không thể tự xác nhận hoàn thành.
+
+#### 1. Khởi tạo và dùng hằng ngày
+
+```bash
+omni init
+# Chọn Dual -> Codex + Gemini via agy -> AUTO
+```
+
+Sau đó, trong Codex chỉ cần gọi `$om-think` (hoặc `>om-think`). Khi interview/spec hoàn tất, workflow tạo `setup.json`, `todo.md` và full graph `dual-plan.json`, rồi gọi một controller `omni dual bootstrap --json`. Controller chạy setup trước, sau đó mới tạo authority, đăng ký graph thật một lần, route task, gọi AGY khi phù hợp và trả về Codex QC. Planning artifacts không được đăng ký thành task tạm.
+
+Codex phải trust project để project hooks được chạy. Config được sinh dùng `[features] hooks = true`, `.codex/hooks.json` và MCP stdio bằng Node/package path tuyệt đối của máy hiện tại; không phụ thuộc global `omni`, PowerShell hay Bash.
+
+#### 2. Lifecycle và recovery
+
+```bash
+omni dual daemon start
+omni dual daemon status
+omni dual daemon stop
+omni dual bootstrap --json
+```
+
+- `SessionStart` tự bootstrap hoặc attach daemon. `omni dual daemon start` là repair command khi cần chạy thủ công.
+- Session/task tiếp tục từ ledger và tái sử dụng AGY phases đã thành công; capability version/model được kiểm tra một lần rồi dùng lại.
+- Greenfield project dùng snapshot baseline, không tự `git init` hoặc commit. Git project dùng HEAD hiện tại.
+- Sau khi session snapshot đã `VERIFIED` và người dùng chủ động tạo Git commit phù hợp, `omni dual baseline promote` revalidate receipt, accepted snapshot, clean tree và daemon shutdown trước khi promote.
+- Không sửa/xóa thủ công `.omni/runs/dual-authority` hay `.omni/runtime/dual` như cách recovery thông thường. Ledger/lock/discovery hỏng hoặc ngoại lai sẽ fail closed.
+- `omni dual bootstrap` có thể archive/adopt một legacy planning-only session chỉ khi setup receipt khớp, không có lease/gate/execution evidence và drift chỉ nằm trong planning/package artifacts.
+
+Các lệnh `omni dual new|run|resume|status|phase` vẫn được giữ cho transaction v1 và debug compatibility; chúng không thay thế authority session của Dual AUTO mới.
+
+#### 3. Runtime data
+
+- `.omni/runtime/dual/daemon.json`, `daemon.lock`: discovery và single-daemon lock theo workspace.
+- `.omni/runs/dual-authority/`: authority ledger, initial/accepted snapshot và receipt-bound state.
+- `.omni/codex-gemini/runs/<task-id>/`: semantic artifacts và raw immutable AGY attempts.
+- `.omni/sdlc/setup.json`: typed setup actions; chạy idempotent bằng `omni dual setup run`.
+- `.omni/sdlc/dual-plan.json`: strict versioned full task graph; controller hash/validate trước mọi daemon side effect.
+
+#### 4. Safety contracts
+
+- AGY worker dùng exact `gemini-3.7-flash-high`, effort `high`, argv bounded với `shell: false`, và `--dangerously-skip-permissions` theo lựa chọn Dual init của người dùng; Omni không đặt token budget cho AGY và không sửa global AGY config.
+- Scout/implement/review phải nộp research trace, alternatives/failure modes, self-review và independent challenge theo strict schema. Output rỗng, malformed, sai schema, timeout, network hoặc non-zero exit được tự retry tối đa 3 attempts với correction hint ngắn.
+- Để tiết kiệm token Codex, success path chỉ đọc semantic artifacts/MCP summaries; raw stdout/stderr chỉ dùng khi failure, hash/correlation mismatch hoặc crash recovery.
+- Trong lúc AGY lease còn active, Codex chỉ điều phối và không ghi source/build/browser artifacts. Codex bắt đầu Final QC sau khi lease đã được release bền vững và task tới `CODEX_QC`.
+- Owner/allowlist/deny-pattern được kiểm tra trước write và diff được kiểm tra lại sau implement/review. Daemon mất kết nối thì source mutation bị deny fail-closed.
+- Chỉ Codex QC mới có thể ghi `task.completed`; mọi task, ba quality cycles và mandatory gates phải pass trước `session.verified`.
+- Commit, push, deploy, stash, reset và external-system mutation luôn cần quyền riêng của người dùng.
+- Node runtime dùng cùng exact argv trên Windows CMD/PowerShell, Linux và macOS; `ai-flow.ps1` chỉ là deprecated compatibility shim.
 
 ---
 
@@ -167,6 +222,10 @@ your-project/
 │   └── workflows/                  # Chỉ dẫn luồng thực thi SDLC
 └── .omni/
     ├── manifest.json               # Trạng thái IDE, skill đã cài, agentFilesVisibility
+    ├── codex-gemini/               # [Dual Orchestrator] Transaction runs và artifacts
+    │   └── runs/<task-id>/         # Thư mục transaction độc lập cho từng task
+    │       ├── spec.json, events.ndjson, state.json...
+    │       └── raw/                # Immutable logs của từng attempt
     ├── run/                        # [Harness] Log hoạt động & state phiên chạy tự động
     │   ├── state.json              # Trạng thái hiện tại (để resume)
     │   └── events.ndjson           # Lịch sử sự kiện thực thi realtime

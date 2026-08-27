@@ -15,26 +15,7 @@ network_access = false
 
 [features]
 # Required for .codex/hooks.json to run.
-codex_hooks = true
+hooks = true
 
-[profiles.omni_safe]
-default_permissions = ":workspace"
-approval_policy = "on-request"
-model = "codex-1"
-model_reasoning_effort = "medium"
-model_verbosity = "medium"
-
-[profiles.omni_yolo]
-# Lower-friction mode. Use only in repositories and sandboxes you trust.
-default_permissions = ":workspace"
-approval_policy = "never"
-model = "codex-1"
-model_reasoning_effort = "medium"
-model_verbosity = "medium"
-
-[profiles.omni_review]
-default_permissions = ":read-only"
-approval_policy = "untrusted"
-model = "codex-1"
-model_reasoning_effort = "high"
-model_verbosity = "medium"
+# Profiles are intentionally omitted here. Current Codex CLI accepts them only
+# in user-level config and ignores [profiles.*] in project-local config.toml.

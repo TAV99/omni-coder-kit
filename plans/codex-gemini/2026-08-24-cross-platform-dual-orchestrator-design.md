@@ -17,13 +17,17 @@ The resulting workflow must remove manual prompt relay, survive interruption wit
 - Use a Node.js orchestrator inside the Omni package. Do not implement separate orchestration logic per shell.
 - Support Node.js 20 and later on Windows, Linux, and macOS.
 - Expose the workflow through `omni dual`; npm supplies the Windows command shim and Unix executable entry point.
-- Keep `ai-flow.ps1` only as a temporary compatibility shim that delegates to `omni dual phase` and prints a deprecation notice.
+- Keep `ai-flow.ps1` only as a deprecated Windows compatibility shim that delegates to `omni dual phase`; it contains no orchestration logic.
 - Invoke child processes with an argv array and `shell: false`.
 - Use `gemini-3.7-flash-high` with effort `high`.
-- For the supported `codex-agy` pair, invoke Agy with `--dangerously-skip-permissions` from the first worker phase. This authority is project workflow policy, not permission to alter global Agy configuration.
+- For the supported `codex-agy` pair, invoke Agy with `--dangerously-skip-permissions` from the first worker phase. This authority is project workflow policy approved at Dual initialization, not permission to alter global Agy configuration.
+- Worker phase modes: `accept-edits` only for implement; `plan` for read-only phases (scout and review).
+- Every worker uses repo-relative tool paths because absolute Windows paths can be rejected by Antigravity as invalid artifact paths.
+- Agy CLI compatibility: Agy 1.1.19 supports `agy models` plain tab-separated output (not `agy models --output-format json`); implementation parses both plain and JSON formats for version resilience.
 - Codex owns task specification, architecture, routing authority, scope enforcement, final validation, and all commit/push decisions.
 - Agy may scout, implement, and review only within the bounded transaction contract.
-- Normal tests never call a live model. Live Agy smoke tests require a separate explicit opt-in and credentials.
+- Normal automated tests and CI are 100% fake-only and credential-free. For the orchestrator bootstrap (Tasks 5-9), the user explicitly authorized live Agy `gemini-3.7-flash-high` calls for implementation delegation; Codex independently verified all accepted edits.
+
 
 ## 3. Root Causes Addressed
 
@@ -166,11 +170,13 @@ Every worker invocation includes:
 - `--add-dir <canonical repo root>`;
 - `--model gemini-3.7-flash-high`;
 - `--effort high`;
-- phase-appropriate `--mode plan|accept-edits`;
+- phase-appropriate `--mode plan` (for `scout` and `review`) or `--mode accept-edits` (for `implement` only);
 - `--dangerously-skip-permissions`;
 - `--output-format json`;
 - `--json-schema <materialized attempt schema>`;
 - a short `-p=<instruction>` that references the materialized repo-local input file.
+
+Every worker must use repository-relative paths for all tool calls. On Windows, passing absolute file paths to Antigravity file tools can cause Antigravity to treat them as invalid artifact paths and emit an outer envelope error.
 
 The complete request/spec/evidence JSON is never placed in argv. The orchestrator builds a versioned input file from bundled Omni templates and transaction artifacts, hashes it, and gives Agy a short instruction to read that file.
 
@@ -190,7 +196,7 @@ Payload extraction order is:
 
 The process exit code must be zero. A non-zero process exit is always a transport failure even if stdout contains a candidate payload.
 
-An outer `ERROR` with exit code zero may be accepted only when the final extracted payload passes the exact local schema. Such an attempt is recorded as `accepted_with_warning` with the original envelope status and extraction mode. Missing fields, invalid enums, malformed JSON, prose-only output, or a payload that fails schema validation remains a hard failure.
+An outer `ERROR` with exit code zero may be accepted only when the final extracted payload passes the exact local schema. Such an attempt is recorded as `accepted_with_warning` with the original envelope status and extraction mode (for example, when Agy emits an outer envelope `status: ERROR` due to the Windows absolute artifact-path bug despite producing valid structured output). Codex independently verifies all accepted edits. Missing fields, invalid enums, malformed JSON, prose-only output, or a payload that fails schema validation remains a hard failure.
 
 Compatibility fallbacks are isolated in `agy-output.js`, covered by metrics/tests, and must not weaken the state machine. Fenced JSON support is eligible for removal after two consecutively verified Agy versions produce native structured output for all three worker phases.
 

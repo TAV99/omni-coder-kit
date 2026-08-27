@@ -14,6 +14,21 @@ const { handleCustomize } = require('../lib/commands/customize');
 const { handleDoctor } = require('../lib/commands/doctor');
 const { handleAgentFiles } = require('../lib/commands/agent-files');
 const { handleRun, handleTrace, handleGate, handleStats, handleAccept } = require('../lib/commands/run');
+const {
+    handleDualNew,
+    handleDualRun,
+    handleDualResume,
+    handleDualStatus,
+    handleDualPhase,
+    handleDualDaemonStart,
+    handleDualDaemonStatus,
+    handleDualDaemonStop,
+    handleDualDaemonRecover,
+    handleDualBaselinePromote,
+    handleDualSetupRun,
+    handleDualBootstrap,
+    handleDualQc,
+} = require('../lib/commands/dual');
 
 // `omni skills` no-arg = auto-equip + status (one-stop "show me my skills").
 async function handleSkillsDefault(options = {}) {
@@ -90,6 +105,7 @@ run.command('accept')
 const skills = program
     .command('skills')
     .description('Quản lý skills (no-arg = auto-equip + status)')
+    .option('-y, --yes', 'Tự động đồng ý cài đặt universal skills (không hỏi lại)')
     .action(handleSkillsDefault);
 
 skills.command('add <source>')
@@ -122,6 +138,82 @@ program
     .command('agent-files [action]')
     .description('Ẩn/hiện file agent (AGENTS.md, CLAUDE.md, …) khỏi git qua .gitignore')
     .action(handleAgentFiles);
+
+// -- 7) dual -----------------------------------------------------------------
+const dual = program
+    .command('dual')
+    .description('Điều phối Codex + Gemini qua agy');
+
+dual.command('new <task-id>')
+    .description('Tạo transaction mới cho task')
+    .action(handleDualNew);
+
+dual.command('run <task-id>')
+    .description('Chạy tự động các phase hợp lệ cho task')
+    .action(handleDualRun);
+
+dual.command('resume <task-id>')
+    .description('Tiếp tục task từ trạng thái hiện tại')
+    .action(handleDualResume);
+
+dual.command('status <task-id>')
+    .description('Xem trạng thái, owner và bước tiếp theo của task')
+    .action(handleDualStatus);
+
+dual.command('phase <phase> <task-id>')
+    .description('Chạy một phase cụ thể (preflight|scout|spec|route|implement|scope|review)')
+    .action(handleDualPhase);
+
+dual.command('bootstrap')
+    .description('Validate planning/setup, register the full typed task graph once, and resume Dual AUTO')
+    .option('--json', 'Xuất một JSON object cho AUTO workflow')
+    .action(handleDualBootstrap);
+
+dual.command('qc [task-id]')
+    .description('Tự động đo đạc snapshot diff, nộp QC Evidence và hoàn tất 3 chu kỳ Quality Gate')
+    .option('--json', 'Xuất một JSON object cho AUTO workflow')
+    .action(handleDualQc);
+
+const dualDaemon = dual
+    .command('daemon')
+    .description('Quản lý vòng đời authority daemon (start|status|stop|recover)');
+
+dualDaemon.command('start')
+    .description('Khởi chạy authority daemon cho workspace')
+    .action(handleDualDaemonStart);
+
+dualDaemon.command('status')
+    .description('Xem trạng thái hoạt động của authority daemon')
+    .action(handleDualDaemonStatus);
+
+dualDaemon.command('stop')
+    .description('Dừng authority daemon của workspace')
+    .action(handleDualDaemonStop);
+
+dualDaemon.command('recover')
+    .description('Archive session mồ côi và tạo authority mới khi workspace còn pristine')
+    .requiredOption('--if-pristine', 'Chỉ recovery khi workspace khớp baseline và chưa có execution evidence')
+    .option('--json', 'Xuất một JSON object cho AUTO workflow')
+    .action(handleDualDaemonRecover);
+
+const dualBaseline = dual
+    .command('baseline')
+    .description('Quản lý baseline và promotion');
+
+dualBaseline.command('promote')
+    .description('Chuyển đổi baseline từ snapshot sang Git commit đã được nghiệm thu')
+    .action(handleDualBaselinePromote);
+
+const dualSetup = dual
+    .command('setup')
+    .description('Quản lý và thực thi setup manifest cho workspace');
+
+dualSetup.command('run')
+    .description('Chạy setup manifest (.omni/sdlc/setup.json) cho workspace')
+    .option('--dry-run', 'Kiểm tra và resolve các action mà không thực thi hoặc ghi receipt')
+    .option('--force', 'Ép chạy lại toàn bộ action kể cả khi receipt hợp lệ')
+    .option('--json', 'Xuất kết quả dưới dạng JSON object duy nhất ra stdout')
+    .action(handleDualSetupRun);
 
 // ---------------------------------------------------------------------------
 // Hidden utility commands (not aliases of the main groups — power-user tools)

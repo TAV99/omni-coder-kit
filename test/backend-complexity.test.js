@@ -184,7 +184,7 @@ describe('Backend Complexity — task-planning backend awareness', () => {
     });
 
     it('describes flexible [infra] task classification', () => {
-        assert.ok(content.includes('[infra]') && content.includes('setup.sh'));
-        assert.ok(content.includes('worker logic') || content.includes('event handlers'));
+        assert.ok(content.includes('[infra]') && (content.includes('setup.json') || content.includes('Setup/Infra')));
+        assert.ok(content.includes('worker logic') || content.includes('event handlers') || content.includes('Queue/Worker'));
     });
 });
