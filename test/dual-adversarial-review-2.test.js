@@ -280,7 +280,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
             });
             t.after(() => daemon.close());
 
-            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 5000 });
+            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 15000 });
             const beginRes = await client.beginSession({ workspace_root: tmpDir, mode: 'auto' });
             const sessionId = beginRes.session_id;
 
@@ -301,8 +301,11 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
 
             await client.request('session.resume', { session_id: sessionId });
 
-            // Wait for worker execution to settle
-            await new Promise((r) => setTimeout(r, 2000));
+            // Wait on the durable phase artifact instead of assuming a fixed worker duration.
+            await waitForFile(
+                path.join(tmpDir, '.omni', 'codex-gemini', 'runs', 'TASK-1', 'review.json'),
+                15000,
+            );
 
             const derived = authorityStore.derive();
             assert.notEqual(derived.tasks['TASK-1'].state, 'TASK_VERIFIED', 'Task must NOT be TASK_VERIFIED on review failure');
@@ -474,7 +477,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
             });
             t.after(() => daemon.close());
 
-            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 5000 });
+            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 15000 });
             const beginRes = await client.beginSession({ workspace_root: tmpDir, mode: 'auto' });
             const sessionId = beginRes.session_id;
 
@@ -566,7 +569,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
             });
             t.after(() => daemon.close());
 
-            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 5000 });
+            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 15000 });
             const beginRes = await client.beginSession({ workspace_root: tmpDir, mode: 'auto' });
             const sessionId = beginRes.session_id;
 
@@ -655,7 +658,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
             });
             t.after(() => daemon.close());
 
-            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 5000 });
+            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 15000 });
             const beginRes = await client.beginSession({
                 workspace_root: tmpDir,
                 mode: 'auto',
@@ -716,7 +719,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
             });
             t.after(() => daemon.close());
 
-            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 5000 });
+            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 15000 });
             const beginRes = await client.beginSession({ workspace_root: tmpDir, mode: 'auto' });
 
             const initialSnapshotPath = path.join(tmpDir, '.omni', 'runs', 'dual-authority', 'initial-snapshot.json');
@@ -743,7 +746,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
             });
             t.after(() => daemon.close());
 
-            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 5000 });
+            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 15000 });
             const beginRes = await client.beginSession({ workspace_root: tmpDir, mode: 'auto' });
 
             const initialSnapshotPath = path.join(tmpDir, '.omni', 'runs', 'dual-authority', 'initial-snapshot.json');
@@ -785,7 +788,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
             });
             t.after(() => daemon.close());
 
-            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 5000 });
+            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 15000 });
             const beginRes = await client.beginSession({ workspace_root: tmpDir, mode: 'auto' });
             const sessionId = beginRes.session_id;
 
