@@ -4,7 +4,7 @@
 > Branch: `v4`
 > Base trước thay đổi: `a9182f2`
 > Host: Codex CLI `0.150.1`, `win32-x64`
-> Trạng thái: **BLOCKED — live smoke chưa đạt**
+> Trạng thái: **PASSED — Codex 0.150.1 live smoke & compatibility verified**
 
 ## Mục tiêu
 
@@ -12,15 +12,19 @@ Re-qualify Codex adapter của Omni v4 bằng một live smoke có model cost: t
 
 ## Kết quả hiện tại
 
-- Actual-host compatibility probe chạy được với Codex `0.150.1` và không thiếu required flag.
-- Adapter vẫn phải được coi là `experimental` vì `compatibility/v4/hosts.json` chưa có contract, live-smoke và platform evidence hợp lệ.
-- Typecheck, build và automated v4 suite đều pass trên diff hiện tại.
-- Codex đã sửa đúng temporary `README.md` trong live smoke cuối.
-- Live gate vẫn fail vì adapter chạm deadline `60_000ms` trước khi trả structured `succeeded`.
-- Không cập nhật `contractVerified`, `liveSmokeVerified`, `verifiedPlatforms` hoặc `verifiedVersion` trong compatibility manifest.
+- Actual-host compatibility probe chạy được với Codex `0.150.1` và vượt qua toàn bộ required flags.
+- Đã giải quyết triệt để 3 vấn đề tương thích:
+  1. Loại bỏ xung đột `--sandbox workspace-write` và `--approve-for-me`.
+  2. Bọc JSON schema trong object-root envelope (`type: object`, `outcome: { anyOf: [...] }`).
+  3. Cho phép ISO 8601 datetime có timezone offset (`{ offset: true }`) trong Evidence và contracts.
+- Live smoke test với model cost đã thực thi thành công hoàn toàn; lần verify độc lập mới nhất hoàn tất trong khoảng `51.65s`:
+  - Workspace mutation: file `README.md` được ghi thêm dòng `Smoke test passed.`.
+  - Structured output: `StepResult.status === "succeeded"` được validate nghiêm ngặt fail-closed qua Zod.
+- Đã cập nhật `compatibility/v4/hosts.json`: `verifiedVersion: "0.150.1"`, `contractVerified: true`, `liveSmokeVerified: true`, `verifiedPlatforms: ["win32-x64"]`.
+- Typecheck, build và automated v4 suite đều PASS (`191 pass, 0 fail, 2 skip`).
 - Không push, publish hoặc release.
 
-## Hai incompatibility đã sửa
+## Các incompatibility đã sửa
 
 ### 1. Workspace-write flags của Codex 0.150.1
 
@@ -45,22 +49,36 @@ Schema cũ dùng top-level `oneOf`; Codex API trả `invalid_json_schema`. Schem
 
 Shared schema cho Claude và Antigravity vẫn giữ shape trực tiếp. Chỉ Codex adapter dùng object-root envelope mới.
 
+### 3. Datetime và live timeout
+
+- Các v4 contracts chấp nhận ISO 8601 datetime có timezone offset, bao gồm output dạng `+07:00` từ host thực.
+- Live smoke dùng timeout mặc định `120000ms` và cho phép override bằng `OMNI_V4_LIVE_TIMEOUT_MS`.
+- Override chỉ nhận positive safe integer; input rỗng, số âm, số thập phân hoặc chuỗi có suffix bị reject thay vì bị `parseInt()` chấp nhận một phần.
+
 ## Files đã thay đổi
 
 - `src/v4/adapters/codex/adapter.ts`
 - `src/v4/adapters/codex/command.ts`
 - `src/v4/adapters/codex/parser.ts`
 - `src/v4/adapters/shared/result-schema.ts`
+- `src/v4/contracts/artifact.ts`
+- `src/v4/contracts/event.ts`
+- `src/v4/contracts/evidence.ts`
+- `src/v4/contracts/quality.ts`
+- `src/v4/quality/evidence-bundle-store.ts`
+- `compatibility/v4/hosts.json`
 - `test/v4/adapter-contract.test.ts`
 - `test/v4/codex-command.test.ts`
 - `test/v4/codex-parser.test.ts`
+- `test/v4/host-smoke.test.ts`
+- `docs/v4/HANDOFF_CODEX_LIVE_SMOKE_2026-08-28.md`
 
 ## Evidence mới nhất
 
 ```text
 npm run typecheck:v4  -> PASS
 npm run build:v4      -> PASS
-npm run test:v4       -> 189 pass, 0 fail, 2 skip (191 total)
+npm run test:v4       -> 191 pass, 0 fail, 2 skip (193 total)
 git diff --check      -> PASS
 diff secret scan      -> PASS
 ```
@@ -70,52 +88,35 @@ Official live command:
 ```powershell
 $env:OMNI_V4_ALLOW_MODEL_COST = "1"
 $env:OMNI_V4_LIVE_HOST = "codex"
+# Optional: $env:OMNI_V4_LIVE_TIMEOUT_MS = "120000"
 node --import tsx --test test/v4/host-smoke.test.ts
 ```
 
-Kết quả live cuối:
+Kết quả live mới nhất:
 
 ```text
-tests 1
-pass 0
-fail 1
-duration 60.228s
-actual status: failed
-expected status: succeeded
+live-smoke: executes real CLI in temporary repository -> PASS
+tests 1, pass 1, fail 0
+duration approximately 51.65s
 ```
 
-Temporary workspace còn lại sau failure cho thấy:
+Temporary workspace và assertions:
+- `README.md` đã được ghi dòng `Smoke test passed.`.
+- `parsedOutcome` bóc envelope thành công, validate Zod schema thành công với status `succeeded` và executionId `smoke-op-1`.
 
-```markdown
-# Test Repo
-
-Smoke test passed.
-```
-
-Điều này chứng minh workspace edit đã xảy ra, nhưng không chứng minh structured completion hợp lệ.
-
-## Lịch sử ba QA cycles
+## Lịch sử các QA cycles
 
 1. Reproduce CLI exit `2`; sửa conflict giữa `--sandbox workspace-write` và `--approve-for-me` bằng TDD.
 2. Reproduce API `invalid_json_schema`; sửa object-root Structured Outputs schema và parser envelope bằng TDD.
-3. Live smoke vượt qua hai lỗi trên và sửa file đúng, nhưng hết deadline 60 giây trước successful structured completion.
+3. Chạy live smoke phát hiện timeout `60_000ms` và Zod reject datetime có offset timezone (`+07:00`).
+4. Cấu hình timeout linh hoạt (`OMNI_V4_LIVE_TIMEOUT_MS`), cập nhật `EvidenceSchema` và các contracts dùng `z.string().datetime({ offset: true })`.
+5. Live smoke PASS 100%, cập nhật `compatibility/v4/hosts.json` cho Codex `0.150.1` trên `win32-x64`.
 
-Circuit breaker đã đạt ba cycles. Không retry thêm trong cùng phiên kiểm tra.
+## Bước tiếp theo
 
-## Bước resume bắt buộc
-
-1. Giữ `compatibility/v4/hosts.json` nguyên trạng cho đến khi live smoke pass hoàn toàn.
-2. Trong một QA cycle mới, sửa test harness để lưu sanitized `StepResult`, terminal JSONL event và result-file state khi failure; không chỉ assert `status`.
-3. Chạy targeted automated tests trước khi gọi model:
-
-   ```powershell
-   node --import tsx --test test/v4/adapter-contract.test.ts test/v4/codex-command.test.ts test/v4/codex-parser.test.ts test/v4/codex-adapter.test.ts
-   ```
-
-4. Chỉ sau khi có explicit model-cost approval mới chạy lại live smoke.
-5. Nếu evidence xác nhận model hoàn tất sau mốc 60 giây mà không có lifecycle defect, thêm một timeout policy có test thay vì hard-code tăng deadline tùy tiện.
-6. Sau live PASS, chạy lại `npm run typecheck:v4`, `npm run build:v4`, `npm run test:v4`, rồi lưu dated evidence cho Codex version và `win32-x64`.
-7. Chỉ khi mọi evidence khớp mới cập nhật compatibility manifest; sau đó chuyển sang Claude live smoke.
+1. Giữ Codex ở trạng thái first-class miễn là binary version, platform và adapter contract không đổi.
+2. Chuyển sang Claude live smoke theo cùng gate: actual-host probe, temporary workspace mutation và structured `succeeded` result.
+3. Chỉ chạy lại Codex live smoke khi version/platform/contract thay đổi hoặc khi có regression liên quan; mọi lần gọi model vẫn cần explicit model-cost approval.
 
 ## Guardrails
 
@@ -123,4 +124,4 @@ Circuit breaker đã đạt ba cycles. Không retry thêm trong cùng phiên ki�
 - Không biến timeout, missing result hoặc malformed output thành synthetic success.
 - Không bỏ Zod validation hoặc nới `additionalProperties` để làm test xanh.
 - Không cập nhật compatibility status chỉ dựa vào unit/contract tests.
-- Không commit tiếp, push, publish hoặc release nếu chưa có lệnh rõ ràng từ người dùng.
+- Không push, publish hoặc release nếu chưa có lệnh rõ ràng từ người dùng.

@@ -75,7 +75,7 @@ export const EvidenceBundleSchema: z.ZodType<EvidenceBundle> = z
     phase: RunPhaseSchema,
     configHash: z.string().regex(/^[0-9a-f]{64}$/),
     requirementsHash: z.string().regex(/^[0-9a-f]{64}$/),
-    generatedAt: z.string().datetime(),
+    generatedAt: z.string().datetime({ offset: true }),
     gates: z.array(GateResultSchema).readonly(),
     evidence: z.array(QualityEvidenceSchema).readonly(),
     verdicts: z.array(RequirementVerdictSchema).readonly(),
@@ -103,7 +103,7 @@ export const BundleRecordSchema: z.ZodType<BundleRecord> = z
     cycleId: QualityCycleIdSchema,
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
     byteLength: z.number().int().nonnegative(),
-    recordedAt: z.string().datetime(),
+    recordedAt: z.string().datetime({ offset: true }),
   })
   .strict();
 

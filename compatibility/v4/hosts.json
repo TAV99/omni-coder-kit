@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-20",
+  "verifiedAt": "2026-08-28",
   "hosts": {
     "codex": {
       "binary": "codex",
-      "verifiedVersion": "0.147.0",
+      "verifiedVersion": "0.150.1",
       "versionArgs": ["--version"],
       "helpArgs": ["exec", "--help"],
       "requiredFlags": [
@@ -17,9 +17,9 @@
         "--approve-for-me",
         "--cd"
       ],
-      "contractVerified": false,
-      "liveSmokeVerified": false,
-      "verifiedPlatforms": []
+      "contractVerified": true,
+      "liveSmokeVerified": true,
+      "verifiedPlatforms": ["win32-x64"]
     },
     "claude": {
       "binary": "claude",

@@ -96,7 +96,7 @@ const BaseGateResultFields = {
   cycleId: QualityCycleIdSchema,
   gateId: GateIdSchema,
   operationId: z.string().min(1),
-  startedAt: z.string().datetime(),
+  startedAt: z.string().datetime({ offset: true }),
   durationMs: z.number().int().nonnegative(),
   mandatory: z.boolean().optional(),
 };
@@ -198,7 +198,7 @@ export const QualityEvidenceSchema = z
       "spawn-error",
     ]),
     exitCode: z.number().int().nullable(),
-    startedAt: z.string().datetime(),
+    startedAt: z.string().datetime({ offset: true }),
     durationMs: z.number().int().nonnegative(),
     stdoutSummary: z.string(),
     stderrSummary: z.string(),
@@ -457,7 +457,7 @@ export const RepairHistoryEntrySchema = z
     perRequirementAttempts: z.record(z.string(), z.number().int().positive()).readonly(),
     fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
     outcome: RepairOutcomeSchema,
-    timestamp: z.string().datetime(),
+    timestamp: z.string().datetime({ offset: true }),
   })
   .strict();
 

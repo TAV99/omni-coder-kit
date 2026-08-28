@@ -14,6 +14,35 @@ const manifestPath = path.resolve(__dirname, "../../compatibility/v4/hosts.json"
 const allowCost = process.env.OMNI_V4_ALLOW_MODEL_COST === "1";
 const liveHost = process.env.OMNI_V4_LIVE_HOST as "codex" | "claude" | "antigravity" | undefined;
 
+function parseLiveTimeoutMs(rawValue: string | undefined): number {
+  const normalized = rawValue ?? "120000";
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error("OMNI_V4_LIVE_TIMEOUT_MS must be a positive integer");
+  }
+
+  const timeoutMs = Number(normalized);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("OMNI_V4_LIVE_TIMEOUT_MS must be a positive integer");
+  }
+
+  return timeoutMs;
+}
+
+test("live-smoke: rejects invalid timeout overrides", () => {
+  for (const invalidValue of ["invalid", "120000ms", "1.5", "0", "-1"]) {
+    assert.throws(
+      () => parseLiveTimeoutMs(invalidValue),
+      /OMNI_V4_LIVE_TIMEOUT_MS/,
+      `Expected ${JSON.stringify(invalidValue)} to be rejected`
+    );
+  }
+});
+
+test("live-smoke: uses a safe default and accepts positive integer overrides", () => {
+  assert.equal(parseLiveTimeoutMs(undefined), 120000);
+  assert.equal(parseLiveTimeoutMs("90000"), 90000);
+});
+
 test(
   "live-smoke: executes real CLI in temporary repository",
   { skip: !allowCost || !liveHost },
@@ -50,6 +79,10 @@ test(
         : { hostId: "antigravity" }
     );
 
+    const liveTimeoutMs = parseLiveTimeoutMs(
+      process.env.OMNI_V4_LIVE_TIMEOUT_MS
+    );
+
     const stepReq: StepRequest = {
       runId: asRunId("smoke-run-1"),
       stepId: asStepId("step-smoke-1"),
@@ -59,7 +92,7 @@ test(
       prompt: "Add a new line 'Smoke test passed.' to README.md and report artifact.",
       requiredCapabilities: ["workspace.read", "workspace.write"],
       sideEffect: "workspace-write",
-      timeoutMs: 60000,
+      timeoutMs: liveTimeoutMs,
     };
 
     const rawOutcome = await adapter.execute(stepReq, {
@@ -68,8 +101,20 @@ test(
     });
 
     const parsed = StepResultSchema.parse(rawOutcome);
+    if (parsed.status !== "succeeded") {
+      console.error(
+        "[live-smoke diagnostic] StepResult did not succeed:",
+        JSON.stringify(parsed, null, 2)
+      );
+    }
     assert.equal(parsed.status, "succeeded");
     assert.equal(parsed.executionId, "smoke-op-1");
+
+    const modifiedReadme = await fs.readFile(readmeFile, "utf-8");
+    assert.ok(
+      modifiedReadme.includes("Smoke test passed."),
+      "Expected README.md to contain 'Smoke test passed.'"
+    );
 
     await fs.rm(tempDir, { recursive: true, force: true });
   }

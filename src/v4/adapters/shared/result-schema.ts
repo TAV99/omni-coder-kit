@@ -48,7 +48,10 @@ export function createAgentStepOutcomeJsonSchema(): Record<string, unknown> {
                 },
                 producerStepId: { type: "string", minLength: 1 },
                 method: { type: "string", minLength: 1 },
-                startedAt: { type: "string" },
+                startedAt: {
+                  type: "string",
+                  description: "ISO 8601 UTC timestamp string, e.g. 2026-08-28T15:00:00.000Z",
+                },
                 durationMs: { type: "number", minimum: 0 },
                 artifactIds: {
                   type: "array",

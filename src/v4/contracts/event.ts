@@ -33,12 +33,12 @@ const BaseEventFields = {
   eventId: z.string().min(1).transform(asEventId),
   runId: z.string().min(1).transform(asRunId),
   sequence: z.number().int().nonnegative(),
-  at: z.string().datetime(),
+  at: z.string().datetime({ offset: true }),
 };
 
 export const RunCreatedPayloadSchema = z
   .object({
-    startedAt: z.string().datetime(),
+    startedAt: z.string().datetime({ offset: true }),
   })
   .strict();
 
@@ -162,7 +162,7 @@ export const QualityStartedPayloadSchema = z
   .object({
     cycleId: QualityCycleIdSchema,
     phase: RunPhaseSchema,
-    startedAt: z.string().datetime(),
+    startedAt: z.string().datetime({ offset: true }),
   })
   .strict();
 
@@ -171,7 +171,7 @@ export const GateStartedPayloadSchema = z
     cycleId: QualityCycleIdSchema,
     gateId: GateIdSchema,
     operationId: z.string().min(1),
-    startedAt: z.string().datetime(),
+    startedAt: z.string().datetime({ offset: true }),
   })
   .strict();
 
@@ -192,7 +192,7 @@ export const QualityCompletedPayloadSchema = z
   .object({
     cycleId: QualityCycleIdSchema,
     decision: QualityDecisionSchema,
-    completedAt: z.string().datetime(),
+    completedAt: z.string().datetime({ offset: true }),
   })
   .strict();
 

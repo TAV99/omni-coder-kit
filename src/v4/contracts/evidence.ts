@@ -30,7 +30,7 @@ export const EvidenceSchema = z
     kind: EvidenceKindSchema,
     producerStepId: z.string().min(1).transform(asStepId),
     method: z.string().min(1),
-    startedAt: z.string().datetime(),
+    startedAt: z.string().datetime({ offset: true }),
     durationMs: z.number().nonnegative(),
     artifactIds: z.array(z.string().min(1).transform(asArtifactId)).readonly(),
     summary: z.string(),

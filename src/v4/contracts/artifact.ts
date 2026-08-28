@@ -49,7 +49,7 @@ export const ArtifactRecordSchema = z
       .string()
       .regex(/^[a-f0-9]{64}$/, "Must be a 64-character lowercase hex SHA-256 hash"),
     sizeBytes: z.number().int().nonnegative(),
-    recordedAt: z.string().datetime(),
+    recordedAt: z.string().datetime({ offset: true }),
   })
   .strict();
 
