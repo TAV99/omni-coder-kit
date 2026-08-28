@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { NodeProcessRunner } from "../../src/v4/process/node-process-runner";
 
@@ -124,6 +126,52 @@ test("process-runner: returns spawn-error for non-existent binary without reject
     assert.ok(result.error.message.length > 0);
   }
 });
+
+test(
+  "process-runner: resolves a native executable behind a Windows npm cmd shim",
+  { skip: process.platform !== "win32" },
+  async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omni-v4-win-shim-"));
+    const nativeDir = path.join(tempDir, "node_modules", "vendor", "bin");
+    const nativePath = path.join(nativeDir, "shim-tool.exe");
+    await fs.mkdir(nativeDir, { recursive: true });
+    await fs.copyFile(process.execPath, nativePath);
+    await fs.writeFile(
+      path.join(tempDir, "shim-tool.cmd"),
+      [
+        "@ECHO off",
+        "GOTO start",
+        ":find_dp0",
+        "SET dp0=%~dp0",
+        "EXIT /b",
+        ":start",
+        "SETLOCAL",
+        "CALL :find_dp0",
+        '"%dp0%\\node_modules\\vendor\\bin\\shim-tool.exe" %*',
+      ].join("\r\n"),
+      "utf-8"
+    );
+
+    try {
+      const runner = new NodeProcessRunner();
+      const result = await runner.run({
+        command: "shim-tool",
+        args: ["--version"],
+        cwd: tempDir,
+        env: { PATH: `${tempDir}${path.delimiter}${process.env.PATH ?? ""}` },
+        timeoutMs: 5000,
+      });
+
+      assert.equal(result.termination, "exited");
+      if (result.termination === "exited") {
+        assert.equal(result.exitCode, 0);
+      }
+      assert.match(result.stdout, new RegExp(process.version.replace(".", "\\.")));
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  }
+);
 
 test("process-runner: captures POSIX signals on non-Windows platform", { skip: process.platform === "win32" }, async () => {
   const runner = new NodeProcessRunner();

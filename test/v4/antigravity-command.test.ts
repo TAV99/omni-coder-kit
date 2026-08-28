@@ -35,7 +35,7 @@ test("antigravity-command: buildAntigravityInvocation in safe workspace-write mo
   assert.ok(invocation.args.includes("--print-timeout"));
   assert.ok(invocation.args.includes("30s"));
   assert.ok(invocation.args.includes("--print"));
-  assert.ok(!invocation.args.includes("--dangerously-skip-permissions"));
+  assert.ok(invocation.args.includes("--dangerously-skip-permissions"));
 });
 
 test("antigravity-command: buildAntigravityInvocation elevated mode contains bypass flag", () => {

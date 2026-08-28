@@ -10,6 +10,12 @@ import {
   processFailure,
 } from "../shared/adapter-failure";
 
+function parseStructuredJsonString(raw: string): unknown {
+  const trimmed = raw.trim();
+  const fencedMatch = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
+  return JSON.parse(fencedMatch?.[1] ?? trimmed);
+}
+
 export function parseAntigravityExecution(input: {
   readonly executionId: string;
   readonly process: ProcessResult;
@@ -99,7 +105,7 @@ export function parseAntigravityExecution(input: {
     rawStructured = envelope.structured_output;
   } else if (typeof envelope.result === "string") {
     try {
-      rawStructured = JSON.parse(envelope.result);
+      rawStructured = parseStructuredJsonString(envelope.result);
     } catch (err: any) {
       return malformedOutputFailure(
         executionId,
@@ -109,6 +115,18 @@ export function parseAntigravityExecution(input: {
     }
   } else if (typeof envelope.result === "object" && envelope.result !== null) {
     rawStructured = envelope.result;
+  } else if (typeof envelope.response === "string") {
+    try {
+      rawStructured = parseStructuredJsonString(envelope.response);
+    } catch (err: any) {
+      return malformedOutputFailure(
+        executionId,
+        "antigravity",
+        `Could not parse JSON response string: ${err.message}`
+      );
+    }
+  } else if (typeof envelope.response === "object" && envelope.response !== null) {
+    rawStructured = envelope.response;
   } else if (envelope.status === "succeeded" || envelope.status === "failed") {
     rawStructured = envelope;
   } else {

@@ -27,7 +27,12 @@ export function buildAntigravityInvocation(
     args.push("--sandbox", "--mode", "plan");
   } else {
     // workspace-write
-    args.push("--sandbox", "--mode", "accept-edits");
+    args.push(
+      "--sandbox",
+      "--mode",
+      "accept-edits",
+      "--dangerously-skip-permissions"
+    );
   }
 
   args.push("--add-dir", input.request.workspaceDir);

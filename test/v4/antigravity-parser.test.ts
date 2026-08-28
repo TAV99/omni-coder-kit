@@ -33,6 +33,82 @@ test("antigravity-parser: parses valid envelope and extracts session/usage metad
   }
 });
 
+test("antigravity-parser: falls back to a JSON response when structured_output is absent", () => {
+  const outcome = {
+    status: "succeeded",
+    executionId: "exec-1",
+    summary: "Updated README.md",
+    artifacts: [
+      {
+        artifactId: "artifact-readme",
+        kind: "file",
+        relativePath: "README.md",
+      },
+    ],
+    evidence: [
+      {
+        schemaVersion: 1,
+        kind: "artifact",
+        producerStepId: "step-1",
+        method: "automated",
+        startedAt: "2026-08-28T16:27:20.000Z",
+        durationMs: 100,
+        artifactIds: ["artifact-readme"],
+        summary: "Verified README.md",
+      },
+    ],
+  };
+  const proc: ProcessResult = {
+    stdout: JSON.stringify({
+      conversation_id: "conversation-1",
+      status: "SUCCESS",
+      response: JSON.stringify(outcome),
+    }),
+    stderr: "",
+    durationMs: 100,
+    termination: "exited",
+    exitCode: 0,
+    signal: null,
+  };
+
+  const stepResult = parseAntigravityExecution({
+    executionId: "exec-1",
+    process: proc,
+  });
+
+  assert.equal(stepResult.status, "succeeded");
+  if (stepResult.status === "succeeded") {
+    assert.equal(stepResult.native?.sessionId, "conversation-1");
+    assert.equal(stepResult.artifacts[0]?.relativePath, "README.md");
+  }
+});
+
+test("antigravity-parser: rejects an ambiguous response with trailing content", () => {
+  const proc: ProcessResult = {
+    stdout: JSON.stringify({
+      status: "SUCCESS",
+      response:
+        '{"status":"failed","executionId":"exec-1","failure":{"code":"X","message":"first","retryable":false,"signature":"x:first"}}\n' +
+        '{"status":"failed","executionId":"exec-1","failure":{"code":"Y","message":"second","retryable":false,"signature":"y:second"}}',
+    }),
+    stderr: "",
+    durationMs: 100,
+    termination: "exited",
+    exitCode: 0,
+    signal: null,
+  };
+
+  const stepResult = parseAntigravityExecution({
+    executionId: "exec-1",
+    process: proc,
+  });
+
+  assert.equal(stepResult.status, "failed");
+  if (stepResult.status === "failed") {
+    assert.equal(stepResult.failure.signature, "antigravity:malformed_output");
+  }
+});
+
 test("antigravity-parser: error envelope returns failure", () => {
   const failedJson = fs.readFileSync(
     path.resolve(__dirname, "../fixtures/v4/hosts/antigravity/failed.json"),

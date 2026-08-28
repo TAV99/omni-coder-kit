@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import type { ProcessRequest, ProcessResult, ProcessRunner } from "./types";
+import { resolveWindowsNativeCommand } from "./windows-native-command";
 
 const MAX_OUTPUT_BYTES = 10 * 1024 * 1024; // 10 MiB
 const FORCE_KILL_GRACE_MS = 500;
@@ -111,9 +112,11 @@ export class NodeProcessRunner implements ProcessRunner {
       }
 
       try {
-        child = spawn(request.command, [...request.args], {
+        const childEnv = request.env ? { ...process.env, ...request.env } : process.env;
+        const command = resolveWindowsNativeCommand(request.command, childEnv);
+        child = spawn(command, [...request.args], {
           cwd: request.cwd,
-          env: request.env ? { ...process.env, ...request.env } : process.env,
+          env: childEnv,
           shell: false,
           windowsHide: true,
           stdio: ["pipe", "pipe", "pipe"],
