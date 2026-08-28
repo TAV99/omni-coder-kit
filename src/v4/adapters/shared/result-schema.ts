@@ -55,11 +55,6 @@ export function createAgentStepOutcomeJsonSchema(): Record<string, unknown> {
                   items: { type: "string", minLength: 1 },
                 },
                 summary: { type: "string" },
-                command: {
-                  type: "array",
-                  items: { type: "string" },
-                },
-                exitCode: { type: "integer" },
               },
             },
           },
@@ -107,5 +102,25 @@ export function createAgentStepOutcomeJsonSchema(): Record<string, unknown> {
         },
       },
     ],
+  };
+}
+
+export function createCodexAgentStepOutcomeJsonSchema(): Record<string, unknown> {
+  const baseSchema = createAgentStepOutcomeJsonSchema() as {
+    oneOf: readonly Record<string, unknown>[];
+  };
+
+  return {
+    $schema: "http://json-schema.org/draft-07/schema#",
+    title: "AgentStepOutcome",
+    description: "Structured result produced by Codex executing an Omni v4 step",
+    type: "object",
+    additionalProperties: false,
+    required: ["outcome"],
+    properties: {
+      outcome: {
+        anyOf: baseSchema.oneOf,
+      },
+    },
   };
 }

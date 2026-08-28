@@ -5,7 +5,10 @@ import {
   resolvePermissionMode,
   AdapterPolicyError,
 } from "../../src/v4/adapters/shared/permission-mode";
-import { createAgentStepOutcomeJsonSchema } from "../../src/v4/adapters/shared/result-schema";
+import {
+  createAgentStepOutcomeJsonSchema,
+  createCodexAgentStepOutcomeJsonSchema,
+} from "../../src/v4/adapters/shared/result-schema";
 import {
   processFailure,
   malformedOutputFailure,
@@ -74,6 +77,29 @@ test("adapter-shared: createAgentStepOutcomeJsonSchema is valid and rejects nati
   // Ensure no variant includes 'native' in required or properties
   for (const variant of schema.oneOf as any[]) {
     assert.equal(variant.properties.native, undefined);
+  }
+});
+
+test("adapter-shared: Codex schema uses an object root and requires every declared field", () => {
+  const schema = createCodexAgentStepOutcomeJsonSchema() as any;
+  assert.equal(schema.type, "object");
+  assert.equal(schema.oneOf, undefined);
+  assert.equal(schema.anyOf, undefined);
+  assert.deepEqual(schema.required, ["outcome"]);
+  assert.ok(Array.isArray(schema.properties.outcome.anyOf));
+
+  for (const variant of schema.properties.outcome.anyOf) {
+    assert.deepEqual(
+      [...variant.required].sort(),
+      Object.keys(variant.properties).sort()
+    );
+    const evidenceItem = variant.properties.evidence?.items;
+    if (evidenceItem) {
+      assert.deepEqual(
+        [...evidenceItem.required].sort(),
+        Object.keys(evidenceItem.properties).sort()
+      );
+    }
   }
 });
 

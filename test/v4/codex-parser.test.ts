@@ -42,6 +42,34 @@ test("codex-parser: successfully parses valid outcome and extracts JSONL native 
   }
 });
 
+test("codex-parser: unwraps the object-root structured-output envelope", () => {
+  const resultJson = JSON.stringify({
+    outcome: {
+      status: "succeeded",
+      executionId: "exec-1",
+      summary: "Task finished successfully",
+      artifacts: [],
+      evidence: [],
+    },
+  });
+  const proc: ProcessResult = {
+    stdout: successJsonl,
+    stderr: "",
+    durationMs: 120,
+    termination: "exited",
+    exitCode: 0,
+    signal: null,
+  };
+
+  const stepResult = parseCodexExecution({
+    executionId: "exec-1",
+    process: proc,
+    resultText: resultJson,
+  });
+
+  assert.equal(stepResult.status, "succeeded");
+});
+
 test("codex-parser: non-zero exit returns failure even if result text exists", () => {
   const resultJson = JSON.stringify({
     status: "succeeded",

@@ -34,7 +34,7 @@ export function buildCodexInvocation(input: CodexInvocationInput): HostInvocatio
     args.push("--sandbox", "read-only");
   } else {
     // workspace-write
-    args.push("--sandbox", "workspace-write", "--approve-for-me");
+    args.push("--approve-for-me");
   }
 
   args.push("--cd", input.request.workspaceDir, "-");

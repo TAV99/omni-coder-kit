@@ -16,7 +16,7 @@ const dummyReq: StepRequest = {
   timeoutMs: 5000,
 };
 
-test("codex-command: buildCodexInvocation in safe workspace-write mode", () => {
+test("codex-command: workspace-write uses approve-for-me without conflicting sandbox flag", () => {
   const invocation = buildCodexInvocation({
     request: dummyReq,
     mode: "workspace-write",
@@ -31,8 +31,9 @@ test("codex-command: buildCodexInvocation in safe workspace-write mode", () => {
   assert.ok(invocation.args.includes("--ignore-user-config"));
   assert.ok(invocation.args.includes("--output-schema"));
   assert.ok(invocation.args.includes("--output-last-message"));
-  assert.ok(invocation.args.includes("workspace-write"));
   assert.ok(invocation.args.includes("--approve-for-me"));
+  assert.ok(!invocation.args.includes("--sandbox"));
+  assert.ok(!invocation.args.includes("workspace-write"));
   assert.ok(invocation.args.includes("/my/workspace"));
   assert.ok(!invocation.args.includes("--dangerously-bypass-approvals-and-sandbox"));
   assert.ok(invocation.stdin?.includes("implement feature X"));

@@ -92,7 +92,24 @@ export function parseCodexExecution(input: {
     );
   }
 
-  const parsedOutcome = AgentStepOutcomeSchema.safeParse(rawJson);
+  let rawOutcome = rawJson;
+  if (
+    typeof rawJson === "object" &&
+    rawJson !== null &&
+    Object.prototype.hasOwnProperty.call(rawJson, "outcome")
+  ) {
+    const keys = Object.keys(rawJson);
+    if (keys.length !== 1) {
+      return malformedOutputFailure(
+        executionId,
+        "codex",
+        "Structured output envelope contains unexpected fields"
+      );
+    }
+    rawOutcome = (rawJson as { outcome: unknown }).outcome;
+  }
+
+  const parsedOutcome = AgentStepOutcomeSchema.safeParse(rawOutcome);
   if (!parsedOutcome.success) {
     return malformedOutputFailure(
       executionId,

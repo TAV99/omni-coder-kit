@@ -12,7 +12,7 @@ import type { ProcessRunner } from "../../process/types";
 import { loadCompatibilityManifest } from "../../compatibility/manifest";
 import { probeHost } from "../../compatibility/probe";
 import { resolvePermissionMode } from "../shared/permission-mode";
-import { createAgentStepOutcomeJsonSchema } from "../shared/result-schema";
+import { createCodexAgentStepOutcomeJsonSchema } from "../shared/result-schema";
 import { buildCodexInvocation } from "./command";
 import { parseCodexExecution } from "./parser";
 
@@ -77,7 +77,7 @@ export class CodexAdapter implements AgentAdapter {
     const schemaPath = path.join(runStepDir, "schema.json");
     const resultPath = path.join(runStepDir, "result.json");
 
-    const schemaJson = createAgentStepOutcomeJsonSchema();
+    const schemaJson = createCodexAgentStepOutcomeJsonSchema();
     await fs.writeFile(schemaPath, JSON.stringify(schemaJson, null, 2), "utf-8");
 
     const invocation = buildCodexInvocation({
