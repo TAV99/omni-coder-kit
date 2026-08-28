@@ -25,10 +25,10 @@ Confirm:
 
 ```bash
 # After commit(s) for the release:
-git tag -a v3.0.0 -m "v3.0.0 — remove deprecated CLI aliases; release hygiene"
+git tag -a v3.1.0 -m "v3.1.0 — Dual AUTO Authority Daemon (Codex + Gemini via agy)"
 # Do not push until review:
 # git push origin main
-# git push origin v3.0.0
+# git push origin v3.1.0
 ```
 
 ## npm publish (maintainer — explicit)
@@ -39,7 +39,7 @@ npm publish --access public   # or your usual access settings
 
 ## GitHub Release (maintainer — explicit)
 
-- Create release from tag `v3.0.0`
+- Create release from tag `v3.1.0`
 - Paste CHANGELOG section body
 - Note migration table for major versions
 

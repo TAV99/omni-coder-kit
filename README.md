@@ -148,6 +148,8 @@ omni dual daemon start     # Khởi động daemon
 omni dual daemon status    # Kiểm tra trạng thái daemon & lease
 omni dual daemon stop      # Dừng daemon an toàn
 omni dual bootstrap --json # Bootstrap session từ kế hoạch
+omni dual setup run        # Chạy setup.json theo argv contract, không qua shell
+omni dual baseline promote # Promote snapshot đã VERIFIED sang Git baseline
 ```
 
 ---

@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `package.json` version bumped to `3.1.0`.
-- Verified 100% test pass rate across 925 test cases.
+- Fresh release suite: 1,595 passed, 2 platform-conditional skipped, 0 failed (1,597 tests total).
 
 ## [3.0.0] — 2026-07-20
 
