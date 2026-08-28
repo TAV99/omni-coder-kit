@@ -1,14 +1,23 @@
 # Omni-Coder Kit
 
-**Omni-Coder Kit** là một bộ công cụ CLI giúp inject mindset phát triển phần mềm chuẩn mực (Karpathy Mindset), SDLC workflows và các kỹ năng chuyên sâu vào AI coding agents (Claude Code, Antigravity CLI, Cursor, Windsurf, Codex, Gemini CLI...). Công cụ này định hướng AI hoạt động với kỷ luật của một Senior Engineer, tuân thủ quy trình SDLC nghiêm ngặt và hạn chế tối đa lỗi ảo tưởng (hallucination).
+[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/TAV99/omni-coder-kit/releases/tag/v3.0.0)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
+[![V4 Next-Gen Harness](https://img.shields.io/badge/Next--Gen-Omni%20v4%20Harness-purple.svg)](./README_V4.md)
+
+**Omni-Coder Kit** là một bộ công cụ CLI giúp inject tư duy phát triển phần mềm chuẩn mực (**Karpathy Mindset**), quy trình SDLC tinh gọn và các kỹ năng chuyên sâu vào AI coding agents (Claude Code, Antigravity CLI, Cursor, Windsurf, Codex, Gemini CLI...). Công cụ này định hướng AI hoạt động với kỷ luật của một Senior Engineer, tuân thủ quy trình SDLC nghiêm ngặt và hạn chế tối đa lỗi ảo tưởng (hallucination).
 
 Trong phiên bản mới nhất (**v3.0.0**), Omni-Coder Kit hoạt động như một **Agent Harness & Loop Runtime** — tự lái vòng lặp SDLC: gọi LLM → thực thi quality gates (lint, build, test, security) → tự động sửa lỗi (fix loop) → tự động nghiệm thu (acceptance loop).
+
+> 📌 **Tài liệu phiên bản:**
+> - [**README_V3.md**](./README_V3.md): Hướng dẫn chi tiết cho Omni v3.0.0 (Workflows, CLI, Dual Authority Daemon).
+> - [**README_V4.md**](./README_V4.md): Kiến trúc Reliability Kernel thế hệ mới v4.0 (TypeScript, Deterministic State Machine, DAG Quality Gates, Multi-Agent Adapters).
 
 ---
 
 ## 📦 Cài đặt & Khởi tạo nhanh
 
-Yêu cầu [Node.js](https://nodejs.org/) >= 16.0.0.
+Yêu cầu [Node.js](https://nodejs.org/) >= 20.0.0.
 
 1. **Cài đặt toàn cục (global):**
    ```bash
@@ -35,9 +44,9 @@ Yêu cầu [Node.js](https://nodejs.org/) >= 16.0.0.
 
 ---
 
-## 🚀 Hai cách sử dụng chính
+## 🚀 Ba cách sử dụng chính
 
-Omni-Coder Kit hỗ trợ 2 cách tiếp cận linh hoạt tùy theo thói quen lập trình của bạn:
+Omni-Coder Kit hỗ trợ 3 cách tiếp cận linh hoạt tùy theo thói quen lập trình của bạn:
 
 ### Cách 1: Chế độ tương tác trong Chat (`>om-*`) — Dành cho AI IDE
 Sử dụng trực tiếp trong khung chat của các AI IDE (Cursor, Windsurf, Claude Code, Antigravity, Gemini CLI) bằng các câu lệnh siêu ngắn với tiền tố `>om-` (hoặc `/om-` trên Claude Code / Antigravity).
@@ -78,6 +87,31 @@ omni run --spec spec.md
 *   **Chạy nháp không sửa code:** `omni run --dry-run` (In ra kế hoạch hành động chi tiết để bạn kiểm tra trước).
 *   **Chạy kiểm định chất lượng độc lập:** `omni run gate` (Chạy toàn bộ pipeline kiểm thử P0-P5: Security → Lint → Build → Test → Content).
 *   **Xem nhật ký sự kiện:** `omni run log` (In event log chi tiết từ `.omni/run/events.ndjson`).
+*   **Xem thống kê tài nguyên:** `omni run stats` (Tổng hợp token, chi phí và thời gian thực thi).
+
+---
+
+### Cách 3: Dual AUTO Authority Daemon — Codex + Gemini qua Agy
+
+Ở chế độ này, **Codex** giữ vai trò Architect, Router và Final QC; **Gemini 3.7 Flash High** qua `agy` đảm nhiệm các phần việc worker đủ điều kiện. Authority daemon giữ session, ownership, lease và quality gates bằng ledger hash-chain; Gemini không thể tự xác nhận hoàn thành.
+
+#### 1. Khởi tạo và dùng hằng ngày
+
+```bash
+omni init
+# Chọn: Dual -> Codex + Gemini via agy -> AUTO
+```
+
+Sau đó, trong Codex chỉ cần gọi `$om-think` (hoặc `>om-think`). Khi interview/spec hoàn tất, workflow tạo `setup.json`, `todo.md` và full graph `dual-plan.json`, rồi gọi controller `omni dual bootstrap --json`. Controller chạy setup trước, sau đó mới tạo authority, đăng ký graph thật một lần, route task, gọi AGY khi phù hợp và trả về Codex QC.
+
+#### 2. Lifecycle và recovery
+
+```bash
+omni dual daemon start     # Khởi động daemon
+omni dual daemon status    # Kiểm tra trạng thái daemon & lease
+omni dual daemon stop      # Dừng daemon an toàn
+omni dual bootstrap --json # Bootstrap session từ kế hoạch
+```
 
 ---
 
@@ -106,21 +140,20 @@ Khi chat với AI trong IDE, hãy gõ các lệnh sau ở đầu câu để đ�
 ---
 
 ### 2. Lệnh trong CLI Terminal (`omni <nhóm>`)
-CLI gọn nhẹ với các nhóm lệnh điều khiển chính:
 
 | Nhóm lệnh | Mô tả | Option / Subcommand hữu ích |
 | :--- | :--- | :--- |
-| `omni init` | Khởi tạo DNA dự án và cấu hình IDE thích hợp. | `--onboard` (ép quét codebase cũ), `--dry-run`; hỏi ẩn/hiện agent files; chọn chế độ Dual |
-| `omni dual` | Điều phối Codex + Gemini qua agy (cross-platform). | `new`, `run`, `resume`, `status`, `phase <phase>` |
+| `omni init` | Khởi tạo DNA dự án và cấu hình IDE thích hợp. | `--onboard`, `--dry-run`; hỏi ẩn/hiện agent files; chọn Dual mode |
+| `omni dual` | Điều phối Codex + Gemini qua agy (cross-platform). | `daemon`, `bootstrap`, `setup`, `baseline`, `status` |
 | `omni run` | Khởi chạy vòng lặp SDLC tự động từ terminal. | `--spec <file>`, `--resume`, `--dry-run`, `--yolo` |
 | `omni run gate` | Chạy độc lập Quality Pipeline P0-P5 (tiện cho CI/CD). | `--only <P0,P1,P3>` |
 | `omni run log` | Xem nhật ký sự kiện thực thi của phiên chạy gần nhất. | `--limit <n>`, `--follow` |
 | `omni run stats` | Tổng hợp token, chi phí và thời gian từ event log. | *(không)* |
 | `omni run accept` | Chạy riêng state ACCEPTANCE trên build hiện tại (CI). | `--accept <specs>`, `--yolo`, `--quiet` |
-| `omni skills` | Quản lý các bộ skill lập trình (cài đặt/kiểm tra). | Subcommand: `add <nguồn>`, `doctor` |
+| `omni skills` | Quản lý các bộ skill lập trình (cài đặt/kiểm tra). | `add <nguồn>`, `doctor` |
 | `omni map` | Tạo hoặc cập nhật sơ đồ tóm tắt mã nguồn dự án. | `--refresh` |
 | `omni rules` | Quản lý quy tắc cá nhân (Personal Rules sync). | `[action]`, `--dry-run` |
-| `omni agent-files` | Ẩn/hiện file agent (`AGENTS.md`, `CLAUDE.md`, IDE dirs…) khỏi git qua `.gitignore`. | `hide`, `show`, `status` |
+| `omni agent-files` | Ẩn/hiện file agent khỏi git qua `.gitignore`. | `hide`, `show`, `status` |
 
 #### Migration từ 2.x → 3.0 (breaking)
 
@@ -137,60 +170,6 @@ Các **hidden aliases** CLI đã bị gỡ. Dùng lệnh canonical:
 | `omni onboard` | `omni init --onboard` |
 
 Chat commands `>om-*` **không** đổi. Chi tiết release: `CHANGELOG.md`, checklist ship: `RELEASE.md`.
-
----
-
-### Cách 3: Dual AUTO Authority Daemon — Codex + Gemini qua Agy
-
-Ở chế độ này, **Codex** giữ vai trò Architect, Router và Final QC; **Gemini 3.7 Flash High** qua `agy` đảm nhiệm các phần việc worker đủ điều kiện. Authority daemon giữ session, ownership, lease và quality gates bằng ledger hash-chain; Gemini không thể tự xác nhận hoàn thành.
-
-#### 1. Khởi tạo và dùng hằng ngày
-
-```bash
-omni init
-# Chọn Dual -> Codex + Gemini via agy -> AUTO
-```
-
-Sau đó, trong Codex chỉ cần gọi `$om-think` (hoặc `>om-think`). Khi interview/spec hoàn tất, workflow tạo `setup.json`, `todo.md` và full graph `dual-plan.json`, rồi gọi một controller `omni dual bootstrap --json`. Controller chạy setup trước, sau đó mới tạo authority, đăng ký graph thật một lần, route task, gọi AGY khi phù hợp và trả về Codex QC. Planning artifacts không được đăng ký thành task tạm.
-
-Codex phải trust project để project hooks được chạy. Config được sinh dùng `[features] hooks = true`, `.codex/hooks.json` và MCP stdio bằng Node/package path tuyệt đối của máy hiện tại; không phụ thuộc global `omni`, PowerShell hay Bash.
-
-#### 2. Lifecycle và recovery
-
-```bash
-omni dual daemon start
-omni dual daemon status
-omni dual daemon stop
-omni dual bootstrap --json
-```
-
-- `SessionStart` tự bootstrap hoặc attach daemon. `omni dual daemon start` là repair command khi cần chạy thủ công.
-- Session/task tiếp tục từ ledger và tái sử dụng AGY phases đã thành công; capability version/model được kiểm tra một lần rồi dùng lại.
-- Greenfield project dùng snapshot baseline, không tự `git init` hoặc commit. Git project dùng HEAD hiện tại.
-- Sau khi session snapshot đã `VERIFIED` và người dùng chủ động tạo Git commit phù hợp, `omni dual baseline promote` revalidate receipt, accepted snapshot, clean tree và daemon shutdown trước khi promote.
-- Không sửa/xóa thủ công `.omni/runs/dual-authority` hay `.omni/runtime/dual` như cách recovery thông thường. Ledger/lock/discovery hỏng hoặc ngoại lai sẽ fail closed.
-- `omni dual bootstrap` có thể archive/adopt một legacy planning-only session chỉ khi setup receipt khớp, không có lease/gate/execution evidence và drift chỉ nằm trong planning/package artifacts.
-
-Các lệnh `omni dual new|run|resume|status|phase` vẫn được giữ cho transaction v1 và debug compatibility; chúng không thay thế authority session của Dual AUTO mới.
-
-#### 3. Runtime data
-
-- `.omni/runtime/dual/daemon.json`, `daemon.lock`: discovery và single-daemon lock theo workspace.
-- `.omni/runs/dual-authority/`: authority ledger, initial/accepted snapshot và receipt-bound state.
-- `.omni/codex-gemini/runs/<task-id>/`: semantic artifacts và raw immutable AGY attempts.
-- `.omni/sdlc/setup.json`: typed setup actions; chạy idempotent bằng `omni dual setup run`.
-- `.omni/sdlc/dual-plan.json`: strict versioned full task graph; controller hash/validate trước mọi daemon side effect.
-
-#### 4. Safety contracts
-
-- AGY worker dùng exact `gemini-3.7-flash-high`, effort `high`, argv bounded với `shell: false`, và `--dangerously-skip-permissions` theo lựa chọn Dual init của người dùng; Omni không đặt token budget cho AGY và không sửa global AGY config.
-- Scout/implement/review phải nộp research trace, alternatives/failure modes, self-review và independent challenge theo strict schema. Output rỗng, malformed, sai schema, timeout, network hoặc non-zero exit được tự retry tối đa 3 attempts với correction hint ngắn.
-- Để tiết kiệm token Codex, success path chỉ đọc semantic artifacts/MCP summaries; raw stdout/stderr chỉ dùng khi failure, hash/correlation mismatch hoặc crash recovery.
-- Trong lúc AGY lease còn active, Codex chỉ điều phối và không ghi source/build/browser artifacts. Codex bắt đầu Final QC sau khi lease đã được release bền vững và task tới `CODEX_QC`.
-- Owner/allowlist/deny-pattern được kiểm tra trước write và diff được kiểm tra lại sau implement/review. Daemon mất kết nối thì source mutation bị deny fail-closed.
-- Chỉ Codex QC mới có thể ghi `task.completed`; mọi task, ba quality cycles và mandatory gates phải pass trước `session.verified`.
-- Commit, push, deploy, stash, reset và external-system mutation luôn cần quyền riêng của người dùng.
-- Node runtime dùng cùng exact argv trên Windows CMD/PowerShell, Linux và macOS; `ai-flow.ps1` chỉ là deprecated compatibility shim.
 
 ---
 
@@ -234,8 +213,6 @@ your-project/
     └── knowledge/                  # Bản đồ codebase (project-map.md) & tri thức (knowledge-base.md)
 ```
 
-**Ẩn file agent khỏi git (tuỳ chọn):** nếu chọn *Ẩn* lúc `init` hoặc chạy `omni agent-files hide`, Omni thêm block có marker vào `.gitignore` (root config + IDE dirs như `.claude/`, `.agents/`, …). File vẫn tồn tại local — chỉ không commit. `omni agent-files show` gỡ block đó. File **đã track** trước đó cần bạn tự `git rm --cached` nếu muốn untrack.
-
 ---
 
 ## 💖 Nguồn cảm hứng
@@ -251,4 +228,4 @@ Dự án được phát triển và tối ưu dựa trên ý tưởng từ:
 
 ## 📄 Giấy phép
 
-Mã nguồn được phân phối dưới giấy phép **ISC**. Phát triển và duy trì bởi **TAV** (tav99.dev@gmail.com).
+Mã nguồn được phân phối dưới giấy phép **ISC**. Phát triển và duy trì bởi **TAV** (<tav99.dev@gmail.com>).
