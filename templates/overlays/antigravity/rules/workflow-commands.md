@@ -19,6 +19,7 @@ When the user types a `>om-` command, read the corresponding workflow file and f
 | `>om-doc` | `.omni/workflows/documentation-writer.md` | Writer | Read implementation to generate docs |
 | `>om-ship` | `.omni/workflows/shipping.md` | Release Engineer | Only after >om-check passes; stage, never auto-deploy |
 | `>om-memo` | `.omni/workflows/knowledge-learn.md` | Learner | Write Knowledge Item (KI) or file |
+| `>om-map` | `.omni/workflows/project-map.md` | Architect | Scan codebase -> generate project-map.md |
 
 Supporting files:
 - `.omni/workflows/pm-templates.md` — Output format standards
