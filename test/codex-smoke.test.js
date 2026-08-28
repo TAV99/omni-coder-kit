@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { spawnSync } = require('node:child_process');
 
 const BIN = path.join(__dirname, '..', 'bin', 'omni.js');
 const TEMPLATES = path.join(__dirname, '..', 'templates');
@@ -80,23 +81,7 @@ function buildCommands(ide) {
     return Object.keys(files).length > 0 ? files : null;
 }
 
-function buildCodexConfig(ide, advanced) {
-    if (!advanced || !(ide === 'codex' || ide === 'dual')) return null;
-    const overlayDir = getOverlayDir(ide, 'codex');
-    if (!overlayDir) return null;
-    const templatePath = path.join(overlayDir, 'config.template.toml');
-    if (!fs.existsSync(templatePath)) return null;
-    return fs.readFileSync(templatePath, 'utf-8');
-}
-
-function buildCodexHooks(ide, advanced) {
-    if (!advanced || !(ide === 'codex' || ide === 'dual')) return null;
-    const overlayDir = getOverlayDir(ide, 'codex');
-    if (!overlayDir) return null;
-    const templatePath = path.join(overlayDir, 'hooks.template.json');
-    if (!fs.existsSync(templatePath)) return null;
-    return fs.readFileSync(templatePath, 'utf-8');
-}
+const { buildCodexConfig, buildCodexHooks } = require('../lib/init');
 
 function buildCommandRegistry(ide) {
     const isClaudeCode = ide === 'claudecode' || ide === 'dual';
@@ -289,9 +274,7 @@ describe('buildCodexConfig', () => {
         assert.ok(config.includes('default_permissions'));
         assert.ok(config.includes('approval_policy'));
         assert.ok(config.includes('network_access = false'));
-        assert.ok(config.includes('[profiles.omni_safe]'));
-        assert.ok(config.includes('[profiles.omni_yolo]'));
-        assert.ok(config.includes('[profiles.omni_review]'));
+        assert.doesNotMatch(config, /^\[profiles\./m, 'project config must not emit unsupported user-level profiles');
     });
 
     it('returns config for dual + advanced', () => {
@@ -310,22 +293,80 @@ describe('buildCodexConfig', () => {
 });
 
 describe('buildCodexHooks', () => {
-    it('returns hooks JSON for codex + advanced', () => {
-        const hooks = buildCodexHooks('codex', true);
+    it('emits a PowerShell-safe Windows hook command that executes the real bridge', () => {
+        const hooks = buildCodexHooks('dual', true, { dualPair: 'codex-agy', mode: 'auto' });
+        const parsed = JSON.parse(hooks);
+        const commandWindows = parsed.hooks.UserPromptSubmit[0].hooks[0].commandWindows;
+        const hookPath = path.join(__dirname, '..', 'bin', 'omni-hook.js');
+
+        assert.equal(commandWindows, `& "${process.execPath}" "${hookPath}"`);
+
+        if (process.platform !== 'win32') return;
+
+        const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'omni hook powershell '));
+        fs.mkdirSync(path.join(workspace, '.omni'), { recursive: true });
+        fs.writeFileSync(path.join(workspace, '.omni', 'manifest.json'), '{}\n', 'utf8');
+
+        try {
+            const payload = JSON.stringify({
+                session_id: 'codex-hook-test',
+                cwd: workspace,
+                hook_event_name: 'UserPromptSubmit',
+                turn_id: 'turn-test',
+                prompt: 'diagnostic prompt',
+            });
+            const result = spawnSync('powershell.exe', [
+                '-NoLogo',
+                '-NoProfile',
+                '-NonInteractive',
+                '-Command',
+                commandWindows,
+            ], {
+                cwd: workspace,
+                input: payload,
+                encoding: 'utf8',
+                windowsHide: true,
+                timeout: 12000,
+            });
+
+            assert.equal(result.error, undefined, result.error?.message);
+            assert.equal(result.status, 0, result.stderr);
+            assert.match(JSON.parse(result.stdout).hookSpecificOutput?.additionalContext || '', /No active Dual session/);
+        } finally {
+            spawnSync(process.execPath, [BIN, 'dual', 'daemon', 'stop'], {
+                cwd: workspace,
+                encoding: 'utf8',
+                windowsHide: true,
+                timeout: 12000,
+            });
+            fs.rmSync(workspace, { recursive: true, force: true });
+        }
+    });
+
+    it('returns materialized hooks JSON for exact dual auto codex-agy', () => {
+        const hooks = buildCodexHooks('dual', true, { dualPair: 'codex-agy', mode: 'auto' });
         assert.ok(hooks);
         const parsed = JSON.parse(hooks);
         assert.ok(parsed.hooks);
+        assert.ok(parsed.hooks.SessionStart);
+        assert.ok(parsed.hooks.PreToolUse);
         assert.ok(parsed.hooks.PostToolUse);
         assert.ok(parsed.hooks.Stop);
+        assert.ok(parsed.hooks.PreToolUse[0].hooks[0].command.includes('omni-hook'));
+        assert.match(
+            parsed.hooks.PreToolUse[0].hooks[0].command,
+            /^'(?:[^']|'\\''+)*' '(?:[^']|'\\''+)*'$/,
+            'POSIX hook command must shell-quote both executable and script paths'
+        );
     });
 
-    it('returns hooks for dual + advanced', () => {
-        const hooks = buildCodexHooks('dual', true);
-        assert.ok(hooks);
+    it('returns null for single-agent codex or manual mode to avoid forcing daemon authority', () => {
+        assert.equal(buildCodexHooks('codex', true), null);
+        assert.equal(buildCodexHooks('dual', true, { dualPair: 'codex-agy', mode: 'manual' }), null);
     });
 
     it('returns null when advanced is false', () => {
-        assert.equal(buildCodexHooks('codex', false), null);
+        assert.equal(buildCodexHooks('dual', false, { dualPair: 'codex-agy', mode: 'auto' }), null);
     });
 });
 
@@ -404,7 +445,7 @@ describe('E2E: codex init', () => {
         assert.equal(loaded.ide, 'codex');
     });
 
-    it('codex advanced setup creates .codex/config.toml and hooks.json', () => {
+    it('codex advanced setup creates .codex/config.toml without forcing daemon authority', () => {
         const codexDir = path.join(tmpDir, '.codex');
         fs.mkdirSync(codexDir, { recursive: true });
 
@@ -412,36 +453,21 @@ describe('E2E: codex init', () => {
         const hooks = buildCodexHooks('codex', true);
 
         assert.ok(config, 'config should not be null');
-        assert.ok(hooks, 'hooks should not be null');
+        assert.equal(hooks, null, 'single-agent codex should not emit daemon authority hooks');
 
         const configPath = path.join(codexDir, 'config.toml');
-        const hooksPath = path.join(codexDir, 'hooks.json');
-
         fs.writeFileSync(configPath, config);
-        fs.writeFileSync(hooksPath, hooks);
 
         assert.ok(fs.existsSync(configPath));
-        assert.ok(fs.existsSync(hooksPath));
 
         // Validate config content
         const configContent = fs.readFileSync(configPath, 'utf-8');
         assert.ok(configContent.includes('project_doc_max_bytes = 32768'));
         assert.ok(configContent.includes('network_access = false'));
-        assert.ok(configContent.includes('[profiles.omni_safe]'));
-        assert.ok(configContent.includes('[profiles.omni_yolo]'));
-        assert.ok(configContent.includes('[profiles.omni_review]'));
-        assert.ok(configContent.includes('codex_hooks = true'));
-
-        // Validate hooks content
-        const hooksContent = JSON.parse(fs.readFileSync(hooksPath, 'utf-8'));
-        assert.ok(hooksContent.hooks.PostToolUse);
-        assert.ok(hooksContent.hooks.Stop);
-        assert.equal(hooksContent.hooks.PostToolUse.length, 1);
-        assert.ok(hooksContent.hooks.PostToolUse[0].matcher.includes('apply_patch'));
-
-        const postHook = hooksContent.hooks.PostToolUse[0].hooks[0];
-        assert.equal(postHook.type, 'command');
-        assert.ok(postHook.command.includes('systemMessage'));
+        assert.doesNotMatch(configContent, /^\[profiles\./m, 'project config must not emit unsupported user-level profiles');
+        assert.ok(configContent.includes('hooks = true'));
+        assert.ok(!configContent.includes('codex_hooks'));
+        assert.ok(!configContent.includes('[mcp_servers.omni_dual]'), 'single-agent codex must not declare omni_dual MCP');
     });
 });
 
@@ -475,16 +501,19 @@ describe('E2E: dual init', () => {
         assert.ok(!coderContent.includes('Codex Safety Preflight'), 'dual mode should use base coder-execution, not codex overlay');
     });
 
-    it('dual mode generates both Claude commands and Codex config', () => {
+    it('dual mode generates both Claude commands and Codex config/hooks for exact auto', () => {
         // Claude side: slash commands exist
         const cmds = buildCommands('dual');
         assert.ok(cmds !== null, 'dual should generate Claude slash commands');
 
-        // Codex side: config + hooks exist
-        const config = buildCodexConfig('dual', true);
-        const hooks = buildCodexHooks('dual', true);
+        // Codex side: config + hooks exist for exact dual auto
+        const config = buildCodexConfig('dual', true, { dualPair: 'codex-agy', mode: 'auto' });
+        const hooks = buildCodexHooks('dual', true, { dualPair: 'codex-agy', mode: 'auto' });
         assert.ok(config, 'dual + advanced should generate Codex config');
+        assert.ok(config.includes('[mcp_servers.omni_dual]'));
         assert.ok(hooks, 'dual + advanced should generate Codex hooks');
+        const parsed = JSON.parse(hooks);
+        assert.ok(parsed.hooks.PreToolUse);
     });
 });
 
@@ -532,19 +561,26 @@ describe('Codex workflow content integrity', () => {
         assert.ok(content.includes('network_access = false'));
         assert.ok(content.includes('approval_policy = "on-request"'));
         assert.ok(content.includes('default_permissions = ":workspace"'));
+        assert.doesNotMatch(content, /^\[profiles\./m, 'Codex ignores profiles in project-local config');
     });
 
-    it('codex hooks.json uses systemMessage (non-destructive)', () => {
+    it('codex hooks.json template has required hook event groups', () => {
         const content = JSON.parse(fs.readFileSync(
             path.join(TEMPLATES, 'overlays', 'codex', 'hooks.template.json'),
             'utf-8'
         ));
+        assert.ok(content.hooks.SessionStart);
+        assert.ok(content.hooks.UserPromptSubmit);
+        assert.ok(content.hooks.PreToolUse);
+        assert.ok(content.hooks.PostToolUse);
+        assert.ok(content.hooks.Stop);
         for (const hookGroup of Object.values(content.hooks)) {
             for (const entry of hookGroup) {
                 const hooks = entry.hooks || [];
                 for (const hook of hooks) {
                     assert.equal(hook.type, 'command');
-                    assert.ok(hook.command.includes('systemMessage'), 'hooks should use systemMessage, not destructive actions');
+                    assert.equal(hook.command, '__OMNI_HOOK_COMMAND_POSIX__');
+                    assert.equal(hook.commandWindows, '__OMNI_HOOK_COMMAND_WINDOWS__');
                 }
             }
         }

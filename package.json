@@ -1,6 +1,6 @@
 {
   "name": "omni-coder-kit",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "CLI inject mindset + SDLC workflow + skills into AI coding agents — Claude Code, Codex CLI, Cursor, Windsurf, Antigravity",
   "main": "bin/omni.js",
   "bin": {
@@ -14,7 +14,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node -c bin/omni.js && node --test test/*.test.js test/**/*.test.js"
+    "test": "node -c bin/omni.js && node --test --test-concurrency=1 test/*.test.js test/**/*.test.js",
+    "test:dual": "node --test --test-concurrency=1 test/dual-*.test.js"
   },
   "keywords": [
     "ai",
@@ -44,12 +45,14 @@
     "url": "https://github.com/TAV99/omni-coder-kit/issues"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=20.0.0"
   },
   "type": "commonjs",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "chalk": "^4.1.2",
     "commander": "^14.0.3",
-    "prompts": "^2.4.2"
+    "prompts": "^2.4.2",
+    "zod": "^4.4.3"
   }
 }

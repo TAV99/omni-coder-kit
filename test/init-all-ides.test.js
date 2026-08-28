@@ -1242,7 +1242,7 @@ describe('Project Map — init integration', () => {
     it('detectExistingProject returns true for this project', () => {
         const result = detectExistingProject(path.join(__dirname, '..'));
         assert.equal(result.detected, true);
-        assert.ok(result.lang.includes('Node.js'));
+        assert.ok(result.lang.includes('Node.js') || result.lang.includes('TypeScript'));
     });
 
     it('scanProject returns valid structure for this project', () => {

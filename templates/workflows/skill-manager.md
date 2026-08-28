@@ -2,12 +2,12 @@
 You are authorized to use the `skills.sh` ecosystem to extend your capabilities. Universal skills are auto-installed, project-specific skills are discovered dynamically via `find-skills`.
 
 ### Step 1: Ensure Universal Skills
-Run `omni auto-equip -y` to install the 6 universal skills (find-skills, karpathy-guidelines, systematic-debugging, test-driven-development, requesting-code-review, using-git-worktrees). These apply to ALL projects regardless of tech stack.
+Run `omni skills -y` to install the 6 universal skills (find-skills, karpathy-guidelines, systematic-debugging, test-driven-development, requesting-code-review, using-git-worktrees). These apply to ALL projects regardless of tech stack.
 
 **Sandbox fallback:** If the shell command fails (sandbox/network restriction — common in Gemini CLI `--yolo`, Codex sandbox), do NOT retry. Instead output the commands for the user to run manually in their terminal:
 ```
 ⚠️ Không cài được skills (sandbox/mạng). Chạy trong terminal:
-   omni auto-equip
+   omni skills
 ```
 Then skip to Step 2 — proceed with whatever skills are already installed. Do NOT block the workflow.
 
@@ -26,7 +26,7 @@ Read `.omni/sdlc/design-spec.md` and extract:
 ### Step 3: Dynamic Discovery (find-skills)
 Check if `find-skills` is installed (look in `.agents/skills/` or `.claude/skills/`). If NOT installed:
 ```
-⚠️ find-skills chưa được cài. Chạy: omni auto-equip
+⚠️ find-skills chưa được cài. Chạy: omni skills
 ```
 
 If available, search skills.sh for each technology from Step 2. For each result, collect: **name, description, downloads, rating, source**.
@@ -42,7 +42,7 @@ Mandatory groups are determined by project DNA — not all groups apply to every
 | **UI/UX/Frontend** | `hasUI = true` | `design`, `ui`, `ux`, `frontend`, `css`, `component`, `accessibility` |
 | **Backend/Infrastructure** | `backendComplexity ≥ moderate` | AI generates from detected patterns in DNA (see below) |
 
-**Testing skill selection:** `omni auto-equip` already proposes curated test skills based on detected tech stack. If test skills are already installed, skip this group. If not, search for the project's test framework (e.g., `jest` for Node.js, `pytest` for Python) or generic testing patterns for the detected language.
+**Testing skill selection:** `omni skills` already proposes curated test skills based on detected tech stack. If test skills are already installed, skip this group. If not, search for the project's test framework (e.g., `jest` for Node.js, `pytest` for Python) or generic testing patterns for the detected language.
 
 **Backend keyword generation:** When `backendComplexity ≥ moderate`, AI reads detected patterns from DNA and maps to search keywords. This is open-ended — no hardcoded keyword list. Examples:
 - DNA detects `realtime` → search: `websocket`, `realtime`, `socket`, `pubsub`
@@ -76,7 +76,7 @@ Mandatory groups are determined by project DNA — not all groups apply to every
 ⚡ Best Practices:
   1. ✅ skill-name — Mô tả (⬇ 12.3k ⭐ 4.8) [source]
 
-🧪 Testing:                           ← bỏ qua nếu đã cài qua auto-equip
+🧪 Testing:                           ← bỏ qua nếu đã cài qua omni skills
   2. ✅ skill-name — Mô tả (⬇ 15.8k ⭐ 4.9) [source]
 
 🎨 UI/UX/Frontend:                    ← chỉ hiện nếu hasUI
@@ -96,17 +96,17 @@ Cài tất cả? Gõ số để loại bỏ (vd: "loại 3"), hoặc gõ y để
 - **"không"** → skip all
 
 ### Step 6: Install
-- **Universal skills:** `omni auto-equip -y`
-- **Discovered skills:** `omni equip <source> --name <short-name>` for each approved skill
-- **Antigravity:** Dùng `AGENTS.md` + `.agents/` directory — cài skills bình thường qua `omni equip`
+- **Universal skills:** `omni skills -y`
+- **Discovered skills:** `omni skills add <source> --name <short-name>` for each approved skill
+- **Antigravity:** Dùng `AGENTS.md` + `.agents/` directory — cài skills bình thường qua `omni skills add`
 
 **Sandbox fallback:** If ANY install command fails due to sandbox/network restrictions, collect ALL failed commands and output them as a single copy-paste block:
 ```
 ⚠️ Không cài được [N] skills (sandbox/mạng). Chạy trong terminal:
 
-omni auto-equip
-omni equip <source1> --name <name1>
-omni equip <source2> --name <name2>
+omni skills
+omni skills add <source1> --name <name1>
+omni skills add <source2> --name <name2>
 ```
 Mark the skills as "pending install" and continue to Step 7 with whatever skills ARE available.
 
@@ -114,4 +114,4 @@ Mark the skills as "pending install" and continue to Step 7 with whatever skills
 After installation, read the newly added skill files (in `.agents/skills/` or `.claude/skills/`) and apply those rules to the current session immediately.
 
 ### Manual Override
-The user can always install individual skills via `omni equip <owner/repo>` or search manually with find-skills.
+The user can always install individual skills via `omni skills add <owner/repo>` or search manually with find-skills.

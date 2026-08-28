@@ -48,11 +48,21 @@ test('omni run accept --help: has --max-time flag', () => {
     assert.match(stdout, /--step-timeout </);
 });
 
-test('omni skills --help: lists `add` and `doctor` subcommands', () => {
+test('omni skills --help: lists -y/--yes option and `add`/`doctor` subcommands', () => {
     const { code, stdout } = run(['skills', '--help']);
     assert.strictEqual(code, 0);
+    assert.match(stdout, /-y,\s+--yes/);
     assert.match(stdout, /^\s+add\b/m);
     assert.match(stdout, /^\s+doctor\b/m);
+});
+
+test('omni skills -y / --yes: parses flag and reaches default skills action without unknown-option error', () => {
+    for (const flag of ['-y', '--yes']) {
+        const { code, stderr, stdout } = run(['skills', flag], { cwd: __dirname });
+        assert.doesNotMatch(stderr, /unknown option/i, `${flag} must not be rejected as unknown option`);
+        assert.doesNotMatch(stdout, /unknown option/i, `${flag} must not be rejected as unknown option`);
+        assert.match(`${stderr}\n${stdout}`, /Không tìm thấy file Omni|universal skills|Trạng thái Omni-Coder Kit/i);
+    }
 });
 
 test('omni run --dry-run shows ACCEPTANCE in the planned pipeline', () => {

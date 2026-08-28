@@ -2,9 +2,11 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('path');
 
 const { buildInitConfig, buildModeBlock } = require('../lib/init');
+const { getAdvancedSetupTargets } = require('../lib/commands/init');
 
 const DEFAULT_OPTS = {
     mode: 'manual',
@@ -31,6 +33,46 @@ describe('buildInitConfig return shape', () => {
     });
 });
 
+describe('dual-first onboarding contract', () => {
+    const initCommandSource = fs.readFileSync(path.join(__dirname, '..', 'lib', 'commands', 'init.js'), 'utf8');
+
+    it('puts Dual mode first and resolves the supported pair before SDLC mode', () => {
+        const dualMenuIndex = initCommandSource.indexOf("{ title: 'Dual mode — chọn cặp agent', value: 'dual' }");
+        const firstSingleAgentIndex = initCommandSource.indexOf("{ title: 'Claude Code (CLI) / OpenCode', value: 'claudecode' }");
+        const dualPairIndex = initCommandSource.indexOf('let dualPair');
+        const modePromptIndex = initCommandSource.indexOf("name: 'mode'");
+
+        assert.ok(dualMenuIndex >= 0, 'primary selector must expose Dual mode');
+        assert.ok(dualMenuIndex < firstSingleAgentIndex, 'Dual mode must be the first selector option');
+        assert.ok(dualPairIndex < modePromptIndex, 'pair selection must happen before SDLC mode');
+    });
+
+    it('offers only the implemented Codex plus Gemini pair', () => {
+        assert.match(initCommandSource, /Codex \+ Gemini qua Antigravity \(agy\).*codex-agy/s);
+        assert.doesNotMatch(initCommandSource, /Claude Code \+ Codex \(mặc định\)/);
+    });
+});
+
+describe('advanced setup routing', () => {
+    const initCommandSource = fs.readFileSync(path.join(__dirname, '..', 'lib', 'commands', 'init.js'), 'utf8');
+    const initSetupSource = fs.readFileSync(path.join(__dirname, '..', 'lib', 'commands', 'init-setup.js'), 'utf8');
+
+    it('routes the supported Codex plus agy pair to Codex and Antigravity only', () => {
+        assert.deepEqual(getAdvancedSetupTargets('dual', 'codex-agy'), ['codex', 'antigravity']);
+    });
+
+    it('reports mandatory Codex integration and labels optional advanced setup as Codex plus AGY', () => {
+        assert.match(initCommandSource, /Codex nang cao.*bat buoc.*hooks.*omni_dual MCP/i);
+        assert.match(initCommandSource, /promptMessage:\s*'[^']*Codex \+ AGY/i);
+        assert.match(initSetupSource, /options\.promptMessage \|\| '🔧 Cài đặt Antigravity nâng cao/);
+    });
+
+    it('persists the registered AGY project id for daemon phase reuse', () => {
+        assert.match(initSetupSource, /const agyProjectId\s*=\s*registerAntigravityProject\(projectDir\)/);
+        assert.match(initSetupSource, /manifest\.agyProjectId\s*=\s*agyProjectId/);
+    });
+});
+
 // ─── Per-IDE config file tests ──────────────────────────────────
 
 describe('buildInitConfig per-IDE config files', () => {
@@ -47,6 +89,44 @@ describe('buildInitConfig per-IDE config files', () => {
         assert.ok(main, 'should have AGENTS.md');
     });
 
+    it('codex emits native skills for every Omni workflow entry point', () => {
+        const result = buildInitConfig('codex', DEFAULT_OPTS);
+        const expected = [
+            'om-go', 'om-think', 'om-spec', 'om-skill', 'om-plan', 'om-cook', 'om-check',
+            'om-fix', 'om-pass', 'om-doc', 'om-memo', 'om-map', 'om-ship',
+        ];
+
+        for (const name of expected) {
+            assert.ok(
+                result.files.some(f => f.path === path.join('.codex', 'skills', name, 'SKILL.md')),
+                `should emit native Codex skill ${name}`
+            );
+        }
+        assert.equal(
+            result.dirs.filter(d => d.startsWith(path.join('.codex', 'skills'))).length,
+            expected.length
+        );
+    });
+
+    it('native Codex skills route to workflow source without embedding it', () => {
+        const result = buildInitConfig('codex', DEFAULT_OPTS);
+        const think = result.files.find(f => f.path === path.join('.codex', 'skills', 'om-think', 'SKILL.md'));
+        const cook = result.files.find(f => f.path === path.join('.codex', 'skills', 'om-cook', 'SKILL.md'));
+
+        assert.match(think.content, /\.omni\/workflows\/requirement-analysis\.md/);
+        assert.match(cook.content, /\.omni\/workflows\/coder-execution\.md/);
+        assert.match(think.content, /read.*fully.*before/i);
+        assert.equal(think.content.includes('## Adaptive Interview'), false, 'must not duplicate workflow body');
+    });
+
+    it('Codex AGENTS.md prefers native $om-* skills and keeps >om-* as compatibility', () => {
+        const result = buildInitConfig('codex', DEFAULT_OPTS);
+        const agents = result.files.find(f => f.path === 'AGENTS.md');
+        assert.match(agents.content, /\$om-think/);
+        assert.match(agents.content, />om-think/);
+        assert.match(agents.content, /preferred.*native/i);
+    });
+
     it('dual produces both CLAUDE.md and AGENTS.md', () => {
         const result = buildInitConfig('dual', DEFAULT_OPTS);
         const claude = result.files.find(f => f.path === 'CLAUDE.md');
@@ -54,6 +134,63 @@ describe('buildInitConfig per-IDE config files', () => {
         assert.ok(claude, 'should have CLAUDE.md');
         assert.ok(agents, 'should have AGENTS.md');
         assert.ok(agents.content.includes('Codex CLI / Cross-tool'));
+        assert.ok(
+            result.files.some(f => f.path === path.join('.codex', 'skills', 'om-think', 'SKILL.md')),
+            'dual should also install native Codex skills'
+        );
+    });
+
+    it('dual codex-agy emits the native Codex worker integration with compatibility shim only', () => {
+        const result = buildInitConfig('dual', { ...DEFAULT_OPTS, dualPair: 'codex-agy' });
+        assert.equal(result.manifest.dualPair, 'codex-agy');
+        assert.equal(result.manifest.workerProvider, 'antigravity');
+        assert.equal(result.manifest.workerPermissions, 'dangerous-auto');
+        assert.equal(result.manifest.dualOrchestrator, 'omni-dual-v1');
+        assert.ok(result.files.some(f => f.path === path.join('.codex', 'skills', 'omni-codex-gemini', 'SKILL.md')));
+        assert.ok(result.files.some(f => f.path === path.join('.omni', 'codex-gemini', 'ai-flow.ps1')));
+        assert.equal(result.files.some(f => f.path.includes(path.join('.omni', 'codex-gemini', 'prompts'))), false);
+        assert.equal(result.files.some(f => f.path.includes(path.join('.omni', 'codex-gemini', 'schemas'))), false);
+        assert.equal(result.dirs.some(d => d.includes(path.join('.omni', 'codex-gemini', 'prompts'))), false);
+        assert.equal(result.dirs.some(d => d.includes(path.join('.omni', 'codex-gemini', 'schemas'))), false);
+    });
+
+    it('dual auto augments om-think with the Node orchestrator run command only for codex-agy', () => {
+        const auto = buildInitConfig('dual', { ...DEFAULT_OPTS, mode: 'auto', dualPair: 'codex-agy' });
+        const manual = buildInitConfig('dual', { ...DEFAULT_OPTS, mode: 'manual', dualPair: 'codex-agy' });
+        const autoThink = auto.files.find(f => f.path === path.join('.codex', 'skills', 'om-think', 'SKILL.md'));
+        const manualThink = manual.files.find(f => f.path === path.join('.codex', 'skills', 'om-think', 'SKILL.md'));
+
+        assert.match(autoThink.content, /Dual Auto Router/);
+        assert.match(autoThink.content, /dual-plan\.json.*omni dual bootstrap --json/is);
+        assert.match(autoThink.content, /Never create `bootstrap-plan-artifacts`/i);
+        assert.match(autoThink.content, /do not call `omni_dual_begin` or `omni_dual_register_plan` directly/i);
+        assert.match(autoThink.content, /omni dual run <task-id>/);
+        assert.match(autoThink.content, /gemini-3\.7-flash-high/);
+        assert.match(autoThink.content, /semantic artifacts first/i);
+        assert.match(autoThink.content, /raw stdout\/stderr only/i);
+        assert.match(autoThink.content, /AGY lease is released/i);
+        assert.doesNotMatch(autoThink.content, /new\s*→\s*preflight\s*→\s*scout\s*→\s*route/);
+        assert.doesNotMatch(manualThink.content, /Dual Auto Router/);
+    });
+
+    it('codex-agy native skill specifies permission bypass and Codex final QC authority', () => {
+        const result = buildInitConfig('dual', { ...DEFAULT_OPTS, dualPair: 'codex-agy' });
+        const skill = result.files.find(f => f.path === path.join('.codex', 'skills', 'omni-codex-gemini', 'SKILL.md'));
+        assert.ok(skill);
+        assert.match(skill.content, /--dangerously-skip-permissions/);
+        assert.match(skill.content, /Codex retains final QC/i);
+        assert.match(skill.content, /semantic artifacts first/i);
+        assert.match(skill.content, /raw stdout\/stderr only/i);
+        assert.match(skill.content, /no source, build, or browser writes/i);
+        assert.match(skill.content, /AGY lease is released/i);
+        assert.match(skill.content, /commit/i);
+        assert.doesNotMatch(skill.content, /automatic commit/i);
+    });
+
+    it('dual without a pairing does not emit the Codex-Gemini worker integration', () => {
+        const result = buildInitConfig('dual', DEFAULT_OPTS);
+        assert.equal(result.manifest.dualPair, undefined);
+        assert.equal(result.files.some(f => f.path.includes('omni-codex-gemini')), false);
     });
 
     it('cursor produces .cursorrules', () => {
@@ -198,5 +335,75 @@ describe('buildInitConfig run mode', () => {
         const result = buildInitConfig('claudecode', { ...DEFAULT_OPTS, mode: 'auto' });
         const main = result.files.find(f => f.path === 'CLAUDE.md');
         assert.ok(!/HARDCORE|FLEXIBLE|STRICTNESS LEVEL/.test(main.content));
+    });
+});
+
+// ─── Dual auto daemon config ────────────────────────────────────
+
+describe('dual auto daemon configuration', () => {
+    const { buildCodexConfig, buildCodexHooks } = require('../lib/init');
+
+    it('exact dual auto codex-agy emits [features] hooks = true and [mcp_servers.omni_dual]', () => {
+        const config = buildCodexConfig('dual', true, { dualPair: 'codex-agy', mode: 'auto' });
+        assert.ok(config);
+        assert.ok(config.includes('hooks = true'));
+        assert.ok(!config.includes('codex_hooks'));
+        assert.ok(config.includes('[mcp_servers.omni_dual]'));
+        assert.ok(config.includes('mcp-server.mjs'));
+        assert.ok(config.includes('--workspace'));
+    });
+
+    it('exact dual auto codex-agy emits materialized hooks for current OS', () => {
+        const hooksStr = buildCodexHooks('dual', true, { dualPair: 'codex-agy', mode: 'auto' });
+        assert.ok(hooksStr);
+        const parsed = JSON.parse(hooksStr);
+        assert.ok(parsed.hooks);
+        assert.ok(parsed.hooks.SessionStart);
+        assert.ok(parsed.hooks.UserPromptSubmit);
+        assert.ok(parsed.hooks.PreToolUse);
+        assert.ok(parsed.hooks.PostToolUse);
+        assert.ok(parsed.hooks.Stop);
+
+        const preHook = parsed.hooks.PreToolUse[0].hooks[0];
+        assert.ok(preHook.command.includes('omni-hook.js'));
+        assert.ok(preHook.commandWindows.includes('omni-hook.js'));
+        assert.ok(!hooksStr.includes('__OMNI_HOOK_COMMAND_'));
+    });
+
+    it('bootstrap hook timeouts allow startup recovery while enforcement stays bounded', () => {
+        const parsed = JSON.parse(buildCodexHooks('dual', true, { dualPair: 'codex-agy', mode: 'auto' }));
+        assert.equal(parsed.hooks.SessionStart[0].hooks[0].timeout, 15);
+        assert.equal(parsed.hooks.UserPromptSubmit[0].hooks[0].timeout, 15);
+        assert.equal(parsed.hooks.PreToolUse[0].hooks[0].timeout, 5);
+        assert.equal(parsed.hooks.PostToolUse[0].hooks[0].timeout, 5);
+        assert.equal(parsed.hooks.Stop[0].hooks[0].timeout, 5);
+    });
+
+    it('buildInitConfig emits .codex/config.toml and .codex/hooks.json in files for exact dual auto codex-agy', () => {
+        const result = buildInitConfig('dual', { ...DEFAULT_OPTS, dualPair: 'codex-agy', mode: 'auto' });
+        const configFile = result.files.find(f => f.path === path.join('.codex', 'config.toml'));
+        const hooksFile = result.files.find(f => f.path === path.join('.codex', 'hooks.json'));
+        assert.ok(configFile, 'must emit .codex/config.toml');
+        assert.ok(hooksFile, 'must emit .codex/hooks.json');
+        assert.ok(configFile.content.includes('[mcp_servers.omni_dual]'));
+        assert.ok(configFile.content.includes('--workspace'));
+        assert.ok(result.dirs.includes('.codex'));
+    });
+
+    it('single-agent codex and manual dual do not force omni_dual MCP or daemon hooks', () => {
+        const codexConfig = buildCodexConfig('codex', true);
+        const codexHooks = buildCodexHooks('codex', true);
+        assert.ok(codexConfig);
+        assert.ok(!codexConfig.includes('[mcp_servers.omni_dual]'));
+        assert.equal(codexHooks, null);
+
+        const manualConfig = buildCodexConfig('dual', true, { dualPair: 'codex-agy', mode: 'manual' });
+        const manualHooks = buildCodexHooks('dual', true, { dualPair: 'codex-agy', mode: 'manual' });
+        assert.ok(manualConfig);
+        assert.ok(!manualConfig.includes('[mcp_servers.omni_dual]'));
+        assert.equal(manualHooks, null);
+
+        const manualResult = buildInitConfig('dual', { ...DEFAULT_OPTS, dualPair: 'codex-agy', mode: 'manual' });
+        assert.ok(!manualResult.files.some(f => f.path === path.join('.codex', 'hooks.json')));
     });
 });

@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "status",
+    "modified_files",
+    "command_outputs",
+    "unverified_items"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "SUCCESS",
+        "FAILURE",
+        "BLOCKED"
+      ]
+    },
+    "modified_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "command_outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "command",
+          "exit_code",
+          "output"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "exit_code": {
+            "type": "integer"
+          },
+          "output": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "unverified_items": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

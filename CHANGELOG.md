@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] — 2026-08-28
+
+### Added
+- **Dual AUTO Authority Daemon (`omni dual`)**:
+  - Full cross-platform orchestration coordinating **Codex** (Architect, Router, Final QC) and **Gemini 3.7 Flash High** via `agy` (Fast Worker).
+  - Authority Ledger with hash-chain receipts for durable task ownership, lease-based concurrency locking, and immutable audit logs.
+  - Native Codex Hook Bridge (`.codex/hooks.json`) and bidirectional stdio MCP Server for token-efficient summaries, context briefing, and quality gating.
+  - Idempotent Setup Runner (`setup.json`) automating pre-task environment and dependency initialization.
+  - Baseline Snapshot Store & Git Promotion Protocol protecting source tree integrity until final QC verification.
+  - 3-tier Adaptive Visual QA & UI Quality Gate integration.
+- **Dual CLI Subcommands**:
+  - `omni dual daemon start|status|stop` — Daemon lifecycle and health management.
+  - `omni dual bootstrap --json` — Bootstrap authority session from planning graphs.
+  - `omni dual setup run` — Idempotent environment setup execution.
+  - `omni dual baseline promote` — Safe git promotion after verified QC completion.
+- **Dual Test Suite**:
+  - 24 dedicated test suites in `test/dual-*.test.js` covering authority store, hook bridge, MCP server, quality ledger, snapshot baseline, daemon orchestrator, and adversarial review.
+- **Updated Documentation**:
+  - Comprehensive documentation for Dual AUTO mode and `omni dual` workflows in `README.md`.
+
+### Changed
+- `package.json` version bumped to `3.1.0`.
+- Verified 100% test pass rate across 925 test cases.
+
 ## [3.0.0] — 2026-07-20
 
 ### Breaking
@@ -43,19 +67,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lineage includes harness Phase 0–4 (acceptance loop), simplified 5-group CLI, Antigravity overlay, multi-IDE init. See git history for full detail.
 
 ## [2.6.2] — prior
-
 ### Added
 - Phase-4 ACCEPTANCE loop, simplified CLI surface, `--yolo` host-cli permissions flag.
 
 ## [2.6.1] — prior
-
 ### Changed
 - Antigravity overlay rewritten to verified `agy` schema + CLI-aware init map.
 
 ## [2.6.0] — prior
-
 ### Added
 - Agent harness Phases 0–3 and skills upgrades.
 
-[Unreleased]: https://github.com/TAV99/omni-coder-kit/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/TAV99/omni-coder-kit/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/TAV99/omni-coder-kit/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/TAV99/omni-coder-kit/releases/tag/v3.0.0

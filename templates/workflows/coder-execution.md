@@ -9,10 +9,12 @@ When executing the [>om-cook] command, you MUST act as a Senior Developer. Your 
 - **Knowledge base:** If `.omni/knowledge/knowledge-base.md` exists, scan it for entries matching the current task's files. Apply relevant lessons.
 - **Project Map:** If `.omni/knowledge/project-map.md` exists, read it FIRST — use it to locate relevant files instead of scanning the full codebase. If the map header shows Age > 7 days, warn: "⚠️ Project Map cũ [N] ngày. Chạy `omni map --refresh` để cập nhật." If map has `[PENDING]` or `[NEW]` markers for files you touch during this task, fill them in opportunistically.
 - **Content source:** If `.omni/sdlc/content-source.md` exists, read it. Use `## Facts` as ground truth for any user-facing text. Check `## Forbidden Content` before writing copy, labels, or descriptions. Do NOT generate content that contradicts these facts. If the project has UI files (HTML, JSX, TSX, Vue, Svelte) but `.omni/sdlc/content-source.md` is missing, warn: "⚠️ UI project without .omni/sdlc/content-source.md — run `>om-think` to generate it. Content accuracy cannot be verified."
-- **Infra pre-check:** If `setup.sh` exists in the project root, verify infrastructure is ready before coding:
-  - Check: Docker running? DB accessible? `.env` exists? Dependencies installed?
-  - If any check fails → STOP. Tell the user: "Chạy `bash setup.sh` trước khi tiếp tục >om-cook."
-  - If all checks pass or `setup.sh` does not exist → proceed normally.
+- **Setup preflight:** If `.omni/sdlc/setup.json` exists, run `omni dual setup run` before making source edits to ensure dependencies and setup actions are ready (the CLI is idempotency-aware; never inspect or invoke shell scripts).
+  - Require a matching `SUCCESS receipt` for the current setup manifest. The runner may self-heal only the exact `native` package-manager kind mismatch; it never falls back to shell scripts.
+  - If setup fails or reports BLOCKED → STOP safely and report the exact failing action and error to the user.
+  - In Dual AUTO, require an active Dual session/authority and registered full graph before any source edit, build, browser mutation, or dev-server launch. If authority is absent, require `.omni/sdlc/dual-plan.json` and call `omni dual bootstrap --json`; do not invent temporary planning tasks or call low-level begin/register operations.
+  - Legacy planning-only session adoption is handled by `omni dual bootstrap`. Never delete/overwrite the old ledger. If bootstrap returns `DUAL_BOOTSTRAP_ADOPTION_UNSAFE`, STOP as BLOCKED.
+  - If setup succeeds with its receipt (or `.omni/sdlc/setup.json` does not exist) and Dual authority is active when required → proceed normally.
 *CRITICAL: If `.omni/sdlc/todo.md` does not exist, STOP. Tell the user to run `>om-plan` first.*
 
 **Step 2: Dev Server Preflight (MANDATORY CHECKPOINT)**
@@ -23,7 +25,7 @@ You MUST complete this step and report the result BEFORE writing any code in Ste
    - `Makefile` → target `dev` or `serve`
    - `manage.py` → `python manage.py runserver`
 2. If a command is found:
-   a. Install dependencies if missing (e.g. `node_modules/` absent).
+   a. Never install missing dependencies ad hoc. If dependencies are missing (e.g. `node_modules/` absent), they must already be represented in `.omni/sdlc/setup.json` and executed through `omni dual setup run`. If missing dependencies were not declared in the setup manifest, STOP fail-closed and return a precise blocker so the plan/setup manifest can be revised; do not guess a package manager, do not invoke shell, and do not directly run package installation.
    b. Run the dev server as a background process.
    c. Wait up to 5 seconds for the server to print a URL.
 3. Report to user (REQUIRED — pick one):
@@ -33,7 +35,7 @@ You MUST complete this step and report the result BEFORE writing any code in Ste
 4. Only after printing one of the above lines may you proceed to Step 3.
 
 **Step 3: Execute ONE Task at a Time**
-Before editing: run `git diff --stat`. If uncommitted changes exist from a prior task, commit or stash first.
+Before editing: run `git diff --stat`. If uncommitted changes exist, report pre-existing changes and work surgically within the declared task scope; do not commit, stash, or reset automatically.
 For the current task:
 1. State what you will do and which files will be affected (scope declaration).
 2. Scope lock: only create/modify files declared in 3.1. Zero exceptions — no cleanup, no refactoring, no "improvements".
@@ -74,6 +76,7 @@ The project runs exactly **3 quality cycles**. Each cycle triggers after complet
    - If max attempts reached: mark failing task `[BLOCKED]` in `.omni/sdlc/todo.md`, escalate to user, then resume >om-cook for the next batch (skipping blocked tasks).
    - Once >om-check passes, resume >om-cook for the next batch.
 4. After cycle 3 completes and >om-check passes:
+   - In Dual Authority mode: Execute `omni dual qc --json` to automatically submit task QC evidence, calculate snapshot diff fingerprint, record all 3 quality cycles, and obtain the cryptographic verification receipt.
    ```
    ✅ All 3 quality cycles complete. [total] tasks done.
       Project ready for >om-doc.

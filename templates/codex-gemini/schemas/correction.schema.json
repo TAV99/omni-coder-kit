@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "round",
+    "corrections"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "round": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2
+    },
+    "corrections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "expected",
+          "actual",
+          "required_fix",
+          "verify_command"
+        ],
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "expected": {
+            "type": "string"
+          },
+          "actual": {
+            "type": "string"
+          },
+          "required_fix": {
+            "type": "string"
+          },
+          "verify_command": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

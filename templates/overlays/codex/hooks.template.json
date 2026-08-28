@@ -1,14 +1,56 @@
 {
   "hooks": {
-    "PostToolUse": [
+    "SessionStart": [
       {
-        "matcher": "apply_patch|Edit|Write",
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"console.log(JSON.stringify({systemMessage:'[omni] Files changed. Keep changes surgical and run the Omni quality gate at the next checkpoint.'}))\"",
-            "timeout": 10,
-            "statusMessage": "Omni file-change reminder"
+            "command": "__OMNI_HOOK_COMMAND_POSIX__",
+            "commandWindows": "__OMNI_HOOK_COMMAND_WINDOWS__",
+            "timeout": 15,
+            "statusMessage": "Omni Dual session start"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__OMNI_HOOK_COMMAND_POSIX__",
+            "commandWindows": "__OMNI_HOOK_COMMAND_WINDOWS__",
+            "timeout": 15,
+            "statusMessage": "Omni Dual prompt authority check"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch|mcp__.*)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__OMNI_HOOK_COMMAND_POSIX__",
+            "commandWindows": "__OMNI_HOOK_COMMAND_WINDOWS__",
+            "timeout": 5,
+            "statusMessage": "Omni Dual pre-tool authority check"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch|mcp__.*)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__OMNI_HOOK_COMMAND_POSIX__",
+            "commandWindows": "__OMNI_HOOK_COMMAND_WINDOWS__",
+            "timeout": 5,
+            "statusMessage": "Omni Dual post-tool scope observation"
           }
         ]
       }
@@ -18,9 +60,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"console.log(JSON.stringify({systemMessage:'[omni] If .omni/sdlc/todo.md progress changed, verify the current quality cycle before claiming completion.'}))\"",
-            "timeout": 10,
-            "statusMessage": "Omni quality-cycle reminder"
+            "command": "__OMNI_HOOK_COMMAND_POSIX__",
+            "commandWindows": "__OMNI_HOOK_COMMAND_WINDOWS__",
+            "timeout": 5,
+            "statusMessage": "Omni Dual completion verification"
           }
         ]
       }
