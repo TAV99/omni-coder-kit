@@ -279,7 +279,7 @@ graph TD
 
 ### 4.8 Acceptance Engine & Bounded Repair Loop
 
-- **`AcceptanceEngine`:** Đọc danh sách yêu cầu nguyên tử từ `.omni/sdlc/requirements.md` (R1-R79) và đối chiếu từng mục với bằng chứng thực nghiệm thu thập được.
+- **`AcceptanceEngine`:** Đọc danh sách yêu cầu nguyên tử từ `.omni/sdlc/requirements.md` (hiện tại R1-R98) và đối chiếu từng mục với bằng chứng thực nghiệm thu thập được.
 - **`AgentJudge`:** Dành cho các yêu cầu phi chức năng hoặc trải nghiệm giao diện. Bắt buộc mô hình phải đưa ra `rationale` phân tích chi tiết trước khi chấm `satisfied`.
 - **`RepairPolicy`:**
   - Giới hạn số chu kỳ sửa lỗi tối đa (mặc định: 2 chu kỳ).
@@ -291,11 +291,20 @@ graph TD
 
 - **Benchmark Runner (`src/v4/benchmark/`):**
   - Chạy bộ bài kiểm chuẩn đại diện (`benchmarks/v4/manifest.json`).
-  - Đo lường 10 chỉ số cốt lõi: Tỉ lệ hoàn thành tin cậy (Reliable Completion Rate), Tỉ lệ báo thành công sai (False-Success Rate = 0%), Khả năng phục hồi sau sự cố (Resume Correctness), Số token, Chi phí USD, và Thời gian thực thi.
+  - Tách `expectation match` khỏi Reliable Completion Rate. Một completion chỉ đáng tin khi tạo working result, qua mandatory gates, đạt acceptance, có evidence đầy đủ và không false-success.
+  - Aggregate dùng denominator là các task thật sự applicable; không có task applicable thì SLO là `inconclusive`, không phải 100%.
+  - Performance/context profile giữ metric thiếu ở trạng thái `unavailable`, không tự ghi thành 0. V3/v4 comparison bắt buộc cùng corpus identity và correctness được xét trước speed/token.
   - Tự động xuất báo cáo định dạng Markdown và JSON.
 - **Host Compatibility Matrix (`compatibility/v4/hosts.json`):**
-  - Lưu trữ danh sách các phiên bản CLI đã được kiểm chứng (Codex `0.147.0`, Claude Code `2.1.185`, Antigravity `1.1.16`).
+  - Lưu trữ danh sách các phiên bản CLI đã được kiểm chứng (Codex `0.150.1`, Claude Code `2.1.185`, Antigravity `1.1.16`).
   - Probes kiểm tra thời gian thực các cờ CLI bắt buộc trước khi kích hoạt adapter.
+
+### 4.10 Migration và Compatibility Smoke Evidence
+
+- Trong checkout v4, `node scripts/run-v4-migration.cjs --project <path> --id <id>` chỉ tạo deterministic dry-run plan và không ghi source. Command này chưa thuộc npm package v3.1.0.
+- Thêm `--apply` để tạo checksum-backed backup rồi mới ghi v4 legacy-import record. Rollback dùng `--rollback <backup-manifest.json>` và từ chối backup bị tamper.
+- Compatibility smoke yêu cầu đồng thời manifest opt-in, environment opt-in và runner approval. Evidence JSON/Markdown được ghi theo ngày; promotion validation chỉ trả plan và không tự sửa `hosts.json`.
+- External Gate 2/3 vẫn disabled trong manifest. Runtime activation cần clean pinned Git binding và paid-model approval riêng; deterministic tests không được dùng để tuyên bố live qualification.
 
 ---
 

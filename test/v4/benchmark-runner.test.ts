@@ -92,6 +92,10 @@ test("isolated_workspace", async () => {
   assert.equal(report.passedCases, 14); // 14 enabled deterministic cases
   assert.equal(report.falseSuccessCount, 0);
   assert.equal(report.falseFailureCount, 0);
+  assert.ok(report.reliability.applicableTaskCount > 0);
+  assert.equal(report.reliability.falseSuccessCount, 0);
+  assert.equal(report.reliability.threshold, 0.9);
+  assert.notEqual(report.reliability.thresholdStatus, "inconclusive");
 
   // Check omni self dogfood case executed in isolation and ran real npm scripts
   const omniCase = report.cases.find((c) => c.id === "case-12-omni-self-dogfood");
@@ -212,6 +216,7 @@ test("isolated_workspace", async () => {
       {
         id: "case-mismatch-expect",
         enabled: true,
+        applicability: "applicable",
         projectKind: "fixture",
         fixturePath: "benchmarks/v4/fixtures/pass-all",
         adapter: "fake",
@@ -274,6 +279,7 @@ test("isolated_workspace", async () => {
           {
             id: "case-escape",
             enabled: true,
+            applicability: "applicable",
             projectKind: "fixture",
             fixturePath: "benchmarks/v4/fixtures/escape-symlink",
             adapter: "fake",
@@ -393,6 +399,7 @@ test("live_host_requires_opt_in", async () => {
         {
           id: "case-live-01",
           enabled: true,
+          applicability: "applicable",
           projectKind: "fixture",
           fixturePath: "benchmarks/v4/fixtures/pass-all",
           adapter: "claude", // Non-fake adapter requested
@@ -555,6 +562,7 @@ test("live_host_requires_opt_in", async () => {
         {
           id: "case-live-fail-expectation",
           enabled: true,
+          applicability: "applicable",
           projectKind: "fixture",
           fixturePath: "benchmarks/v4/fixtures/pass-all",
           adapter: "claude",
@@ -754,6 +762,7 @@ test("correctness_precedes_efficiency", async () => {
         {
           id: `case-${tc.name}`,
           enabled: true,
+          applicability: "applicable",
           projectKind: "fixture",
           fixturePath: "benchmarks/v4/fixtures/regress",
           adapter: "fake",

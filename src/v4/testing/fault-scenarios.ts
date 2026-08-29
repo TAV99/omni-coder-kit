@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { asArtifactId, asEventId, asRunId, asStepId, type RunId } from "../contracts/ids";
 import type { RunPhase } from "../contracts/run";
 import type { RunEventType } from "../contracts/event";
+import type { StepRequest } from "../contracts/adapter";
 import { RunController } from "../core/controller";
 import { createDefaultPolicy } from "../policy/default-policy";
 import { FileArtifactStore } from "../storage/artifact-store";
@@ -376,11 +377,7 @@ export async function truncatedEventLog(): Promise<FaultScenarioFixture> {
     transitionAllowed: false,
     expectedMaxAdapterCalls: 0,
     run: async () => {
-      try {
-        await controller.resume(runId);
-      } catch {
-        // Expected reject
-      }
+      await controller.resume(runId);
     },
     cleanup,
   };
@@ -1231,8 +1228,192 @@ export async function crashAfterRunTransitioned(): Promise<FaultScenarioFixture>
   };
 }
 
+export async function networkDisconnect(): Promise<FaultScenarioFixture> {
+  const { tmpdir, runId, cleanup } = await createBaseProject("network-disconnect");
+  const disconnectError = new Error("socket disconnected with ECONNRESET");
+  (disconnectError as NodeJS.ErrnoException).code = "ECONNRESET";
+  const adapter = new FakeAdapter({
+    outcomes: [{ kind: "throw", error: disconnectError }],
+  });
+  let eventSeq = 0;
+  const events = new FileEventStore({ projectDir: tmpdir });
+  const controller = new RunController({
+    adapter,
+    policy: createDefaultPolicy({ maxRetriesPerStep: 0 }),
+    events,
+    artifacts: new FileArtifactStore(),
+    now: () => new Date().toISOString(),
+    newEventId: () => asEventId(`evt-${++eventSeq}-${crypto.randomUUID()}`),
+  });
+
+  return {
+    name: "networkDisconnect",
+    projectDir: tmpdir,
+    runId,
+    expectedTerminalPhase: "BLOCKED",
+    transitionAllowed: false,
+    expectedMaxAdapterCalls: 1,
+    run: async () => {
+      await controller.start({ runId });
+      await controller.executeNext({
+        runId,
+        stepId: asStepId("step-network-disconnect"),
+        phase: "INTAKE",
+        operationId: "op-network-disconnect",
+        workspaceDir: tmpdir,
+        prompt: "network disconnect scenario",
+        requiredCapabilities: ["workspace.read"],
+        sideEffect: "read-only",
+        timeoutMs: 5000,
+      });
+      const failure = (await events.read(runId)).find(
+        (event): event is Extract<import("../contracts/event").RunEvent, { type: "step.failed" }> =>
+          event.type === "step.failed"
+      );
+      if (!failure || !failure.payload.result.failure.message.includes("ECONNRESET")) {
+        throw new Error("Network disconnect evidence was not preserved in step.failed");
+      }
+    },
+    cleanup,
+  };
+}
+
+export async function repeatedTimeout(): Promise<FaultScenarioFixture> {
+  const { tmpdir, runId, cleanup } = await createBaseProject("repeated-timeout");
+  const adapter = new FakeAdapter({
+    outcomes: [{ kind: "wait-for-abort" }, { kind: "wait-for-abort" }],
+  });
+  let eventSeq = 0;
+  const controller = new RunController({
+    adapter,
+    policy: createDefaultPolicy({ maxRetriesPerStep: 3, maxSameFailureCount: 2 }),
+    events: new FileEventStore({ projectDir: tmpdir }),
+    artifacts: new FileArtifactStore(),
+    now: () => new Date().toISOString(),
+    newEventId: () => asEventId(`evt-${++eventSeq}-${crypto.randomUUID()}`),
+  });
+  await controller.start({ runId });
+
+  const request = (operationId: string): StepRequest => ({
+    runId,
+    stepId: asStepId("step-repeated-timeout"),
+    operationId,
+    phase: "INTAKE",
+    workspaceDir: tmpdir,
+    prompt: "bounded timeout scenario",
+    requiredCapabilities: ["workspace.read"],
+    sideEffect: "read-only",
+    timeoutMs: 10,
+  });
+
+  return {
+    name: "repeatedTimeout",
+    projectDir: tmpdir,
+    runId,
+    expectedTerminalPhase: "BLOCKED",
+    transitionAllowed: false,
+    expectedMaxAdapterCalls: 2,
+    run: async () => {
+      const first = await controller.executeNext(request("op-timeout-1"));
+      if (first.phase === "BLOCKED") {
+        throw new Error("First timeout must remain retryable");
+      }
+
+      const second = await controller.executeNext(request("op-timeout-2"));
+      if (second.phase !== "BLOCKED") {
+        throw new Error(`Repeated identical timeout must block, got '${second.phase}'`);
+      }
+      if (adapter.calls.length !== 2) {
+        throw new Error(`Expected exactly 2 adapter calls, got ${adapter.calls.length}`);
+      }
+    },
+    cleanup,
+  };
+}
+
+export async function filesystemUnavailable(): Promise<FaultScenarioFixture> {
+  const { tmpdir, runId, cleanup } = await createBaseProject("filesystem-unavailable");
+  const stepId = asStepId("step-filesystem-unavailable");
+  const artifactId = asArtifactId("artifact-filesystem-unavailable");
+  await fs.writeFile(path.join(tmpdir, "output.txt"), "output\n", "utf-8");
+
+  const adapter = new FakeAdapter({
+    outcomes: [
+      {
+        kind: "return",
+        value: {
+          status: "succeeded",
+          executionId: "op-filesystem-unavailable",
+          summary: "created output",
+          artifacts: [{ artifactId, kind: "file", relativePath: "output.txt" }],
+          evidence: [
+            {
+              schemaVersion: 1,
+              kind: "artifact",
+              producerStepId: stepId,
+              method: "write",
+              startedAt: "2026-08-20T10:00:00.000Z",
+              durationMs: 1,
+              artifactIds: [artifactId],
+              summary: "captured output",
+            },
+          ],
+        },
+      },
+    ],
+  });
+  let eventSeq = 0;
+  const controller = new RunController({
+    adapter,
+    policy: createDefaultPolicy(),
+    events: new FileEventStore({ projectDir: tmpdir }),
+    artifacts: new FileArtifactStore({
+      fsHooks: {
+        beforeHashRead: () => {
+          const err = new Error("filesystem unavailable during artifact persistence");
+          (err as NodeJS.ErrnoException).code = "EIO";
+          throw err;
+        },
+      },
+    }),
+    now: () => new Date().toISOString(),
+    newEventId: () => asEventId(`evt-${++eventSeq}-${crypto.randomUUID()}`),
+  });
+  await controller.start({ runId });
+
+  return {
+    name: "filesystemUnavailable",
+    projectDir: tmpdir,
+    runId,
+    expectedTerminalPhase: "BLOCKED",
+    transitionAllowed: false,
+    expectedMaxAdapterCalls: 1,
+    run: async () => {
+      const state = await controller.executeNext({
+        runId,
+        stepId,
+        operationId: "op-filesystem-unavailable",
+        phase: "INTAKE",
+        workspaceDir: tmpdir,
+        prompt: "create output",
+        requiredCapabilities: ["workspace.read"],
+        sideEffect: "workspace-write",
+        timeoutMs: 5000,
+      });
+      if (state.phase !== "BLOCKED") {
+        throw new Error(`Filesystem failure must block, got '${state.phase}'`);
+      }
+      if (adapter.calls.length !== 1) {
+        throw new Error(`Expected exactly 1 adapter call, got ${adapter.calls.length}`);
+      }
+    },
+    cleanup,
+  };
+}
+
 export const faultScenarios = {
   providerThrow,
+  networkDisconnect,
   providerTimeout,
   malformedSuccess,
   missingArtifact,
@@ -1250,4 +1431,6 @@ export const faultScenarios = {
   crashAfterStepBlocked,
   crashAfterStepCancelled,
   crashAfterRunTransitioned,
+  repeatedTimeout,
+  filesystemUnavailable,
 } as const;

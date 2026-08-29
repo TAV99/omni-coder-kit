@@ -24,6 +24,15 @@ test("benchmark_e2e_full_suite: executes all manifest cases and emits reproducib
     assert.equal(report.skippedCases, 3);
     assert.equal(report.falseSuccessCount, 0);
     assert.equal(report.falseFailureCount, 0);
+    assert.equal(report.reliability.applicableTaskCount, 10);
+    assert.equal(report.reliability.reliableCompletionCount, 7);
+    assert.equal(report.reliability.reliableCompletionRate, 0.7);
+    assert.equal(report.reliability.thresholdStatus, "failed");
+    assert.deepEqual(report.reliability.unreliableCaseIds, [
+      "case-15-external-js-slot",
+      "case-16-external-non-js-slot",
+      "case-17-external-unusual-tests-slot",
+    ]);
 
     const { jsonPath, mdPath } = await writeBenchmarkArtifacts(report, tmpOut);
 

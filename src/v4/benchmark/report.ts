@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import type { BenchmarkRunReport } from "./runner";
+import { renderBenchmarkAggregateMarkdown } from "./aggregate";
 
 function normalizeStringPaths(text: string | undefined): string | undefined {
   if (!text) return undefined;
@@ -120,6 +121,8 @@ export function generateBenchmarkMarkdown(report: BenchmarkRunReport): string {
   lines.push(
     `| Unclassified False Failures | ${report.cases.filter((item) => item.actual.falseFailureClassified === false).length} |`
   );
+  lines.push(``);
+  lines.push(renderBenchmarkAggregateMarkdown(report.reliability));
   lines.push(``);
 
   lines.push(`## Case Breakdown`);

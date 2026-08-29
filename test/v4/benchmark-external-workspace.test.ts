@@ -199,3 +199,55 @@ test("external_diff: treats allowed file paths as exact files, not directory pre
   );
   await fs.rm(root, { recursive: true, force: true });
 });
+
+test("external_diff: allows only descendants of declared safe prefixes", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "omni-external-prefix-"));
+  await fs.mkdir(path.join(root, "backend", "tests"), { recursive: true });
+  await fs.writeFile(path.join(root, "backend", "tests", "existing.py"), "pass\n");
+  await fs.writeFile(path.join(root, "backend", "tests-secret.py"), "pass\n");
+  const before = await captureWorkspaceSnapshot(root);
+
+  await fs.writeFile(path.join(root, "backend", "tests", "new_test.py"), "def test_ok(): assert True\n");
+  const allowed = await captureWorkspaceSnapshot(root);
+  assert.deepEqual(
+    compareWorkspaceSnapshots(before, allowed, [], ["backend/tests"]).modifiedFiles,
+    ["backend/tests/new_test.py"]
+  );
+
+  await fs.writeFile(path.join(root, "backend", "tests-secret.py"), "changed\n");
+  const outside = await captureWorkspaceSnapshot(root);
+  assert.throws(
+    () => compareWorkspaceSnapshots(before, outside, [], ["backend/tests"]),
+    /BENCHMARK_EXTERNAL_DIFF_SCOPE/
+  );
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("external_workspace: ignores generated Python paths but rejects them when tracked", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "omni-python-generated-"));
+  await fs.writeFile(path.join(root, "app.py"), "VALUE = 1\n");
+  const before = await captureWorkspaceSnapshot(root);
+  for (const generatedDir of [".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"]) {
+    const generated = path.join(root, generatedDir);
+    await fs.mkdir(generated, { recursive: true });
+    await fs.writeFile(path.join(generated, "generated.bin"), "generated");
+  }
+  const after = await captureWorkspaceSnapshot(root);
+  assert.deepEqual(compareWorkspaceSnapshots(before, after, ["app.py"]).modifiedFiles, []);
+  await fs.rm(root, { recursive: true, force: true });
+
+  for (const unsafePath of [".venv/pyvenv.cfg", "app/__pycache__/module.pyc", ".pytest_cache/state"]) {
+    const repo = await createRepository();
+    const fullPath = path.join(repo.root, ...unsafePath.split("/"));
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
+    await fs.writeFile(fullPath, "generated\n");
+    git(repo.root, ["add", "-f", unsafePath]);
+    git(repo.root, ["commit", "-m", `track ${unsafePath}`]);
+    const trackedRevision = git(repo.root, ["rev-parse", "HEAD"]);
+    assert.throws(
+      () => inspectExternalRepository(binding(repo.root, trackedRevision)),
+      /BENCHMARK_EXTERNAL_TRACKED_PATH_UNSAFE/
+    );
+    await fs.rm(repo.root, { recursive: true, force: true });
+  }
+});

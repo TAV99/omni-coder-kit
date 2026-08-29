@@ -28,6 +28,11 @@ export const ExternalBindingFileSchema = z
 export type ExternalCaseBinding = z.infer<typeof ExternalCaseBindingSchema>;
 export type ExternalBindingFile = z.infer<typeof ExternalBindingFileSchema>;
 
+export interface ExternalBindingContract {
+  readonly requiredDependencyPolicy?: ExternalCaseBinding["dependencyPolicy"] | undefined;
+  readonly requiredToolchain?: Readonly<Record<string, string>> | undefined;
+}
+
 function invalidBinding(message: string): QualityError {
   return new QualityError(
     "BENCHMARK_WORKSPACE_UNSAFE",
@@ -69,4 +74,26 @@ export function requireExternalCaseBinding(
     );
   }
   return binding;
+}
+
+export function enforceExternalBindingContract(
+  binding: ExternalCaseBinding,
+  contract: ExternalBindingContract
+): void {
+  if (
+    contract.requiredDependencyPolicy !== undefined &&
+    binding.dependencyPolicy !== contract.requiredDependencyPolicy
+  ) {
+    throw invalidBinding(
+      "[BENCHMARK_EXTERNAL_DEPENDENCY_POLICY_MISMATCH] Binding dependency policy does not match the case contract"
+    );
+  }
+
+  for (const [name, requiredValue] of Object.entries(contract.requiredToolchain ?? {})) {
+    if (binding.toolchain?.[name] !== requiredValue) {
+      throw invalidBinding(
+        `[BENCHMARK_EXTERNAL_TOOLCHAIN_MISMATCH] Binding toolchain metadata does not match the case contract for '${name}'`
+      );
+    }
+  }
 }

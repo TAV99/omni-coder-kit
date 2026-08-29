@@ -52,6 +52,30 @@ export {
   writeBenchmarkArtifacts,
 } from "./benchmark/report";
 export {
+  aggregateBenchmarkReliability,
+  renderBenchmarkAggregateMarkdown,
+  BenchmarkAggregationInputSchema,
+  BenchmarkAggregateSchema,
+  type BenchmarkAggregationInput,
+  type BenchmarkAggregate,
+} from "./benchmark/aggregate";
+export {
+  profileBenchmarkRuns,
+  renderBenchmarkProfileMarkdown,
+  BenchmarkProfileInputSchema,
+  BenchmarkProfileSchema,
+  type BenchmarkProfileInput,
+  type BenchmarkProfile,
+} from "./benchmark/profile";
+export {
+  compareBenchmarkVersions,
+  renderVersionComparisonMarkdown,
+  VersionComparisonInputSchema,
+  VersionComparisonSchema,
+  type VersionComparisonInput,
+  type VersionComparison,
+} from "./benchmark/version-comparison";
+export {
   AcceptanceEngine,
   type AgentJudgement,
 } from "./quality/acceptance-engine";
@@ -133,6 +157,36 @@ export {
   type CompatibilityStatus,
   type HostCompatibilityResult,
 } from "./compatibility/probe";
+export {
+  createSmokeEvidence,
+  renderSmokeEvidenceMarkdown,
+  writeSmokeEvidence,
+  validatePromotionEvidence,
+  SmokeEvidenceSchema,
+  type SmokeEvidence,
+  type SmokeEvidenceInput,
+  type PromotionRequest,
+  type PromotionPlan,
+} from "./compatibility/smoke-evidence";
+export {
+  runCompatibilitySmoke,
+  type CompatibilitySmokeOptions,
+  type CompatibilitySmokeResult,
+} from "./compatibility/smoke-runner";
+export {
+  createMigrationPlan,
+  applyMigration,
+  verifyBackup,
+  rollbackMigration,
+  MigrationPlanSchema,
+  type MigrationPlan,
+  type MigrationReceipt,
+} from "./migration/migrator";
+export {
+  parseMigrationCliArgs,
+  runMigrationCli,
+  type MigrationCliArgs,
+} from "./migration/cli";
 
 export {
   CodexAdapter,

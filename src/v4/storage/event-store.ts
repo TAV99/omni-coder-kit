@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
 import { RunEventSchema, type RunEvent } from "../contracts/event";
 import type { EventId, RunId } from "../contracts/ids";
 import type { RunState } from "../contracts/run";
@@ -23,6 +24,12 @@ export class EventSequenceConflictError extends Error {
 export interface EventStore {
   append(event: RunEvent, expectedSequence: number): Promise<void>;
   read(runId: RunId): Promise<readonly RunEvent[]>;
+}
+
+export interface EventStoreFsHooks {
+  readonly beforeTempWrite?: (targetPath: string, tempPath: string) => Promise<void> | void;
+  readonly beforeTempSync?: (targetPath: string, tempPath: string) => Promise<void> | void;
+  readonly beforeRename?: (tempPath: string, targetPath: string) => Promise<void> | void;
 }
 
 // Module-scoped process-wide lock queue for CAS per normalized file path
@@ -209,9 +216,14 @@ export function validateEventHistory(events: readonly RunEvent[]): void {
 
 export class FileEventStore implements EventStore {
   private readonly projectDir: string;
+  private readonly fsHooks?: EventStoreFsHooks | undefined;
 
-  constructor(options: { readonly projectDir: string }) {
+  constructor(options: {
+    readonly projectDir: string;
+    readonly fsHooks?: EventStoreFsHooks | undefined;
+  }) {
     this.projectDir = options.projectDir;
+    this.fsHooks = options.fsHooks;
   }
 
   async append(event: RunEvent, expectedSequence: number): Promise<void> {
@@ -273,13 +285,25 @@ export class FileEventStore implements EventStore {
       const fullList = [...existingEvents, validatedEvent];
       validateEventHistory(fullList);
 
-      const line = JSON.stringify(validatedEvent) + "\n";
-      const fileHandle = await fs.open(eventsPath, "a");
+      const durableContent = fullList.map((item) => JSON.stringify(item)).join("\n") + "\n";
+      const tempPath = path.join(
+        runDir,
+        `.tmp.events.${process.pid}.${crypto.randomBytes(6).toString("hex")}`
+      );
+      let fileHandle: fs.FileHandle | undefined;
       try {
-        await fileHandle.writeFile(line, "utf-8");
+        await this.fsHooks?.beforeTempWrite?.(eventsPath, tempPath);
+        fileHandle = await fs.open(tempPath, "wx");
+        await fileHandle.writeFile(durableContent, "utf-8");
+        await this.fsHooks?.beforeTempSync?.(eventsPath, tempPath);
         await fileHandle.sync();
-      } finally {
         await fileHandle.close();
+        fileHandle = undefined;
+        await this.fsHooks?.beforeRename?.(tempPath, eventsPath);
+        await fs.rename(tempPath, eventsPath);
+      } finally {
+        await fileHandle?.close().catch(() => undefined);
+        await fs.rm(tempPath, { force: true }).catch(() => undefined);
       }
     });
   }

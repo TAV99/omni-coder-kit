@@ -46,7 +46,7 @@ export function reduceEvent(state: RunState, event: RunEvent): RunState {
     );
   }
 
-  if (state.phase === "READY") {
+  if (state.phase === "READY" && event.type !== "run.blocked") {
     throw new InvalidStateError("Cannot apply event to a run that is already in READY terminal phase");
   }
 

@@ -19,6 +19,7 @@ async function createFixtureManifest(): Promise<string> {
         {
           id: "disabled-fixture",
           enabled: false,
+          applicability: "applicable",
           projectKind: "fixture",
           fixturePath: "benchmarks/v4/fixtures/pass-all",
           adapter: "fake",

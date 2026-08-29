@@ -18,6 +18,7 @@ async function createLiveFixture(): Promise<string> {
       {
         id: "live-contract-case",
         enabled: true,
+        applicability: "applicable",
         projectKind: "fixture",
         fixturePath: "benchmarks/v4/fixtures/pass-all",
         adapter: "codex",

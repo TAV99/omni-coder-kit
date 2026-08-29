@@ -42,6 +42,7 @@ async function createExternalHarness(): Promise<{
       {
         id: "external-js",
         enabled: false,
+        applicability: "applicable",
         projectKind: "javascript",
         repositoryPath: "external/placeholder",
         adapter: "codex",

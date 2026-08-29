@@ -4,6 +4,7 @@
     {
       "id": "case-01-pass-all",
       "enabled": true,
+      "applicability": "applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/pass-all",
       "adapter": "fake",
@@ -18,6 +19,7 @@
     {
       "id": "case-02-config-missing",
       "enabled": true,
+      "applicability": "not-applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/config-missing",
       "adapter": "fake",
@@ -31,6 +33,7 @@
     {
       "id": "case-03-mandatory-failed",
       "enabled": true,
+      "applicability": "not-applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/gate-failed",
       "adapter": "fake",
@@ -44,6 +47,7 @@
     {
       "id": "case-04-mandatory-skipped",
       "enabled": true,
+      "applicability": "not-applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/gate-nonpass",
       "adapter": "fake",
@@ -57,6 +61,7 @@
     {
       "id": "case-05-mandatory-inconclusive",
       "enabled": true,
+      "applicability": "not-applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/evidence-invalid",
       "adapter": "fake",
@@ -70,6 +75,7 @@
     {
       "id": "case-06-repair-progress-success",
       "enabled": true,
+      "applicability": "applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/repair-progress",
       "adapter": "fake",
@@ -85,6 +91,7 @@
     {
       "id": "case-07-repair-no-progress",
       "enabled": true,
+      "applicability": "not-applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/repair-no-progress",
       "adapter": "fake",
@@ -99,6 +106,7 @@
     {
       "id": "case-08-crash-resume",
       "enabled": true,
+      "applicability": "applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/crash-resume",
       "adapter": "fake",
@@ -114,6 +122,7 @@
     {
       "id": "case-09-concurrency-locks",
       "enabled": true,
+      "applicability": "applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/concurrency-locks",
       "adapter": "fake",
@@ -130,6 +139,7 @@
     {
       "id": "case-10-budget-modes",
       "enabled": true,
+      "applicability": "applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/budget-modes",
       "adapter": "fake",
@@ -144,6 +154,7 @@
     {
       "id": "case-11-false-success-prevention",
       "enabled": true,
+      "applicability": "not-applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/false-success",
       "adapter": "fake",
@@ -158,6 +169,7 @@
     {
       "id": "case-12-omni-self-dogfood",
       "enabled": true,
+      "applicability": "applicable",
       "projectKind": "omni",
       "adapter": "fake",
       "liveModelCostOptIn": false,
@@ -171,6 +183,7 @@
     {
       "id": "case-13-workspace-serialization",
       "enabled": true,
+      "applicability": "applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/workspace-serialization",
       "adapter": "fake",
@@ -187,6 +200,7 @@
     {
       "id": "case-14-budget-mandatory-breach",
       "enabled": true,
+      "applicability": "not-applicable",
       "projectKind": "fixture",
       "fixturePath": "benchmarks/v4/fixtures/budget-mandatory",
       "adapter": "fake",
@@ -202,6 +216,7 @@
     {
       "id": "case-15-external-js-slot",
       "enabled": false,
+      "applicability": "applicable",
       "projectKind": "javascript",
       "repositoryPath": "external/sample-js-repo",
       "adapter": "codex",
@@ -306,50 +321,228 @@
     {
       "id": "case-16-external-non-js-slot",
       "enabled": false,
+      "applicability": "applicable",
       "projectKind": "non-javascript",
-      "repositoryPath": "external/sample-rust-repo",
-      "adapter": "fake",
-      "liveModelCostOptIn": false,
+      "repositoryPath": "external/mindx-lms",
+      "adapter": "codex",
+      "liveModelCostOptIn": true,
       "expected": {
         "finalPhase": "DOCUMENT",
-        "acceptanceStatus": "accepted"
+        "acceptanceStatus": "accepted",
+        "minPassedGates": 3,
+        "falseSuccess": false,
+        "falseFailure": false
       },
-      "tags": ["future-slot", "non-js"],
-      "description": "Future slot for non-JavaScript (Rust/Go/Python) repository dogfood",
-      "baselineNotes": "Requires cargo toolchain and cargo test suite passing cleanly",
+      "tags": ["future-slot", "non-js", "python", "external-dogfood", "codex"],
+      "description": "Runtime-activated external Python dogfood on the pinned MindX LMS repository",
+      "baselineNotes": "Requires a clean parent Git revision, Python 3.13.14, a reproducible backend requirements-dev.txt, and all credential-free baseline tests passing",
       "gateMapping": {
-        "build": "cargo check",
-        "test": "cargo test"
+        "compile": "backend/.venv/Scripts/python.exe -m compileall -q app",
+        "test": "backend/.venv/Scripts/python.exe -m pytest tests -q -p no:cacheprovider",
+        "targeted": "backend/.venv/Scripts/python.exe -m pytest tests/test_cache.py -q -p no:cacheprovider"
       },
       "activationChecklist": [
-        "Clone target repository to local path",
-        "Configure native build/test CLI gates",
-        "Verify compiler and toolchain availability",
-        "Enable case in manifest"
-      ]
+        "Bind the clean parent Git repository root to its full pinned revision",
+        "Verify Python 3.13.14 and reproducible backend test dependencies",
+        "Run credential-free baseline tests with cache and bytecode generation disabled",
+        "Activate the exact case through the runtime override"
+      ],
+      "liveTask": {
+        "prompt": "Remove wall-clock sleeping from the TTLCache expiry regression by introducing a deterministic injectable clock while preserving the default production behavior. Modify only the cache implementation and its focused unit test. Do not call external services or use credentials.",
+        "allowedPaths": [
+          "backend/app/cache/ttl_cache.py",
+          "backend/tests/test_cache.py"
+        ],
+        "requiredCapabilities": [
+          "workspace.read",
+          "workspace.write",
+          "shell",
+          "structured-output"
+        ],
+        "sideEffect": "workspace-write",
+        "timeoutMs": 180000,
+        "outputSummaryBytes": 16384,
+        "requiredDependencyPolicy": "clean-install",
+        "requiredToolchain": {
+          "python": "3.13.14"
+        },
+        "setupCommands": [
+          {
+            "program": "python",
+            "args": ["-m", "venv", "backend/.venv"],
+            "cwd": ".",
+            "timeoutMs": 120000
+          },
+          {
+            "program": ".venv/Scripts/python.exe",
+            "args": ["-m", "pip", "install", "-r", "requirements.txt", "-r", "requirements-dev.txt"],
+            "cwd": "backend",
+            "timeoutMs": 180000
+          }
+        ],
+        "requirements": [
+          {
+            "id": "EXT-PY-COMPILE",
+            "text": "The pinned Python backend compiles without syntax errors"
+          },
+          {
+            "id": "EXT-PY-CACHE",
+            "text": "TTL cache behavior passes focused deterministic unit tests without wall-clock sleeping"
+          },
+          {
+            "id": "EXT-PY-TEST",
+            "text": "The credential-free Python backend unit suite passes"
+          }
+        ],
+        "gates": [
+          {
+            "id": "external-python-compile",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["-m", "compileall", "-q", "app"],
+            "cwd": "backend",
+            "timeoutMs": 120000,
+            "mandatory": true,
+            "requirementIds": ["EXT-PY-COMPILE"],
+            "dependsOn": [],
+            "sideEffect": "read-only",
+            "retrySafe": true
+          },
+          {
+            "id": "external-python-cache-test",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["-m", "pytest", "tests/test_cache.py", "-q", "-p", "no:cacheprovider"],
+            "cwd": "backend",
+            "timeoutMs": 120000,
+            "mandatory": true,
+            "requirementIds": ["EXT-PY-CACHE"],
+            "dependsOn": [],
+            "sideEffect": "read-only",
+            "retrySafe": true
+          },
+          {
+            "id": "external-python-test",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["-m", "pytest", "tests", "-q", "-p", "no:cacheprovider"],
+            "cwd": "backend",
+            "timeoutMs": 180000,
+            "mandatory": true,
+            "requirementIds": ["EXT-PY-TEST"],
+            "dependsOn": ["external-python-compile", "external-python-cache-test"],
+            "sideEffect": "read-only",
+            "retrySafe": true
+          }
+        ]
+      }
     },
     {
       "id": "case-17-external-unusual-tests-slot",
       "enabled": false,
+      "applicability": "applicable",
       "projectKind": "unusual-tests",
-      "repositoryPath": "external/sample-custom-test-repo",
-      "adapter": "fake",
-      "liveModelCostOptIn": false,
+      "repositoryPath": "external/demo-kit",
+      "adapter": "codex",
+      "liveModelCostOptIn": true,
       "expected": {
         "finalPhase": "DOCUMENT",
-        "acceptanceStatus": "accepted"
+        "acceptanceStatus": "accepted",
+        "minPassedGates": 3,
+        "falseSuccess": false,
+        "falseFailure": false
       },
-      "tags": ["future-slot", "unusual-tests"],
-      "description": "Future slot for custom test runner / multi-repo configuration",
-      "baselineNotes": "Requires custom test harness wrapper and bounded output buffer",
+      "tags": ["future-slot", "unusual-tests", "javascript", "external-dogfood", "codex"],
+      "description": "Runtime-activated dogfood for a Vite project that starts without a standard test script",
+      "baselineNotes": "Requires an immutable local Git baseline with npm ci, lint, and build passing before the deterministic test harness task",
       "gateMapping": {
-        "test": "node test-harness.js --all"
+        "lint": "npm run lint",
+        "test": "npm test",
+        "build": "npm run build"
       },
       "activationChecklist": [
-        "Configure custom runner wrapper script",
-        "Set outputSummaryBytes bounds appropriately",
-        "Enable case in manifest"
-      ]
+        "Create and verify an immutable local Git baseline",
+        "Verify npm ci, lint, and build before mutation",
+        "Confirm the case-specific 8192-byte output summary bound",
+        "Activate the exact case through the runtime override"
+      ],
+      "liveTask": {
+        "prompt": "Add a minimal deterministic Vitest harness and regression test for the existing counter interaction. Do not redesign the UI or call any external service.",
+        "allowedPaths": [
+          "package.json",
+          "package-lock.json",
+          "vite.config.js",
+          "src/App.test.jsx",
+          "src/test/setup.js"
+        ],
+        "requiredCapabilities": [
+          "workspace.read",
+          "workspace.write",
+          "shell",
+          "structured-output"
+        ],
+        "sideEffect": "workspace-write",
+        "timeoutMs": 180000,
+        "outputSummaryBytes": 8192,
+        "requiredDependencyPolicy": "clean-install",
+        "setupCommands": [
+          {
+            "program": "npm",
+            "args": ["ci"],
+            "cwd": ".",
+            "timeoutMs": 180000
+          }
+        ],
+        "requirements": [
+          {
+            "id": "EXT-UNUSUAL-LINT",
+            "text": "The unusual-test project passes lint after adding the harness"
+          },
+          {
+            "id": "EXT-UNUSUAL-TEST",
+            "text": "npm test runs the new counter regression once and exits deterministically"
+          },
+          {
+            "id": "EXT-UNUSUAL-BUILD",
+            "text": "The unusual-test project still produces a successful build"
+          }
+        ],
+        "gates": [
+          {
+            "id": "external-unusual-lint",
+            "command": "npm",
+            "args": ["run", "lint"],
+            "cwd": ".",
+            "timeoutMs": 120000,
+            "mandatory": true,
+            "requirementIds": ["EXT-UNUSUAL-LINT"],
+            "dependsOn": [],
+            "sideEffect": "read-only",
+            "retrySafe": true
+          },
+          {
+            "id": "external-unusual-test",
+            "command": "npm",
+            "args": ["test"],
+            "cwd": ".",
+            "timeoutMs": 120000,
+            "mandatory": true,
+            "requirementIds": ["EXT-UNUSUAL-TEST"],
+            "dependsOn": [],
+            "sideEffect": "read-only",
+            "retrySafe": true
+          },
+          {
+            "id": "external-unusual-build",
+            "command": "npm",
+            "args": ["run", "build"],
+            "cwd": ".",
+            "timeoutMs": 120000,
+            "mandatory": true,
+            "requirementIds": ["EXT-UNUSUAL-BUILD"],
+            "dependsOn": ["external-unusual-lint", "external-unusual-test"],
+            "sideEffect": "read-only",
+            "retrySafe": true
+          }
+        ]
+      }
     }
   ]
 }

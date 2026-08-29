@@ -12,7 +12,10 @@ import {
 import { QualityError } from "../quality/errors";
 import { loadBenchmarkManifest, isBenchmarkPathContained } from "./manifest";
 import { FileEventStore } from "../storage/event-store";
-import { EvidenceBundleStore } from "../quality/evidence-bundle-store";
+import {
+  EvidenceBundleStore,
+  type EvidenceBundle,
+} from "../quality/evidence-bundle-store";
 import { GateRegistry } from "../quality/gate-registry";
 import { GateRunner } from "../quality/gate-runner";
 import { AcceptanceEngine } from "../quality/acceptance-engine";
@@ -43,7 +46,10 @@ import type { AgentAdapter } from "../contracts/adapter";
 import { StepResultSchema } from "../contracts/step-result";
 import type { NativeExecutionMetadata } from "../contracts/step-result";
 import { computeSemanticHash } from "./report";
+import { aggregateBenchmarkReliability, type BenchmarkAggregate } from "./aggregate";
+import type { BenchmarkAggregationInput } from "./aggregate";
 import {
+  enforceExternalBindingContract,
   loadExternalBindings,
   requireExternalCaseBinding,
   type ExternalCaseBinding,
@@ -86,6 +92,7 @@ export interface BenchmarkCaseResult {
       readonly failureSignature?: string | undefined;
     } | undefined;
     readonly commandEvidence?: readonly BenchmarkCommandEvidence[] | undefined;
+    readonly evidenceFacts?: BenchmarkAggregationInput["cases"][number]["evidence"] | undefined;
   };
   readonly metrics?: RunMetrics | undefined;
   readonly error?: string | undefined;
@@ -120,6 +127,7 @@ export interface BenchmarkRunReport {
   readonly skippedCases: number;
   readonly falseSuccessCount: number;
   readonly falseFailureCount: number;
+  readonly reliability: BenchmarkAggregate;
   readonly cases: readonly BenchmarkCaseResult[];
 }
 
@@ -498,6 +506,12 @@ export class BenchmarkRunner {
             falseSuccess: false,
             falseFailure: false,
             executedCommands: [],
+            evidenceFacts: {
+              runIdentityRecorded: false,
+              expectedOutcomeRecorded: true,
+              mandatoryGateEvidenceComplete: false,
+              acceptanceEvidenceComplete: false,
+            },
           },
         });
         continue;
@@ -525,6 +539,12 @@ export class BenchmarkRunner {
             falseSuccess: false,
             falseFailure: false,
             executedCommands: [],
+            evidenceFacts: {
+              runIdentityRecorded: false,
+              expectedOutcomeRecorded: true,
+              mandatoryGateEvidenceComplete: false,
+              acceptanceEvidenceComplete: false,
+            },
           },
         });
         continue;
@@ -564,6 +584,16 @@ export class BenchmarkRunner {
             path.resolve(this.options.repoRoot, this.options.externalBindingPath)
           );
           externalBinding = requireExternalCaseBinding(bindings, c.id);
+          if (!c.liveTask) {
+            throw new QualityError(
+              "BENCHMARK_WORKSPACE_UNSAFE",
+              "[BENCHMARK_EXTERNAL_CONTRACT_MISSING] External case must declare liveTask"
+            );
+          }
+          enforceExternalBindingContract(externalBinding, {
+            requiredDependencyPolicy: c.liveTask.requiredDependencyPolicy,
+            requiredToolchain: c.liveTask.requiredToolchain,
+          });
         }
 
         const source = await this.stageWorkspace(c, tmpWorkspace, externalBinding);
@@ -616,6 +646,12 @@ export class BenchmarkRunner {
             falseFailure: false,
             executedCommands: setupEvidence.map((item) => item.command.join(" ")),
             commandEvidence: setupEvidence,
+            evidenceFacts: {
+              runIdentityRecorded: false,
+              expectedOutcomeRecorded: true,
+              mandatoryGateEvidenceComplete: false,
+              acceptanceEvidenceComplete: false,
+            },
             source: externalSource
               ? { ...externalSource, repositoryRoot: "<external-root>" }
               : undefined,
@@ -630,6 +666,39 @@ export class BenchmarkRunner {
 
     const completedAt = this.options.now ? this.options.now() : new Date().toISOString();
     const durationMs = Date.now() - startTime;
+    const reliability = aggregateBenchmarkReliability({
+      schemaVersion: 1,
+      threshold: 0.9,
+      cases: caseResults.map((result) => {
+        const caseDefinition = manifest.cases.find((item) => item.id === result.id);
+        if (!caseDefinition) {
+          throw new Error(`Benchmark result '${result.id}' has no manifest definition`);
+        }
+        const evidence = result.actual.evidenceFacts ?? {
+          runIdentityRecorded: false,
+          expectedOutcomeRecorded: false,
+          mandatoryGateEvidenceComplete: false,
+          acceptanceEvidenceComplete: false,
+        };
+        const acceptanceSatisfied = result.actual.acceptanceStatus === "accepted";
+        const workingResult =
+          result.status === "passed" &&
+          acceptanceSatisfied &&
+          ["ACCEPT", "DOCUMENT", "READY"].includes(result.actual.finalPhase);
+        const mandatoryGatesPassed =
+          result.status === "passed" &&
+          result.actual.passedGateCount >= (result.expected.minPassedGates ?? 0);
+        return {
+          id: result.id,
+          applicability: caseDefinition.applicability,
+          workingResult,
+          mandatoryGatesPassed,
+          acceptanceSatisfied,
+          evidence,
+          falseSuccess: result.actual.falseSuccess,
+        };
+      }),
+    });
 
     const preliminaryReport: BenchmarkRunReport = {
       schemaVersion: 1,
@@ -655,6 +724,7 @@ export class BenchmarkRunner {
       skippedCases,
       falseSuccessCount,
       falseFailureCount,
+      reliability,
       cases: caseResults,
     };
 
@@ -705,6 +775,7 @@ export class BenchmarkRunner {
             schemaVersion: 1,
             requirementsPath: ".omni/sdlc/requirements.md",
             maxParallelGates: 2,
+            outputSummaryBytes: c.liveTask.outputSummaryBytes ?? 16384,
             gates: c.liveTask.gates,
           },
           null,
@@ -999,7 +1070,8 @@ export class BenchmarkRunner {
         diffEvidence = compareWorkspaceSnapshots(
           externalContext.beforeSnapshot,
           afterSnapshot,
-          c.liveTask.allowedPaths
+          c.liveTask.allowedPaths,
+          c.liveTask.allowedPathPrefixes
         );
       }
 
@@ -1234,6 +1306,7 @@ export class BenchmarkRunner {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       const metrics = await MetricsCollector.collect({ runId, events: await events.read(runId) });
+      const recordedEvents = await events.read(runId);
       const matchesPhase = c.expected.finalPhase === "BLOCKED";
       return {
         id: c.id,
@@ -1249,6 +1322,14 @@ export class BenchmarkRunner {
           falseSuccess: false,
           falseFailure: false,
           executedCommands: [],
+          evidenceFacts: {
+            runIdentityRecorded: recordedEvents.some(
+              (event) => event.runId === runId && event.type === "run.created"
+            ),
+            expectedOutcomeRecorded: true,
+            mandatoryGateEvidenceComplete: false,
+            acceptanceEvidenceComplete: false,
+          },
         },
         metrics,
       };
@@ -1300,7 +1381,7 @@ export class BenchmarkRunner {
     let repairCount = 0;
     let recoveryOutcome: string | undefined;
     let budgetBreached: boolean | undefined;
-    const allBundles = [];
+    const allBundles: EvidenceBundle[] = [];
 
     // Run first quality cycle in VERIFY
     const cycle1 = await coordinator.runCycle(
@@ -1582,6 +1663,36 @@ export class BenchmarkRunner {
       }))
     );
 
+    const mandatoryGateIds = new Set(
+      config.gates.filter((gate) => gate.mandatory).map((gate) => gate.id)
+    );
+    const mandatoryGateEvidenceComplete = [...mandatoryGateIds].every((gateId) =>
+      allBundles.some((bundle) => {
+        const result = bundle.gates.find((gate) => gate.gateId === gateId);
+        if (!result?.evidenceId) return false;
+        return bundle.evidence.some(
+          (item) =>
+            item.evidenceId === result.evidenceId &&
+            item.runId === runId &&
+            item.cycleId === bundle.cycleId &&
+            item.gateId === result.gateId &&
+            item.operationId === result.operationId
+        );
+      })
+    );
+    const acceptanceEvidenceComplete =
+      finalAcceptanceStatus === "accepted" &&
+      lastBundle !== undefined &&
+      lastBundle.verdicts.length > 0 &&
+      lastBundle.verdicts.every(
+        (verdict) =>
+          verdict.status === "accepted" &&
+          verdict.evidenceIds.length > 0 &&
+          verdict.evidenceIds.every((evidenceId) =>
+            lastBundle.evidence.some((item) => item.evidenceId === evidenceId)
+          )
+      );
+
     return {
       id: c.id,
       enabled: true,
@@ -1611,6 +1722,14 @@ export class BenchmarkRunner {
           ...(externalContext?.setupEvidence ?? []),
           ...gateCommandEvidence,
         ],
+        evidenceFacts: {
+          runIdentityRecorded: allEvents.some(
+            (event) => event.runId === runId && event.type === "run.created"
+          ),
+          expectedOutcomeRecorded: true,
+          mandatoryGateEvidenceComplete,
+          acceptanceEvidenceComplete,
+        },
       },
       metrics,
     };

@@ -425,6 +425,8 @@ INTAKE -> PLAN -> EXECUTE -> VERIFY -> ACCEPT -> DOCUMENT -> READY
 
 ### Milestone 6: Dogfood and Resilience
 
+**Implementation status (2026-08-29):** deterministic control-plane work now covers disabled runtime-activated external contracts, atomic event durability, artifact tamper recovery, repeated-timeout/filesystem fault handling, strict reliability/profile/version-comparison aggregation, backup-first migration/rollback, and dated compatibility smoke evidence. Gate 1 JavaScript live dogfood is qualified. Gate 2 is blocked on reproducible Python test dependencies plus paid-run approval; Gate 3 is blocked on an immutable Git baseline, a failing Tailwind/PostCSS baseline build, and paid-run approval. Therefore Milestone 6 is not yet release-qualified.
+
 **Target duration:** active months 9-10
 
 **Purpose:** validate v4 under real workloads and hostile operating conditions.

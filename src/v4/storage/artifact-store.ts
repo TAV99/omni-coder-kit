@@ -20,7 +20,14 @@ export interface ArtifactVerificationInput {
 
 export type ArtifactVerification =
   | { readonly valid: true }
-  | { readonly valid: false; readonly reason: "missing" | "checksum-mismatch" | "path-escape" };
+  | {
+      readonly valid: false;
+      readonly reason: "missing" | "checksum-mismatch" | "path-escape" | "io-error";
+    };
+
+export interface ArtifactStoreFsHooks {
+  readonly beforeHashRead?: (filePath: string) => Promise<void> | void;
+}
 
 export interface ArtifactStore {
   record(input: ArtifactRecordInput): Promise<ArtifactRecord>;
@@ -28,7 +35,14 @@ export interface ArtifactStore {
 }
 
 export class FileArtifactStore implements ArtifactStore {
+  private readonly fsHooks?: ArtifactStoreFsHooks | undefined;
+
+  constructor(options?: { readonly fsHooks?: ArtifactStoreFsHooks | undefined }) {
+    this.fsHooks = options?.fsHooks;
+  }
+
   private async computeFileHashAndSize(filePath: string): Promise<{ sha256: string; sizeBytes: number }> {
+    await this.fsHooks?.beforeHashRead?.(filePath);
     const handle = await fs.open(filePath, "r");
     try {
       const stat = await handle.stat();
@@ -104,7 +118,10 @@ export class FileArtifactStore implements ArtifactStore {
       if (err.code === "ENOENT") {
         return { valid: false, reason: "missing" };
       }
-      return { valid: false, reason: "path-escape" };
+      return {
+        valid: false,
+        reason: err.code === "EIO" || err.code === "ENOSPC" ? "io-error" : "path-escape",
+      };
     }
   }
 }

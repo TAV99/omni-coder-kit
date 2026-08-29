@@ -97,6 +97,27 @@ test("codex-parser: non-zero exit returns failure even if result text exists", (
   assert.equal(stepResult.status, "failed");
 });
 
+test("codex-parser: non-zero exit without structured result returns failure", () => {
+  const proc: ProcessResult = {
+    stdout: "",
+    stderr: "network unavailable",
+    durationMs: 50,
+    termination: "exited",
+    exitCode: 1,
+    signal: null,
+  };
+
+  const stepResult = parseCodexExecution({
+    executionId: "exec-unstructured-nonzero",
+    process: proc,
+  });
+
+  assert.equal(stepResult.status, "failed");
+  if (stepResult.status === "failed") {
+    assert.equal(stepResult.failure.code, "CODEX_CLI_EXIT");
+  }
+});
+
 test("codex-parser: missing result text returns malformed output failure", () => {
   const proc: ProcessResult = {
     stdout: successJsonl,

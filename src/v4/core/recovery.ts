@@ -21,7 +21,7 @@ export async function recoverRun(
   }
 
   let state = replayRun(events);
-  if (state.phase === "READY" || state.phase === "BLOCKED" || state.phase === "CANCELLED") {
+  if (state.phase === "BLOCKED" || state.phase === "CANCELLED") {
     return { kind: "continue", state };
   }
 
@@ -102,6 +102,66 @@ export async function recoverRun(
         reason: resumeDecision.reason,
       };
     }
+  }
+
+  // Durable transitions do not make previously captured artifacts immutable.
+  // Re-verify every recorded artifact before trusting the replayed phase so a
+  // resume cannot advance from evidence whose bytes changed after capture.
+  for (const artifactEvent of events) {
+    if (artifactEvent.type !== "artifact.recorded") continue;
+
+    const successEvent = events.find(
+      (event): event is Extract<RunEvent, { type: "step.succeeded" }> =>
+        event.type === "step.succeeded" &&
+        event.payload.stepId === artifactEvent.payload.record.producerStepId &&
+        event.payload.result.artifacts.some(
+          (claim) => claim.artifactId === artifactEvent.payload.record.artifactId
+        )
+    );
+    const startEvent = successEvent
+      ? events.find(
+          (event): event is Extract<RunEvent, { type: "step.started" }> =>
+            event.type === "step.started" &&
+            event.payload.stepId === successEvent.payload.stepId &&
+            event.payload.operationId === successEvent.payload.operationId
+        )
+      : undefined;
+
+    if (!startEvent || startEvent.type !== "step.started" || !successEvent) {
+      continue;
+    }
+
+    const verification = await deps.artifacts.verify({
+      workspaceDir: startEvent.payload.workspaceDir,
+      record: artifactEvent.payload.record,
+    });
+    if (verification.valid) continue;
+
+    const reason = `Artifact verification failed during recovery: ${verification.reason}`;
+    const blockedEvent: RunEvent = {
+      schemaVersion: 1,
+      eventId: deps.newEventId(),
+      runId,
+      sequence: currentSeq + 1,
+      at: deps.now(),
+      type: "run.blocked",
+      payload: {
+        reason,
+        requiredAction: "Inspect workspace artifacts and rerun step",
+        causedByEventId: successEvent.eventId,
+      },
+    };
+    await deps.events.append(blockedEvent, currentSeq);
+    events = await deps.events.read(runId);
+    return {
+      kind: "blocked",
+      state: replayRun(events),
+      reason,
+    };
+  }
+
+  if (state.phase === "READY") {
+    return { kind: "continue", state };
   }
 
   // 2. step.succeeded without run.transitioned -> Roll forward if valid

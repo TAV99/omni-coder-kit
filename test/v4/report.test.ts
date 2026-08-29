@@ -58,6 +58,19 @@ const sampleReport: BenchmarkRunReport = {
   skippedCases: 1,
   falseSuccessCount: 0,
   falseFailureCount: 0,
+  reliability: {
+    schemaVersion: 1,
+    threshold: 0.9,
+    totalCaseCount: 2,
+    applicableTaskCount: 1,
+    reliableCompletionCount: 1,
+    reliableCompletionRate: 1,
+    falseSuccessCount: 0,
+    falseSuccessCaseIds: [],
+    evidenceCompleteCount: 1,
+    thresholdStatus: "passed",
+    unreliableCaseIds: [],
+  },
   cases: [
     {
       id: "case-01",
@@ -493,6 +506,7 @@ test("runner_reproducible_semantic_hash_twice", async () => {
       {
         id: "case-twice-01",
         enabled: true,
+        applicability: "applicable",
         projectKind: "fixture",
         fixturePath: "benchmarks/v4/fixtures/pass-all",
         adapter: "fake",

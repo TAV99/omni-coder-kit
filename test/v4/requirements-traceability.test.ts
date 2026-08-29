@@ -129,17 +129,17 @@ test("exact_name_matching_rejects_similar_names: proves AST ignores comments, st
   assert.equal(extractedExact.has("todo_exact_test"), false);
 });
 
-test("all_requirements_have_exact_named_tests: checks active exact test traceability for R1-R79", () => {
+test("all_requirements_have_exact_named_tests: checks active exact test traceability for R1-R98", () => {
   const rootDir = path.resolve(__dirname, "../../");
   const reqFilePath = path.join(rootDir, ".omni/sdlc/requirements.md");
   const content = fs.readFileSync(reqFilePath, "utf-8");
   const requirements = parseRequirementsMd(content);
 
-  assert.equal(requirements.length, 79, `Expected exactly 79 requirements, found ${requirements.length}`);
+  assert.equal(requirements.length, 98, `Expected exactly 98 requirements, found ${requirements.length}`);
   assert.deepEqual(
     requirements.map((requirement) => requirement.id),
-    Array.from({ length: 79 }, (_, index) => `R${index + 1}`),
-    "Requirements must remain uniquely ordered from R1 through R79"
+    Array.from({ length: 98 }, (_, index) => `R${index + 1}`),
+    "Requirements must remain uniquely ordered from R1 through R98"
   );
 
   const commandRequirements = requirements.filter((requirement) => requirement.isCommand);

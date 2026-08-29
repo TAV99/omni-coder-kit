@@ -15,9 +15,19 @@ const RepoRelativePathSchema = z
     "Path must be repository-relative"
   );
 
+const RepoRelativePrefixSchema = RepoRelativePathSchema.refine(
+  (value) => value !== ".",
+  "Path prefix must identify a bounded repository subdirectory"
+);
+
+const SetupProgramSchema = z.string().min(1).refine((value) => {
+  if (/^[A-Za-z0-9._-]+$/.test(value)) return true;
+  return value !== "." && RepoRelativePathSchema.safeParse(value).success;
+}, "Program must be a native executable name or safe repository-relative executable path");
+
 export const BenchmarkSetupCommandSchema = z
   .object({
-    program: z.string().regex(/^[A-Za-z0-9._-]+$/, "Program must be a native executable name"),
+    program: SetupProgramSchema,
     args: z.array(z.string()).readonly(),
     cwd: RepoRelativePathSchema,
     timeoutMs: z.number().int().positive(),
@@ -35,9 +45,13 @@ export const BenchmarkLiveTaskSchema = z
   .object({
     prompt: z.string().min(1),
     allowedPaths: z.array(RepoRelativePathSchema).min(1).readonly(),
+    allowedPathPrefixes: z.array(RepoRelativePrefixSchema).readonly().optional(),
     requiredCapabilities: z.array(CapabilitySchema).min(1).readonly(),
     sideEffect: z.literal("workspace-write"),
     timeoutMs: z.number().int().positive(),
+    outputSummaryBytes: z.number().int().positive().optional(),
+    requiredDependencyPolicy: z.enum(["clean-install", "existing-lockfile"]).optional(),
+    requiredToolchain: z.record(z.string(), z.string().min(1)).optional(),
     setupCommands: z.array(BenchmarkSetupCommandSchema).readonly(),
     requirements: z.array(BenchmarkRequirementSchema).min(1).readonly(),
     gates: z.array(GateDefinitionSchema).min(1).readonly(),
@@ -69,6 +83,7 @@ export const BenchmarkCaseSchema = z
       .string()
       .regex(/^[a-zA-Z0-9_-]+$/, "Case ID must be path-safe (alphanumeric, dash, underscore)"),
     enabled: z.boolean(),
+    applicability: z.enum(["applicable", "not-applicable"]),
     projectKind: z.enum(["omni", "javascript", "non-javascript", "unusual-tests", "fixture"]),
     fixturePath: z.string().min(1).optional(),
     repositoryPath: z.string().min(1).optional(),

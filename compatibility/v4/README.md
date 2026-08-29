@@ -6,9 +6,9 @@ This directory contains the machine-readable compatibility matrix (`hosts.json`)
 
 | Host | Binary | Baseline Version | Help / Flags Verified | Contract Test Gate | Live Smoke Gate | Current Status | Known Limitations |
 |---|---|---|---|---|---|---|---|
-| **Codex** | `codex` | `0.147.0` | `--json`, `--strict-config`, `--ignore-user-config`, `--output-schema`, `--output-last-message`, `--sandbox`, `--approve-for-me`, `--cd` | **PASSED** (`test/v4/codex-adapter.test.ts`) | Opt-in required (`OMNI_V4_ALLOW_MODEL_COST=1`) | `experimental` | Requires `codex exec resume` for session continuity; model output strictly validated from result file. |
-| **Claude Code** | `claude` | `2.1.185` | `--print`, `--output-format`, `--json-schema`, `--permission-mode`, `--allowedTools`, `--session-id` | **PASSED** (`test/v4/claude-adapter.test.ts`) | Opt-in required (`OMNI_V4_ALLOW_MODEL_COST=1`) | `experimental` | Tool capabilities derived dynamically from active tool policy (`writeTools`, `shellPatterns`). |
-| **Antigravity** | `agy` | `1.1.16` | `--print`, `--output-format`, `--json-schema`, `--mode`, `--sandbox`, `--add-dir`, `--print-timeout` | **PASSED** (`test/v4/antigravity-adapter.test.ts`) | Opt-in required (`OMNI_V4_ALLOW_MODEL_COST=1`) | `experimental` | Requires outer `timeoutMs > 30000` and native print timeout strictly less than request deadline. |
+| **Codex** | `codex` | `0.150.1` | `--json`, `--strict-config`, `--ignore-user-config`, `--output-schema`, `--output-last-message`, `--skip-git-repo-check`, `--sandbox`, `--approve-for-me`, `--cd` | **PASSED** | **PASSED** on `win32-x64` | `first-class` on `win32-x64` | Requires exact installed version/platform match; structured result and workspace mutation are verified independently. |
+| **Claude Code** | `claude` | `2.1.185` | `--print`, `--output-format`, `--json-schema`, `--permission-mode`, `--allowedTools`, `--session-id` | Not promoted | Deferred: account unavailable | `experimental` | Authentication is required before a fresh live qualification. |
+| **Antigravity** | `agy` | `1.1.16` | `--print`, `--output-format`, `--json-schema`, `--mode`, `--sandbox`, `--add-dir`, `--print-timeout` | Not promoted | Not qualified end-to-end | `experimental` | Do not infer promotion from probe success or partial workspace mutation. |
 
 ---
 
@@ -36,3 +36,5 @@ An adapter is classified into one of four statuses:
 
 > [!IMPORTANT]
 > Editing `hosts.json` alone does not promote an adapter. Any promotion must be accompanied by exact dated test execution logs, model-cost approval, and platform verification records.
+
+Smoke evidence is produced separately as dated JSON and Markdown. Promotion validation rejects stale host/version/platform mismatches and never edits `hosts.json` automatically.

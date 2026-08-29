@@ -19,6 +19,7 @@ test("strict_versioned_manifest", async () => {
       {
         id: "case-01",
         enabled: true,
+        applicability: "applicable",
         projectKind: "fixture",
         fixturePath: "benchmarks/v4/fixtures/pass-all",
         adapter: "fake",
@@ -41,6 +42,7 @@ test("strict_versioned_manifest", async () => {
   assert.equal(loaded.schemaVersion, 1);
   assert.equal(loaded.cases.length, 1);
   assert.equal(loaded.cases[0]?.id, "case-01");
+  assert.equal(loaded.cases[0]?.applicability, "applicable");
 
   // Adversarial: Invalid schemaVersion rejected
   const badVersion = { ...manifestData, schemaVersion: 2 };
@@ -65,6 +67,7 @@ test("strict_versioned_manifest", async () => {
       {
         id: "case-01",
         enabled: true,
+        applicability: "applicable",
         projectKind: "fixture",
         adapter: "fake",
         expected: { finalPhase: "DOCUMENT", acceptanceStatus: "accepted" },
@@ -73,6 +76,7 @@ test("strict_versioned_manifest", async () => {
       {
         id: "case-01",
         enabled: true,
+        applicability: "applicable",
         projectKind: "fixture",
         adapter: "fake",
         expected: { finalPhase: "DOCUMENT", acceptanceStatus: "accepted" },
@@ -93,6 +97,7 @@ test("strict_versioned_manifest", async () => {
       {
         id: "case-02",
         enabled: true,
+        applicability: "applicable",
         projectKind: "fixture",
         fixturePath: "../../escape/path",
         adapter: "fake",
@@ -202,4 +207,14 @@ test("future_real_repo_slots", async () => {
   assert.ok(unusualSlot.baselineNotes, "Unusual tests slot must declare baseline notes");
   assert.ok(unusualSlot.gateMapping && Object.keys(unusualSlot.gateMapping).length > 0);
   assert.ok(unusualSlot.activationChecklist && unusualSlot.activationChecklist.length > 0);
+
+  for (const slot of [nonJsSlot, unusualSlot]) {
+    assert.equal(slot.adapter, "codex");
+    assert.equal(slot.liveModelCostOptIn, true);
+    assert.equal(slot.liveTask?.sideEffect, "workspace-write");
+    assert.ok(slot.liveTask?.requirements.length);
+    assert.ok(slot.liveTask?.gates.length);
+    assert.equal(slot.liveTask?.requiredDependencyPolicy, "clean-install");
+  }
+  assert.equal(unusualSlot.liveTask?.outputSummaryBytes, 8192);
 });

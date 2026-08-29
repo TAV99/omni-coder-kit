@@ -90,3 +90,36 @@ test("artifact-store: rejects escaping paths", async () => {
     await fs.rm(tmpdir, { recursive: true, force: true });
   }
 });
+
+test("artifact-store: reports filesystem I/O failure separately from path escape", async () => {
+  const tmpdir = await fs.mkdtemp(path.join(os.tmpdir(), "omni-v4-artifact-eio-"));
+  try {
+    await fs.writeFile(path.join(tmpdir, "artifact.txt"), "trusted", "utf-8");
+    const baselineStore = new FileArtifactStore();
+    const record = await baselineStore.record({
+      workspaceDir: tmpdir,
+      runId: asRunId("run-eio"),
+      producerStepId: asStepId("step-eio"),
+      claim: {
+        artifactId: asArtifactId("artifact-eio"),
+        kind: "file",
+        relativePath: "artifact.txt",
+      },
+      recordedAt: "2026-08-20T10:00:00.000Z",
+    });
+
+    const faultStore = new FileArtifactStore({
+      fsHooks: {
+        beforeHashRead: () => {
+          const err = new Error("filesystem unavailable");
+          (err as NodeJS.ErrnoException).code = "EIO";
+          throw err;
+        },
+      },
+    });
+    const verification = await faultStore.verify({ workspaceDir: tmpdir, record });
+    assert.deepEqual(verification, { valid: false, reason: "io-error" });
+  } finally {
+    await fs.rm(tmpdir, { recursive: true, force: true });
+  }
+});

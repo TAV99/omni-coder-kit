@@ -86,7 +86,22 @@ function isPortableRelativePath(relativePath: string): boolean {
 function isUnsafeTrackedPath(relativePath: string): boolean {
   const segments = relativePath.toLowerCase().split("/");
   const basename = segments.at(-1) ?? "";
-  if (segments.some((segment) => [".git", ".omni", "node_modules", "dist", "coverage"].includes(segment))) {
+  if (
+    segments.some((segment) =>
+      [
+        ".git",
+        ".omni",
+        "node_modules",
+        "dist",
+        "coverage",
+        ".venv",
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+      ].includes(segment)
+    )
+  ) {
     return true;
   }
   if (basename.startsWith(".env") && basename !== ".env.example") {
@@ -209,6 +224,11 @@ const SNAPSHOT_IGNORED_DIRECTORIES = new Set([
   "node_modules",
   "dist",
   "coverage",
+  ".venv",
+  "__pycache__",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".mypy_cache",
 ]);
 
 function shouldIgnoreSnapshotPath(relativePath: string, isDirectory: boolean): boolean {
@@ -258,10 +278,22 @@ export async function captureWorkspaceSnapshot(root: string): Promise<WorkspaceS
   return { root: canonicalRoot, entries };
 }
 
-function isAllowedMutation(relativePath: string, allowedPaths: readonly string[]): boolean {
-  return allowedPaths.some(
-    (allowed) => relativePath === allowed.replace(/\\/g, "/").replace(/\/+$/, "")
-  );
+function normalizeScopePath(value: string): string {
+  return value.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+function isAllowedMutation(
+  relativePath: string,
+  allowedPaths: readonly string[],
+  allowedPathPrefixes: readonly string[]
+): boolean {
+  if (allowedPaths.some((allowed) => relativePath === normalizeScopePath(allowed))) {
+    return true;
+  }
+  return allowedPathPrefixes.some((allowedPrefix) => {
+    const prefix = normalizeScopePath(allowedPrefix);
+    return relativePath.startsWith(`${prefix}/`);
+  });
 }
 
 const SECRET_RULES = [
@@ -274,7 +306,8 @@ const SECRET_RULES = [
 export function compareWorkspaceSnapshots(
   before: WorkspaceSnapshot,
   after: WorkspaceSnapshot,
-  allowedPaths: readonly string[]
+  allowedPaths: readonly string[],
+  allowedPathPrefixes: readonly string[] = []
 ): WorkspaceDiffEvidence {
   const beforeMap = new Map(before.entries.map((entry) => [entry.relativePath, entry]));
   const afterMap = new Map(after.entries.map((entry) => [entry.relativePath, entry]));
@@ -299,7 +332,7 @@ export function compareWorkspaceSnapshots(
       beforeSha256: prior?.sha256 ?? null,
       afterSha256: current?.sha256 ?? null,
     });
-    if (!isAllowedMutation(relativePath, allowedPaths)) {
+    if (!isAllowedMutation(relativePath, allowedPaths, allowedPathPrefixes)) {
       outsidePaths.push(relativePath);
     }
 
