@@ -27,14 +27,36 @@ import { loadRequirements } from "../quality/requirements";
 import { recoverRun } from "../core/recovery";
 import { createDefaultPolicy } from "../policy/default-policy";
 import { asEventId, asRunId, asStepId } from "../contracts/ids";
-import { asGateId, asQualityCycleId, asRequirementId, type GateDefinition } from "../contracts/quality";
+import {
+  asGateId,
+  asQualityCycleId,
+  asRequirementId,
+  truncateUtf8Bytes,
+  type GateDefinition,
+} from "../contracts/quality";
 import type { RunMetrics } from "../metrics/contracts";
-import type { ProcessRunner } from "../process/types";
+import type { ProcessRequest, ProcessResult, ProcessRunner } from "../process/types";
 import type { RunPhase } from "../contracts/run";
 import type { RunEvent } from "../contracts/event";
 import { FakeAdapter } from "../testing/fake-adapter";
 import type { AgentAdapter } from "../contracts/adapter";
+import { StepResultSchema } from "../contracts/step-result";
+import type { NativeExecutionMetadata } from "../contracts/step-result";
 import { computeSemanticHash } from "./report";
+import {
+  loadExternalBindings,
+  requireExternalCaseBinding,
+  type ExternalCaseBinding,
+} from "./external-binding";
+import {
+  captureWorkspaceSnapshot,
+  compareWorkspaceSnapshots,
+  stagePinnedTrackedTree,
+  WorkspaceDiffViolation,
+  type ExternalSourceMetadata,
+  type WorkspaceDiffEvidence,
+  type WorkspaceSnapshot,
+} from "./external-workspace";
 
 export interface BenchmarkCaseResult {
   readonly id: string;
@@ -49,9 +71,21 @@ export interface BenchmarkCaseResult {
     readonly repairCount: number;
     readonly falseSuccess: boolean;
     readonly falseFailure: boolean;
+    readonly falseFailureClassified?: boolean | undefined;
     readonly recoveryOutcome?: string | undefined;
     readonly budgetBreached?: boolean | undefined;
     readonly executedCommands?: readonly string[] | undefined;
+    readonly source?: ExternalSourceMetadata | undefined;
+    readonly modifiedFiles?: readonly string[] | undefined;
+    readonly diffFingerprint?: string | undefined;
+    readonly secretFindings?: readonly { readonly path: string; readonly ruleId: string }[] | undefined;
+    readonly adapterNative?: NativeExecutionMetadata | undefined;
+    readonly adapterOutcome?: {
+      readonly status: "succeeded" | "failed" | "blocked" | "cancelled" | "invalid";
+      readonly failureCode?: string | undefined;
+      readonly failureSignature?: string | undefined;
+    } | undefined;
+    readonly commandEvidence?: readonly BenchmarkCommandEvidence[] | undefined;
   };
   readonly metrics?: RunMetrics | undefined;
   readonly error?: string | undefined;
@@ -68,6 +102,7 @@ export interface BenchmarkRunReport {
   readonly manifestHash: string;
   readonly configHash: string;
   readonly semanticHash: string;
+  readonly externalBindingHash?: string | undefined;
   readonly gitMetadata: GitMetadata;
   readonly environment: {
     readonly platform: string;
@@ -105,6 +140,67 @@ export interface BenchmarkRunnerOptions {
   readonly workspaceFactory?: ((caseId: string) => Promise<{ path: string; cleanup: () => Promise<void> }>) | undefined;
   readonly outputDir?: string | undefined;
   readonly now?: (() => string) | undefined;
+  readonly activateCaseIds?: readonly string[] | undefined;
+  readonly externalBindingPath?: string | undefined;
+}
+
+export interface BenchmarkCommandEvidence {
+  readonly phase: "setup" | "gate";
+  readonly command: readonly string[];
+  readonly cwd: string;
+  readonly timeoutMs: number;
+  readonly termination: ProcessResult["termination"];
+  readonly exitCode: number | null;
+  readonly stdoutSummary: string;
+  readonly stderrSummary: string;
+  readonly stdoutSha256: string;
+  readonly stderrSha256: string;
+  readonly evidenceId?: string | undefined;
+  readonly artifactIds: readonly string[];
+}
+
+interface ExternalExecutionContext {
+  readonly source: ExternalSourceMetadata;
+  readonly beforeSnapshot: WorkspaceSnapshot;
+  readonly setupEvidence: readonly BenchmarkCommandEvidence[];
+}
+
+class ExternalSetupFailure extends QualityError {
+  readonly evidence: readonly BenchmarkCommandEvidence[];
+
+  constructor(evidence: readonly BenchmarkCommandEvidence[]) {
+    super(
+      "BENCHMARK_WORKSPACE_UNSAFE",
+      "[BENCHMARK_EXTERNAL_SETUP_FAILED] Typed setup command did not exit successfully"
+    );
+    this.evidence = evidence;
+  }
+}
+
+function sha256Text(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function commandEvidenceFromResult(
+  phase: "setup" | "gate",
+  request: Pick<ProcessRequest, "command" | "args" | "cwd" | "timeoutMs">,
+  result: ProcessResult,
+  workspaceDir: string
+): BenchmarkCommandEvidence {
+  const relativeCwd = path.relative(workspaceDir, request.cwd).replace(/\\/g, "/") || ".";
+  return {
+    phase,
+    command: [request.command, ...request.args],
+    cwd: relativeCwd,
+    timeoutMs: request.timeoutMs,
+    termination: result.termination,
+    exitCode: result.exitCode,
+    stdoutSummary: truncateUtf8Bytes(result.stdout, 16384),
+    stderrSummary: truncateUtf8Bytes(result.stderr, 16384),
+    stdoutSha256: sha256Text(result.stdout),
+    stderrSha256: sha256Text(result.stderr),
+    artifactIds: [],
+  };
 }
 
 export function getGitMetadata(repoRoot: string): GitMetadata {
@@ -320,6 +416,24 @@ export class BenchmarkRunner {
       this.options.manifestPath
     );
 
+    const requestedActivations = this.options.activateCaseIds ?? [];
+    const activationSet = new Set(requestedActivations);
+    if (activationSet.size !== requestedActivations.length) {
+      throw new QualityError(
+        "BENCHMARK_MANIFEST_INVALID",
+        "[BENCHMARK_ACTIVATION_INVALID] Activation case IDs must be unique"
+      );
+    }
+    const manifestCaseIds = new Set(manifest.cases.map((item) => item.id));
+    for (const caseId of activationSet) {
+      if (!manifestCaseIds.has(caseId)) {
+        throw new QualityError(
+          "BENCHMARK_MANIFEST_INVALID",
+          `[BENCHMARK_ACTIVATION_INVALID] Unknown benchmark case ID '${caseId}'`
+        );
+      }
+    }
+
     let manifestRaw = "";
     try {
       manifestRaw = await fs.readFile(resolvedManifestPath, "utf-8");
@@ -328,6 +442,20 @@ export class BenchmarkRunner {
     }
 
     const manifestHash = crypto.createHash("sha256").update(manifestRaw).digest("hex");
+    let externalBindingHash: string | undefined;
+    if (this.options.externalBindingPath) {
+      try {
+        const bindingBytes = await fs.readFile(
+          path.resolve(this.options.repoRoot, this.options.externalBindingPath)
+        );
+        externalBindingHash = crypto.createHash("sha256").update(bindingBytes).digest("hex");
+      } catch {
+        throw new QualityError(
+          "BENCHMARK_WORKSPACE_UNSAFE",
+          "[BENCHMARK_EXTERNAL_BINDING_INVALID] Binding file is missing or unreadable"
+        );
+      }
+    }
     // Relative config hash without absolute repoRoot
     const configHash = crypto
       .createHash("sha256")
@@ -335,6 +463,8 @@ export class BenchmarkRunner {
         JSON.stringify({
           schemaVersion: 1,
           allowModelCost: Boolean(this.options.allowModelCost),
+          activateCaseIds: [...activationSet].sort(),
+          externalBindingHash: externalBindingHash ?? null,
         })
       )
       .digest("hex");
@@ -351,7 +481,8 @@ export class BenchmarkRunner {
     let falseFailureCount = 0;
 
     for (const c of manifest.cases) {
-      if (!c.enabled) {
+      const isEnabled = c.enabled || activationSet.has(c.id);
+      if (!isEnabled) {
         skippedCases++;
         caseResults.push({
           id: c.id,
@@ -382,7 +513,7 @@ export class BenchmarkRunner {
         skippedCases++;
         caseResults.push({
           id: c.id,
-          enabled: true,
+          enabled: isEnabled,
           status: "skipped",
           reason: "[LIVE_BENCHMARK_NOT_APPROVED] Live model cost is not approved (requires manifest liveModelCostOptIn=true, process.env.OMNI_V4_ALLOW_MODEL_COST=1, and runner allowModelCost=true)",
           expected: c.expected,
@@ -414,10 +545,40 @@ export class BenchmarkRunner {
         };
       }
 
+      let externalSource: ExternalSourceMetadata | undefined;
+      let setupEvidence: readonly BenchmarkCommandEvidence[] = [];
       try {
-        await this.stageWorkspace(c, tmpWorkspace);
+        let externalBinding: ExternalCaseBinding | undefined;
+        if (
+          c.projectKind === "javascript" ||
+          c.projectKind === "non-javascript" ||
+          c.projectKind === "unusual-tests"
+        ) {
+          if (!this.options.externalBindingPath) {
+            throw new QualityError(
+              "BENCHMARK_WORKSPACE_UNSAFE",
+              "[BENCHMARK_EXTERNAL_BINDING_MISSING] Activated external case requires a local binding file"
+            );
+          }
+          const bindings = await loadExternalBindings(
+            path.resolve(this.options.repoRoot, this.options.externalBindingPath)
+          );
+          externalBinding = requireExternalCaseBinding(bindings, c.id);
+        }
 
-        const runResult = await this.executeCase(c, tmpWorkspace);
+        const source = await this.stageWorkspace(c, tmpWorkspace, externalBinding);
+        externalSource = source;
+        let externalContext: ExternalExecutionContext | undefined;
+        if (source && c.liveTask) {
+          setupEvidence = await this.runExternalSetup(c, tmpWorkspace);
+          externalContext = {
+            source,
+            beforeSnapshot: await captureWorkspaceSnapshot(tmpWorkspace),
+            setupEvidence,
+          };
+        }
+
+        const runResult = await this.executeCase(c, tmpWorkspace, externalContext);
         caseResults.push(runResult);
 
         if (runResult.status === "passed") {
@@ -437,9 +598,12 @@ export class BenchmarkRunner {
       } catch (err: unknown) {
         failedCases++;
         const errMsg = err instanceof Error ? err.message : String(err);
+        if (err instanceof ExternalSetupFailure) {
+          setupEvidence = err.evidence;
+        }
         caseResults.push({
           id: c.id,
-          enabled: true,
+          enabled: isEnabled,
           status: "failed",
           error: errMsg,
           expected: c.expected,
@@ -450,7 +614,11 @@ export class BenchmarkRunner {
             repairCount: 0,
             falseSuccess: false,
             falseFailure: false,
-            executedCommands: [],
+            executedCommands: setupEvidence.map((item) => item.command.join(" ")),
+            commandEvidence: setupEvidence,
+            source: externalSource
+              ? { ...externalSource, repositoryRoot: "<external-root>" }
+              : undefined,
           },
         });
       } finally {
@@ -469,6 +637,7 @@ export class BenchmarkRunner {
       manifestHash,
       configHash,
       semanticHash: "",
+      ...(externalBindingHash ? { externalBindingHash } : {}),
       gitMetadata,
       environment: {
         platform: process.platform,
@@ -497,10 +666,54 @@ export class BenchmarkRunner {
     };
   }
 
-  private async stageWorkspace(c: BenchmarkCase, tmpWorkspace: string): Promise<void> {
+  private async stageWorkspace(
+    c: BenchmarkCase,
+    tmpWorkspace: string,
+    externalBinding?: ExternalCaseBinding
+  ): Promise<ExternalSourceMetadata | undefined> {
     const repoRoot = path.resolve(this.options.repoRoot);
 
-    if (c.projectKind === "fixture" && c.fixturePath) {
+    if (externalBinding) {
+      if (!c.liveTask) {
+        throw new QualityError(
+          "BENCHMARK_WORKSPACE_UNSAFE",
+          "[BENCHMARK_EXTERNAL_CONTRACT_MISSING] External case must declare liveTask"
+        );
+      }
+      const source = await stagePinnedTrackedTree(externalBinding, tmpWorkspace);
+      const sdlcDir = path.join(tmpWorkspace, ".omni", "sdlc");
+      const v4Dir = path.join(tmpWorkspace, ".omni", "v4");
+      await fs.mkdir(sdlcDir, { recursive: true });
+      await fs.mkdir(v4Dir, { recursive: true });
+
+      const requirementLines = c.liveTask.requirements.map((requirement) => {
+        const gate = c.liveTask!.gates.find((candidate) =>
+          candidate.requirementIds.includes(requirement.id as never)
+        );
+        const strategy = gate ? [gate.command, ...gate.args].join(" ") : "agent";
+        return `- [ ] ${requirement.id} | ${requirement.text} | test: ${strategy}`;
+      });
+      await fs.writeFile(
+        path.join(sdlcDir, "requirements.md"),
+        `# External Benchmark Requirements\n${requirementLines.join("\n")}\n`,
+        "utf-8"
+      );
+      await fs.writeFile(
+        path.join(v4Dir, "quality.json"),
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            requirementsPath: ".omni/sdlc/requirements.md",
+            maxParallelGates: 2,
+            gates: c.liveTask.gates,
+          },
+          null,
+          2
+        ),
+        "utf-8"
+      );
+      return source;
+    } else if (c.projectKind === "fixture" && c.fixturePath) {
       const srcFixture = path.resolve(repoRoot, c.fixturePath);
       await copyDirectoryContained(srcFixture, tmpWorkspace, repoRoot, tmpWorkspace);
     } else if (c.projectKind === "omni") {
@@ -659,11 +872,44 @@ export class BenchmarkRunner {
         await copyDirectoryContained(srcRepo, tmpWorkspace, repoRoot, tmpWorkspace);
       }
     }
+    return undefined;
+  }
+
+  private async runExternalSetup(
+    c: BenchmarkCase,
+    workspaceDir: string
+  ): Promise<readonly BenchmarkCommandEvidence[]> {
+    if (!c.liveTask) return [];
+    const runner = this.options.processRunner ?? new NodeProcessRunner();
+    const evidence: BenchmarkCommandEvidence[] = [];
+    for (const command of c.liveTask.setupCommands) {
+      const cwd = path.resolve(workspaceDir, command.cwd);
+      const relativeCwd = path.relative(workspaceDir, cwd);
+      if (relativeCwd.startsWith("..") || path.isAbsolute(relativeCwd)) {
+        throw new QualityError(
+          "BENCHMARK_WORKSPACE_UNSAFE",
+          "[BENCHMARK_EXTERNAL_SETUP_UNSAFE] Setup cwd escapes the owned workspace"
+        );
+      }
+      const request = {
+        command: command.program,
+        args: command.args,
+        cwd,
+        timeoutMs: command.timeoutMs,
+      } satisfies ProcessRequest;
+      const result = await runner.run(request);
+      evidence.push(commandEvidenceFromResult("setup", request, result, workspaceDir));
+      if (result.termination !== "exited" || result.exitCode !== 0) {
+        throw new ExternalSetupFailure(evidence);
+      }
+    }
+    return evidence;
   }
 
   private async executeCase(
     c: BenchmarkCase,
-    workspaceDir: string
+    workspaceDir: string,
+    externalContext?: ExternalExecutionContext
   ): Promise<BenchmarkCaseResult> {
     const runId = asRunId(`run-bm-${c.id}`);
     const events = new FileEventStore({ projectDir: workspaceDir });
@@ -671,6 +917,12 @@ export class BenchmarkRunner {
 
     // Handle adapter resolution and live operation execution seam
     let adapter: AgentAdapter;
+    let adapterNative: NativeExecutionMetadata | undefined;
+    let adapterCliVersion: string | undefined;
+    let adapterOutcome: BenchmarkCaseResult["actual"]["adapterOutcome"];
+    let adapterExecutionAttempted = false;
+    let diffEvidence: WorkspaceDiffEvidence | undefined;
+    try {
     if (c.adapter === "fake") {
       adapter = new FakeAdapter({ outcomes: [] });
     } else {
@@ -682,25 +934,133 @@ export class BenchmarkRunner {
           `[LIVE_ADAPTER_UNAVAILABLE] No live adapter configured for ${c.adapter}`
         );
       }
+      const adapterProbe = await adapter.probe();
+      if (!adapterProbe.available) {
+        throw new QualityError(
+          "BENCHMARK_WORKSPACE_UNSAFE",
+          `[LIVE_ADAPTER_UNAVAILABLE] Adapter ${c.adapter} is not available`
+        );
+      }
+      const missingCapabilities = (c.liveTask?.requiredCapabilities ?? []).filter(
+        (capability) => !adapterProbe.capabilities.includes(capability)
+      );
+      if (missingCapabilities.length > 0) {
+        throw new QualityError(
+          "BENCHMARK_WORKSPACE_UNSAFE",
+          `[LIVE_ADAPTER_CAPABILITY_MISSING] Adapter ${c.adapter} lacks required capabilities: ${missingCapabilities.join(", ")}`
+        );
+      }
+      adapterCliVersion = adapterProbe.version;
       // Execute the live adapter seam operation - record call attempt at exact boundary before await
+      adapterExecutionAttempted = true;
       this.modelCallCount++;
-      await adapter.execute(
+      const operationId = `live-exec-${c.id}`;
+      const rawAdapterResult = await adapter.execute(
         {
           runId,
           stepId: asStepId("s-live-exec"),
           phase: "EXECUTE",
-          operationId: `live-exec-${c.id}`,
+          operationId,
           workspaceDir,
-          prompt: "Execute benchmark step",
-          requiredCapabilities: [],
-          sideEffect: "read-only",
-          timeoutMs: 60000,
+          prompt: c.liveTask?.prompt ?? "Execute benchmark step",
+          requiredCapabilities: c.liveTask?.requiredCapabilities ?? [],
+          sideEffect: c.liveTask?.sideEffect ?? "read-only",
+          timeoutMs: c.liveTask?.timeoutMs ?? 60000,
         },
         {
           signal: new AbortController().signal,
           elevatedPermissions: false,
         }
       );
+
+      const parsedAdapterResult = StepResultSchema.safeParse(rawAdapterResult);
+      if (parsedAdapterResult.success) {
+        adapterNative = {
+          ...parsedAdapterResult.data.native,
+          ...(adapterCliVersion ? { cliVersion: adapterCliVersion } : {}),
+        };
+        if (Object.keys(adapterNative).length === 0) {
+          adapterNative = undefined;
+        }
+        adapterOutcome =
+          parsedAdapterResult.data.status === "failed"
+            ? {
+                status: "failed",
+                failureCode: parsedAdapterResult.data.failure.code,
+                failureSignature: parsedAdapterResult.data.failure.signature,
+              }
+            : { status: parsedAdapterResult.data.status };
+      } else {
+        adapterOutcome = { status: "invalid" };
+      }
+
+      if (externalContext && c.liveTask) {
+        const afterSnapshot = await captureWorkspaceSnapshot(workspaceDir);
+        diffEvidence = compareWorkspaceSnapshots(
+          externalContext.beforeSnapshot,
+          afterSnapshot,
+          c.liveTask.allowedPaths
+        );
+      }
+
+      if (!parsedAdapterResult.success) {
+        throw new QualityError(
+          "BENCHMARK_WORKSPACE_UNSAFE",
+          "[BENCHMARK_ADAPTER_RESULT_INVALID] Live adapter returned a schema-invalid result"
+        );
+      }
+      if (parsedAdapterResult.data.executionId !== operationId) {
+        throw new QualityError(
+          "BENCHMARK_WORKSPACE_UNSAFE",
+          "[BENCHMARK_ADAPTER_EXECUTION_MISMATCH] Live adapter result is not correlated to the requested operation"
+        );
+      }
+      if (parsedAdapterResult.data.status !== "succeeded") {
+        throw new QualityError(
+          "BENCHMARK_WORKSPACE_UNSAFE",
+          `[BENCHMARK_ADAPTER_NOT_SUCCEEDED] Live adapter ended with status '${parsedAdapterResult.data.status}'`
+        );
+      }
+      if (externalContext && c.liveTask) {
+        if (!diffEvidence || diffEvidence.modifiedFiles.length === 0) {
+          throw new QualityError(
+            "BENCHMARK_WORKSPACE_UNSAFE",
+            "[BENCHMARK_EXTERNAL_MUTATION_REQUIRED] Adapter reported success without a required source mutation"
+          );
+        }
+      }
+    }
+    } catch (err: unknown) {
+      if (err instanceof WorkspaceDiffViolation) {
+        diffEvidence = err.evidence;
+      }
+      const errMsg = err instanceof Error ? err.message : String(err);
+      return {
+        id: c.id,
+        enabled: true,
+        status: "failed",
+        error: errMsg,
+        expected: c.expected,
+        actual: {
+          finalPhase: "ERROR",
+          acceptanceStatus: "failed",
+          passedGateCount: 0,
+          repairCount: 0,
+          falseSuccess: false,
+          falseFailure: false,
+          falseFailureClassified: !adapterExecutionAttempted,
+          executedCommands: externalContext?.setupEvidence.map((item) => item.command.join(" ")) ?? [],
+          commandEvidence: externalContext?.setupEvidence ?? [],
+          source: externalContext
+            ? { ...externalContext.source, repositoryRoot: "<external-root>" }
+            : undefined,
+          modifiedFiles: diffEvidence?.modifiedFiles,
+          diffFingerprint: diffEvidence?.patchSha256,
+          secretFindings: diffEvidence?.secretFindings,
+          adapterNative,
+          adapterOutcome,
+        },
+      };
     }
 
     // 1. Initial run.created and lifecycle transition events reaching VERIFY phase
@@ -900,7 +1260,9 @@ export class BenchmarkRunner {
 
     const registry = new GateRegistry(config, reqs);
     const baseProcessRunner = this.options.processRunner ?? new NodeProcessRunner();
-    const executedCommands: string[] = [];
+    const executedCommands: string[] = externalContext
+      ? externalContext.setupEvidence.map((item) => item.command.join(" "))
+      : [];
     const recordingRunner: ProcessRunner = {
       run: async (req) => {
         const cmdStr =
@@ -1203,6 +1565,23 @@ export class BenchmarkRunner {
       ? `[BENCHMARK_EXPECTATION_MISMATCH] ${mismatches.join("; ")}`
       : undefined;
 
+    const gateCommandEvidence: BenchmarkCommandEvidence[] = allBundles.flatMap((bundle) =>
+      bundle.evidence.map((item) => ({
+        phase: "gate" as const,
+        command: item.command,
+        cwd: path.relative(workspaceDir, item.cwd).replace(/\\/g, "/") || ".",
+        timeoutMs: item.timeoutMs,
+        termination: item.termination,
+        exitCode: item.exitCode,
+        stdoutSummary: item.stdoutSummary,
+        stderrSummary: item.stderrSummary,
+        stdoutSha256: item.stdoutSha256,
+        stderrSha256: item.stderrSha256,
+        evidenceId: item.evidenceId,
+        artifactIds: item.artifactIds,
+      }))
+    );
+
     return {
       id: c.id,
       enabled: true,
@@ -1220,6 +1599,18 @@ export class BenchmarkRunner {
         recoveryOutcome,
         budgetBreached,
         executedCommands,
+        source: externalContext
+          ? { ...externalContext.source, repositoryRoot: "<external-root>" }
+          : undefined,
+        modifiedFiles: diffEvidence?.modifiedFiles,
+        diffFingerprint: diffEvidence?.patchSha256,
+        secretFindings: diffEvidence?.secretFindings,
+        adapterNative,
+        adapterOutcome,
+        commandEvidence: [
+          ...(externalContext?.setupEvidence ?? []),
+          ...gateCommandEvidence,
+        ],
       },
       metrics,
     };

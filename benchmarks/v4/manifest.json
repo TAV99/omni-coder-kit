@@ -204,26 +204,104 @@
       "enabled": false,
       "projectKind": "javascript",
       "repositoryPath": "external/sample-js-repo",
-      "adapter": "fake",
-      "liveModelCostOptIn": false,
+      "adapter": "codex",
+      "liveModelCostOptIn": true,
       "expected": {
         "finalPhase": "DOCUMENT",
-        "acceptanceStatus": "accepted"
+        "acceptanceStatus": "accepted",
+        "minPassedGates": 3,
+        "falseSuccess": false,
+        "falseFailure": false
       },
-      "tags": ["future-slot", "javascript"],
-      "description": "Future slot for full-stack JavaScript repository dogfood",
-      "baselineNotes": "Requires Node 20+, express/react dependencies, and npm test baseline pass",
+      "tags": ["future-slot", "javascript", "external-dogfood", "codex"],
+      "description": "Runtime-activated external JavaScript dogfood on a pinned local repository",
+      "baselineNotes": "Requires a clean pinned Git revision, Node 20+, package-lock.json, and all baseline gates passing",
       "gateMapping": {
         "build": "npm run build",
         "test": "npm test",
-        "lint": "npm run lint"
+        "typecheck": "npm run typecheck"
       },
       "activationChecklist": [
         "Clone target repository to local path",
         "Map package.json scripts to quality.json gates",
         "Verify baseline test passing rate",
-        "Enable case in manifest"
-      ]
+        "Activate the exact case through the runtime override"
+      ],
+      "liveTask": {
+        "prompt": "Change package.json so npm test runs Vitest once in deterministic CI mode. Add or adjust only directly necessary regression tests. Do not call any external endpoint.",
+        "allowedPaths": [
+          "package.json",
+          "src/components/WaitlistForm.test.tsx"
+        ],
+        "requiredCapabilities": [
+          "workspace.read",
+          "workspace.write",
+          "shell",
+          "structured-output"
+        ],
+        "sideEffect": "workspace-write",
+        "timeoutMs": 180000,
+        "setupCommands": [
+          {
+            "program": "npm",
+            "args": ["ci"],
+            "cwd": ".",
+            "timeoutMs": 180000
+          }
+        ],
+        "requirements": [
+          {
+            "id": "EXT-JS-TYPECHECK",
+            "text": "The pinned JavaScript project passes TypeScript type checking"
+          },
+          {
+            "id": "EXT-JS-TEST",
+            "text": "npm test runs Vitest once and exits deterministically"
+          },
+          {
+            "id": "EXT-JS-BUILD",
+            "text": "The pinned JavaScript project produces a successful production build"
+          }
+        ],
+        "gates": [
+          {
+            "id": "external-typecheck",
+            "command": "npm",
+            "args": ["run", "typecheck"],
+            "cwd": ".",
+            "timeoutMs": 120000,
+            "mandatory": true,
+            "requirementIds": ["EXT-JS-TYPECHECK"],
+            "dependsOn": [],
+            "sideEffect": "read-only",
+            "retrySafe": true
+          },
+          {
+            "id": "external-test",
+            "command": "npm",
+            "args": ["test"],
+            "cwd": ".",
+            "timeoutMs": 120000,
+            "mandatory": true,
+            "requirementIds": ["EXT-JS-TEST"],
+            "dependsOn": [],
+            "sideEffect": "read-only",
+            "retrySafe": true
+          },
+          {
+            "id": "external-build",
+            "command": "npm",
+            "args": ["run", "build"],
+            "cwd": ".",
+            "timeoutMs": 120000,
+            "mandatory": true,
+            "requirementIds": ["EXT-JS-BUILD"],
+            "dependsOn": ["external-typecheck", "external-test"],
+            "sideEffect": "read-only",
+            "retrySafe": true
+          }
+        ]
+      }
     },
     {
       "id": "case-16-external-non-js-slot",

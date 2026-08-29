@@ -31,6 +31,7 @@ test("codex-command: workspace-write uses approve-for-me without conflicting san
   assert.ok(invocation.args.includes("--ignore-user-config"));
   assert.ok(invocation.args.includes("--output-schema"));
   assert.ok(invocation.args.includes("--output-last-message"));
+  assert.ok(invocation.args.includes("--skip-git-repo-check"));
   assert.ok(invocation.args.includes("--approve-for-me"));
   assert.ok(!invocation.args.includes("--sandbox"));
   assert.ok(!invocation.args.includes("workspace-write"));

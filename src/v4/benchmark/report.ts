@@ -31,9 +31,44 @@ export function normalizeBenchmarkReport(report: BenchmarkRunReport): BenchmarkR
       error: normalizeStringPaths(c.error),
       actual: {
         ...c.actual,
+        ...(c.actual.source
+          ? { source: { ...c.actual.source, repositoryRoot: "<external-root>" } }
+          : {}),
+        ...(c.actual.adapterNative
+          ? {
+              adapterNative: {
+                ...c.actual.adapterNative,
+                ...(c.actual.adapterNative.sessionId ? { sessionId: "<session>" } : {}),
+                ...(c.actual.adapterNative.processEvidence
+                  ? {
+                      processEvidence: {
+                        ...c.actual.adapterNative.processEvidence,
+                        command: c.actual.adapterNative.processEvidence.command.map(
+                          (part) => normalizeStringPaths(part) ?? part
+                        ),
+                        stdoutSummary: "<bounded-output>",
+                        stderrSummary: "<bounded-output>",
+                        stdoutSha256: "<output-sha256>",
+                        stderrSha256: "<output-sha256>",
+                      },
+                    }
+                  : {}),
+              },
+            }
+          : {}),
         executedCommands: c.actual.executedCommands
           ? c.actual.executedCommands.map((cmd) => normalizeStringPaths(cmd) ?? cmd)
           : undefined,
+        commandEvidence: c.actual.commandEvidence?.map((item) => ({
+          ...item,
+          cwd: normalizeStringPaths(item.cwd) ?? item.cwd,
+          stdoutSummary: "<bounded-output>",
+          stderrSummary: "<bounded-output>",
+          stdoutSha256: "<output-sha256>",
+          stderrSha256: "<output-sha256>",
+          ...(item.evidenceId ? { evidenceId: "<evidence-id>" } : {}),
+          artifactIds: item.artifactIds.map(() => "<artifact-id>"),
+        })),
       },
       metrics: c.metrics
         ? {
@@ -82,6 +117,9 @@ export function generateBenchmarkMarkdown(report: BenchmarkRunReport): string {
   lines.push(`| Skipped Cases | ${report.skippedCases} |`);
   lines.push(`| False Successes | ${report.falseSuccessCount} |`);
   lines.push(`| False Failures | ${report.falseFailureCount} |`);
+  lines.push(
+    `| Unclassified False Failures | ${report.cases.filter((item) => item.actual.falseFailureClassified === false).length} |`
+  );
   lines.push(``);
 
   lines.push(`## Case Breakdown`);
@@ -127,6 +165,9 @@ export function generateBenchmarkMarkdown(report: BenchmarkRunReport): string {
   lines.push(`| Live Approved | ${report.environment.liveApproved ? "YES" : "NO"} |`);
   lines.push(`| Config Hash | \`${report.configHash}\` |`);
   lines.push(`| Semantic Hash | \`${report.semanticHash}\` |`);
+  lines.push(
+    `| External Binding Hash | ${report.externalBindingHash ? `\`${report.externalBindingHash}\`` : "-"} |`
+  );
 
   const gitRev = report.gitMetadata?.revision ? `\`${report.gitMetadata.revision}\`` : "unavailable";
   const gitDirty =
@@ -153,6 +194,64 @@ export function generateBenchmarkMarkdown(report: BenchmarkRunReport): string {
   lines.push(`| Git Dirty | ${gitDirty} |`);
   lines.push(`| Source Reproducibility | ${sourceRepro} |`);
   lines.push(``);
+
+  const externalCases = report.cases.filter((item) => item.actual.source);
+  if (externalCases.length > 0) {
+    lines.push(`## External Evidence`);
+    lines.push(``);
+    lines.push(
+      `| Case ID | Source Revision | Tracked Files | Tree SHA-256 | Modified Files | Diff Fingerprint | Adapter |`
+    );
+    lines.push(`| :--- | :--- | :--- | :--- | :--- | :--- | :--- |`);
+    for (const item of externalCases) {
+      const source = item.actual.source!;
+      const modified = item.actual.modifiedFiles?.join(", ") || "-";
+      const adapter = item.actual.adapterNative
+        ? [item.actual.adapterNative.cliVersion, item.actual.adapterNative.model]
+            .filter(Boolean)
+            .join(" / ") || "recorded"
+        : "-";
+      lines.push(
+        `| \`${item.id}\` | \`${source.revision}\` | ${source.trackedFileCount} | \`${source.treeSha256}\` | ${modified} | ${item.actual.diffFingerprint ? `\`${item.actual.diffFingerprint}\`` : "-"} | ${adapter} |`
+      );
+    }
+    lines.push(``);
+
+    const adapterProcessCases = externalCases.filter(
+      (item) => item.actual.adapterNative?.processEvidence
+    );
+    if (adapterProcessCases.length > 0) {
+      lines.push(`## External Adapter Process Evidence`);
+      lines.push(``);
+      lines.push(`| Case ID | Command | Timeout | Termination | Exit | Stdout SHA-256 | Stderr SHA-256 |`);
+      lines.push(`| :--- | :--- | ---: | :--- | ---: | :--- | :--- |`);
+      for (const item of adapterProcessCases) {
+        const processEvidence = item.actual.adapterNative!.processEvidence!;
+        const normalizedCommand = processEvidence.command
+          .map((part) => normalizeStringPaths(part) ?? part)
+          .join(" ");
+        lines.push(
+          `| \`${item.id}\` | \`${normalizedCommand}\` | ${processEvidence.timeoutMs}ms | ${processEvidence.termination} | ${processEvidence.exitCode ?? "-"} | \`${processEvidence.stdoutSha256}\` | \`${processEvidence.stderrSha256}\` |`
+        );
+      }
+      lines.push(``);
+    }
+
+    lines.push(`## External Command Evidence`);
+    lines.push(``);
+    lines.push(
+      `| Case ID | Phase | Command | CWD | Timeout | Termination | Exit | Evidence ID | Artifacts |`
+    );
+    lines.push(`| :--- | :--- | :--- | :--- | ---: | :--- | ---: | :--- | :--- |`);
+    for (const item of externalCases) {
+      for (const evidence of item.actual.commandEvidence ?? []) {
+        lines.push(
+          `| \`${item.id}\` | ${evidence.phase} | \`${evidence.command.join(" ")}\` | \`${evidence.cwd}\` | ${evidence.timeoutMs}ms | ${evidence.termination} | ${evidence.exitCode ?? "-"} | ${evidence.evidenceId ? `\`${evidence.evidenceId}\`` : "-"} | ${evidence.artifactIds.length ? evidence.artifactIds.join(", ") : "-"} |`
+        );
+      }
+    }
+    lines.push(``);
+  }
 
   return lines.join("\n");
 }

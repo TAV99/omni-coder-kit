@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "requirementsPath": ".omni/sdlc/requirements.md",
+  "maxParallelGates": 2,
+  "gates": [
+    {
+      "id": "verify-gate-a",
+      "command": "node",
+      "args": ["-e", "process.exit(0)"],
+      "cwd": ".",
+      "timeoutMs": 30000,
+      "mandatory": true,
+      "requirementIds": ["R1"],
+      "dependsOn": [],
+      "sideEffect": "read-only",
+      "concurrencyKey": "workspace-lock",
+      "retrySafe": true
+    },
+    {
+      "id": "write-gate-a",
+      "command": "node",
+      "args": ["-e", "process.exit(0)"],
+      "cwd": ".",
+      "timeoutMs": 30000,
+      "mandatory": true,
+      "requirementIds": ["R1"],
+      "dependsOn": [],
+      "sideEffect": "workspace-write",
+      "retrySafe": true
+    },
+    {
+      "id": "verify-gate-b",
+      "command": "node",
+      "args": ["-e", "process.exit(0)"],
+      "cwd": ".",
+      "timeoutMs": 30000,
+      "mandatory": true,
+      "requirementIds": ["R2"],
+      "dependsOn": [],
+      "sideEffect": "read-only",
+      "concurrencyKey": "workspace-lock",
+      "retrySafe": true
+    },
+    {
+      "id": "write-gate-b",
+      "command": "node",
+      "args": ["-e", "process.exit(0)"],
+      "cwd": ".",
+      "timeoutMs": 30000,
+      "mandatory": true,
+      "requirementIds": ["R2"],
+      "dependsOn": [],
+      "sideEffect": "workspace-write",
+      "retrySafe": true
+    }
+  ]
+}

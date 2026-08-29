@@ -25,7 +25,8 @@ export function buildCodexInvocation(input: CodexInvocationInput): HostInvocatio
     "--output-schema",
     input.schemaPath,
     "--output-last-message",
-    input.resultPath
+    input.resultPath,
+    "--skip-git-repo-check"
   );
 
   if (input.mode === "elevated") {

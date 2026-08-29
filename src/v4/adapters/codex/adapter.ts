@@ -15,6 +15,8 @@ import { resolvePermissionMode } from "../shared/permission-mode";
 import { createCodexAgentStepOutcomeJsonSchema } from "../shared/result-schema";
 import { buildCodexInvocation } from "./command";
 import { parseCodexExecution } from "./parser";
+import { truncateUtf8Bytes } from "../../contracts/quality";
+import type { StepResult } from "../../contracts/step-result";
 
 export interface CodexAdapterOptions {
   readonly runner: ProcessRunner;
@@ -33,6 +35,13 @@ const CODEX_CAPABILITIES: readonly Capability[] = [
   "native-resume",
   "usage",
 ];
+
+function redactProcessSummary(value: string): string {
+  const redacted = value
+    .replace(/(authorization\s*[:=]\s*(?:bearer\s+)?)[^\s"']+/gi, "$1<redacted>")
+    .replace(/((?:api[_-]?key|token|secret|password)\s*[:=]\s*)[^\s"']+/gi, "$1<redacted>");
+  return truncateUtf8Bytes(redacted, 16384);
+}
 
 export class CodexAdapter implements AgentAdapter {
   readonly id = "codex";
@@ -115,7 +124,7 @@ export class CodexAdapter implements AgentAdapter {
         // Result file may not have been created on failure
       }
 
-      return parseCodexExecution(
+      const parsed = parseCodexExecution(
         resultText !== undefined
           ? {
               executionId: request.operationId,
@@ -125,8 +134,36 @@ export class CodexAdapter implements AgentAdapter {
           : {
               executionId: request.operationId,
               process: processRes,
-            }
+          }
       );
+      const normalizedCommand = [
+        path.basename(invocation.command),
+        ...invocation.args.map((arg) =>
+          arg === schemaPath
+            ? "<schema-path>"
+            : arg === resultPath
+              ? "<result-path>"
+              : arg === request.workspaceDir
+                ? "<workspace>"
+                : arg
+        ),
+      ];
+      return {
+        ...parsed,
+        native: {
+          ...parsed.native,
+          processEvidence: {
+            command: normalizedCommand,
+            timeoutMs: request.timeoutMs,
+            termination: processRes.termination,
+            exitCode: processRes.exitCode,
+            stdoutSummary: redactProcessSummary(processRes.stdout),
+            stderrSummary: redactProcessSummary(processRes.stderr),
+            stdoutSha256: crypto.createHash("sha256").update(processRes.stdout).digest("hex"),
+            stderrSha256: crypto.createHash("sha256").update(processRes.stderr).digest("hex"),
+          },
+        },
+      } satisfies StepResult;
     } finally {
       context.signal.removeEventListener("abort", onContextAbort);
       this.activeExecutions.delete(request.operationId);

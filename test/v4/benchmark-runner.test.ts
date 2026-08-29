@@ -13,7 +13,7 @@ import {
 import type { BenchmarkCase, BenchmarkExpectation } from "../../src/v4/benchmark/contracts";
 import type { ProcessRunner, ProcessRequest, ProcessResult } from "../../src/v4/process/types";
 import { FakeAdapter } from "../../src/v4/testing/fake-adapter";
-import type { AgentAdapter } from "../../src/v4/contracts/adapter";
+import type { AgentAdapter, StepRequest } from "../../src/v4/contracts/adapter";
 
 async function snapshotSourceCorpus(repoRoot: string): Promise<Map<string, string>> {
   const map = new Map<string, string>();
@@ -372,11 +372,11 @@ test("live_host_requires_opt_in", async () => {
         capabilities: [],
         diagnostics: [],
       }),
-      execute: async () => {
+      execute: async (request: StepRequest) => {
         adapterExecuteCount++;
         return {
           status: "succeeded" as const,
-          executionId: "exec-live",
+          executionId: request.operationId,
           summary: "live executed",
           artifacts: [],
           evidence: [],

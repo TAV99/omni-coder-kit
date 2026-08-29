@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "requirementsPath": ".omni/sdlc/requirements.md",
+  "maxRepairAttemptsPerRequirement": 2,
+  "gates": [
+    {
+      "id": "broken-gate",
+      "command": "node",
+      "args": ["-e", "process.exit(1)"],
+      "cwd": ".",
+      "timeoutMs": 30000,
+      "mandatory": true,
+      "requirementIds": ["R1"],
+      "dependsOn": [],
+      "sideEffect": "read-only",
+      "retrySafe": true
+    }
+  ]
+}

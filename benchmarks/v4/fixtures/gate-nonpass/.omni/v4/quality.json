@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "requirementsPath": ".omni/sdlc/requirements.md",
+  "gates": [
+    {
+      "id": "base-gate",
+      "command": "node",
+      "args": ["-e", "process.exit(1)"],
+      "cwd": ".",
+      "timeoutMs": 30000,
+      "mandatory": true,
+      "requirementIds": [],
+      "dependsOn": [],
+      "sideEffect": "read-only",
+      "retrySafe": true
+    },
+    {
+      "id": "integ-gate",
+      "command": "node",
+      "args": ["-e", "process.exit(0)"],
+      "cwd": ".",
+      "timeoutMs": 30000,
+      "mandatory": true,
+      "requirementIds": ["R1"],
+      "dependsOn": ["base-gate"],
+      "sideEffect": "read-only",
+      "retrySafe": true
+    }
+  ]
+}

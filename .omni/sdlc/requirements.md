@@ -1,0 +1,86 @@
+# Requirements — Omni v4 P2/P3 (nguồn: customer Q&A / approved design)
+
+## P2 — Reliability, Verification and Acceptance
+
+- [ ] R1 | Quality command execution is isolated from `RunController`; the controller does not parse requirements or spawn gate commands. | test: test/v4/orchestrator.test.ts::quality_boundary
+- [ ] R2 | Every gate result has exactly one status from `passed`, `failed`, `skipped`, or `inconclusive`. | test: test/v4/quality-contracts.test.ts::four_state_gate_result
+- [ ] R3 | Neither `skipped` nor `inconclusive` satisfies a mandatory gate. | test: test/v4/acceptance-engine.test.ts::mandatory_non_pass_fails_closed
+- [ ] R4 | The requirements loader accepts atomic requirement IDs and preserves requirement text verbatim. | test: test/v4/requirements.test.ts::preserves_requirement_text
+- [ ] R5 | Duplicate requirement IDs are rejected. | test: test/v4/requirements.test.ts::rejects_duplicate_ids
+- [ ] R6 | A malformed requirements line is rejected with `REQUIREMENTS_INVALID`. | test: test/v4/requirements.test.ts::rejects_malformed_line
+- [ ] R7 | Raw `test:` text from `requirements.md` is never executed as a shell command. | test: test/v4/requirements.test.ts::never_executes_test_text
+- [ ] R8 | A hard-test requirement without a configured gate mapping is `inconclusive`. | test: test/v4/acceptance-engine.test.ts::unmapped_hard_test_inconclusive
+- [ ] R9 | Quality configuration is loaded only from a strict versioned schema. | test: test/v4/quality-config.test.ts::strict_versioned_config
+- [ ] R10 | Missing quality configuration produces `QUALITY_CONFIG_MISSING`, not a green result. | test: test/v4/quality-config.test.ts::missing_config_fails_closed
+- [ ] R11 | Invalid quality configuration produces `QUALITY_CONFIG_INVALID`, not a partial execution. | test: test/v4/quality-config.test.ts::invalid_config_fails_before_execution
+- [ ] R12 | Executable gates use `command` plus `args[]` with `shell: false`. | test: test/v4/gate-runner.test.ts::argv_only_execution
+- [ ] R13 | Gate evidence records exact argv, cwd, timeout, termination, exit code, start time, and duration. | test: test/v4/gate-runner.test.ts::records_command_evidence
+- [ ] R14 | Gate evidence records bounded stdout and stderr summaries. | test: test/v4/gate-runner.test.ts::bounds_output_summaries
+- [ ] R15 | Gate evidence records SHA-256 digests of complete stdout and stderr. | test: test/v4/gate-runner.test.ts::records_output_digests
+- [ ] R16 | Quality evidence never persists secret environment values. | test: test/v4/gate-runner.test.ts::redacts_environment
+- [ ] R17 | Timeout, abort, output-limit, spawn error, and nonzero exit remain distinguishable gate outcomes. | test: test/v4/gate-runner.test.ts::termination_taxonomy
+- [ ] R18 | A gate cannot report `passed` unless its process exited with code zero and its evidence validates. | test: test/v4/gate-runner.test.ts::passed_requires_zero_exit_and_evidence
+- [ ] R19 | Each requirement verdict references valid evidence IDs from the same run. | test: test/v4/acceptance-engine.test.ts::same_run_evidence_correlation
+- [ ] R20 | Every accepted mandatory requirement references at least one valid evidence item. | test: test/v4/acceptance-engine.test.ts::accepted_requirement_has_evidence
+- [ ] R21 | Agent judgement runs only for a requirement whose test strategy is exactly `agent`. | test: test/v4/agent-judge.test.ts::agent_strategy_only
+- [ ] R22 | Agent judgement runs read-only and cannot request elevated permissions. | test: test/v4/agent-judge.test.ts::read_only_no_elevation
+- [ ] R23 | Agent judgement can cite existing evidence but cannot create deterministic gate evidence. | test: test/v4/agent-judge.test.ts::cannot_forge_hard_evidence
+- [ ] R24 | Missing or unavailable judgement adapter produces `inconclusive`. | test: test/v4/agent-judge.test.ts::unavailable_is_inconclusive
+- [ ] R25 | Malformed judgement output produces `AGENT_JUDGE_MALFORMED` and `inconclusive`. | test: test/v4/agent-judge.test.ts::malformed_is_inconclusive
+- [ ] R26 | `VERIFY` routes to `ACCEPT` only after all mandatory deterministic gates pass. | test: test/v4/orchestrator.test.ts::verify_to_accept
+- [ ] R27 | A repairable deterministic failure routes `VERIFY` to `FIX`. | test: test/v4/orchestrator.test.ts::verify_to_fix
+- [ ] R28 | `ACCEPT` routes to `DOCUMENT` only after every mandatory requirement is accepted. | test: test/v4/orchestrator.test.ts::accept_to_document
+- [ ] R29 | A repairable acceptance failure routes `ACCEPT` to `REWORK`. | test: test/v4/orchestrator.test.ts::accept_to_rework
+- [ ] R30 | Mandatory inconclusive evidence blocks the run with an actionable required action. | test: test/v4/orchestrator.test.ts::mandatory_inconclusive_blocks
+- [ ] R31 | Every quality-driven route references a prior same-run quality or repair decision event. | test: test/v4/quality-replay.test.ts::route_causation
+- [ ] R32 | A quality event with a cross-run or missing cause is rejected as corrupt. | test: test/v4/quality-replay.test.ts::rejects_invalid_cause
+- [ ] R33 | Existing P0/P1 event logs remain replayable after quality event variants are added. | test: test/v4/quality-replay.test.ts::replays_legacy_logs
+- [ ] R34 | An interrupted quality cycle is never reused as a passed cycle. | test: test/v4/quality-recovery.test.ts::interrupted_cycle_not_passed
+- [ ] R35 | Resume starts a new mandatory verification cycle while preserving the interrupted cycle as audit evidence. | test: test/v4/quality-recovery.test.ts::resume_new_cycle
+- [ ] R36 | Interrupted read-only gates may be rerun with a fresh operation ID. | test: test/v4/quality-recovery.test.ts::reruns_read_only_gate
+- [ ] R37 | Interrupted workspace-write gates rerun only when `retrySafe` is true. | test: test/v4/quality-recovery.test.ts::workspace_write_retry_policy
+- [ ] R38 | Missing or ambiguous recovery correlation blocks with `QUALITY_RECOVERY_UNSAFE`. | test: test/v4/quality-recovery.test.ts::ambiguous_recovery_blocks
+- [ ] R39 | Repair attempts are counted per requirement. | test: test/v4/repair-policy.test.ts::counts_per_requirement
+- [ ] R40 | No requirement receives more than two repair attempts by default. | test: test/v4/repair-policy.test.ts::default_max_two
+- [ ] R41 | An unchanged failure signature, failed-requirement set, and evidence digest stops repair immediately. | test: test/v4/repair-policy.test.ts::no_progress_stops
+- [ ] R42 | Any repair invalidates prior verdicts for affected requirements. | test: test/v4/repair-policy.test.ts::repair_invalidates_verdicts
+- [ ] R43 | The evidence bundle contains config hash, requirements hash, ordered gate results, requirement verdicts, repair history, and run identity. | test: test/v4/evidence-bundle.test.ts::complete_bundle
+- [ ] R44 | Evidence bundles are written atomically and include a checksum-backed record. | test: test/v4/evidence-bundle.test.ts::atomic_checksum_record
+- [ ] R45 | A corrupt or checksum-mismatched evidence bundle cannot authorize acceptance. | test: test/v4/evidence-bundle.test.ts::corrupt_bundle_fails_closed
+- [ ] R46 | The P2 fault suite produces zero false-green runs. | test: test/v4/quality-fault-injection.test.ts::zero_false_green
+
+## P3 — Efficiency, Bounded Concurrency and Dogfood
+
+- [ ] R47 | Only quality gates may execute concurrently; agent steps remain single in-flight. | test: test/v4/gate-scheduler.test.ts::agent_steps_remain_serial
+- [ ] R48 | `maxParallelGates` defaults to 2. | test: test/v4/quality-config.test.ts::default_parallelism_two
+- [ ] R49 | `maxParallelGates` accepts only integers from 1 through 8. | test: test/v4/quality-config.test.ts::parallelism_bounds
+- [ ] R50 | Duplicate gate IDs and missing dependencies are rejected before any gate starts. | test: test/v4/gate-scheduler.test.ts::rejects_invalid_dag_references
+- [ ] R51 | Dependency cycles are rejected with `GATE_DEPENDENCY_CYCLE`. | test: test/v4/gate-scheduler.test.ts::rejects_cycle
+- [ ] R52 | A gate starts only after every dependency has passed. | test: test/v4/gate-scheduler.test.ts::dependency_order
+- [ ] R53 | Independent read-only gates with non-conflicting concurrency keys may run in parallel. | test: test/v4/gate-scheduler.test.ts::parallel_independent_read_only
+- [ ] R54 | Conflicting concurrency keys never overlap. | test: test/v4/gate-scheduler.test.ts::concurrency_key_lock
+- [ ] R55 | A workspace-write gate holds an exclusive workspace lock. | test: test/v4/gate-scheduler.test.ts::workspace_write_exclusive
+- [ ] R56 | Gates already running may finish after another gate fails. | test: test/v4/gate-scheduler.test.ts::active_gates_finish
+- [ ] R57 | A gate whose dependency failed does not start and receives an explicit non-pass reason. | test: test/v4/gate-scheduler.test.ts::failed_dependency_prevents_start
+- [ ] R58 | Parallel and sequential execution of the same fixture produce identical acceptance verdicts and evidence mapping. | test: test/v4/gate-scheduler.test.ts::parallel_sequential_equivalence
+- [ ] R59 | Final reports sort gates by declaration order regardless of completion order. | test: test/v4/report.test.ts::stable_gate_order
+- [ ] R60 | Metrics include actual status, reported status, false-success, and false-failure. | test: test/v4/metrics.test.ts::completion_metrics
+- [ ] R61 | Metrics include gate counts, retry count, repair count, resume count, and user-intervention count. | test: test/v4/metrics.test.ts::reliability_counts
+- [ ] R62 | Metrics include wall-clock duration, summed gate duration, queue time, peak parallelism, and measured speedup. | test: test/v4/metrics.test.ts::efficiency_metrics
+- [ ] R63 | Metrics include available token, cost, adapter, CLI, model, and session metadata. | test: test/v4/metrics.test.ts::native_usage_metadata
+- [ ] R64 | Missing provider usage remains explicitly unavailable and is never recorded as zero. | test: test/v4/metrics.test.ts::missing_usage_not_zero
+- [ ] R65 | Efficiency budgets default to report-only. | test: test/v4/budget-policy.test.ts::default_report_only
+- [ ] R66 | A report-only budget breach cannot change the acceptance verdict. | test: test/v4/budget-policy.test.ts::report_only_does_not_block
+- [ ] R67 | A mandatory budget breach fails the budget gate with `BUDGET_EXCEEDED`. | test: test/v4/budget-policy.test.ts::mandatory_budget_blocks
+- [ ] R68 | A missing metric required by a mandatory budget is `inconclusive`. | test: test/v4/budget-policy.test.ts::mandatory_missing_metric_inconclusive
+- [ ] R69 | Benchmark manifests are strict and versioned. | test: test/v4/benchmark-manifest.test.ts::strict_versioned_manifest
+- [ ] R70 | Benchmark cases execute in isolated temporary workspaces. | test: test/v4/benchmark-runner.test.ts::isolated_workspace
+- [ ] R71 | Deterministic benchmarks use a fake adapter by default and consume no model quota. | test: test/v4/benchmark-runner.test.ts::fake_adapter_default
+- [ ] R72 | Live-host benchmark execution requires an explicit opt-in flag. | test: test/v4/benchmark-runner.test.ts::live_host_requires_opt_in
+- [ ] R73 | The benchmark suite contains 10 to 15 deterministic cases covering the approved failure, repair, recovery, concurrency, budget, and false-success scenarios. | test: test/v4/benchmark-manifest.test.ts::representative_case_count
+- [ ] R74 | The benchmark manifest includes an enabled Omni self-dogfood case. | test: test/v4/benchmark-manifest.test.ts::omni_self_case
+- [ ] R75 | The benchmark manifest includes disabled slots for JavaScript/full-stack, non-JavaScript, and unusual-test-config repositories. | test: test/v4/benchmark-manifest.test.ts::future_real_repo_slots
+- [ ] R76 | Benchmark output includes a versioned JSON report and a human-readable Markdown summary. | test: test/v4/report.test.ts::json_and_markdown_outputs
+- [ ] R77 | Report generation is reproducible from the same persisted event and evidence inputs. | test: test/v4/report.test.ts::reproducible_from_inputs
+- [ ] R78 | Correctness regressions fail the P3 gate even when wall-clock or token metrics improve. | test: test/v4/benchmark-runner.test.ts::correctness_precedes_efficiency
+- [ ] R79 | All P0/P1/P2 tests continue to pass after P3 is enabled. | test: npm test

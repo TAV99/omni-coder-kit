@@ -42,7 +42,7 @@ test("adapter-registry: rejects experimental adapter when allowExperimental is f
     async run(req: ProcessRequest): Promise<ProcessResult> {
       return {
         stdout:
-          "codex 0.147.0 exec --json --strict-config --ignore-user-config --output-schema --output-last-message --sandbox --approve-for-me --cd",
+          "codex 0.147.0 exec --json --strict-config --ignore-user-config --output-schema --output-last-message --skip-git-repo-check --sandbox --approve-for-me --cd",
         stderr: "",
         durationMs: 1,
         termination: "exited",
@@ -72,7 +72,7 @@ test("adapter-registry: constructs adapter when experimental is allowed", async 
     async run(req: ProcessRequest): Promise<ProcessResult> {
       return {
         stdout:
-          "codex 0.147.0 exec --json --strict-config --ignore-user-config --output-schema --output-last-message --sandbox --approve-for-me --cd",
+          "codex 0.147.0 exec --json --strict-config --ignore-user-config --output-schema --output-last-message --skip-git-repo-check --sandbox --approve-for-me --cd",
         stderr: "",
         durationMs: 1,
         termination: "exited",

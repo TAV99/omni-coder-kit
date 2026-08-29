@@ -173,6 +173,49 @@ test(
   }
 );
 
+test(
+  "process-runner: resolves the modern multi-line npm 11 cmd shim without a shell",
+  { skip: process.platform !== "win32" },
+  async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omni-v4-win-npm11-shim-"));
+    const npmBinDir = path.join(tempDir, "node_modules", "npm", "bin");
+    await fs.mkdir(npmBinDir, { recursive: true });
+    await fs.copyFile(process.execPath, path.join(tempDir, "node.exe"));
+    await fs.copyFile(fixturePath, path.join(npmBinDir, "npm-cli.js"));
+    await fs.writeFile(
+      path.join(tempDir, "npm.cmd"),
+      [
+        ":: Created by npm, please don't edit manually.",
+        "@ECHO OFF",
+        "SETLOCAL",
+        'SET "NODE_EXE=%~dp0\\node.exe"',
+        'SET "NPM_CLI_JS=%~dp0\\node_modules\\npm\\bin\\npm-cli.js"',
+        '"%NODE_EXE%" "%NPM_CLI_JS%" %*',
+      ].join("\r\n"),
+      "utf-8"
+    );
+
+    try {
+      const runner = new NodeProcessRunner();
+      const result = await runner.run({
+        command: "npm",
+        args: ["echo", "npm 11 shim"],
+        cwd: tempDir,
+        env: { PATH: tempDir },
+        timeoutMs: 5000,
+      });
+
+      assert.equal(result.termination, "exited");
+      if (result.termination === "exited") {
+        assert.equal(result.exitCode, 0);
+      }
+      assert.deepEqual(JSON.parse(result.stdout).args, ["npm 11 shim"]);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  }
+);
+
 test("process-runner: captures POSIX signals on non-Windows platform", { skip: process.platform === "win32" }, async () => {
   const runner = new NodeProcessRunner();
 

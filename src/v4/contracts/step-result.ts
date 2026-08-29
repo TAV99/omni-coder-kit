@@ -15,6 +15,18 @@ export interface NativeExecutionMetadata {
   readonly cliVersion?: string | undefined;
   readonly model?: string | undefined;
   readonly usage?: NormalizedUsage | undefined;
+  readonly processEvidence?: NativeProcessEvidence | undefined;
+}
+
+export interface NativeProcessEvidence {
+  readonly command: readonly string[];
+  readonly timeoutMs: number;
+  readonly termination: "exited" | "signalled" | "timed-out" | "aborted" | "output-limit" | "spawn-error";
+  readonly exitCode: number | null;
+  readonly stdoutSummary: string;
+  readonly stderrSummary: string;
+  readonly stdoutSha256: string;
+  readonly stderrSha256: string;
 }
 
 export type AgentStepOutcome =
@@ -67,6 +79,26 @@ export const NativeExecutionMetadataSchema = z
     cliVersion: z.string().min(1).optional(),
     model: z.string().min(1).optional(),
     usage: NormalizedUsageSchema.optional(),
+    processEvidence: z
+      .object({
+        command: z.array(z.string()).min(1).readonly(),
+        timeoutMs: z.number().int().positive(),
+        termination: z.enum([
+          "exited",
+          "signalled",
+          "timed-out",
+          "aborted",
+          "output-limit",
+          "spawn-error",
+        ]),
+        exitCode: z.number().int().nullable(),
+        stdoutSummary: z.string(),
+        stderrSummary: z.string(),
+        stdoutSha256: z.string().regex(/^[0-9a-f]{64}$/),
+        stderrSha256: z.string().regex(/^[0-9a-f]{64}$/),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

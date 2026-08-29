@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "requirementsPath": ".omni/sdlc/requirements.md",
+  "budgets": {
+    "mode": "report",
+    "wallClockMs": 0
+  },
+  "gates": [
+    {
+      "id": "gate-1",
+      "command": "node",
+      "args": ["-e", "process.exit(0)"],
+      "cwd": ".",
+      "timeoutMs": 30000,
+      "mandatory": true,
+      "requirementIds": ["R1"],
+      "dependsOn": [],
+      "sideEffect": "read-only",
+      "retrySafe": true
+    }
+  ]
+}

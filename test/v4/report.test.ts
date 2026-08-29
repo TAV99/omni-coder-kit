@@ -534,6 +534,81 @@ test("runner_reproducible_semantic_hash_twice", async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
+test("external_report: renders source revision and diff evidence without absolute source root", () => {
+  const absoluteRoot = process.platform === "win32" ? "E:\\demoSite" : "/srv/demoSite";
+  const report = {
+    ...sampleReport,
+    externalBindingHash: "b".repeat(64),
+    cases: [
+      {
+        ...sampleReport.cases[0]!,
+        actual: {
+          ...sampleReport.cases[0]!.actual,
+          source: {
+            repositoryRoot: absoluteRoot,
+            revision: "c".repeat(40),
+            isDirty: false as const,
+            trackedFileCount: 12,
+            treeSha256: "d".repeat(64),
+          },
+          modifiedFiles: ["package.json"],
+          diffFingerprint: "e".repeat(64),
+          secretFindings: [],
+          adapterNative: {
+            sessionId: "session-local-only",
+            cliVersion: "0.150.1",
+            model: "codex",
+            processEvidence: {
+              command: ["codex", "exec", "--cd", absoluteRoot],
+              timeoutMs: 180000,
+              termination: "exited" as const,
+              exitCode: 1,
+              stdoutSummary: "volatile output 123",
+              stderrSummary: "volatile error 456",
+              stdoutSha256: "1".repeat(64),
+              stderrSha256: "2".repeat(64),
+            },
+          },
+          commandEvidence: [
+            {
+              phase: "gate" as const,
+              command: ["npm", "test"],
+              cwd: ".",
+              timeoutMs: 120000,
+              termination: "exited" as const,
+              exitCode: 0,
+              stdoutSummary: "5 tests passed",
+              stderrSummary: "",
+              stdoutSha256: "f".repeat(64),
+              stderrSha256: "0".repeat(64),
+              evidenceId: "evidence-1",
+              artifactIds: ["artifact-1"],
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  const markdown = generateBenchmarkMarkdown(report);
+  assert.match(markdown, new RegExp("c{40}"));
+  assert.match(markdown, new RegExp("e{64}"));
+  assert.match(markdown, /package\.json/);
+  assert.match(markdown, /External Command Evidence/);
+  assert.match(markdown, /External Adapter Process Evidence/);
+  assert.match(markdown, /evidence-1/);
+  assert.match(markdown, /artifact-1/);
+  assert.doesNotMatch(markdown, new RegExp(absoluteRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+
+  const normalized = normalizeBenchmarkReport(report);
+  assert.equal(normalized.cases[0]?.actual.source?.repositoryRoot, "<external-root>");
+  assert.equal(normalized.cases[0]?.actual.adapterNative?.sessionId, "<session>");
+  assert.doesNotMatch(
+    JSON.stringify(normalized.cases[0]?.actual.adapterNative?.processEvidence),
+    new RegExp(absoluteRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  );
+});
+
 test("git_metadata_read_only_and_unavailable_handling", async () => {
   // 1. Compare production metadata with deterministic read-only git query on real repo
   const actualRev = child_process

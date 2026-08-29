@@ -59,3 +59,23 @@ docs/
 .agents/cache/
 .agents/tmp/
 dist-v4/
+
+# Immutable v4 benchmark/spec inputs required by clean checkouts
+!/.omni/
+/.omni/*
+!/.omni/sdlc/
+/.omni/sdlc/*
+!/.omni/sdlc/requirements.md
+!benchmarks/v4/fixtures/**/.omni/
+benchmarks/v4/fixtures/**/.omni/*
+!benchmarks/v4/fixtures/**/.omni/sdlc/
+!benchmarks/v4/fixtures/**/.omni/sdlc/requirements.md
+!benchmarks/v4/fixtures/**/.omni/v4/
+!benchmarks/v4/fixtures/**/.omni/v4/quality.json
+!docs/
+docs/*
+!docs/superpowers/
+docs/superpowers/*
+!docs/superpowers/plans/
+docs/superpowers/plans/*
+!docs/superpowers/plans/2026-08-29-external-js-dogfood-gate-1.md

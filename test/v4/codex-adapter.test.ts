@@ -31,7 +31,7 @@ test("codex-adapter: probe, execute lifecycle, and result correlation", async ()
       if (req.args.includes("exec") && req.args.includes("--help")) {
         return {
           stdout:
-            "Usage: codex exec [--json] [--strict-config] [--ignore-user-config] [--output-schema] [--output-last-message] [--sandbox] [--approve-for-me] [--cd]",
+            "Usage: codex exec [--json] [--strict-config] [--ignore-user-config] [--output-schema] [--output-last-message] [--skip-git-repo-check] [--sandbox] [--approve-for-me] [--cd]",
           stderr: "",
           durationMs: 5,
           termination: "exited",
@@ -98,6 +98,14 @@ test("codex-adapter: probe, execute lifecycle, and result correlation", async ()
   assert.equal(outcome.status, "succeeded");
   assert.equal(outcome.executionId, "op-test-1");
   assert.equal(outcome.native?.sessionId, "thread-123");
+  assert.equal(outcome.native?.processEvidence?.termination, "exited");
+  assert.equal(outcome.native?.processEvidence?.exitCode, 0);
+  assert.equal(outcome.native?.processEvidence?.timeoutMs, 5000);
+  assert.match(outcome.native?.processEvidence?.stdoutSha256 ?? "", /^[0-9a-f]{64}$/);
+  assert.deepEqual(outcome.native?.processEvidence?.command.slice(0, 2), ["codex", "exec"]);
+  assert.ok(outcome.native?.processEvidence?.command.includes("<workspace>"));
+  assert.ok(!outcome.native?.processEvidence?.command.includes(workspaceDir));
+  assert.doesNotMatch(JSON.stringify(outcome.native?.processEvidence), new RegExp(tempDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 
   await fs.rm(tempDir, { recursive: true, force: true });
 });

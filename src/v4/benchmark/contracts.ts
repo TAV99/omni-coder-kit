@@ -1,4 +1,50 @@
 import { z } from "zod";
+import { GateDefinitionSchema } from "../contracts/quality";
+import { CapabilitySchema } from "../contracts/run";
+
+const RepoRelativePathSchema = z
+  .string()
+  .min(1)
+  .refine(
+    (value) =>
+      value === "." ||
+      (!value.includes("\\") &&
+        !value.startsWith("/") &&
+        !/^[A-Za-z]:/.test(value) &&
+        !value.split("/").includes("..")),
+    "Path must be repository-relative"
+  );
+
+export const BenchmarkSetupCommandSchema = z
+  .object({
+    program: z.string().regex(/^[A-Za-z0-9._-]+$/, "Program must be a native executable name"),
+    args: z.array(z.string()).readonly(),
+    cwd: RepoRelativePathSchema,
+    timeoutMs: z.number().int().positive(),
+  })
+  .strict();
+
+export const BenchmarkRequirementSchema = z
+  .object({
+    id: z.string().regex(/^[A-Za-z0-9_-]+$/),
+    text: z.string().min(1),
+  })
+  .strict();
+
+export const BenchmarkLiveTaskSchema = z
+  .object({
+    prompt: z.string().min(1),
+    allowedPaths: z.array(RepoRelativePathSchema).min(1).readonly(),
+    requiredCapabilities: z.array(CapabilitySchema).min(1).readonly(),
+    sideEffect: z.literal("workspace-write"),
+    timeoutMs: z.number().int().positive(),
+    setupCommands: z.array(BenchmarkSetupCommandSchema).readonly(),
+    requirements: z.array(BenchmarkRequirementSchema).min(1).readonly(),
+    gates: z.array(GateDefinitionSchema).min(1).readonly(),
+  })
+  .strict();
+
+export type BenchmarkLiveTask = z.infer<typeof BenchmarkLiveTaskSchema>;
 
 export const BenchmarkExpectationSchema = z
   .object({
@@ -35,6 +81,7 @@ export const BenchmarkCaseSchema = z
     activationChecklist: z.array(z.string()).readonly().optional(),
     baselineNotes: z.string().optional(),
     gateMapping: z.record(z.string(), z.string()).optional(),
+    liveTask: BenchmarkLiveTaskSchema.optional(),
   })
   .strict();
 

@@ -13,6 +13,7 @@
         "--ignore-user-config",
         "--output-schema",
         "--output-last-message",
+        "--skip-git-repo-check",
         "--sandbox",
         "--approve-for-me",
         "--cd"
