@@ -322,6 +322,147 @@ test("isolated_workspace", async () => {
   }
 });
 
+test("default benchmark workspaces stay inside the repository workspace root", async () => {
+  const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), "omni-bm-contained-root-"));
+  const manifestDir = path.join(repoRoot, "benchmarks", "v4");
+  const fixtureDir = path.join(manifestDir, "fixtures", "pass-all");
+  const observedCwds: string[] = [];
+  const observedCanonicalCwds: string[] = [];
+
+  try {
+    await fs.mkdir(manifestDir, { recursive: true });
+    await fs.cp(path.resolve(process.cwd(), "benchmarks/v4/fixtures/pass-all"), fixtureDir, {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(manifestDir, "manifest.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        cases: [
+          {
+            id: "case-contained-workspace",
+            enabled: true,
+            applicability: "applicable",
+            projectKind: "fixture",
+            fixturePath: "benchmarks/v4/fixtures/pass-all",
+            adapter: "fake",
+            liveModelCostOptIn: false,
+            expected: {
+              finalPhase: "DOCUMENT",
+              acceptanceStatus: "accepted",
+              minPassedGates: 1,
+            },
+            tags: ["workspace-containment"],
+          },
+        ],
+      }),
+      "utf-8"
+    );
+
+    const processRunner: ProcessRunner = {
+      run: async (request): Promise<ProcessResult> => {
+        observedCwds.push(request.cwd);
+        observedCanonicalCwds.push(await fs.realpath(request.cwd));
+        return {
+          stdout: "",
+          stderr: "",
+          durationMs: 1,
+          termination: "exited",
+          exitCode: 0,
+          signal: null,
+        };
+      },
+    };
+    const report = await new BenchmarkRunner({
+      repoRoot,
+      allowModelCost: false,
+      processRunner,
+    }).run();
+
+    assert.equal(report.failedCases, 0);
+    assert.ok(observedCwds.length > 0, "The fixture must execute at least one gate");
+    const workspaceRoot = path.join(repoRoot, ".omni", "v4", "workspaces");
+    const canonicalRepoRoot = await fs.realpath(repoRoot);
+    const canonicalWorkspaceRoot = await fs.realpath(workspaceRoot);
+    assert.equal(
+      path.relative(canonicalRepoRoot, canonicalWorkspaceRoot).startsWith(".."),
+      false,
+      "Canonical workspace root must remain inside the canonical repository root"
+    );
+    for (const [index, cwd] of observedCwds.entries()) {
+      assert.equal(cwd, observedCanonicalCwds[index], "Gate cwd must use the canonical case workspace");
+      const relative = path.relative(canonicalWorkspaceRoot, cwd);
+      assert.equal(
+        relative.startsWith("..") || path.isAbsolute(relative),
+        false,
+        `Gate cwd '${cwd}' must remain inside '${canonicalWorkspaceRoot}'`
+      );
+      assert.equal(syncFs.existsSync(cwd), false, "Owned case workspace must be cleaned after the run");
+    }
+  } finally {
+    await fs.rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test("default benchmark workspace root rejects a junction that escapes the repository", async (t) => {
+  const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), "omni-bm-junction-root-"));
+  const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "omni-bm-junction-outside-"));
+  const manifestDir = path.join(repoRoot, "benchmarks", "v4");
+  const fixtureDir = path.join(manifestDir, "fixtures", "pass-all");
+  const workspaceRoot = path.join(repoRoot, ".omni", "v4", "workspaces");
+
+  try {
+    await fs.mkdir(manifestDir, { recursive: true });
+    await fs.cp(path.resolve(process.cwd(), "benchmarks/v4/fixtures/pass-all"), fixtureDir, {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(manifestDir, "manifest.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        cases: [
+          {
+            id: "case-junction-escape",
+            enabled: true,
+            applicability: "applicable",
+            projectKind: "fixture",
+            fixturePath: "benchmarks/v4/fixtures/pass-all",
+            adapter: "fake",
+            liveModelCostOptIn: false,
+            expected: {
+              finalPhase: "DOCUMENT",
+              acceptanceStatus: "accepted",
+              minPassedGates: 1,
+            },
+            tags: ["workspace-containment"],
+          },
+        ],
+      }),
+      "utf-8"
+    );
+    await fs.mkdir(path.dirname(workspaceRoot), { recursive: true });
+    try {
+      await fs.symlink(outsideRoot, workspaceRoot, process.platform === "win32" ? "junction" : "dir");
+    } catch {
+      t.skip("Directory junction/symlink creation is unavailable on this platform");
+      return;
+    }
+
+    await assert.rejects(
+      new BenchmarkRunner({ repoRoot, allowModelCost: false }).run(),
+      (err: unknown) =>
+        err instanceof Error &&
+        err.message.includes("BENCHMARK_WORKSPACE_ESCAPE") &&
+        err.message.includes("canonical workspace root")
+    );
+    assert.deepEqual(await fs.readdir(outsideRoot), [], "Escaping workspace root must remain untouched");
+  } finally {
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+    await fs.rm(repoRoot, { recursive: true, force: true });
+    await fs.rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
 test("fake_adapter_default", async () => {
   // R71: Deterministic benchmarks use a fake adapter by default and consume no model quota
   const runner = new BenchmarkRunner({

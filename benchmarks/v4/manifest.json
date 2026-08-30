@@ -360,7 +360,7 @@
           "structured-output"
         ],
         "sideEffect": "workspace-write",
-        "timeoutMs": 180000,
+        "timeoutMs": 300000,
         "outputSummaryBytes": 16384,
         "requiredDependencyPolicy": "clean-install",
         "requiredToolchain": {

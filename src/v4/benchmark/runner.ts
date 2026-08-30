@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import syncFs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import child_process from "node:child_process";
@@ -150,6 +149,41 @@ export interface BenchmarkRunnerOptions {
   readonly now?: (() => string) | undefined;
   readonly activateCaseIds?: readonly string[] | undefined;
   readonly externalBindingPath?: string | undefined;
+}
+
+async function createDefaultBenchmarkWorkspace(
+  repoRoot: string,
+  caseId: string
+): Promise<{ path: string; cleanup: () => Promise<void> }> {
+  const canonicalRepoRoot = await fs.realpath(path.resolve(repoRoot));
+  const workspaceRoot = path.join(canonicalRepoRoot, ".omni", "v4", "workspaces");
+  await fs.mkdir(workspaceRoot, { recursive: true });
+
+  const canonicalWorkspaceRoot = await fs.realpath(workspaceRoot);
+  if (!isBenchmarkPathContained(canonicalWorkspaceRoot, canonicalRepoRoot)) {
+    throw new QualityError(
+      "BENCHMARK_WORKSPACE_UNSAFE",
+      "[BENCHMARK_WORKSPACE_ESCAPE] Default canonical workspace root escapes the repository"
+    );
+  }
+
+  const workspacePath = await fs.mkdtemp(path.join(canonicalWorkspaceRoot, `case-${caseId}-`));
+  const canonicalWorkspacePath = await fs.realpath(workspacePath);
+  if (!isBenchmarkPathContained(canonicalWorkspacePath, canonicalWorkspaceRoot)) {
+    // The canonical target is outside the owned root, so recursive cleanup would be unsafe.
+    // Fail closed and leave any residue for explicit inspection instead of touching that target.
+    throw new QualityError(
+      "BENCHMARK_WORKSPACE_UNSAFE",
+      "[BENCHMARK_WORKSPACE_ESCAPE] Default canonical case workspace escapes its owned root"
+    );
+  }
+
+  return {
+    path: canonicalWorkspacePath,
+    cleanup: async () => {
+      await fs.rm(canonicalWorkspacePath, { recursive: true, force: true }).catch(() => {});
+    },
+  };
 }
 
 export interface BenchmarkCommandEvidence {
@@ -559,10 +593,9 @@ export class BenchmarkRunner {
         tmpWorkspace = wsObj.path;
         workspaceCleanup = wsObj.cleanup;
       } else {
-        tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), `omni-bm-case-${c.id}-`));
-        workspaceCleanup = async () => {
-          await fs.rm(tmpWorkspace, { recursive: true, force: true }).catch(() => {});
-        };
+        const wsObj = await createDefaultBenchmarkWorkspace(this.options.repoRoot, c.id);
+        tmpWorkspace = wsObj.path;
+        workspaceCleanup = wsObj.cleanup;
       }
 
       let externalSource: ExternalSourceMetadata | undefined;

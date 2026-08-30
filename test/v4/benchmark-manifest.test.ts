@@ -200,6 +200,11 @@ test("future_real_repo_slots", async () => {
   assert.ok(nonJsSlot.baselineNotes, "Non-JavaScript slot must declare baseline notes");
   assert.ok(nonJsSlot.gateMapping && Object.keys(nonJsSlot.gateMapping).length > 0);
   assert.ok(nonJsSlot.activationChecklist && nonJsSlot.activationChecklist.length > 0);
+  assert.equal(
+    nonJsSlot.liveTask?.timeoutMs,
+    300000,
+    "Python Gate 2 must retain enough time for its TDD and focused verification loop"
+  );
 
   assert.ok(unusualSlot, "Unusual tests future slot must exist in manifest");
   assert.equal(unusualSlot.enabled, false, "Unusual tests slot must be disabled");
