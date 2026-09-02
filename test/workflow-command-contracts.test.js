@@ -20,10 +20,14 @@ describe('Workflow Command & Setup Contracts (Task 7B)', () => {
     const planning = readNormalized(PLANNING_PATH);
     const coder = readNormalized(CODER_PATH);
     const skillMgr = readNormalized(SKILL_MGR_PATH);
+    const OMNI_SKILL_MGR_PATH = path.join(__dirname, '..', '.omni', 'workflows', 'skill-manager.md');
     const allTemplates = [
         { name: 'task-planning.md', content: planning },
         { name: 'coder-execution.md', content: coder },
         { name: 'skill-manager.md', content: skillMgr },
+        ...(fs.existsSync(OMNI_SKILL_MGR_PATH)
+            ? [{ name: '.omni/workflows/skill-manager.md', content: readNormalized(OMNI_SKILL_MGR_PATH) }]
+            : []),
     ];
 
     describe('1. Global Stale Pattern Scans', () => {

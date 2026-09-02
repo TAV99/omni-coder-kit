@@ -1,11 +1,11 @@
 # Omni-Coder Kit (Phiên bản v3.x)
 
-[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/TAV99/omni-coder-kit/releases/tag/v3.1.0)
+[![Version](https://img.shields.io/badge/version-3.1.1-blue.svg)](https://github.com/TAV99/omni-coder-kit/releases/tag/v3.1.1)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
 [![V4 Next-Gen](https://img.shields.io/badge/Next--Gen-Omni%20v4%20Harness-purple.svg)](./README_V4.md)
 
-> **Tài liệu cho Omni-Coder Kit v3.1.0**. Nếu bạn quan tâm đến kiến trúc Reliability Kernel thế hệ mới (TypeScript, Deterministic State Machine, DAG Quality Gates), vui lòng xem [README_V4.md](./README_V4.md).
+> **Tài liệu cho Omni-Coder Kit v3.1.1**. Nếu bạn quan tâm đến kiến trúc Reliability Kernel thế hệ mới (TypeScript, Deterministic State Machine, DAG Quality Gates), vui lòng xem [README_V4.md](./README_V4.md).
 
 ---
 

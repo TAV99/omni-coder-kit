@@ -1,13 +1,13 @@
 # Omni-Coder Kit
 
-[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/TAV99/omni-coder-kit/releases/tag/v3.1.0)
+[![Version](https://img.shields.io/badge/version-3.1.1-blue.svg)](https://github.com/TAV99/omni-coder-kit/releases/tag/v3.1.1)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
 [![V4 Next-Gen Harness](https://img.shields.io/badge/Next--Gen-Omni%20v4%20Harness-purple.svg)](./README_V4.md)
 
 **Omni-Coder Kit** là một bộ công cụ CLI giúp inject tư duy phát triển phần mềm chuẩn mực (**Karpathy Mindset**), quy trình SDLC tinh gọn và các kỹ năng chuyên sâu vào AI coding agents (Claude Code, Antigravity CLI, Cursor, Windsurf, Codex, Gemini CLI...). Công cụ này định hướng AI hoạt động với kỷ luật của một Senior Engineer, tuân thủ quy trình SDLC nghiêm ngặt và hạn chế tối đa lỗi ảo tưởng (hallucination).
 
-Trong phiên bản mới nhất (**v3.1.0**), Omni-Coder Kit hoạt động như một **Agent Harness & Loop Runtime** — tự lái vòng lặp SDLC: gọi LLM → thực thi quality gates (lint, build, test, security) → tự động sửa lỗi (fix loop) → tự động nghiệm thu (acceptance loop).
+Trong phiên bản mới nhất (**v3.1.1**), Omni-Coder Kit hoạt động như một **Agent Harness & Loop Runtime** — tự lái vòng lặp SDLC: gọi LLM → thực thi quality gates (lint, build, test, security) → tự động sửa lỗi (fix loop) → tự động nghiệm thu (acceptance loop).
 
 > 📌 **Tài liệu phiên bản:**
 > - [**README_V3.md**](./README_V3.md): Hướng dẫn chi tiết cho Omni v3.x (Workflows, CLI, Dual Authority Daemon).

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.1] — 2026-09-03
+
+### Added
+- **Configurable AGY Worker Model in Dual Flow (`omni dual`)**:
+  - Full support for configuring custom Antigravity (`agy`) models and reasoning efforts for the worker role in Dual Flow.
+  - Deterministic 4-level precedence resolution: CLI option (`--worker-model`, `--worker-effort`) > Environment variables (`OMNI_DUAL_WORKER_MODEL`, `OMNI_DUAL_WORKER_EFFORT`) > Manifest configuration (`.omni/manifest.json` -> `workerModel`, `workerEffort`) > Safe default (`gemini-3.7-flash-high`, effort `high`).
+  - Added dedicated test suite `test/dual-custom-model.test.js` covering dynamic model resolution, preflight checks, and execution isolation.
+
+### Fixed
+- **Stale Workflow Template Command Cleanup**:
+  - Replaced legacy `omni auto-equip` and `omni equip` commands with canonical `omni skills -y` and `omni skills add` across local `.omni/workflows/skill-manager.md` and candidate overlays.
+  - Added regression test guard in `test/workflow-command-contracts.test.js` enforcing zero stale command references in `.omni/workflows/`.
+- **Daemon Orchestrator Scoping & Evidence Validation**:
+  - Resolved variable scope leak in `daemon-server.js` handoff evaluation to ensure clean task verification.
+  - Hardened capability evidence validation in `capability-preflight.js` and `orchestrator.js` against forged worker models.
+
 ## [3.1.0] — 2026-08-28
 
 ### Added
@@ -82,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Agent harness Phases 0–3 and skills upgrades.
 
-[Unreleased]: https://github.com/TAV99/omni-coder-kit/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/TAV99/omni-coder-kit/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/TAV99/omni-coder-kit/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/TAV99/omni-coder-kit/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/TAV99/omni-coder-kit/releases/tag/v3.0.0
