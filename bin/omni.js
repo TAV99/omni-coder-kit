@@ -167,6 +167,7 @@ dual.command('phase <phase> <task-id>')
 dual.command('bootstrap')
     .description('Validate planning/setup, register the full typed task graph once, and resume Dual AUTO')
     .option('--json', 'Xuất một JSON object cho AUTO workflow')
+    .option('--worker-model <model>', 'Tùy chọn worker model cho AGY (mặc định: gemini-3.7-flash-high)')
     .action(handleDualBootstrap);
 
 dual.command('qc [task-id]')
