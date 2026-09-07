@@ -60,7 +60,7 @@ function createTempWorkspace(t) {
     return canonical;
 }
 
-function setupTestSession(wsRoot, { tasks = [] } = {}) {
+function setupTestSession(wsRoot, { tasks = [], clock } = {}) {
     const init = spawnSync('git', ['init', '-b', 'main'], { cwd: wsRoot, encoding: 'utf8' });
     if (init.status !== 0) {
         assert.equal(spawnSync('git', ['init'], { cwd: wsRoot, encoding: 'utf8' }).status, 0);
@@ -74,7 +74,7 @@ function setupTestSession(wsRoot, { tasks = [] } = {}) {
     assert.equal(head.status, 0);
 
     const wsId = computeWorkspaceId(wsRoot);
-    const store = createAuthorityStore(path.join(wsRoot, '.omni', 'authority'));
+    const store = createAuthorityStore(path.join(wsRoot, '.omni', 'authority'), clock ? { clock } : {});
     const sessionId = 'omni-sess-1';
     const baseline = { kind: 'git', id: head.stdout.trim() };
 
@@ -121,6 +121,7 @@ function setupTestSession(wsRoot, { tasks = [] } = {}) {
                 title: t.title || t.id,
                 owner: t.owner || 'codex',
                 allowed_files: t.allowed_files || [],
+                ...(t.external_operations ? { external_operations: t.external_operations } : {}),
             })),
         });
 
@@ -1307,6 +1308,38 @@ test('evaluateHook Stop handles verified completion, continuation, terminal BLOC
     assert.deepEqual(noDaemonStop, {});
 });
 
+test('Stop completion uses a separate bounded snapshot budget rather than the health timeout', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    setupTestSession(wsRoot, { tasks: [{ id: 'TASK-1', title: 'task', owner: 'codex', allowed_files: ['a.js'] }] });
+    let completionOptions, healthTimeout;
+    const result = await evaluateHook({ session_id: 'codex-session', cwd: wsRoot, hook_event_name: 'Stop',
+        turn_id: 'turn-budget', stop_hook_active: false }, { createClient: ({ timeoutMs }) => {
+        healthTimeout = timeoutMs;
+        return { health: async () => ({ status: 'healthy', session_id: 'budget-session' }),
+            status: async () => ({ state: 'EXECUTING' }),
+            evaluateCompletion: async (_id, _params, requestOptions) => { completionOptions = requestOptions; return { verified: true }; } };
+    } });
+    assert.deepEqual(result, {});
+    assert.equal(healthTimeout, 500);
+    assert.equal(completionOptions?.timeoutMs, 10000);
+});
+
+test('Stop reports durable failed preparation without spinning but preserves unrelated runnable work', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    setupTestSession(wsRoot, { tasks: [{ id: 'TASK-1', owner: 'codex', allowed_files: ['a.js'] }] });
+    const failed = { task_id: 'TASK-2', state: 'ROUTED', last_outcome: { status: 'FAILED', code: 'DUAL_PRIVATE_SETUP_LIMIT' } };
+    let tasks = { 'TASK-1': { task_id: 'TASK-1', state: 'TASK_VERIFIED' }, 'TASK-2': failed };
+    const client = { health: async () => ({ status: 'healthy', session_id: 's' }),
+        status: async () => ({ state: 'EXECUTING', tasks, leases: {} }),
+        evaluateCompletion: async () => ({ verified: false, blockers: ['TASK_UNVERIFIED'] }) };
+    const input = { session_id: 'codex-session', cwd: wsRoot, hook_event_name: 'Stop', stop_hook_active: false };
+    const stopped = await evaluateHook(input, { createClient: () => client });
+    assert.equal(stopped.decision, undefined);
+    assert.match(stopped.systemMessage, /DUAL_PRIVATE_SETUP_LIMIT/);
+    tasks = { ...tasks, 'TASK-3': { task_id: 'TASK-3', state: 'ROUTED' } };
+    assert.equal((await evaluateHook(input, { createClient: () => client })).decision, 'block');
+});
+
 test('evaluateHook Stop returns empty object when session is verified', async (t) => {
     const wsRoot = createTempWorkspace(t);
     const { store, wsId, sessionId, baseline } = setupTestSession(wsRoot, {
@@ -1629,4 +1662,62 @@ test('bin/omni-hook.js fails closed for PreToolUse on oversized input and malfor
     assert.equal(parsedMalformedPre.hookSpecificOutput?.permissionDecision, 'deny');
     assert.match(parsedMalformedPre.hookSpecificOutput?.permissionDecisionReason, /invalid JSON input/);
     assert.equal(parsedMalformedPre.systemMessage, undefined);
+});
+test('exact external Stitch grant is reserved once through daemon and survives replay', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    let now = Date.now();
+    const grant = { tool_name: 'mcp__stitch__create_project', tool_input: { title: 'Scoped project' }, evidence_file: 'a.js' };
+    const { store } = setupTestSession(wsRoot, { clock: () => new Date(now), tasks: [{ id: 'TASK-1', owner: 'codex', allowed_files: ['a.js'], external_operations: [grant] },
+        { id: 'TASK-2', owner: 'agy', allowed_files: ['b.js'] }] });
+    const daemon = await startDaemonServer({ workspaceRoot: wsRoot, authorityStore: store });
+    t.after(() => daemon.close());
+    const input = { session_id: 'codex-session', cwd: wsRoot, hook_event_name: 'PreToolUse',
+        tool_name: grant.tool_name, tool_input: grant.tool_input, tool_use_id: 'external-1' };
+    const wrong = await evaluateHook({ ...input, tool_input: { title: 'Wrong' } });
+    assert.equal(wrong.hookSpecificOutput?.permissionDecision, 'deny');
+    const smuggledPath = await evaluateHook({ ...input, tool_input: { title: 'Wrong', path: 'a.js' } });
+    assert.equal(smuggledPath.hookSpecificOutput?.permissionDecision, 'deny', 'external mutation must not fall through to local path authorization');
+    const expired = store.acquireLease('TASK-2', 'agy');
+    now += 60000;
+    assert.equal(store.derive().leases[expired.lease_id].status, 'expired');
+    assert.equal((await evaluateHook(input)).hookSpecificOutput?.permissionDecision, 'deny', 'expired unreleased worker is not safe');
+    assert.equal(store.derive().tasks['TASK-1'].externalReservations, undefined, 'denial must not reserve anything');
+    now -= 60000; // Restore fixture clock; no event was written in the expired branch.
+    store.releaseLease(expired.lease_id, 'test worker never spawned');
+    assert.deepEqual(await evaluateHook(input), {});
+    const replay = await evaluateHook(input);
+    assert.equal(replay.hookSpecificOutput?.permissionDecision, 'deny');
+    assert.deepEqual(await evaluateHook({ ...input, hook_event_name: 'PostToolUse', tool_response: { id: 'remote-1' } }), {});
+    const reservations = Object.values(store.derive().tasks['TASK-1'].externalReservations);
+    assert.equal(reservations.length, 1);
+    assert.equal(reservations[0].observed, true);
+    assert.equal(store.derive().tasks['TASK-1'].state, 'ROUTED', 'observation is not task QC');
+    assert.equal(fs.readFileSync(path.join(wsRoot, 'a.js'), 'utf8'), 'module.exports = true;\n');
+});
+
+test('daemon registration persists exact external capability and rejects invalid ownership', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    const { store, sessionId } = setupTestSession(wsRoot);
+    store.append({ schema_version: 2, type: 'capability.result', from_state: 'DISCOVERED', to_state: 'CAPABILITY_SAFE',
+        status: 'PASSED', checks: [{ name: 'fixture', status: 'PASSED' }] });
+    const daemon = await startDaemonServer({ workspaceRoot: wsRoot, authorityStore: store });
+    t.after(() => daemon.close());
+    const client = createDaemonClient({ workspaceRoot: wsRoot });
+    const grant = { tool_name: 'mcp__stitch__create_project', tool_input: { title: 'Register exact grant' }, evidence_file: 'a.js' };
+    const task = { task_id: 'TASK-1', title: 'Design', owner: 'codex', allowed_files: ['a.js'], external_operations: [grant],
+        goal: 'Design source', category: 'design', complexity: 'small', risk: 'low', execution_mode: 'shared',
+        context_files: [], deny_patterns: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] };
+    const planBytes = JSON.stringify({ schema_version: 1, plan_revision: 1, tasks: [task] });
+    fs.writeFileSync(path.join(wsRoot, 'plan.md'), planBytes);
+    const params = { plan_revision: 1, plan_path: 'plan.md', plan_sha256: crypto.createHash('sha256').update(planBytes).digest('hex'), tasks: [{ ...task, owner: 'agy' }] };
+    await assert.rejects(() => client.registerPlan(sessionId, params));
+    await client.registerPlan(sessionId, { ...params, tasks: [task] });
+    const reopened = createAuthorityStore(path.join(wsRoot, '.omni/authority')).derive();
+    assert.deepEqual(reopened.tasks['TASK-1'].external_operations, [grant]);
+    const directPost = await client.evaluateHook(sessionId, { hook_event_name: 'PostToolUse', owner: 'codex', task_id: 'TASK-1',
+        tool_name: grant.tool_name, tool_input: grant.tool_input, operation: 'read' });
+    assert.equal(directPost.decision, 'deny');
+    const unreserved = await client.evaluateHook(sessionId, { hook_event_name: 'PostToolUse', owner: 'codex', task_id: 'TASK-1',
+        tool_name: grant.tool_name, tool_input: grant.tool_input, operation: 'external' });
+    assert.equal(unreserved.decision, 'deny');
 });

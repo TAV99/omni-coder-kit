@@ -53,7 +53,7 @@ async function runDaemon(argv = process.argv.slice(2)) {
     const orchestratorAdapter = createOrchestratorAdapter({
         workspaceRoot: canonicalWorkspace,
         authorityStore,
-        ...(agyProjectId ? { agyPrefixArgs: ['--project', agyProjectId] } : {}),
+        ...(agyProjectId ? { agyProjectId } : {}),
     });
 
     let daemon;

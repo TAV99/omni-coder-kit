@@ -331,6 +331,15 @@ test('omni dual status reads the live authority task in a greenfield snapshot wo
     assert.equal(offlineStatus.code, 0, `offline status failed: ${offlineStatus.stderr}`);
     assert.match(offlineStatus.stdout, /TASK_VERIFIED/);
     assert.match(offlineStatus.stdout, new RegExp(seeded.receiptSha));
+    const before = seeded.store.verifyIntegrity().lastHash;
+    for (const action of ['run', 'resume']) {
+        const done = await runOmniCli(['dual', action, 'TASK-1'], { cwd: wsRoot });
+        assert.equal(done.code, 0, done.stderr);
+        assert.match(done.stdout, /TASK_VERIFIED/);
+        assert.doesNotMatch(done.stdout, /hoàn tất cho task/);
+    }
+    assert.equal(seeded.store.verifyIntegrity().lastHash, before);
+    assert.equal(fs.existsSync(path.join(wsRoot, '.omni', 'runtime', 'dual', 'daemon.json')), false);
 });
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Codex–AGY workflows share a controller reference across native entrypoints, with exact isolated QC, context-reply, correction and dependency contracts. Generated integration text respects the selected pairing and configured worker model.
+
+### Fixed
+- Isolated dispatch no longer inherits the source AGY project binding. Private dependency fingerprints use bounded reads for native binaries, with readiness checks before dispatch and explicit resource limits.
+- Exact opt-in Stitch operation grants are preserved through MCP and authority replay; durable reservations prevent automatic duplicate mutations. Failed preparation no longer loops AUTO continuation when no independent work can run.
+- Authority task metadata survives replay; `run`/`resume` recognize authority tasks rather than fabricating legacy transactions.
+- Standalone Codex cook preserves uncommitted changes without requiring automatic commit/stash or undeclared dependency installation.
+
+### Added
+- Opt-in isolated worker snapshots, hash-bound handoffs, controller QC/integration journals, dependency waits, durable scout questions/replies, and bounded correction attempts. Live-host and release qualification remain pending; these entries do not announce a published release.
+
 ## [3.1.1] — 2026-09-03
 
 ### Added

@@ -343,6 +343,56 @@ test('client handles connection refusal when daemon is not running', async (t) =
     );
 });
 
+test('isolated QC RPC budget covers the declared validator batch rather than the short discovery timeout', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    let observedTimeout;
+    const server = http.createServer((req, res) => {
+        req.resume();
+        req.on('end', () => setTimeout(() => res.end(JSON.stringify({ result: { status: 'TASK_VERIFIED' } })), 30));
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    fs.mkdirSync(getRuntimeDir(wsRoot), { recursive: true });
+    fs.writeFileSync(path.join(getRuntimeDir(wsRoot), 'daemon.json'), JSON.stringify({
+        protocol_version: 1, workspace_id: computeWorkspaceId(wsRoot), workspace_root: wsRoot,
+        pid: process.pid, started_at: new Date().toISOString(), host: '127.0.0.1', port: server.address().port, token: 'a'.repeat(64),
+    }));
+    const client = createDaemonClient({ workspaceRoot: wsRoot, timeoutMs: 1, httpImpl: {
+        request(options, callback) { observedTimeout = options.timeout; return http.request(options, callback); },
+    } });
+    let result, failure;
+    try { result = await client.completeIsolatedTask('session', 'TASK-1', 1); } catch (error) { failure = error; }
+    assert.ok(observedTimeout >= 50 * 60000, 'RPC timeout covers every bounded validator');
+    assert.equal(failure, undefined);
+    assert.equal(result.status, 'TASK_VERIFIED');
+});
+
+test('daemon RPC uses a fresh connection instead of a pooled socket across long worker gaps', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    const sockets = new Set();
+    let requests = 0;
+    const server = http.createServer((req, res) => {
+        sockets.add(req.socket);
+        req.resume();
+        req.on('end', () => {
+            requests++;
+            res.end(JSON.stringify({ result: { status: 'healthy' } }));
+        });
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    fs.mkdirSync(getRuntimeDir(wsRoot), { recursive: true });
+    fs.writeFileSync(path.join(getRuntimeDir(wsRoot), 'daemon.json'), JSON.stringify({
+        protocol_version: 1, workspace_id: computeWorkspaceId(wsRoot), workspace_root: wsRoot, pid: process.pid,
+        started_at: new Date().toISOString(), host: '127.0.0.1', port: server.address().port, token: 'a'.repeat(64),
+    }));
+    const client = createDaemonClient({ workspaceRoot: wsRoot });
+    await client.health();
+    await client.health();
+    assert.equal(requests, 2, 'RPC is not automatically replayed');
+    assert.equal(sockets.size, 2, 'request must not reuse an idle global-agent socket');
+});
+
 test('client enforces timeoutMs and destroys socket on timeout', async (t) => {
     const wsRoot = createTempWorkspace(t);
     const runtimeDir = getRuntimeDir(wsRoot);

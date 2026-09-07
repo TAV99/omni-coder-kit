@@ -666,6 +666,112 @@ function setupRoutedSession(store, options = {}) {
     return { e1, e2, e3, e4, e5, lastEvent: e5 || e4 };
 }
 
+test('registered execution metadata survives authority replay and store reopen', (t) => {
+    const { sessionDir, store, clock } = makeStore(t);
+    const task = {
+        task_id: 'TASK-1', title: 'Exact validation', owner: 'agy', allowed_files: ['lib/a.js'],
+        goal: 'Validate with the registered command, not a guessed npm test',
+        category: 'feature', complexity: 'low', risk: 'low', deny_patterns: ['secrets/**'],
+        validation_commands: [{ program: 'node', args: ['--check', 'lib/a.js'], cwd: '.' }],
+    };
+    setupRoutedSession(store, { tasks: [task] });
+    const reopened = createAuthorityStore(sessionDir, { clock });
+    for (const field of ['goal', 'category', 'complexity', 'risk', 'deny_patterns', 'validation_commands']) {
+        assert.deepEqual(reopened.derive().tasks['TASK-1'][field], task[field], field);
+    }
+    assert.equal(reopened.derive().tasks['TASK-1'].state, 'ROUTED');
+    assert.equal(reopened.verifyIntegrity().valid, true);
+});
+
+test('registered context sources survive replay without altering old event hashes', (t) => {
+    const { sessionDir, store, clock } = makeStore(t);
+    const task = {
+        task_id: 'TASK-1', title: 'Context', owner: 'agy', allowed_files: ['lib/a.js'],
+        context_files: ['.omni/sdlc/design-spec.md', 'docs/source.md'],
+    };
+    setupRoutedSession(store, { tasks: [task] });
+    const reopened = createAuthorityStore(sessionDir, { clock });
+    assert.deepEqual(reopened.derive().tasks['TASK-1'].context_files, task.context_files);
+    assert.equal(reopened.verifyIntegrity().valid, true);
+
+    const legacy = makeStore(t);
+    setupRoutedSession(legacy.store);
+    const before = legacy.store.verifyIntegrity().lastHash;
+    const oldStore = createAuthorityStore(legacy.sessionDir, { clock: legacy.clock });
+    assert.equal(oldStore.verifyIntegrity().lastHash, before);
+    assert.equal(Object.hasOwn(oldStore.derive().tasks['TASK-1'], 'context_files'), false);
+});
+
+test('isolated workspace binding and handoff replay require a live matching lease', (t) => {
+    const { store, sessionDir, clock } = makeStore(t);
+    clock.set('2026-08-25T00:00:04.000Z');
+    setupRoutedSession(store);
+    const prepared = {
+        schema_version: 2, type: 'task.workspace.prepared', task_id: 'TASK-1', attempt: 1,
+        lease_id: '11111111-1111-4111-8111-111111111111',
+        reference: { bindingPath: '.omni/runs/dual-workspaces/task/binding.json', bindingSha256: 'a'.repeat(64),
+            workerBaselineSha256: 'b'.repeat(64), workerContractSha256: 'c'.repeat(64) },
+    };
+    assert.throws(() => store.append(prepared), (error) => error.code === 'DUAL_INTEGRITY_CORRUPT');
+    const lease = store.acquireLease('TASK-1', 'agy');
+    prepared.lease_id = lease.lease_id;
+    store.append(prepared);
+    store.append({ schema_version: 2, type: 'task.workspace.handoff', task_id: 'TASK-1', lease_id: lease.lease_id,
+        attempt: 1, handoff_path: '.omni/runs/dual-workspaces/task/worker-handoff.json',
+        handoff_sha256: 'd'.repeat(64), result_sha256: 'e'.repeat(64) });
+    store.releaseLease(lease.lease_id, 'isolated_awaiting_codex_qc');
+    const reopened = createAuthorityStore(sessionDir, { clock }).derive().tasks['TASK-1'];
+    assert.deepEqual(reopened.isolatedWorkspace.reference, prepared.reference);
+    assert.equal(reopened.isolatedHandoff.handoff_sha256, 'd'.repeat(64));
+    assert.equal(reopened.state, 'ROUTED', 'worker evidence alone does not verify task');
+    assert.throws(() => store.append(prepared), (error) => error.code === 'DUAL_INTEGRITY_CORRUPT');
+    const qcLease = store.acquireLease('TASK-1', 'codex');
+    assert.throws(() => store.append({ schema_version: 2, type: 'task.completed', task_id: 'TASK-1', owner: 'agy',
+        authority_state: 'TASK_VERIFIED', modified_files: ['lib/a.js'], diff_fingerprint: 'e'.repeat(64),
+        verdict: 'SUCCESS', verified_by: 'codex' }), (error) => error.code === 'DUAL_INTEGRITY_CORRUPT');
+    store.releaseLease(qcLease.lease_id, 'test complete');
+});
+
+test('authority replay rejects cyclic dependencies even when registration bypasses CLI validation', (t) => {
+    const { store } = makeStore(t);
+    assert.throws(() => setupRoutedSession(store, { tasks: [
+        { task_id: 'TASK-1', title: 'one', owner: 'agy', allowed_files: ['a.js'], depends_on: ['TASK-2'] },
+        { task_id: 'TASK-2', title: 'two', owner: 'codex', allowed_files: ['b.js'], depends_on: ['TASK-1'] },
+    ] }), (error) => error.code === 'DUAL_INTEGRITY_CORRUPT');
+    assert.equal(store.derive().sessionState, 'CAPABILITY_SAFE');
+});
+
+test('task messages persist question reply and idempotency without changing file authority', (t) => {
+    const { postTaskMessage } = require('../lib/dual/task-messages');
+    const { store, sessionDir, clock } = makeStore(t);
+    clock.set('2026-08-25T00:00:04.000Z');
+    setupRoutedSession(store);
+    const lease = store.acquireLease('TASK-1', 'agy');
+    const request = { authorityStore: store, sessionId: SESSION_ID, planRevision: 1, taskId: 'TASK-1',
+        messageId: 'question-1', kind: 'question', body: 'Which label?', leaseId: lease.lease_id };
+    postTaskMessage(request);
+    const before = store.verifyIntegrity().lastHash;
+    assert.equal(postTaskMessage(request).reused, true);
+    assert.equal(store.verifyIntegrity().lastHash, before);
+    assert.throws(() => postTaskMessage({ ...request, body: 'Changed question' }),
+        (error) => error.code === 'DUAL_MESSAGE_CONFLICT');
+    store.releaseLease(lease.lease_id, 'awaiting_context');
+    const beforeBlank = store.verifyIntegrity().lastHash;
+    assert.throws(() => postTaskMessage({ authorityStore: store, sessionId: SESSION_ID, planRevision: 1, taskId: 'TASK-1',
+        messageId: 'blank-reply', kind: 'reply', replyTo: 'question-1', body: '   \n ' }));
+    assert.equal(store.verifyIntegrity().lastHash, beforeBlank);
+    postTaskMessage({ authorityStore: store, sessionId: SESSION_ID, planRevision: 1, taskId: 'TASK-1',
+        messageId: 'reply-1', kind: 'reply', replyTo: 'question-1', body: 'Use Student.' });
+    const task = createAuthorityStore(sessionDir, { clock }).derive().tasks['TASK-1'];
+    assert.equal(task.messages.length, 2);
+    assert.equal(task.messages[1].body, 'Use Student.');
+    assert.deepEqual(task.allowed_files, ['lib/a.js']);
+    assert.throws(() => postTaskMessage({ ...request, messageId: 'question-2' }),
+        (error) => error.code === 'DUAL_INTEGRITY_CORRUPT');
+    assert.throws(() => postTaskMessage({ authorityStore: store, sessionId: SESSION_ID, planRevision: 1, taskId: 'TASK-1',
+        messageId: 'reply-2', kind: 'reply', replyTo: 'unknown', body: 'No' }));
+});
+
 test('reconstructs complete session lifecycle and task states across full flow', (t) => {
     const { store } = makeStore(t);
     const e1 = store.append(createSessionCreatedEvent());

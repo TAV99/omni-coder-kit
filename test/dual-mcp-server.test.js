@@ -72,6 +72,8 @@ test('MCP initialize handshake succeeds and tools/list exposes exactly the 5 app
     });
 
     const toolListResult = await client.listTools();
+    const registration = toolListResult.tools.find((tool) => tool.name === 'omni_dual_register_plan');
+    assert.ok(registration.inputSchema.properties.tasks.items.properties.external_operations, 'MCP must expose external grants to the controller');
     assert.ok(toolListResult && Array.isArray(toolListResult.tools));
 
     const toolNames = toolListResult.tools.map((t) => t.name).sort();
@@ -2564,6 +2566,124 @@ test('MCP omni_dual_register_plan accepts repository root cwd dot and forwards e
         args: ['--version'],
         cwd: '.',
     });
+});
+
+test('MCP completion routes an isolated QC request and reports task status without claiming session verification', async (t) => {
+    const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
+    const calls = [];
+    const sessionId = 'session-isolated-qc';
+    const server = createOmniDualMcpServer({ workspaceRoot: process.cwd(), createClient: () => ({
+        async health() { return { status: 'healthy', workspace_root: process.cwd(), session_id: sessionId }; },
+        async completeIsolatedTask(...args) {
+            calls.push(args);
+            return { session_id: sessionId, status: 'TASK_VERIFIED', taskId: 'TASK-1', verified: false, session_state: 'ACCEPTANCE' };
+        },
+    }) });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    t.after(async () => { await client.close(); await server.close(); });
+    const result = await client.callTool({ name: 'omni_dual_completion', arguments: {
+        workspace_root: process.cwd(), session_id: sessionId, isolated_qc: { task_id: 'TASK-1', plan_revision: 1 },
+    } });
+    assert.notEqual(result.isError, true);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].slice(0, 3), [sessionId, 'TASK-1', 1]);
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload.verified, false);
+    assert.equal(payload.isolated_task.status, 'TASK_VERIFIED');
+});
+
+test('MCP status exposes pending question IDs and bodies for the controller', async (t) => {
+    const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
+    const root = process.cwd(), sessionId = 'question-session';
+    const taskInfo = { task_id: 'TASK-1', owner: 'agy', state: 'ROUTED', allowed_files: ['index.js'],
+        messages: [{ message_id: 'question-1', kind: 'question', body: 'Which label?', plan_revision: 1 }] };
+    const server = createOmniDualMcpServer({ workspaceRoot: root, createClient: () => ({
+        async health() { return { status: 'healthy', workspace_root: root, session_id: sessionId }; },
+        async status() { return { session_id: sessionId, workspace_id: 'workspace', workspace_root: root,
+            state: 'EXECUTING', plan_revision: 1, current_baseline: { kind: 'snapshot', id: 'a'.repeat(64) },
+            tasks: { 'TASK-1': taskInfo }, gates: {} }; },
+    }) });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
+    await server.connect(st); await client.connect(ct);
+    t.after(async () => { await client.close(); await server.close(); });
+    const result = await client.callTool({ name: 'omni_dual_status', arguments: { workspace_root: root, session_id: sessionId } });
+    assert.notEqual(result.isError, true);
+    assert.deepEqual(result.structuredContent.tasks['TASK-1'].pending_questions, [{ message_id: 'question-1', body: 'Which label?' }]);
+    taskInfo.messages = [];
+    taskInfo.lastOutcome = { attempt: 1, status: 'NEEDS_FIX', code: 'DUAL_QC_VALIDATION_FAILED', summary: 'Registered command exited 7' };
+    const failed = await client.callTool({ name: 'omni_dual_status', arguments: { workspace_root: root, session_id: sessionId } });
+    assert.deepEqual(failed.structuredContent.tasks['TASK-1'].last_outcome, taskInfo.lastOutcome);
+});
+
+test('MCP resume delivers controller reply once before resuming worker task', async (t) => {
+    const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
+    const calls = [], sessionId = 'reply-session';
+    const server = createOmniDualMcpServer({ workspaceRoot: process.cwd(), createClient: () => ({
+        async health() { return { status: 'healthy', workspace_root: process.cwd(), session_id: sessionId }; },
+        async replyToTask(id, reply) { calls.push(['reply', id, reply]); return { acknowledged: true, message_id: reply.message_id }; },
+        async request(method, payload) { calls.push([method, payload]); return { session_id: sessionId, state: 'EXECUTING', resumed: true }; },
+    }) });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
+    await server.connect(st); await client.connect(ct);
+    t.after(async () => { await client.close(); await server.close(); });
+    const result = await client.callTool({ name: 'omni_dual_resume', arguments: {
+        workspace_root: process.cwd(), session_id: sessionId,
+        context_reply: { task_id: 'TASK-1', plan_revision: 1, message_id: 'answer-1', reply_to: 'question-1', body: 'Use current label.' },
+    } });
+    assert.notEqual(result.isError, true);
+    assert.equal(calls[0][0], 'reply');
+    assert.equal(calls[1][0], 'session.resume');
+    assert.equal(calls[1][1].task_id, 'TASK-1');
+});
+
+test('MCP resume requests an acknowledged bounded correction before restarting a task', async (t) => {
+    const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
+    const calls = [], sessionId = 'correction-session';
+    const server = createOmniDualMcpServer({ workspaceRoot: process.cwd(), createClient: () => ({
+        async health() { return { status: 'healthy', workspace_root: process.cwd(), session_id: sessionId }; },
+        async correctTask(id, correction) { calls.push(['correct', id, correction]); return { acknowledged: true, attempt: 2 }; },
+        async request(method, payload) { calls.push([method, payload]); return { session_id: sessionId, state: 'EXECUTING', resumed: true }; },
+    }) });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
+    await server.connect(st); await client.connect(ct);
+    t.after(async () => { await client.close(); await server.close(); });
+    const result = await client.callTool({ name: 'omni_dual_resume', arguments: {
+        workspace_root: process.cwd(), session_id: sessionId,
+        correction: { task_id: 'TASK-1', plan_revision: 1, request_id: 'fix-1', expected_attempt: 1, reason: 'Fix registered test failure.' },
+    } });
+    assert.notEqual(result.isError, true);
+    assert.equal(calls[0][0], 'correct');
+    assert.equal(calls[1][0], 'session.resume');
+    assert.equal(calls[1][1].task_id, 'TASK-1');
+});
+
+test('MCP recovery resumes only after evidenced recovery, never while a process remains uncertain', async (t) => {
+    const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
+    let status = 'NEEDS_PROCESS_TREE_EVIDENCE', resumes = 0;
+    const root = process.cwd(), sessionId = 'recover-session';
+    const server = createOmniDualMcpServer({ workspaceRoot: root, createClient: () => ({
+        async health() { return { status: 'healthy', workspace_root: root, session_id: sessionId }; },
+        async recoverTask() { return { status, taskId: 'TASK-1' }; },
+        async request() { resumes++; return { session_id: sessionId, state: 'EXECUTING', resumed: true }; },
+    }) });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
+    await server.connect(st); await client.connect(ct);
+    t.after(async () => { await client.close(); await server.close(); });
+    const args = { workspace_root: root, session_id: sessionId, recovery: { task_id: 'TASK-1', plan_revision: 1 } };
+    const waiting = await client.callTool({ name: 'omni_dual_resume', arguments: args });
+    assert.notEqual(waiting.isError, true);
+    assert.equal(waiting.structuredContent.resumed, false);
+    assert.equal(resumes, 0);
+    status = 'RECOVERED';
+    assert.notEqual((await client.callTool({ name: 'omni_dual_resume', arguments: args })).isError, true);
+    assert.equal(resumes, 1);
 });
 
 test('Codex MCP list-tools wire schema compatibility: all 5 tools expose object-only items and omni_dual_completion passes strict schema constraints', async (t) => {

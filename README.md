@@ -141,6 +141,16 @@ Sau đó, trong Codex chỉ cần gọi `$om-think` (hoặc `>om-think`). Khi in
 
 Codex phải trust project để project hooks được chạy. Config được sinh dùng `[features] hooks = true`, `.codex/hooks.json` và MCP stdio bằng Node/package path tuyệt đối của máy hiện tại; không phụ thuộc global `omni`, PowerShell hay Bash.
 
+#### Isolated worker workflow (đang phát triển trên nhánh v3.1.2)
+
+Contract dùng chung cho mọi native workflow nằm ở `.omni/workflows/dual-controller.md` sau init. Task low-risk có thể chọn `execution_mode: "isolated"` và `depends_on: []`: AGY làm trong snapshot riêng, Codex QC/integrate kết quả đã được chốt hash. Nhiều isolated tasks được xếp theo dependency/scope; adapter hiện dispatch tuần tự, chưa tuyên bố parallel throughput.
+
+- Worker hỏi ở scout: đọc `pending_questions` trong `omni_dual_status`, trả lời bằng `omni_dual_resume.context_reply`.
+- Worker/QC thất bại: đọc `last_outcome`, dùng `omni_dual_resume.correction` với ID ổn định, `expected_attempt` và reason. Tối đa ba attempt, không đổi scope hay xóa evidence.
+- Handoff chờ QC: gọi `omni dual qc TASK-1 --json` hoặc `omni_dual_completion.isolated_qc`. Task verified chưa phải session verified; ba quality cycles và các mandatory gates vẫn phải có bằng chứng thật.
+
+Shared plans cũ giữ behavior tương thích. Private snapshot không copy `node_modules` hoặc authority credentials. Project npm single-package có package-lock có thể khai báo `dependency_mode: "npm-ci"` để controller cài riêng, tắt lifecycle scripts và giữ fingerprint; package/lock phải nằm ngoài write scope. Workspace, shrinkwrap và build cần lifecycle/native setup chưa thuộc mode này. Đường isolated đã có deterministic tests nhưng chưa được live-qualified cho mọi project/platform; không dùng mô tả này như release qualification.
+
 #### 2. Lifecycle và recovery
 
 ```bash

@@ -91,6 +91,10 @@ If setup actions exist, generate `.omni/sdlc/setup.json` with the exact versione
 - Do not call `omni_dual_begin` or `omni_dual_register_plan` directly from `$om-think`/`$om-plan`, and never invent `bootstrap-plan-artifacts`. Those low-level MCP operations are owned by the controller.
 
 **Typed Full Graph — `.omni/sdlc/dual-plan.json`:**
+
+For Codex + AGY, read `.omni/workflows/dual-controller.md` first. The example below is the backward-compatible shared mode. For new isolated worker graphs, add `"execution_mode": "isolated"` and explicit `"depends_on": []` (or predecessor task IDs). Multiple isolated low-risk AGY slices are supported; Codex-only architecture/integration/QC work stays outside that worker graph. Never lower a real risk classification to force delegation.
+
+Before setup, reject a graph mixing Codex/shared work with more than one AGY task. Either finish design/context before an all-isolated worker graph, or use one cohesive AGY slice after the Codex task. Stitch mutations require exact opt-in `external_operations` from the controller contract; provider IAM is a separate prerequisite. Resolve unknown remote IDs before freezing dependent implementation authority, never add wildcard tool grants.
 ```json
 {
   "schema_version": 1,
@@ -111,7 +115,7 @@ If setup actions exist, generate `.omni/sdlc/setup.json` with the exact versione
 }
 ```
 - Every source implementation deliverable in `todo.md` must have exactly one corresponding typed task. Setup/planning actions and final QC/review/verification checkboxes do not enter the graph; the bootstrap controller and completion/quality/UI gates own them.
-- All fields shown above are required. The full graph may contain at most one AGY-owned implementation slice because a session has one immutable baseline; make that slice cohesive and high-value. It requires 1-10 exact `allowed_files` and at least one typed validation command. Remaining setup, architecture, integration, broader-file, and QC work stays Codex-owned.
+- All fields shown above are required. A shared-mode graph may contain at most one AGY-owned implementation slice against its immutable baseline. An all-isolated worker graph may contain multiple eligible slices, each with its own snapshot and explicit dependencies. Each AGY task requires 1-10 exact `allowed_files` and at least one typed validation command. Controller setup/architecture/integration/QC stays outside the isolated worker graph.
 - **Tối Ưu Hóa Token Cho Codex:** Để chuyển giao tối đa khối lượng code sang AGY, hãy gom toàn bộ các file UI / Components / Tests vào slice thực thi có `owner: "agy"` và `risk: "low"`. Codex chỉ giữ vai trò Kiến Trúc Sư / Phê Duyệt và dùng lệnh `omni dual qc --json` để nghiệm thu nhanh chóng.
 - Architecture, security, migrations, ambiguous work, high risk, broad file scopes, and final QC remain Codex-owned.
 

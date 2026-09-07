@@ -165,7 +165,7 @@ describe('buildInitConfig per-IDE config files', () => {
         assert.match(autoThink.content, /Never create `bootstrap-plan-artifacts`/i);
         assert.match(autoThink.content, /do not call `omni_dual_begin` or `omni_dual_register_plan` directly/i);
         assert.match(autoThink.content, /omni dual run <task-id>/);
-        assert.match(autoThink.content, /gemini-3\.7-flash-high/);
+        assert.match(autoThink.content, /configured, capability-verified worker model/);
         assert.match(autoThink.content, /semantic artifacts first/i);
         assert.match(autoThink.content, /raw stdout\/stderr only/i);
         assert.match(autoThink.content, /AGY lease is released/i);

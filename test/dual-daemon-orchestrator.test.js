@@ -638,6 +638,36 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             assert.equal(tasks.find(t => t.task_id === 'TASK-5').owner, 'codex');
         });
 
+        it('registration preserves context and exact checks through daemon status and store reopen', async (t) => {
+            fs.writeFileSync(path.join(tmpDir, 'package.json'), '{"name":"metadata-replay"}');
+            const authorityDir = path.join(tmpDir, '.omni', 'runs', 'dual-authority');
+            const authorityStore = createAuthorityStore(authorityDir);
+            const daemon = await startDaemonServer({
+                workspaceRoot: tmpDir, authorityStore,
+                preflightRunner: async () => createPassingCapability(),
+            });
+            t.after(() => daemon.close());
+            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 5000 });
+            const begin = await client.beginSession({ workspace_root: tmpDir, mode: 'auto' });
+            const task = {
+                task_id: 'TASK-1', title: 'Exact context', owner: 'codex', goal: 'Use repository validation',
+                category: 'feature', risk: 'low', complexity: 'low', allowed_files: ['lib/a.js'],
+                context_files: ['.omni/sdlc/design-spec.md'], deny_patterns: ['private/**'],
+                validation_commands: [{ program: 'node', args: ['--check', 'lib/a.js'], cwd: '.' }],
+            };
+            await client.registerPlan(begin.session_id, {
+                plan_path: 'plans/plan.md', plan_sha256: 'a'.repeat(64), plan_revision: 1, tasks: [task],
+            });
+            const recorded = authorityStore.readEvents().find((event) => event.type === 'plan.registered').tasks[0];
+            assert.deepEqual(recorded.context_files, task.context_files);
+            const status = await client.status(begin.session_id);
+            assert.deepEqual(status.tasks['TASK-1'].validation_commands, task.validation_commands);
+            const reopened = createAuthorityStore(authorityDir).derive().tasks['TASK-1'];
+            for (const field of ['goal', 'context_files', 'validation_commands', 'deny_patterns']) {
+                assert.deepEqual(reopened[field], task[field], field);
+            }
+        });
+
         it('Daemon rejects multiple eligible AGY tasks against one immutable session baseline', async (t) => {
             fs.writeFileSync(path.join(tmpDir, 'package.json'), '{"name":"single-agy-slice"}');
             const authorityStore = createAuthorityStore(path.join(tmpDir, '.omni', 'runs', 'dual-authority'));
@@ -692,6 +722,13 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
                 authorityStore,
                 agyCommand: process.execPath,
                 agyPrefixArgs: [fakeAgyScript],
+                agyProjectId: '12345678-1234-1234-1234-123456789abc',
+                processRunner: (invocation) => {
+                    const selected = invocation.args.indexOf('--project');
+                    assert.ok(selected >= 0, 'shared adapter keeps registered source project');
+                    assert.equal(invocation.args[selected + 1], '12345678-1234-1234-1234-123456789abc');
+                    return runProcess(invocation);
+                },
             });
 
             const daemon = await startDaemonServer({
@@ -714,6 +751,8 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             });
             const sessionId = beginRes.session_id;
 
+            fs.mkdirSync(path.join(tmpDir, '.omni', 'sdlc'), { recursive: true });
+            fs.writeFileSync(path.join(tmpDir, '.omni', 'sdlc', 'worker-source.md'), 'Keep the heading readable.\n');
             await client.registerPlan(sessionId, {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'b'.repeat(64),
@@ -722,10 +761,12 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
                     {
                         task_id: 'TASK-1',
                         title: 'Update index.html',
+                        goal: 'Update index.html using the registered worker source',
                         category: 'feature',
                         complexity: 'low',
                         risk: 'low',
                         allowed_files: ['index.html'],
+                        context_files: ['.omni/sdlc/worker-source.md'],
                         deny_patterns: [],
                         validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
                     },
@@ -751,6 +792,15 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             assert.ok(fs.existsSync(path.join(taskRunDir, 'spec.json')), 'spec.json must exist');
             assert.ok(fs.existsSync(path.join(taskRunDir, 'context.json')), 'context.json must exist');
             assert.ok(fs.existsSync(path.join(taskRunDir, 'review.json')), 'review.json must exist');
+
+            const registeredSpec = JSON.parse(fs.readFileSync(path.join(taskRunDir, 'spec.json'), 'utf8'));
+            assert.deepEqual(registeredSpec.context_files, ['.omni/sdlc/worker-source.md']);
+            for (const phase of ['scout', 'implement', 'review']) {
+                const input = fs.readFileSync(path.join(taskRunDir, 'raw', `${phase}.1.input.md`), 'utf8');
+                assert.ok(input.includes('Update index.html using the registered worker source'), `${phase} receives goal`);
+                assert.ok(input.includes('.omni/sdlc/worker-source.md'), `${phase} receives context sources`);
+                assert.ok(input.includes(JSON.stringify(registeredSpec.validation_commands)), `${phase} receives exact checks`);
+            }
 
             const callCountAfterFirstResume = parseInt(fs.readFileSync(counterFile, 'utf8'), 10);
             assert.ok(callCountAfterFirstResume >= 3, 'Worker should have been invoked for scout, implement, and review');

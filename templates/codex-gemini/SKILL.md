@@ -5,6 +5,8 @@ description: Native Codex orchestration skill for delegating scout, implementati
 
 # Omni Codex-Gemini Orchestration
 
+Before every workflow, read `.omni/workflows/dual-controller.md`. It defines current isolated planning, owner/lease preflight, `context_reply`, `correction` and `isolated_qc` requests. Use its state-driven operations when a task is waiting; generic source-edit instructions do not override the controller contract.
+
 ## Role & Authority
 - Codex is the manager, orchestrator coordinator, and final verifier.
 - Gemini (via Antigravity / `agy`) is the delegated worker.
@@ -31,7 +33,7 @@ description: Native Codex orchestration skill for delegating scout, implementati
 1. Complete the approved design, install selected skills, and generate `.omni/sdlc/setup.json`, `.omni/sdlc/todo.md`, and the complete `.omni/sdlc/dual-plan.json` graph. These are planning artifacts outside the execution ledger.
    - Put source implementation deliverables only in `dual-plan.json`; setup, planning, final QC, review, and verification remain controller/gate operations rather than tasks.
 2. Call `omni dual bootstrap --json` exactly once. It validates the full graph, executes/reuses typed setup, requires its `SUCCESS receipt`, creates authority after setup, registers the real graph once, and resumes eligible AGY tasks.
-   - Use at most one cohesive AGY-owned implementation slice per session; the immutable baseline cannot safely measure multiple sequential AGY diffs. Give AGY the highest-value low-risk 1-10 exact-file slice and keep architecture/QC in Codex.
+   - Shared-mode sessions use at most one cohesive AGY slice. All-isolated worker graphs support multiple low-risk 1-10 exact-file slices with `depends_on`; private snapshots and controller integration separate their diffs. Keep architecture/QC in Codex outside that worker graph.
 3. Never create a temporary `bootstrap-plan-artifacts` task and never call `omni_dual_begin`/`omni_dual_register_plan` directly during `$om-think` AUTO. The controller owns those low-level operations.
    - For a legacy planning-only session, the controller may archive and adopt it only with a matching setup receipt and bounded planning/package drift; every other mismatch fails closed and preserves the old ledger.
 4. Check status with `omni_dual_status`. AGY runs end at `CODEX_QC` and AGY never self-approves.

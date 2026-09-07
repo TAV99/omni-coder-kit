@@ -42,6 +42,28 @@ function writePlan(root, plan = validPlan()) {
     return target;
 }
 
+test('private dependency readiness fails before session creation on escaping or oversized inputs', async (t) => {
+    for (const kind of ['escape', 'oversized']) {
+        const root = workspace(t);
+        const task = { ...validPlan().tasks[0], owner: 'agy', execution_mode: 'isolated', dependency_mode: 'npm-ci',
+            context_files: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] };
+        writePlan(root, { schema_version: 1, plan_revision: 1, tasks: [task] });
+        fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'fixture', version: '1.0.0',
+            ...(kind === 'escape' ? { dependencies: { outside: 'file:../escape' } } : {}) }));
+        fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({ name: 'fixture', lockfileVersion: 3, packages: {} }));
+        if (kind === 'oversized') {
+            fs.mkdirSync(path.join(root, 'node_modules'));
+            const fd = fs.openSync(path.join(root, 'node_modules/huge.bin'), 'w');
+            try { fs.ftruncateSync(fd, 256 * 1024 * 1024 + 1); } finally { fs.closeSync(fd); }
+        }
+        let sessions = 0;
+        await assert.rejects(() => executeDualBootstrap({ workspaceRoot: root }, {
+            ensureDaemonSession: async () => { sessions++; throw new Error('Session must not start'); },
+        }), { code: kind === 'escape' ? 'DUAL_PRIVATE_SETUP_INVALID' : 'DUAL_PRIVATE_SETUP_LIMIT' });
+        assert.equal(sessions, 0);
+    }
+});
+
 test('bootstrap validates the typed full graph before setup or daemon side effects', async (t) => {
     const root = workspace(t);
     let setupCalls = 0;

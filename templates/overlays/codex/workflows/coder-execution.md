@@ -19,7 +19,7 @@ You MUST complete this step and report the result BEFORE writing any code.
    - `Makefile` → target `dev` or `serve`
    - `manage.py` → `python manage.py runserver`
 2. If a command is found:
-   a. Install dependencies if missing (e.g. `node_modules/` absent).
+   a. If dependencies are missing, use the project's declared setup manifest and `omni dual setup run`; do not install undeclared dependencies or guess a package manager.
    b. Run the dev server as a background process.
    c. Wait up to 5 seconds for the server to print a URL.
    d. If the sandbox blocks the server (network or port restriction), report and skip.
@@ -39,7 +39,7 @@ You MUST complete this step and report the result BEFORE writing any code.
 
 ### Step 4: Execute One Task
 
-Before editing: run `git diff --stat`. If uncommitted changes exist from a prior task, commit or stash first.
+Before editing: run `git diff --stat`. Preserve pre-existing changes; do not commit, stash, or reset automatically.
 For the current task:
 
 1. State the task and which files will be affected (scope declaration).

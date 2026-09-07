@@ -356,6 +356,13 @@ test('complete Gemini path reaches CODEX_QC with all transaction artifacts', asy
     assert.ok(fs.existsSync(path.join(runDir, 'evidence.json')));
     assert.ok(fs.existsSync(path.join(runDir, 'review.json')));
 
+    for (const phase of ['implement', 'review']) {
+        const input = fs.readFileSync(path.join(runDir, 'raw', `${phase}.1.input.md`), 'utf8');
+        assert.ok(input.includes(JSON.stringify(spec.validation_commands)), `${phase} receives exact typed checks`);
+        assert.ok(input.includes(JSON.stringify(spec.deny_patterns)), `${phase} receives deny patterns`);
+        assert.ok(input.includes('.omni/codex-gemini/runs/TASK-FULL/spec.json'), `${phase} knows the spec path`);
+    }
+
     const routeJson = JSON.parse(fs.readFileSync(path.join(runDir, 'route.json'), 'utf8'));
     assert.equal(routeJson.owner, 'gemini');
     assert.equal(routeJson.model, 'gemini-3.7-flash-high');
@@ -370,6 +377,118 @@ test('complete Gemini path reaches CODEX_QC with all transaction artifacts', asy
     assert.equal(status.attempts.scout, 1);
     assert.equal(status.attempts.implement, 1);
     assert.equal(status.attempts.review, 1);
+});
+
+test('registered context paths are checked before scout invokes any worker', async (t) => {
+    const { repoRoot, head, scratchDir } = makeRepoFixture(t);
+    let workerCalls = 0;
+    const orch = createDualOrchestrator({
+        cwd: repoRoot,
+        authoritativeCapabilityEvidence: { version: '1.1.20-test', model: 'gemini-3.7-flash-high' },
+        processRunner: async () => { workerCalls++; throw new Error('worker must not run'); },
+    });
+    for (const [taskId, source, expectedCode] of [
+        ['CONTEXT-MISSING', '.omni/missing.md', 'DUAL_CONTEXT_SOURCE_INVALID'],
+        ['CONTEXT-DIR', '.omni', 'DUAL_CONTEXT_SOURCE_INVALID'],
+        ['CONTEXT-ESCAPE', '.omni/external/reference.md', 'DUAL_PATH_ESCAPE'],
+    ]) {
+        orch.newTask(taskId);
+        if (taskId === 'CONTEXT-ESCAPE') {
+            fs.writeFileSync(path.join(scratchDir, 'reference.md'), 'outside workspace');
+            fs.symlinkSync(scratchDir, path.join(repoRoot, '.omni', 'external'), 'junction');
+        }
+        const runDir = path.join(repoRoot, '.omni', 'codex-gemini', 'runs', taskId);
+        fs.writeFileSync(path.join(runDir, 'spec.json'), JSON.stringify({
+            schema_version: 1, task_id: taskId, expected_base_commit: head,
+            goal: 'Read registered context', allowed_files: ['index.html'], context_files: [source],
+            deny_patterns: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
+            risk_flags: [], permission_authority: 'dual-init-dangerous-auto-v1',
+        }));
+        await orch.runPhase('preflight', taskId);
+        await assert.rejects(() => orch.runPhase('scout', taskId), (error) => error.code === expectedCode);
+        assert.equal(workerCalls, 0);
+    }
+});
+
+test('scout rejects a registered spec from another task or baseline before worker invocation', async (t) => {
+    const { repoRoot, head } = makeRepoFixture(t);
+    let workerCalls = 0;
+    const orch = createDualOrchestrator({
+        cwd: repoRoot,
+        authoritativeCapabilityEvidence: { version: '1.1.20-test', model: 'gemini-3.7-flash-high' },
+        processRunner: async () => { workerCalls++; throw new Error('worker must not run'); },
+    });
+    for (const [taskId, overrides] of [
+        ['CONTEXT-WRONG-TASK', { task_id: 'UNRELATED-TASK' }],
+        ['CONTEXT-WRONG-BASE', { expected_base_commit: 'f'.repeat(40) }],
+    ]) {
+        orch.newTask(taskId);
+        const runDir = path.join(repoRoot, '.omni', 'codex-gemini', 'runs', taskId);
+        fs.writeFileSync(path.join(runDir, 'spec.json'), JSON.stringify({
+            schema_version: 1, task_id: taskId, expected_base_commit: head,
+            goal: 'Read this task only', allowed_files: ['index.html'],
+            deny_patterns: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
+            risk_flags: [], permission_authority: 'dual-init-dangerous-auto-v1', ...overrides,
+        }));
+        await orch.runPhase('preflight', taskId);
+        await assert.rejects(() => orch.runPhase('scout', taskId), (error) => error.code === 'DUAL_SPEC_CORRELATION');
+        assert.equal(workerCalls, 0);
+    }
+});
+
+test('technical retry rechecks registered context before another worker call', async (t) => {
+    const { repoRoot, head } = makeRepoFixture(t);
+    const source = path.join(repoRoot, '.omni', 'source.md');
+    let workerCalls = 0;
+    const orch = createDualOrchestrator({
+        cwd: repoRoot,
+        authoritativeCapabilityEvidence: { version: '1.1.20-test', model: 'gemini-3.7-flash-high' },
+        processRunner: async () => {
+            workerCalls++;
+            if (fs.existsSync(source)) fs.unlinkSync(source);
+            return { exitCode: 0, stdout: 'invalid-json', stderr: '', timedOut: false,
+                startedAt: new Date(), endedAt: new Date(), durationMs: 1 };
+        },
+    });
+    orch.newTask('CONTEXT-RETRY');
+    fs.writeFileSync(source, 'read-only source');
+    const runDir = path.join(repoRoot, '.omni', 'codex-gemini', 'runs', 'CONTEXT-RETRY');
+    fs.writeFileSync(path.join(runDir, 'spec.json'), JSON.stringify({
+        schema_version: 1, task_id: 'CONTEXT-RETRY', expected_base_commit: head,
+        goal: 'Keep context present', allowed_files: ['index.html'], context_files: ['.omni/source.md'],
+        deny_patterns: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
+        risk_flags: [], permission_authority: 'dual-init-dangerous-auto-v1',
+    }));
+    await orch.runPhase('preflight', 'CONTEXT-RETRY');
+    await assert.rejects(() => orch.runPhase('scout', 'CONTEXT-RETRY'), (error) => error.code === 'DUAL_CONTEXT_SOURCE_INVALID');
+    assert.equal(workerCalls, 1);
+});
+
+test('technical retry cannot downgrade a registered task to specless legacy scout', async (t) => {
+    const { repoRoot, head } = makeRepoFixture(t);
+    const runDir = path.join(repoRoot, '.omni', 'codex-gemini', 'runs', 'SPEC-RETRY');
+    let workerCalls = 0;
+    const orch = createDualOrchestrator({
+        cwd: repoRoot,
+        authoritativeCapabilityEvidence: { version: '1.1.20-test', model: 'gemini-3.7-flash-high' },
+        processRunner: async () => {
+            workerCalls++;
+            const specPath = path.join(runDir, 'spec.json');
+            if (fs.existsSync(specPath)) fs.unlinkSync(specPath);
+            return { exitCode: 0, stdout: 'invalid-json', stderr: '', timedOut: false,
+                startedAt: new Date(), endedAt: new Date(), durationMs: 1 };
+        },
+    });
+    orch.newTask('SPEC-RETRY');
+    fs.writeFileSync(path.join(runDir, 'spec.json'), JSON.stringify({
+        schema_version: 1, task_id: 'SPEC-RETRY', expected_base_commit: head,
+        goal: 'Keep registered task context', allowed_files: ['index.html'],
+        deny_patterns: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
+        risk_flags: [], permission_authority: 'dual-init-dangerous-auto-v1',
+    }));
+    await orch.runPhase('preflight', 'SPEC-RETRY');
+    await assert.rejects(() => orch.runPhase('scout', 'SPEC-RETRY'), (error) => error.code === 'DUAL_SPEC_CORRELATION');
+    assert.equal(workerCalls, 1);
 });
 
 test('retries empty and malformed AGY output up to a third quality-first attempt', async (t) => {

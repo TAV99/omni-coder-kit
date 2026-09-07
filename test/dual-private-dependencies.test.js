@@ -1,0 +1,96 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const { createCliResolver } = require('../lib/dual/setup-command');
+const { resolveSetupInvocation } = require('../lib/dual/setup-runner');
+const { preparePrivateDependencies, verifyPrivateDependencies } = require('../lib/dual/private-dependencies');
+
+function fixture(t) {
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-private-deps-')));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(root, 'worker'));
+    fs.writeFileSync(path.join(root, 'worker/package.json'), '{"name":"empty-private-fixture","version":"1.0.0"}');
+    fs.writeFileSync(path.join(root, 'worker/package-lock.json'), JSON.stringify({
+        name: 'empty-private-fixture', version: '1.0.0', lockfileVersion: 3, requires: true,
+        packages: { '': { name: 'empty-private-fixture', version: '1.0.0' } },
+    }));
+    return { workerRoot: path.join(root, 'worker'), artifactRoot: root, authorize: () => true, mode: 'npm-ci' };
+}
+
+test('locked private npm install uses its worker cwd and a durable fingerprint receipt', async (t) => {
+    const input = fixture(t);
+    const result = await preparePrivateDependencies(input);
+    assert.equal(result.mode, 'npm-ci');
+    assert.match(result.receiptSha256, /^[a-f0-9]{64}$/);
+    assert.doesNotThrow(() => verifyPrivateDependencies({ ...input, reference: result }));
+    assert.equal((await preparePrivateDependencies({ ...input, reference: result })).reused, true);
+    assert.equal(fs.existsSync(path.join(input.artifactRoot, 'node_modules')), false);
+});
+
+test('dependency setup cannot run without a lockfile or current authority', async (t) => {
+    const input = fixture(t);
+    await assert.rejects(() => preparePrivateDependencies({ ...input, authorize: () => false }),
+        (error) => error.code === 'DUAL_PRIVATE_SETUP_UNAUTHORIZED');
+    fs.unlinkSync(path.join(input.workerRoot, 'package-lock.json'));
+    await assert.rejects(() => preparePrivateDependencies(input),
+        (error) => error.code === 'DUAL_PRIVATE_SETUP_INVALID');
+});
+
+test('receipt and dependency mutation are detected without rerunning installation', async (t) => {
+    const input = fixture(t);
+    const reference = await preparePrivateDependencies(input);
+    fs.mkdirSync(path.join(input.workerRoot, 'node_modules/forged'), { recursive: true });
+    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/forged/index.js'), 'module.exports = "forged"');
+    assert.throws(() => verifyPrivateDependencies({ ...input, reference }),
+        (error) => error.code === 'DUAL_PRIVATE_SETUP_DRIFT');
+    const original = fs.readFileSync(path.join(input.artifactRoot, reference.receiptPath));
+    fs.writeFileSync(path.join(input.artifactRoot, reference.receiptPath), Buffer.concat([original, Buffer.from(' ')]));
+    assert.throws(() => verifyPrivateDependencies({ ...input, reference }),
+        (error) => error.code === 'DUAL_PRIVATE_SETUP_DRIFT');
+});
+
+test('private install makes a real locked local dependency usable without executing lifecycle scripts', async (t) => {
+    const input = fixture(t);
+    fs.mkdirSync(path.join(input.workerRoot, 'vendor/helper'), { recursive: true });
+    fs.writeFileSync(path.join(input.workerRoot, 'vendor/helper/package.json'), JSON.stringify({ name: 'local-helper', version: '1.0.0', main: 'index.js',
+        scripts: { postinstall: 'node -e "require(\'fs\').writeFileSync(\'script-ran\',\'yes\')"' } }));
+    fs.writeFileSync(path.join(input.workerRoot, 'vendor/helper/index.js'), 'module.exports = 42;');
+    fs.writeFileSync(path.join(input.workerRoot, 'package.json'), JSON.stringify({ name: 'private-fixture', version: '1.0.0',
+        dependencies: { 'local-helper': 'file:vendor/helper' } }));
+    const invocation = resolveSetupInvocation({ kind: 'package-manager', program: 'npm', cwd: '.',
+        args: ['install', '--package-lock-only', '--ignore-scripts', '--install-links', '--no-audit', '--no-fund'] },
+    { workspaceRoot: input.workerRoot, resolveExecutable: createCliResolver(input.workerRoot) });
+    const lock = spawnSync(invocation.command, invocation.args, { cwd: input.workerRoot, shell: false, windowsHide: true, encoding: 'utf8', timeout: 30000 });
+    assert.equal(lock.status, 0, lock.stderr);
+    const reference = await preparePrivateDependencies(input);
+    const execution = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(require("local-helper")))'], {
+        cwd: input.workerRoot, shell: false, windowsHide: true, encoding: 'utf8',
+    });
+    assert.equal(execution.status, 0, execution.stderr);
+    assert.equal(execution.stdout, '42');
+    assert.equal(fs.existsSync(path.join(input.workerRoot, 'node_modules/local-helper/script-ran')), false);
+    assert.equal(verifyPrivateDependencies({ ...input, reference }).mode, 'npm-ci');
+});
+
+test('private setup rejects local dependency paths escaping its snapshot', async (t) => {
+    const input = fixture(t);
+    fs.writeFileSync(path.join(input.workerRoot, 'package.json'), JSON.stringify({ name: 'fixture', dependencies: { outside: 'file:../../outside' } }));
+    await assert.rejects(() => preparePrivateDependencies(input), (error) => error.code === 'DUAL_PRIVATE_SETUP_INVALID');
+    assert.equal(fs.existsSync(path.join(input.workerRoot, 'node_modules')), false);
+});
+
+test('npm shrinkwrap cannot replace the validated lockfile during setup or replay', async (t) => {
+    const input = fixture(t);
+    const reference = await preparePrivateDependencies(input);
+    fs.writeFileSync(path.join(input.workerRoot, 'npm-shrinkwrap.json'), '{}');
+    assert.throws(() => verifyPrivateDependencies({ ...input, reference }), (error) => error.code === 'DUAL_PRIVATE_SETUP_INVALID');
+    const fresh = fixture(t);
+    fs.writeFileSync(path.join(fresh.workerRoot, 'npm-shrinkwrap.json'), '{}');
+    await assert.rejects(() => preparePrivateDependencies(fresh), (error) => error.code === 'DUAL_PRIVATE_SETUP_INVALID');
+    assert.equal(fs.existsSync(path.join(fresh.workerRoot, 'node_modules')), false);
+});
