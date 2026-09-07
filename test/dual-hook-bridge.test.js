@@ -372,8 +372,11 @@ test('classifyTool handles apply_patch, Bash allowlist, Bash denials, MCP tools,
         'omni dual setup run --force --json',
         'omni dual setup run --dry-run --force --json',
         'omni dual --help',
-        'omni dual status',
-        'omni dual status --json',
+        'omni dual status TASK-1',
+        'omni dual status VIBE-LANDING-001',
+        'omni dual status --help',
+        'omni dual bootstrap --help',
+        'omni --version',
         'omni dual daemon recover --if-pristine --json',
         'omni dual bootstrap --json',
         'omni skills --help',
@@ -384,7 +387,11 @@ test('classifyTool handles apply_patch, Bash allowlist, Bash denials, MCP tools,
         'node bin/omni.js dual setup run',
         'node bin/omni.js dual setup run --dry-run',
         'node bin/omni.js dual --help',
-        'node bin/omni.js dual status',
+        'node bin/omni.js dual status TASK-1',
+        'node bin/omni.js dual status VIBE-LANDING-001',
+        'node bin/omni.js dual status --help',
+        'node bin/omni.js dual bootstrap --help',
+        'node bin/omni.js --version',
         'node bin/omni.js dual daemon recover --if-pristine',
         'node bin/omni.js dual bootstrap',
     ];
@@ -403,7 +410,8 @@ test('classifyTool handles apply_patch, Bash allowlist, Bash denials, MCP tools,
         'omni check',
         'omni doctor',
         'omni dual status --output result.json',
-        'omni dual status extra',
+        'omni dual status -invalid',
+        'omni dual status TASK-1 --json',
         'omni dual daemon recover',
         'omni dual daemon recover --if-pristine --force',
         'omni dual bootstrap --force',
@@ -502,6 +510,36 @@ test('classifyTool handles apply_patch, Bash allowlist, Bash denials, MCP tools,
     // 7. Unknown tool
     const unknownTool = classifyTool('UnknownTool', {});
     assert.equal(unknownTool.classification, 'denied');
+});
+
+test('classifyTool allows only exact pre-authority Dual diagnostics', () => {
+    for (const command of [
+        'omni dual status TASK-1',
+        'omni dual status VIBE-LANDING-001',
+        'omni dual status --help',
+        'omni dual bootstrap --help',
+        'omni --version',
+        'node bin/omni.js dual status TASK-1',
+        'node bin/omni.js dual status VIBE-LANDING-001',
+        'node bin/omni.js dual status --help',
+        'node bin/omni.js dual bootstrap --help',
+        'node bin/omni.js --version',
+    ]) {
+        assert.equal(classifyTool('Bash', { command }).classification, 'read', command);
+    }
+
+    for (const command of [
+        'omni dual status',
+        'omni dual status TASK-1 --json',
+        'omni dual status -invalid --output result.json',
+        'omni dual status ../outside',
+        'omni dual status SAFE TASK',
+        'omni dual bootstrap --force',
+        'omni dual status TASK-1 && echo unsafe',
+        'omni dual bootstrap --help extra',
+    ]) {
+        assert.equal(classifyTool('Bash', { command }).classification, 'denied', command);
+    }
 });
 
 test('inferTask prefers active leases and falls back only to a unique routed Codex-owned task', () => {
@@ -921,7 +959,7 @@ test('design-ready phase remains fail-closed for source mutation when daemon is 
     assert.match(out.hookSpecificOutput?.permissionDecisionReason || '', /Dual session required after design is ready/i);
 });
 
-test('design-ready Stop enforces AUTO continuation once before yielding for inspection', async (t) => {
+test('design-ready Stop returns to user without inferring approval or completion', async (t) => {
     const wsRoot = createTempWorkspace(t);
     const sdlcDir = path.join(wsRoot, '.omni', 'sdlc');
     fs.mkdirSync(sdlcDir, { recursive: true });
@@ -931,13 +969,29 @@ test('design-ready Stop enforces AUTO continuation once before yielding for insp
     const first = await evaluateHook({
         session_id: 'codex-pre-authority', cwd: wsRoot, hook_event_name: 'Stop',
     }, { createClient: client });
-    assert.equal(first.decision, 'block');
-    assert.match(first.reason || '', /continue.*setup.*Dual/i);
+    assert.notEqual(first.decision, 'block');
+    assert.match(first.systemMessage || '', /authority is not initialized|session remains unverified/i);
 
     const guarded = await evaluateHook({
         session_id: 'codex-pre-authority', cwd: wsRoot, hook_event_name: 'Stop', stop_hook_active: true,
     }, { createClient: client });
-    assert.match(guarded.systemMessage || '', /stopping loop for user inspection/i);
+    assert.notEqual(guarded.decision, 'block');
+    assert.match(guarded.systemMessage || '', /authority is not initialized|session remains unverified/i);
+});
+
+test('stale design-spec never turns pre-authority Stop into a continuation block', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    const sdlcDir = path.join(wsRoot, '.omni', 'sdlc');
+    fs.mkdirSync(sdlcDir, { recursive: true });
+    fs.writeFileSync(path.join(sdlcDir, 'design-spec.md'), '# Stale design from another session\n', 'utf8');
+    const out = await evaluateHook({
+        session_id: 'codex-pre-authority-stale', cwd: wsRoot, hook_event_name: 'Stop',
+    }, {
+        createClient: () => ({ health: async () => ({ status: 'healthy', session_id: null }) }),
+    });
+
+    assert.notEqual(out.decision, 'block');
+    assert.match(out.systemMessage || '', /authority is not initialized|session remains unverified/i);
 });
 
 test('initialized authority still fails closed when daemon is unavailable from a nested cwd', async (t) => {

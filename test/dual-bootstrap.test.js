@@ -15,6 +15,13 @@ const {
     collectLegacyBootstrapChanges,
     handleDualQc,
 } = require('../lib/commands/dual');
+const { detectBaselineBackend } = require('../lib/dual/baseline');
+const { createConfiguredSnapshotBaseline } = require('../lib/dual/snapshot-policy');
+const { createAuthorityStore } = require('../lib/dual/authority-store');
+const { createDaemonClient } = require('../lib/dual/daemon-client');
+const { startDaemonServer } = require('../lib/dual/daemon-server');
+const { computeWorkspaceId } = require('../lib/dual/daemon-lock');
+const { writeInitialSnapshot } = require('../lib/dual/snapshot-store');
 
 function workspace(t) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-bootstrap-'));
@@ -140,6 +147,83 @@ test('bootstrap runs setup before session creation, registers the exact plan has
     assert.equal(registerPayload.plan_sha256, crypto.createHash('sha256').update(fs.readFileSync(planPath)).digest('hex'));
     assert.deepEqual(registerPayload.tasks, validPlan().tasks);
     assert.equal(result.session_id, 'session-1');
+});
+
+test('unborn Git bootstrap uses a real snapshot authority without changing Git refs or index', async (t) => {
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-unborn-bootstrap-')));
+    let daemon = null;
+    t.after(async () => {
+        if (daemon) await daemon.close();
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+    execFileSync('git', ['init', '-b', 'main'], { cwd: root, stdio: 'ignore' });
+    const planPath = writePlan(root);
+    const headRefPath = path.join(root, '.git', 'refs', 'heads', 'main');
+    const beforeRefs = fs.existsSync(headRefPath) ? fs.readFileSync(headRefPath) : null;
+    const beforeIndex = fs.existsSync(path.join(root, '.git', 'index'))
+        ? fs.readFileSync(path.join(root, '.git', 'index'))
+        : null;
+    assert.equal(detectBaselineBackend(root), 'snapshot');
+    const authorityStore = createAuthorityStore(path.join(root, '.omni', 'runs', 'dual-authority'));
+    daemon = await startDaemonServer({
+        workspaceRoot: root,
+        authorityStore,
+        preflightRunner: async () => ({
+            status: 'PASSED',
+            to_state: 'CAPABILITY_SAFE',
+            checks: [{ name: 'agy_cli_and_model', status: 'PASSED' }],
+            details: {
+                agy_version: '1.2.3',
+                agy_model: 'gemini-3.7-flash-high',
+            },
+        }),
+    });
+    const client = createDaemonClient({ workspaceRoot: root });
+    const ensureDaemonSession = async (_workspaceRoot, expectedSessionId) => {
+        let health = await client.health();
+        if (!health.session_id) {
+            const snapshot = createConfiguredSnapshotBaseline({ root }).baseline.capture();
+            const begin = await client.beginSession({
+                session_id: crypto.randomUUID(),
+                workspace_root: root,
+                mode: 'auto',
+                expected_baseline: snapshot.identity,
+            });
+            writeInitialSnapshot({
+                authorityDir: path.join(root, '.omni', 'runs', 'dual-authority'),
+                sessionId: begin.session_id,
+                workspaceId: computeWorkspaceId(root),
+                workspaceRoot: root,
+                identity: snapshot.identity,
+                manifest: snapshot.manifest,
+            });
+            health = await client.health();
+        }
+        if (expectedSessionId && health.session_id !== expectedSessionId) throw new Error('session mismatch');
+        return { client, health };
+    };
+
+    const result = await executeDualBootstrap({ workspaceRoot: root }, {
+        ensureDaemonSession,
+        executeSetupManifest: () => ({ status: 'SUCCESS' }),
+    });
+
+    assert.equal(result.session_id.length > 0, true);
+    const firstSessionId = result.session_id;
+    const firstStatus = await client.status(firstSessionId);
+    assert.equal(firstStatus.current_baseline.kind, 'snapshot');
+    assert.equal(firstStatus.tasks['TASK-1'].owner, 'codex');
+    const reopened = await executeDualBootstrap({ workspaceRoot: root }, { ensureDaemonSession });
+    assert.equal(reopened.session_id, firstSessionId);
+    assert.equal(reopened.reused, true);
+    assert.equal(fs.existsSync(path.join(root, '.git', 'index')), beforeIndex !== null);
+    assert.deepEqual(
+        fs.existsSync(headRefPath)
+            ? fs.readFileSync(headRefPath)
+            : null,
+        beforeRefs,
+    );
+    assert.equal(fs.readFileSync(planPath, 'utf8').includes('TASK-1'), true);
 });
 
 test('bootstrap retry reuses an identical registered full graph without re-registering', async (t) => {

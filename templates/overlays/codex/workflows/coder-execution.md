@@ -37,6 +37,13 @@ You MUST complete this step and report the result BEFORE writing any code.
 - Do not use destructive commands such as `rm -rf`, `git reset --hard`, or force push without explicit user instruction.
 - If a command fails because of permission or approval limits, explain the needed command and ask the user to rerun with an appropriate Codex profile or approval.
 
+### Dual command wrapper contract
+
+- Preserve the full execution result from every wrapper (`output`, `exit_code`, and `session_id`); use `text(r)` rather than `text(r.output)` and keep/poll the returned handle for long-running commands.
+- Do not retry `omni dual bootstrap` merely because `output` is empty. Empty output is not evidence that the process exited.
+- For read-only status, use `omni dual status <task-id>` (without `--json`); diagnostics must select public status fields and never dump raw `daemon.json` or its token.
+- A missing `HEAD` in a proven unborn repository is separate from `.git/index.lock`; snapshot bootstrap needs no automatic initial commit. Do not delete or infer ownership of an index lock.
+
 ### Step 4: Execute One Task
 
 Before editing: run `git diff --stat`. Preserve pre-existing changes; do not commit, stash, or reset automatically.

@@ -16,7 +16,7 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 - Overlapping write/read-context scopes wait in deterministic dependency order. Do not remove ownership checks or merge competing edits by last-writer-wins. The adapter currently dispatches serially; do not claim parallel throughput.
 - Resolve the worker model from configured capability evidence and `agy models`; model examples are not proof of availability. No silent fallback to another model.
 - Private workers start from source snapshots without copying `node_modules`, authority credentials or the source AGY project binding. For a single-package npm project with an immutable package.json/package-lock.json, declare `dependency_mode: "npm-ci"`. The controller installs in private cwd with lifecycle scripts disabled, records a dependency fingerprint, and checks it on resume/QC. Shrinkwrap, workspace projects and escaping local dependencies are rejected by this mode. If a build requires lifecycle/native setup or another package manager, resolve that capability before spending a live attempt; do not switch to shared writes to hide it.
-- Use `omni_dual_status` and `omni_dual_resume` (or `omni dual status/run/resume <task-id>`). Direct legacy `omni dual phase` is not a bypass for an authority task.
+- Use `omni_dual_status` and `omni_dual_resume` (or `omni dual status <task-id>` / `omni dual run|resume <task-id>`). `omni dual status --json` is not a supported CLI form; use the task ID form and inspect bounded public fields only. Direct legacy `omni dual phase` is not a bypass for an authority task.
 
 ## Act on observable task state
 
@@ -93,6 +93,10 @@ The evidence file must already be in `allowed_files` and outside `deny_patterns`
 Do not invent a local path field in provider tool arguments. Provider IAM/OAuth permissions remain independent. Grants must be known before immutable plan registration: if later operations require newly returned project/screen IDs, prepare that external design phase before freezing the implementation graph, or stop for an explicitly authorized follow-up plan. Never edit an active plan or grant yourself wildcard access to work around unknown IDs.
 
 Read bounded semantic artifacts/status first, raw stdout/stderr only to diagnose a failure or correlation mismatch. Worker prose is not completion evidence.
+
+When an execution wrapper returns a process handle, retain the complete result (`output`, `exit_code`, and `session_id`) and poll that returned handle until it reaches a terminal state. In an exec callback, forward the complete result with `text(r)` rather than `text(r.output)`. Empty output is not process completion and is never a reason to retry bootstrap. Never read or dump raw `.omni/runtime/dual/daemon.json`; it contains a token. Diagnostics must select only public fields such as workspace, PID, host, port, and health state.
+
+A missing Git `HEAD` in a positively proven unborn repository is distinct from `.git/index.lock`: fresh snapshot bootstrap does not require an automatic initial commit, and an index lock is a separate ownership/recovery condition. Do not infer lock ownership from age or size and do not remove it automatically.
 
 TASK_VERIFIED is not session VERIFIED. Record three real quality cycles and required UI evidence on the integrated project through `omni_dual_completion`, then inspect the session receipt. Never fabricate command output or infer visual QA from static checks. A green simulated-worker suite does not qualify live AGY, platforms or release packaging.
 

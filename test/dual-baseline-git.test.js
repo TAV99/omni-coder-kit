@@ -59,6 +59,70 @@ afterEach(() => {
 });
 
 describe('detectBaselineBackend', () => {
+    it('selects snapshot for a freshly initialized unborn repository', () => {
+        const unborn = makeTemp('omni-unborn-');
+        git(unborn, ['init']);
+
+        assert.equal(detectBaselineBackend(unborn), 'snapshot');
+    });
+
+    it('fails closed when a missing HEAD cannot be proven to be an unborn branch', () => {
+        const root = makeTemp('omni-corrupt-ref-');
+        fs.mkdirSync(path.join(root, '.git'));
+        const calls = [];
+        const fakeRunner = (args) => {
+            calls.push(args);
+            if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return `${root}\n`;
+            if (args[0] === 'rev-parse' && args[1] === 'HEAD') {
+                const error = new Error('malformed HEAD');
+                error.details = { status: 128 };
+                throw error;
+            }
+            if (args[0] === 'symbolic-ref') return 'refs/heads/main\n';
+            const error = new Error('cannot read ref');
+            error.details = { status: 128 };
+            throw error;
+        };
+
+        assert.throws(() => detectBaselineBackend(root, { gitRunner: fakeRunner }), {
+            code: 'DUAL_GIT_PROBE_FAILED',
+        });
+        assert.deepEqual(calls.slice(0, 3).map((args) => args.slice(0, 2)), [
+            ['rev-parse', '--show-toplevel'],
+            ['rev-parse', 'HEAD'],
+            ['symbolic-ref', '--quiet'],
+        ]);
+    });
+
+    it('fails closed when repository HEAD metadata is corrupt', () => {
+        const corrupt = makeTemp('omni-corrupt-head-');
+        git(corrupt, ['init']);
+        fs.writeFileSync(path.join(corrupt, '.git', 'HEAD'), 'not-a-symbolic-ref\n', 'utf8');
+
+        assert.throws(() => detectBaselineBackend(corrupt), {
+            code: 'DUAL_GIT_PROBE_FAILED',
+        });
+    });
+
+    it('accepts a safe unborn branch name with path segments', () => {
+        const root = makeTemp('omni-unborn-branch-');
+        fs.mkdirSync(path.join(root, '.git'));
+        const fakeRunner = (args) => {
+            if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return `${root}\n`;
+            if (args[0] === 'rev-parse' && args[1] === 'HEAD') {
+                const error = new Error('unborn');
+                error.details = { status: 128 };
+                throw error;
+            }
+            if (args[0] === 'symbolic-ref') return 'refs/heads/codex/bootstrap\n';
+            const error = new Error('missing ref');
+            error.details = { status: 1 };
+            throw error;
+        };
+
+        assert.equal(detectBaselineBackend(root, { gitRunner: fakeRunner }), 'snapshot');
+    });
+
     it('detects git backend for an existing repository root and nested subdirectory', () => {
         const repo = makeRepo();
         assert.equal(detectBaselineBackend(repo), 'git');
