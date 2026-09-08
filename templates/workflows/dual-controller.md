@@ -31,6 +31,8 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 | Partial integration journal | Resume its integration/recovery; a new correction attempt is refused. |
 | Expired unreleased lease | Verify actual process ownership/termination before recovery; expiry is not proof the worker stopped. |
 
+An isolated finalization failure is a durable `FAILED` outcome, never a success or handoff. A post-expiry lease is settled only when the current controller owns the recorded execution and every tracked child has a correlated started PID plus a numeric normal close; otherwise preserve the lease and surface `NEEDS_PROCESS_EVIDENCE` or `NEEDS_PROCESS_TREE_EVIDENCE`. Use task-level recovery for that attempt; `archive --if-pristine` is not a substitute for resolving an active or expired execution.
+
 ## Exact MCP calls
 
 Use the current `workspace_root`, `session_id`, task ID and `plan_revision` from status. IDs below illustrate a task named `TASK-1`; do not reuse another session's values.

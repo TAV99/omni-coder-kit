@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex–AGY workflows share a controller reference across native entrypoints, with exact isolated QC, context-reply, correction and dependency contracts. Generated integration text respects the selected pairing and configured worker model.
 
 ### Fixed
+- Isolated finalization preserves failure evidence after lease expiry and settles only the current execution with verified tracked-child close evidence; stale owner/revision/lease results cannot overwrite a newer attempt. Unmanaged dependencies fail before result collection scans them.
+- Fresh unborn Git repositories use verified snapshot bootstrap, and pre-authority interview stops no longer force premature continuation; safe task-status diagnostics retain full process-handle guidance.
 - Isolated dispatch no longer inherits the source AGY project binding. Private dependency fingerprints use bounded reads for native binaries, with readiness checks before dispatch and explicit resource limits.
 - Exact opt-in Stitch operation grants are preserved through MCP and authority replay; durable reservations prevent automatic duplicate mutations. Failed preparation no longer loops AUTO continuation when no independent work can run.
 - Authority task metadata survives replay; `run`/`resume` recognize authority tasks rather than fabricating legacy transactions.

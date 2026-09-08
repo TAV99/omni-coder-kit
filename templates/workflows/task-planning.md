@@ -82,6 +82,8 @@ If setup actions exist, generate `.omni/sdlc/setup.json` with the exact versione
   - `kind: "node-cli"`: Resolved trusted JavaScript CLI entrypoint plus argv array.
 - If no setup actions are needed, omit `.omni/sdlc/setup.json` or write an empty typed manifest (`{ "schema_version": 1, "actions": [] }`) and continue.
 
+When validators need installed tools, keep dependency installation as a typed setup action and keep `package.json`/`package-lock.json` immutable for the isolated implementation slice. The private `npm-ci` receipt is part of worker setup and verification; do not combine package/lock writes with that managed install or silently scan an unapproved `node_modules` tree. Build output handling must remain explicit and in scope.
+
 **AUTO Behavior:**
 - Generate all planning artifacts first. Planning artifacts are outside the execution ledger and never become a temporary Codex/AGY task.
 - Call exactly `omni dual bootstrap --json`. The controller validates `dual-plan.json`, executes/reuses the same typed runner as `omni dual setup run`, requires the matching `SUCCESS receipt`, creates authority only after setup, registers the full graph once, and resumes eligible AGY work.

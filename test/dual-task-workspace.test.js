@@ -71,6 +71,18 @@ test('worker result binds create modify delete bytes to its original snapshot an
         (error) => error.code === 'DUAL_SCOPE_VIOLATION');
 });
 
+test('result collection rejects unmanaged node_modules before recursive dependency scanning', (t) => {
+    const { root, options } = fixture(t);
+    const ref = prepareTaskWorkspace(options);
+    const dependency = path.join(ref.workerRoot, 'node_modules', 'unmanaged-package');
+    fs.mkdirSync(dependency, { recursive: true });
+    fs.writeFileSync(path.join(dependency, 'index.js'), 'must not be hashed or copied\n');
+    fs.mkdirSync(path.join(ref.workerRoot, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(ref.workerRoot, 'dist', 'bundle.js'), 'unapproved build output\n');
+    assert.throws(() => collectTaskResult({ workspaceRoot: root, reference: ref }),
+        (error) => error.code === 'DUAL_TASK_DEPENDENCY_MODE_REQUIRED');
+});
+
 test('independent task workspaces do not share files or overwrite another attempt', (t) => {
     const { options } = fixture(t);
     const first = prepareTaskWorkspace(options);
