@@ -670,3 +670,24 @@ test('isolated runner prepares declared locked dependencies before invoking mode
     assert.match(authority.derive().tasks['TASK-1'].isolatedWorkspace.reference.workerDependencies.receiptSha256, /^[a-f0-9]{64}$/);
     assert.equal((await adapter.runTask(authority.derive()))[0].status, 'AWAITING_CODEX_QC');
 });
+
+test('isolated contract header instructs unverified_items empty array and prompt templates are aligned', async (t) => {
+    const input = fixture(t);
+    const calls = [];
+    await runIsolatedTask({
+        ...input,
+        processRunner: async (invocation, deps) => {
+            if (invocation.args && invocation.args.includes('implement')) {
+                const runDir = path.join(invocation.cwd, `.omni/codex-gemini/runs/${input.task.task_id}`);
+                const inputMd = fs.readFileSync(path.join(runDir, 'raw/implement.1.input.md'), 'utf8');
+                assert.match(inputMd, /unverified_items in evidence\.json MUST BE \[\]/);
+            }
+            return fakeWorker(calls)(invocation, deps);
+        },
+    });
+    const implementTemplate = fs.readFileSync(path.resolve(__dirname, '../templates/codex-gemini/prompts/implement.md'), 'utf8');
+    assert.doesNotMatch(implementTemplate, /tag them in `unverified_items` with `\[EXTERNAL_OPTIONAL\]`/);
+    assert.match(implementTemplate, /`unverified_items` in `evidence\.json` MUST BE EXACTLY `\[\]`/);
+    const reviewTemplate = fs.readFileSync(path.resolve(__dirname, '../templates/codex-gemini/prompts/review.md'), 'utf8');
+    assert.doesNotMatch(reviewTemplate, /Unverified items tagged `\[EXTERNAL_OPTIONAL\]`.*do NOT block APPROVE/);
+});

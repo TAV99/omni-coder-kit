@@ -17,8 +17,8 @@ Perform a rigorous, adversarial, read-only review of the changes in git diff aga
    - Check responsive structure and WCAG AA contrast compliance.
 4. **Security & Data Privacy:**
    - Ensure zero hardcoded secrets, no unauthorized telemetry, and clean sanitization.
-5. **External Dependencies:**
-   - Unverified items tagged `[EXTERNAL_OPTIONAL]` (e.g. unconfigured webhook endpoints) do NOT block APPROVE if local unit tests and build pass 100%.
+5. **External Dependencies & Acceptance Evidence:**
+   - For isolated tasks, confirm that `unverified_items` in `evidence.json` is `[]` (empty array). Any unprovisioned external deployment or webhook endpoints must be recorded in `remaining_risks` as an informational finding rather than in `unverified_items`.
 
 ## 🛡️ Rules & Constraints
 - **READ-ONLY:** Do NOT edit any source code or artifacts.

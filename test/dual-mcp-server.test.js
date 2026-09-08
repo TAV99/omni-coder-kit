@@ -2847,3 +2847,53 @@ test('Codex MCP list-tools wire schema compatibility: all 5 tools expose object-
     });
     assert.equal(duplicateUiResult.isError, true, 'Viewport widths must preserve the exact required sequence');
 });
+
+test('omni_dual_completion MCP tool passes through safe diagnostic reason in error.details without leaking paths or secrets', async (t) => {
+    const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
+
+    const fakeClient = {
+        async health() {
+            return {
+                status: 'healthy',
+                workspace_root: process.cwd(),
+                session_id: '550e8400-e29b-41d4-a716-446655440000',
+            };
+        },
+        async evaluateCompletion() {
+            const err = new Error('Diff fingerprint mismatch: fresh diff is abc123, input got def456');
+            err.code = 'DUAL_QUALITY_ERROR';
+            throw err;
+        },
+    };
+
+    const server = createOmniDualMcpServer({
+        workspaceRoot: process.cwd(),
+        createClient: () => fakeClient,
+    });
+
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
+
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    t.after(async () => {
+        await client.close();
+        await server.close();
+    });
+
+    const result = await client.callTool({
+        name: 'omni_dual_completion',
+        arguments: {
+            workspace_root: process.cwd(),
+            session_id: '550e8400-e29b-41d4-a716-446655440000',
+        },
+    });
+
+    assert.equal(result.isError, true);
+    const parsed = JSON.parse(result.content[0].text);
+    assert.equal(parsed.error.code, 'DUAL_MCP_COMPLETION_ERROR');
+    assert.equal(parsed.error.message, 'Failed to evaluate completion with Dual authority daemon');
+    assert.ok(parsed.error.details);
+    assert.equal(parsed.error.details.reason, 'Diff fingerprint mismatch: fresh diff is abc123, input got def456');
+});

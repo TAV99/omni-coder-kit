@@ -36,7 +36,7 @@ Implement the changes specified in `spec.json` with production-grade engineering
 - **Surgical Edits:** Touch ONLY in-scope files declared in `spec.json`.
 - **Relative Paths:** Use repository-relative paths for all file operations (e.g. `src/App.tsx`). Never use absolute paths.
 - **Self-Repair:** Perform up to 5 self-repair iterations for local typecheck, lint, or test failures.
-- **External Dependencies:** If external production endpoints or cloud APIs are unprovisioned, tag them in `unverified_items` with `[EXTERNAL_OPTIONAL]`. Do NOT mark status as FAILURE if all local builds, types, and unit tests pass 100%.
+- **External Dependencies & Acceptance Evidence:** For isolated tasks, `unverified_items` in `evidence.json` MUST BE EXACTLY `[]` (empty array) once all local validation commands (types, tests) pass 100%. Any unprovisioned live deployment endpoints, external credentials, or remote cloud services are strictly outside isolated unit scope and MUST be documented ONLY in `self_review.remaining_risks` as an informational finding. NEVER place unprovisioned external endpoints into `unverified_items`, as any non-empty item triggers an immediate `DUAL_ISOLATED_EVIDENCE_INVALID` quality gate rejection.
 - **Safety:** NO COMMIT, NO PUSH, NO DEPLOY, and NO permission escalations.
 - **Evidence Contract:** Return all command outputs and findings via the structured evidence payload. The orchestrator owns `evidence.json`.
 

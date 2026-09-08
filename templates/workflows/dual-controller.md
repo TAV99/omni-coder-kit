@@ -17,12 +17,15 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 - Resolve the worker model from user preference (`--worker-model`), configured capability evidence in `.omni/manifest.json`, `OMNI_DUAL_WORKER_MODEL`, and `agy models` (supported: `gemini-3.8-flash-high`, `gemini-3.7-flash-high`, `gemini-3.1-pro-high`, `claude-sonnet-4-6`, `claude-opus-4-6-thinking`); model examples are not proof of availability. No silent fallback to another model.
 - Private workers start from source snapshots without copying `node_modules`, authority credentials or the source AGY project binding. For a single-package npm project with an immutable package.json/package-lock.json, declare `dependency_mode: "npm-ci"`. The controller installs in private cwd with lifecycle scripts disabled, records a dependency fingerprint, and checks it on resume/QC. Shrinkwrap, workspace projects and escaping local dependencies are rejected by this mode. If a build requires lifecycle/native setup or another package manager, resolve that capability before spending a live attempt; do not switch to shared writes to hide it.
 - Use `omni_dual_status` and `omni_dual_resume` (or `omni dual status <task-id>` / `omni dual run|resume <task-id>`). `omni dual status --json` is not a supported CLI form; use the task ID form and inspect bounded public fields only. Direct legacy `omni dual phase` is not a bypass for an authority task.
+- **Controller model and reasoning profile:** Default to `gpt-5.6-luna medium` or `gpt-5.6-sol` for Controller coordination. Ultra-high reasoning (`xhigh`) adds 4–8 minutes of latency per coordination turn and is only warranted when initially drafting multi-package architecture plans.
+- **Unstoppable Relay Loop (Baton-Passing Chaining):** For multi-task plans, when an isolated task reaches `TASK_VERIFIED` after QC integration, the controller MUST NOT stop or wait for user prompts. Immediately evaluate the next eligible task in `orderedTasks` and proceed to dispatch or resume it, keeping the pipeline continuously running until all tasks are complete.
+- **Immediate Bounded Correction:** When a worker attempt stops early or fails QC without a fatal session blocker, immediately inspect failure codes and issue targeted `correction` guidance via `omni_dual_resume` within the 3-attempt budget. Never leave worker idle when bounded correction can drive verification.
 
 ## Act on observable task state
 
 | State/evidence | Controller action |
 |---|---|
-| Active AGY lease | Coordinate/read status; no source/build/browser writes and no duplicate worker launch. |
+| Active AGY lease | Lease heartbeat is maintained by daemon (10s intervals). Avoid tight high-effort reasoning loops to poll status; wait for terminal handoff, questions, or failure. No source/build/browser writes and no duplicate worker launch. |
 | WAITING_FOR_DEPENDENCY / WAITING_FOR_SCOPE | Finish/QC the predecessor; wait is not failure. |
 | NEEDS_CONTEXT / pending_questions | Answer from the user's decisions or repository; ask the user only for a genuinely missing decision. |
 | AWAITING_CODEX_QC / isolated handoff | Inspect semantic evidence, then request independent isolated QC. |
@@ -101,6 +104,9 @@ When an execution wrapper returns a process handle, retain the complete result (
 A missing Git `HEAD` in a positively proven unborn repository is distinct from `.git/index.lock`: fresh snapshot bootstrap does not require an automatic initial commit, and an index lock is a separate ownership/recovery condition. Do not infer lock ownership from age or size and do not remove it automatically.
 
 TASK_VERIFIED is not session VERIFIED. Record three real quality cycles and required UI evidence on the integrated project through `omni_dual_completion`, then inspect the session receipt. Never fabricate command output or infer visual QA from static checks. A green simulated-worker suite does not qualify live AGY, platforms or release packaging.
+- **Root Diff Fingerprint Calculation:** In `quality_evidence`, `diff_fingerprint` must reflect the fresh root workspace diff measured against `current_baseline.id` (excluding `.omni`). Do NOT reuse the isolated sandbox attempt's patch SHA.
+- **Fast-Track Quality Inheritance:** When an isolated task has passed independent QC and the root workspace has no competing or unverified modifications, Quality Cycle 1 may inherit the verified command outputs from the isolated QC pass rather than re-running the exact same test suites a third time. Full-pipeline integration checks (e.g. `npm run build`, `audit`) and real browser UI verification complete the remaining cycles.
+- **Uncommitted Working Tree Verification:** The daemon verifies that the uncommitted workspace diff matches the approved receipt diff fingerprint. Do not force an unauthorized `git commit` or `git push` to pass completion.
 
 If transport observation times out, inspect the same daemon/lease/attempt; do not launch another process just because the previous response was lost. Preserve all evidence and report the exact missing capability/authority when safe progress truly requires the user.
 
