@@ -45,7 +45,7 @@ For EACH component, create tasks that are:
   - **Transitions, Responsive & Polish last:** Responsive styling, animations, view transitions, dark mode toggle.
   This strict progression prevents the Coder agent from refactoring already written files due to foundational changes later in the run.
 - **Testable:** Each task has an implicit verification (compiles, returns expected data, renders)
-- **Skill-tagged:** Each task MUST specify which installed skill(s) the agent should apply during execution. Any frontend UI/UX task **must** be tagged with the selected local design skill name (e.g., `@skill:minimalist-ui`, `@skill:industrial-brutalist-ui`, `@skill:high-end-visual-design`, or `@skill:design-taste-frontend` as default) to guarantee visual design guidelines are enforced during execution.
+- **Skill-tagged & UI Style Locking:** Each task MUST specify which installed skill(s) the agent should apply during execution. Any frontend UI/UX task **must** strictly inherit and lock the exact UI Style specified in the Summary table of `.omni/sdlc/design-spec.md` (e.g., `high-end-visual-design` → `@skill:high-end-visual-design`, `minimalist-ui` → `@skill:minimalist-ui`, `industrial-brutalist-ui` → `@skill:industrial-brutalist-ui`, or `design-taste-frontend` → `@skill:design-taste-frontend`). The PM Agent MUST NEVER switch, substitute, or dilute the chosen design aesthetic (e.g., NEVER substitute High-End Visual Design with Minimalist UI). Both task goals and descriptions must explicitly declare and enforce this locked UI style.
 
 **Step 5: Classify Tasks — Setup vs Code**
 For each task, determine if it is **setup/infra** (run-once typed action) or **code** (needs implementation):

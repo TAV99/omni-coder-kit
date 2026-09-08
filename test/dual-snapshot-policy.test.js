@@ -77,3 +77,27 @@ test('configured snapshot fingerprints exclude detected generated outputs consis
     });
     assert.deepEqual(diff.files, ['src/app.js']);
 });
+
+test('configured snapshot baseline excludes canonical control-plane paths to ensure domain symmetry', (t) => {
+    const root = makeWorkspace(t, { name: 'domain-symmetry-test' });
+    fs.mkdirSync(path.join(root, 'src'));
+    fs.writeFileSync(path.join(root, 'src', 'index.js'), 'console.log("hello");\n');
+
+    // Create control-plane directories and files that should be excluded
+    fs.mkdirSync(path.join(root, '.codex'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.codex', 'state.json'), '{"turn": 1}\n');
+    fs.mkdirSync(path.join(root, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.claude', 'settings.json'), '{}\n');
+    fs.mkdirSync(path.join(root, '.omni'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.omni', 'manifest.json'), '{"schema_version": 1}\n');
+
+    const configured = createConfiguredSnapshotBaseline({ root });
+    const snapshot = configured.baseline.capture();
+    const capturedPaths = snapshot.manifest.files.map((f) => f.path);
+
+    assert.ok(capturedPaths.includes('src/index.js'));
+    assert.ok(capturedPaths.includes('package.json'));
+    assert.ok(!capturedPaths.some((p) => p.startsWith('.codex')));
+    assert.ok(!capturedPaths.some((p) => p.startsWith('.claude')));
+    assert.ok(!capturedPaths.includes('.omni/manifest.json'));
+});

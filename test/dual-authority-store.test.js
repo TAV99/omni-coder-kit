@@ -1855,3 +1855,121 @@ test('Slice 3C: replayAuthorityEvents retains capability result in derived state
     assert.equal(derived.capability.details.agy_model, 'gemini-3.7-flash-high');
 });
 
+test('lease acquire and renew support custom ttlMs option', (t) => {
+    const { clock, store } = makeStore(t);
+    setupRoutedSession(store);
+
+    // 1. Acquire with custom ttlMs = 60000
+    const lease = store.acquireLease('TASK-1', 'agy', { ttlMs: 60000 });
+    assert.equal(lease.ttl_ms, 60000);
+    assert.equal(lease.ttlMs, 60000);
+    const acquiredAtMs = new Date(lease.acquired_at).getTime();
+    const expiresAtMs = new Date(lease.expires_at).getTime();
+    assert.equal(expiresAtMs - acquiredAtMs, 60000);
+
+    // 2. Advance 40s -> still active because TTL is 60s
+    clock.advance(40000);
+    assert.equal(store.derive().leases[lease.lease_id].status, 'active');
+
+    // 3. Renew with custom ttl_ms = 90000
+    const renewed = store.renewLease(lease.lease_id, { ttl_ms: 90000 });
+    assert.equal(renewed.ttl_ms, 90000);
+    const renewedAtMs = new Date(renewed.renewed_at).getTime();
+    const newExpiresAtMs = new Date(renewed.expires_at).getTime();
+    assert.equal(newExpiresAtMs - renewedAtMs, 90000);
+
+    // 4. Reject invalid non-positive ttlMs
+    assert.throws(
+        () => store.acquireLease('TASK-2', 'codex', { ttlMs: -1 }),
+        (err) => err.code === 'DUAL_LEASE_INVALID'
+    );
+});
+
+test('isolated handoff succeeds within finalization grace period for cleanly exited worker', (t) => {
+    const { clock, store } = makeStore(t);
+    setupRoutedSession(store);
+
+    // Acquire lease and start execution
+    const lease = store.acquireLease('TASK-1', 'agy');
+    store.append({
+        schema_version: 2,
+        type: 'task.execution.started',
+        task_id: 'TASK-1',
+        lease_id: lease.lease_id,
+        controller_pid: process.pid,
+    });
+
+    // Prepare workspace
+    store.append({
+        schema_version: 2,
+        type: 'task.workspace.prepared',
+        task_id: 'TASK-1',
+        attempt: 1,
+        lease_id: lease.lease_id,
+        reference: {
+            bindingPath: '.omni/runs/dual-workspaces/task/binding.json',
+            bindingSha256: 'a'.repeat(64),
+            workerBaselineSha256: 'b'.repeat(64),
+            workerContractSha256: 'c'.repeat(64),
+        },
+    });
+
+    // Child process runs and exits with code 0
+    const childId = 'worker-proc-1';
+    store.append({
+        schema_version: 2,
+        type: 'task.process.intent',
+        task_id: 'TASK-1',
+        lease_id: lease.lease_id,
+        process_id: childId,
+    });
+    store.append({
+        schema_version: 2,
+        type: 'task.process.started',
+        task_id: 'TASK-1',
+        lease_id: lease.lease_id,
+        process_id: childId,
+        pid: process.pid,
+    });
+    store.append({
+        schema_version: 2,
+        type: 'task.process.exited',
+        task_id: 'TASK-1',
+        lease_id: lease.lease_id,
+        process_id: childId,
+        exit_code: 0,
+    });
+
+    // Advance clock by 35s -> lease is expired (30s default TTL)
+    clock.advance(35000);
+    assert.equal(store.derive().leases[lease.lease_id].status, 'expired');
+
+    // Appending task.workspace.handoff within grace period (5s into 120s grace) SUCCEEDS
+    const handoffEvent = store.append({
+        schema_version: 2,
+        type: 'task.workspace.handoff',
+        task_id: 'TASK-1',
+        lease_id: lease.lease_id,
+        attempt: 1,
+        handoff_path: '.omni/runs/dual-workspaces/task/worker-handoff.json',
+        handoff_sha256: 'd'.repeat(64),
+        result_sha256: 'e'.repeat(64),
+    });
+    assert.equal(handoffEvent.type, 'task.workspace.handoff');
+    assert.ok(store.derive().tasks['TASK-1'].isolatedHandoff);
+
+    // Other events without grace period throw DUAL_LEASE_EXPIRED instead of DUAL_INTEGRITY_CORRUPT
+    assert.throws(
+        () => store.append({
+            schema_version: 2,
+            type: 'task.execution.outcome',
+            task_id: 'TASK-1',
+            lease_id: lease.lease_id,
+            attempt: 1,
+            status: 'FAILED',
+            code: 'DUAL_WORKER_FAILED',
+            summary: 'Done',
+        }),
+        (err) => err.code === 'DUAL_LEASE_EXPIRED'
+    );
+});
