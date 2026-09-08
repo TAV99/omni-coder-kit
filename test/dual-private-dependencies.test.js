@@ -94,3 +94,27 @@ test('npm shrinkwrap cannot replace the validated lockfile during setup or repla
     await assert.rejects(() => preparePrivateDependencies(fresh), (error) => error.code === 'DUAL_PRIVATE_SETUP_INVALID');
     assert.equal(fs.existsSync(path.join(fresh.workerRoot, 'node_modules')), false);
 });
+
+test('ephemeral build cache directories (.vite, .cache, .* caches) inside node_modules do not cause setup drift', async (t) => {
+    const input = fixture(t);
+    const reference = await preparePrivateDependencies(input);
+
+    // Simulate vite build and generic build tool caches created during implement/validation
+    fs.mkdirSync(path.join(input.workerRoot, 'node_modules/.vite/deps'), { recursive: true });
+    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.vite/deps/chunk.js'), 'export default "cached"');
+    fs.mkdirSync(path.join(input.workerRoot, 'node_modules/.cache/test-tool'), { recursive: true });
+    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.cache/test-tool/meta.json'), '{"cache":true}');
+    fs.mkdirSync(path.join(input.workerRoot, 'node_modules/.turbopack/cache'), { recursive: true });
+    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.turbopack/cache/data.bin'), Buffer.alloc(64));
+    fs.mkdirSync(path.join(input.workerRoot, 'node_modules/.custom-tool-cache'), { recursive: true });
+    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.custom-tool-cache/index.json'), '{}');
+
+    // Verification must pass despite any top-level ephemeral dot-cache presence
+    assert.doesNotThrow(() => verifyPrivateDependencies({ ...input, reference }));
+
+    // Real package mutation must still be rejected
+    fs.mkdirSync(path.join(input.workerRoot, 'node_modules/forged-pkg'), { recursive: true });
+    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/forged-pkg/index.js'), 'module.exports = 1');
+    assert.throws(() => verifyPrivateDependencies({ ...input, reference }),
+        (error) => error.code === 'DUAL_PRIVATE_SETUP_DRIFT');
+});
