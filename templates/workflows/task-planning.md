@@ -86,7 +86,7 @@ When validators need installed tools, keep dependency installation as a typed se
 
 **AUTO Behavior:**
 - Generate all planning artifacts first. Planning artifacts are outside the execution ledger and never become a temporary Codex/AGY task.
-- Call exactly `omni dual bootstrap --json`. The controller validates `dual-plan.json`, executes/reuses the same typed runner as `omni dual setup run`, requires the matching `SUCCESS receipt`, creates authority only after setup, registers the full graph once, and resumes eligible AGY work.
+- Call `omni dual bootstrap --json` (pass `--worker-model <model>` if specified by user prompt, chat preference, e.g. `--worker-model claude-sonnet-4-6` or `gemini-3.1-pro-high`). The controller validates `dual-plan.json`, executes/reuses the same typed runner as `omni dual setup run`, requires the matching `SUCCESS receipt`, creates authority only after setup, registers the full graph once, and resumes eligible AGY work.
 - On controller success, continue automatically into execution without asking the user between setup, registration, and resume.
 - The runner self-heals one exact legacy semantic error: `kind: "native"` with `program: "npm"`, `"pnpm"`, `"yarn"`, or `"bun"`. It atomically repairs the action to `kind: "package-manager"`, validates it again, and continues. Never perform a shell fallback.
 - On ambiguous executable names, security violations, unrepresentable actions, or any failure that remains after the bounded repair, record the exact failing action and error and stop safely for real user input (fail-closed).
@@ -95,6 +95,8 @@ When validators need installed tools, keep dependency installation as a typed se
 **Typed Full Graph — `.omni/sdlc/dual-plan.json`:**
 
 For Codex + AGY, read `.omni/workflows/dual-controller.md` first. The example below is the backward-compatible shared mode. For new isolated worker graphs, add `"execution_mode": "isolated"` and explicit `"depends_on": []` (or predecessor task IDs). Multiple isolated low-risk AGY slices are supported; Codex-only architecture/integration/QC work stays outside that worker graph. Never lower a real risk classification to force delegation.
+
+Each task may optionally declare an explicit `"model"` (e.g. `"gemini-3.8-flash-high"`, `"gemini-3.1-pro-high"`, `"claude-sonnet-4-6"`). If omitted, the session-level worker model is used.
 
 Before setup, reject a graph mixing Codex/shared work with more than one AGY task. Either finish design/context before an all-isolated worker graph, or use one cohesive AGY slice after the Codex task. Stitch mutations require exact opt-in `external_operations` from the controller contract; provider IAM is a separate prerequisite. Resolve unknown remote IDs before freezing dependent implementation authority, never add wildcard tool grants.
 ```json
@@ -105,6 +107,7 @@ Before setup, reject a graph mixing Codex/shared work with more than one AGY tas
     "task_id": "TASK-1",
     "title": "Bounded deliverable",
     "owner": "agy",
+    "model": "gemini-3.8-flash-high",
     "goal": "Concrete implementation outcome",
     "category": "frontend",
     "complexity": "medium",
@@ -118,6 +121,7 @@ Before setup, reject a graph mixing Codex/shared work with more than one AGY tas
 ```
 - Every source implementation deliverable in `todo.md` must have exactly one corresponding typed task. Setup/planning actions and final QC/review/verification checkboxes do not enter the graph; the bootstrap controller and completion/quality/UI gates own them.
 - All fields shown above are required. A shared-mode graph may contain at most one AGY-owned implementation slice against its immutable baseline. An all-isolated worker graph may contain multiple eligible slices, each with its own snapshot and explicit dependencies. Each AGY task requires 1-10 exact `allowed_files` and at least one typed validation command. Controller setup/architecture/integration/QC stays outside the isolated worker graph.
+- **Quy chuẩn validation_commands cho isolated AGY task:** Chỉ chọn các lệnh kiểm thử mã nguồn không sinh thư mục build ngoài scope (khuyến nghị: `npm run typecheck`, `npm run test`). Các lệnh build toàn cục (`npm run build`, `vite build`, `next build`) sinh artifact (`dist/`, `build/`) không đặt vào task của worker cách ly; chúng thuộc khâu nghiệm thu tích hợp của Controller (Codex) trên workspace chính sau khi tích hợp.
 - **Tối Ưu Hóa Token Cho Codex:** Để chuyển giao tối đa khối lượng code sang AGY, hãy gom toàn bộ các file UI / Components / Tests vào slice thực thi có `owner: "agy"` và `risk: "low"`. Codex chỉ giữ vai trò Kiến Trúc Sư / Phê Duyệt và dùng lệnh `omni dual qc --json` để nghiệm thu nhanh chóng.
 - Architecture, security, migrations, ambiguous work, high risk, broad file scopes, and final QC remain Codex-owned.
 

@@ -54,6 +54,7 @@ Display extraction result to user:
    • Ràng buộc: [constraints]
    • Quy mô: [small/medium/large]
    • DNA: [hasUI?] + [Backend simple/moderate/complex]
+   • AGY Worker Model: [gemini-3.8-flash-high / gemini-3.1-pro-high / claude-sonnet-4-6 (default: manifest or gemini-3.7-flash-high)]
 
 ❓ Còn thiếu: [list empty/ambiguous slots]
 ```
