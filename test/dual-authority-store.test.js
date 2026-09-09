@@ -15,6 +15,11 @@ const {
     computeLeaseStatus,
 } = require('../lib/dual/authority-store');
 const dualIndex = require('../lib/dual/index');
+const {
+    SessionEventSchema,
+    AcceptanceCorrectionStartedCurrentSchema,
+    AcceptanceCorrectionStartedLegacySchema,
+} = require('../lib/dual/contracts');
 
 const WORKSPACE_ID = 'ws-test-123';
 const SESSION_ID = 'sess-test-456';
@@ -86,6 +91,81 @@ test('authority store module and error classes are exported through lib/dual/ind
     assert.equal(typeof DualAuthorityError, 'function');
     assert.equal(typeof dualIndex.createAuthorityStore, 'function');
     assert.equal(typeof dualIndex.DualAuthorityError, 'function');
+});
+
+test('round-1 acceptance correction started records remain schema-readable as inert history', () => {
+    const legacy = {
+        schema_version: 2,
+        event_id: '10000000-0000-4000-8000-000000000099',
+        causation_id: '10000000-0000-4000-8000-000000000098',
+        sequence: 99,
+        workspace_id: WORKSPACE_ID,
+        session_id: SESSION_ID,
+        plan_revision: 1,
+        expected_baseline: BASELINE_GIT,
+        timestamp: '2026-08-25T00:01:39.000Z',
+        type: 'acceptance.correction.started',
+        correction_id: '10000000-0000-4000-8000-000000000099',
+        task_id: 'TASK-1',
+        attempt: 1,
+        allowed_files: ['lib/a.js'],
+        reason: 'historical correction',
+    };
+    assert.doesNotThrow(() => SessionEventSchema.parse(legacy));
+    assert.doesNotThrow(() => AcceptanceCorrectionStartedLegacySchema.parse(legacy));
+    assert.throws(() => AcceptanceCorrectionStartedCurrentSchema.parse(legacy));
+});
+
+test('current acceptance correction provenance is all-or-nothing while exact legacy shape remains the only compatibility form', () => {
+    const legacy = {
+        schema_version: 2,
+        event_id: '10000000-0000-4000-8000-000000000099',
+        causation_id: '10000000-0000-4000-8000-000000000098',
+        sequence: 99,
+        workspace_id: WORKSPACE_ID,
+        session_id: SESSION_ID,
+        plan_revision: 1,
+        expected_baseline: BASELINE_GIT,
+        timestamp: '2026-08-25T00:01:39.000Z',
+        type: 'acceptance.correction.started',
+        correction_id: '10000000-0000-4000-8000-000000000099',
+        task_id: 'TASK-1',
+        attempt: 1,
+        allowed_files: ['lib/a.js'],
+        reason: 'historical correction',
+    };
+    const current = {
+        ...legacy,
+        validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
+        expected_sequence: 12,
+        start_fingerprint: 'c'.repeat(64),
+        start_state_sha256: 'd'.repeat(64),
+        start_files: ['lib/a.js'],
+        start_state_entries: { 'lib/a.js': { sha256: 'e'.repeat(64), mode: 0o644 } },
+        failure_check_id: 'acceptance-check',
+        failure_sequence: 11,
+        failure_evidence_sha256: 'f'.repeat(64),
+        failure_result_sha256: 'a'.repeat(64),
+    };
+    assert.doesNotThrow(() => AcceptanceCorrectionStartedCurrentSchema.parse(current));
+    assert.doesNotThrow(() => SessionEventSchema.parse(current));
+    assert.throws(() => SessionEventSchema.parse({ ...legacy, validation_commands: current.validation_commands }));
+    assert.throws(() => SessionEventSchema.parse({ ...legacy, failure_sequence: current.failure_sequence }));
+});
+
+test('round-1 acceptance correction envelope is readable but cannot become active authority', (t) => {
+    const { store } = makeStore(t);
+    setupRoutedSession(store, { tasks: [{ task_id: 'TASK-1', title: 'Task 1', owner: 'agy', allowed_files: ['lib/a.js'] }] });
+    const lease = store.acquireLease('TASK-1', 'agy');
+    store.append({ type: 'task.completed', task_id: 'TASK-1', owner: 'agy', authority_state: 'TASK_VERIFIED',
+        modified_files: ['lib/a.js'], diff_fingerprint: 'b'.repeat(64), verdict: 'SUCCESS', verified_by: 'codex' });
+    store.releaseLease(lease.lease_id, 'fixture complete');
+    store.append({ type: 'acceptance.correction.started', correction_id: '10000000-0000-4000-8000-000000000099',
+        task_id: 'TASK-1', attempt: 1, allowed_files: ['lib/a.js'], reason: 'round-1 fixture' });
+    const derived = store.derive();
+    assert.equal(derived.activeAcceptanceCorrection, null);
+    assert.equal(derived.legacyAcceptanceCorrection, true);
+    assert.equal(derived.acceptanceCorrections.at(-1).status, 'LEGACY_READ_ONLY');
 });
 
 test('canonicalizeEvent produces deterministic recursively key-sorted JSON', () => {

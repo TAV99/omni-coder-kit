@@ -8,6 +8,7 @@ const test = require('node:test');
 
 const {
     hashAcceptancePolicy,
+    hashReviewEvidence,
     evaluatePreIntegrationReview,
 } = require('../lib/dual/acceptance-policy');
 const { createAuthorityStore } = require('../lib/dual/authority-store');
@@ -15,6 +16,7 @@ const { startDaemonServer } = require('../lib/dual/daemon-server');
 const { createDaemonClient } = require('../lib/dual/daemon-client');
 
 const sha = (content) => crypto.createHash('sha256').update(content).digest('hex');
+const withEvidenceDigest = (evidence) => ({ ...evidence, evidence_sha256: hashReviewEvidence(evidence) });
 
 function createTempDir(prefix) {
     return fs.mkdtempSync(path.join(fs.realpathSync.native(require('node:os').tmpdir()), `${prefix}-`));
@@ -331,29 +333,27 @@ test('isolated QC enforces pre-integration review evidence before integrating ta
     // 2. With failing review evidence: completeIsolatedTask must return NEEDS_FIX and not integrate
     const handoff = store.derive().tasks['TASK-1'].isolatedHandoff;
     const policySha = hashAcceptancePolicy(policy);
-    const failingEvidence = {
+    const failingEvidence = withEvidenceDigest({
         policy_sha256: policySha,
         task_id: 'TASK-1',
         result_sha256: handoff.result_sha256,
         check_results: [
             { check_id: 'review-task1', status: 'FAIL', findings: ['Syntax issue spotted by reviewer'] },
         ],
-        evidence_sha256: sha('failing-evidence'),
-    };
+    });
     const failRes = await completeIsolatedTask({ ...qcRequest, reviewEvidence: failingEvidence });
     assert.equal(failRes.status, 'NEEDS_FIX');
     assert.equal(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), 'module.exports = 1;\n', 'root files untouched');
 
     // 3. With passing review evidence: completeIsolatedTask integrates and sets TASK_VERIFIED
-    const passingEvidence = {
+    const passingEvidence = withEvidenceDigest({
         policy_sha256: policySha,
         task_id: 'TASK-1',
         result_sha256: handoff.result_sha256,
         check_results: [
             { check_id: 'review-task1', status: 'PASS', findings: [] },
         ],
-        evidence_sha256: sha('passing-evidence'),
-    };
+    });
     const passRes = await completeIsolatedTask({ ...qcRequest, reviewEvidence: passingEvidence });
     assert.equal(passRes.status, 'TASK_VERIFIED');
     assert.equal(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), 'module.exports = 2;\n', 'root files integrated');

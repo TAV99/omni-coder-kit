@@ -12,7 +12,7 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 
 - Complete `.omni/sdlc/setup.json`, design/context sources, `todo.md` and `dual-plan.json` before `omni dual bootstrap --json` (pass `--worker-model <model>` if specified by user prompt or config). Bootstrap is the single AUTO entrypoint: never create `bootstrap-plan-artifacts` or directly call begin/register as a workaround.
 - For new low-risk AGY slices use `execution_mode: "isolated"`, 1–10 exact `allowed_files`, explicit `context_files`, `deny_patterns`, and typed `validation_commands` (`program`, `args`, `cwd`). Declare `depends_on: ["TASK-1"]` when predecessor output is needed. Unknown/cyclic dependencies are invalid. Validation commands for isolated AGY slices must be source verification checks (e.g. typecheck, unit tests); full-project build commands (e.g. npm run build) producing bundle artifacts (dist/) belong to the controller integration/QA phase on the root workspace.
-- **Pre-Integration Acceptance Policy:** Plans may declare an `acceptance_policy` containing `pre_integration_checks` (evaluated on isolated tasks before integration) and `session_acceptance_checks` (evaluated before session verification). For any task subject to pre-integration checks, independent review evidence (`review_evidence`) must be presented during isolated QC before integration is permitted.
+- **Pre-Integration Acceptance Policy:** Plans may declare a strict `acceptance_policy` with `protocol_version: 1` and a `checks` array. Each check uses `id`, `requirement_id`, `phase` (`pre_integration` or `session`), `kind` (`command` or `review`), `required`, optional `task_id`, and a typed command (`program`, `args`, `cwd`) for command checks. For any pre-integration check, canonical `review_evidence` must be presented during isolated QC before integration is permitted.
 - Multiple AGY tasks require an all-isolated worker graph. Architecture/security/migration/ambiguous/high-risk work stays with Codex outside that graph; do not mislabel risky work as low risk. Existing shared plans remain compatible but retain a single AGY slice.
 - Overlapping write/read-context scopes wait in deterministic dependency order. Do not remove ownership checks or merge competing edits by last-writer-wins. The adapter currently dispatches serially; do not claim parallel throughput.
 - Resolve the worker model from user preference (`--worker-model`), configured capability evidence in `.omni/manifest.json`, `OMNI_DUAL_WORKER_MODEL`, and `agy models` (supported: `gemini-3.8-flash-high`, `gemini-3.7-flash-high`, `gemini-3.1-pro-high`, `claude-sonnet-4-6`, `claude-opus-4-6-thinking`); model examples are not proof of availability. No silent fallback to another model.
@@ -49,7 +49,7 @@ Reply and resume through `omni_dual_resume`:
   "session_id": "<current session>",
   "context_reply": {
     "task_id": "TASK-1", "plan_revision": 1,
-    "message_id": "reply-1", "reply_to": "<pending question message_id>",
+    "message_id": "reply-1", "reply_to": "question-1",
     "body": "Use Student."
   }
 }
@@ -80,13 +80,14 @@ For isolated QC, call `omni_dual_completion` with `isolated_qc: {"task_id":"TASK
   "session_id": "<current session>",
   "isolated_qc": {
     "task_id": "TASK-1",
-    "plan_revision": 1,
-    "review_evidence": {
-      "reviewer": "codex",
-      "status": "PASSED",
-      "notes": "Pre-integration acceptance criteria verified.",
-      "checks_evaluated": ["CHK-001"]
-    }
+    "plan_revision": 1
+  },
+  "review_evidence": {
+    "policy_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "task_id": "TASK-1",
+    "result_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "check_results": [{"check_id": "CHK-001", "status": "PASS", "findings": []}],
+    "evidence_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
   }
 }
 ```
@@ -94,24 +95,27 @@ The daemon runs exact registered validators, rechecks private evidence, binds in
 
 ### Post-integration acceptance correction
 
-When the session is in `ACCEPTANCE` state and integrated verification discovers a defect requiring code changes, start an authorized, bounded acceptance correction targeting a verified task:
+When the session is in `ACCEPTANCE` state, submit post-integration review evidence first through `omni_dual_acceptance_review_submit` (or `omni dual acceptance submit <task-id> --plan-revision <n> --review-evidence <file>`). The daemon binds the evidence to the registered policy, current integrated diff fingerprint and verified task result. A failed required session check creates the durable correction gate.
+
+Only then start an authorized, bounded acceptance correction targeting a verified task:
 ```json
 {
   "workspace_root": "<current canonical workspace>",
   "session_id": "<current session>",
   "task_id": "TASK-1",
-  "reason": "Fix button contrast ratio in mobile viewport",
-  "allowed_files": ["src/components/Button.tsx"],
-  "validation_commands": [{ "program": "npm", "args": ["test"] }],
-  "attempt": 1
+  "expected_sequence": 42,
+  "start_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "failure_check_id": "CHK-001",
+  "reason": "Fix button contrast ratio in mobile viewport"
 }
 ```
 Rules:
 1. Target task must be in `TASK_VERIFIED`.
-2. `allowed_files` must be a non-empty subset of the task's original allowed files (max 10).
-3. `attempt` is strictly sequential (1..3). Max 3 attempts per task across the session.
-4. Only one active correction is permitted at a time.
-5. Complete the correction with status `PASSED` or `FAILED`. Failed corrections or active corrections strictly block session completion (`completion.evaluate`) and session verification (`session.verified`).
+2. `failure_check_id` must name a policy-defined required session review with a correction grant for this task. Scope and typed validator commands come only from that immutable grant; callers cannot override either.
+3. `expected_sequence`, `start_fingerprint` and the failed review result are compare-and-swap provenance checks; stale or superseded evidence is rejected.
+4. The daemon assigns `attempt` strictly sequentially (1..3), with a maximum of 3 attempts per task across the session.
+5. Only one active correction is permitted at a time.
+6. Complete the correction without caller-supplied status or validator identity. The daemon derives `PASSED`/`FAILED` from the registered validator and exact delta. Failed corrections or active corrections strictly block session completion (`completion.evaluate`) and session verification (`session.verified`).
 
 ### Durable failures and session blocking
 
@@ -138,11 +142,13 @@ Once a session is `BLOCKED`, the Stop hook cleanly halts execution and PreToolUs
 Stitch mutations need an explicit exact `external_operations` grant on a Codex/shared task. Example (illustrative title, not permission to create a real project):
 
 ```json
+{
 "external_operations": [{
   "tool_name": "mcp__stitch__create_project",
   "tool_input": { "title": "Approved design project" },
   "evidence_file": ".omni/sdlc/stitch-reference.json"
 }]
+}
 ```
 
 The evidence file must already be in `allowed_files` and outside `deny_patterns`. It is a scope anchor, not fabricated proof of remote success. Input is exact bounded JSON (16 KiB, 16 container levels); there are no wildcard arguments or blanket MCP permissions. The daemon reserves a grant durably before allowing one invocation; repeated PreToolUse is denied even after a lost response/restart. PostToolUse records observation only. Inspect the remote state before requesting new authority after uncertain effects. Normal Codex ROUTED interactive authority is retained; active or expired unrecovered AGY leases block external mutation.

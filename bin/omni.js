@@ -29,6 +29,10 @@ const {
     handleDualBootstrap,
     handleDualQc,
     handleDualMonitor,
+    handleDualAcceptanceStart,
+    handleDualAcceptanceReviewSubmit,
+    handleDualAcceptanceComplete,
+    handleDualBlock,
 } = require('../lib/commands/dual');
 
 // `omni skills` no-arg = auto-equip + status (one-stop "show me my skills").
@@ -112,6 +116,7 @@ const skills = program
 skills.command('add <source>')
     .description('Cài skill từ nhiều nguồn: owner/repo | URL | gh:owner/repo/path.md | ./local.md')
     .option('-n, --name <name>', 'Đặt tên ngắn gọn cho kỹ năng (mặc định: tự sinh từ source)')
+    .option('--skill <selector>', 'Chọn chính xác một skill trong source multi-skill')
     .option('-f, --force', 'Bỏ qua cảnh báo xung đột để cài đè')
     .action(handleEquip);
 
@@ -174,7 +179,41 @@ dual.command('bootstrap')
 dual.command('qc [task-id]')
     .description('Tự động đo đạc snapshot diff, nộp QC Evidence và hoàn tất 3 chu kỳ Quality Gate')
     .option('--json', 'Xuất một JSON object cho AUTO workflow')
+    .option('--review-evidence <file>', 'Đọc canonical review_evidence JSON để submit trước isolated integration')
     .action(handleDualQc);
+
+const dualAcceptance = dual
+    .command('acceptance')
+    .description('Điều khiển acceptance review/correction qua authority daemon');
+
+dualAcceptance.command('start <task-id>')
+    .description('Bắt đầu acceptance correction có policy/CAS/scope/validator ràng buộc')
+    .requiredOption('--reason <text>', 'Lý do correction')
+    .requiredOption('--expected-sequence <n>', 'Authority sequence hiện tại')
+    .requiredOption('--start-fingerprint <sha256>', 'Current integrated diff fingerprint')
+    .requiredOption('--failure-check-id <id>', 'Required failed acceptance check ID')
+    .option('--json', 'Xuất một JSON object duy nhất')
+    .action(handleDualAcceptanceStart);
+
+dualAcceptance.command('submit <task-id>')
+    .description('Nộp post-integration acceptance review evidence đã ký và policy-bound')
+    .requiredOption('--plan-revision <n>', 'Plan revision của acceptance review')
+    .requiredOption('--review-evidence <file>', 'File JSON review_evidence canonical')
+    .option('--json', 'Xuất một JSON object duy nhất')
+    .action(handleDualAcceptanceReviewSubmit);
+
+dualAcceptance.command('complete <correction-id>')
+    .description('Hoàn tất acceptance correction; status do daemon validator quyết định')
+    .option('--summary <text>', 'Tóm tắt bounded của correction')
+    .option('--json', 'Xuất một JSON object duy nhất')
+    .action(handleDualAcceptanceComplete);
+
+dual.command('block')
+    .description('Ghi durable blocker và dừng session Dual')
+    .requiredOption('--reason <text>', 'Lý do block')
+    .requiredOption('--blocker-code <code>', 'Mã blocker bounded')
+    .option('--json', 'Xuất một JSON object duy nhất')
+    .action(handleDualBlock);
 
 dual.command('monitor [workspace]')
     .description('Theo dõi real-time ledger và trạng thái Dual Authority session')

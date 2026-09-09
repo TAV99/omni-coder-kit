@@ -5,10 +5,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { EventEmitter } = require('node:events');
 const { spawnSync } = require('node:child_process');
 const { createCliResolver } = require('../lib/dual/setup-command');
 const { resolveSetupInvocation } = require('../lib/dual/setup-runner');
-const { preparePrivateDependencies, verifyPrivateDependencies } = require('../lib/dual/private-dependencies');
+const { preparePrivateDependencies, verifyPrivateDependencies, dependencyFingerprintAsync } = require('../lib/dual/private-dependencies');
 
 function fixture(t) {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-private-deps-')));
@@ -30,6 +31,82 @@ test('locked private npm install uses its worker cwd and a durable fingerprint r
     assert.doesNotThrow(() => verifyPrivateDependencies({ ...input, reference: result }));
     assert.equal((await preparePrivateDependencies({ ...input, reference: result })).reused, true);
     assert.equal(fs.existsSync(path.join(input.artifactRoot, 'node_modules')), false);
+});
+
+test('reused private dependency references use the async verifier and cooperative authority ticks', async (t) => {
+    const input = fixture(t);
+    const reference = await preparePrivateDependencies(input);
+    let ticks = 0;
+    const reused = await preparePrivateDependencies({ ...input, reference, yieldEvery: 1, onTick: () => { ticks += 1; } });
+    assert.equal(reused.reused, true);
+    assert.equal(typeof ticks, 'number');
+    assert.match(fs.readFileSync(path.join(__dirname, '..', 'lib', 'dual', 'private-dependencies.js'), 'utf8'),
+        /await verifyPrivateDependenciesAsync\(\{ workerRoot, artifactRoot, reference/);
+});
+
+test('async dependency hashing yields and aborts between large-file chunks', async (t) => {
+    const input = fixture(t);
+    const dependencyPath = path.join(input.workerRoot, 'node_modules', 'large-pkg');
+    fs.mkdirSync(dependencyPath, { recursive: true });
+    fs.writeFileSync(path.join(dependencyPath, 'payload.bin'), Buffer.alloc(4 * 1024 * 1024, 7));
+    const controller = new AbortController();
+    let ticks = 0;
+    await assert.rejects(() => dependencyFingerprintAsync(input.workerRoot, {
+        yieldEvery: 1,
+        signal: controller.signal,
+        onTick: () => { ticks += 1; controller.abort(); },
+    }), (error) => error.code === 'DUAL_PRIVATE_SETUP_ABORTED');
+    assert.ok(ticks >= 1);
+});
+
+test('fresh dependency install aborts during post-install hashing before writing a receipt', async (t) => {
+    const input = fixture(t);
+    const dependencyPath = path.join(input.workerRoot, 'node_modules', 'large-pkg', 'payload.bin');
+    const controller = new AbortController();
+    let ticks = 0;
+    let authorizeCalls = 0;
+    const spawnImpl = () => {
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        child.kill = () => {};
+        process.nextTick(() => {
+            fs.mkdirSync(path.dirname(dependencyPath), { recursive: true });
+            fs.writeFileSync(dependencyPath, Buffer.alloc(2 * 1024 * 1024, 7));
+            child.emit('close', 0, null);
+        });
+        return child;
+    };
+
+    await assert.rejects(() => preparePrivateDependencies({
+        ...input,
+        authorize: () => { authorizeCalls++; return true; },
+        spawnImpl,
+        yieldEvery: 1,
+        signal: controller.signal,
+        onTick: () => { ticks++; controller.abort(); },
+    }), (error) => error.code === 'DUAL_PRIVATE_SETUP_ABORTED');
+    assert.ok(ticks >= 1, 'caller onTick must run during fresh post-install hashing');
+    assert.ok(authorizeCalls >= 3, 'authority guard must continue running during fresh post-install hashing');
+    assert.equal(fs.existsSync(path.join(input.artifactRoot, 'dependency-setup.json')), false,
+        'aborted dependency verification must not write a receipt');
+});
+
+test('async dependency verifier does not use synchronous filesystem traversal or reads', async (t) => {
+    const input = fixture(t);
+    const reference = await preparePrivateDependencies(input);
+    const originals = { readdirSync: fs.readdirSync, lstatSync: fs.lstatSync, readSync: fs.readSync };
+    fs.readdirSync = () => { throw new Error('sync directory traversal is forbidden in async verifier'); };
+    fs.lstatSync = () => { throw new Error('sync stat is forbidden in async verifier'); };
+    fs.readSync = () => { throw new Error('sync file read is forbidden in async verifier'); };
+    t.after(() => {
+        fs.readdirSync = originals.readdirSync;
+        fs.lstatSync = originals.lstatSync;
+        fs.readSync = originals.readSync;
+    });
+    await assert.doesNotReject(() => require('../lib/dual/private-dependencies').verifyPrivateDependenciesAsync({
+        ...input, reference, yieldEvery: 1,
+    }));
 });
 
 test('dependency setup cannot run without a lockfile or current authority', async (t) => {

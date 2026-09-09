@@ -9,6 +9,7 @@ const test = require('node:test');
 const {
     cycleThresholds,
     evaluateMandatoryGates,
+    evaluateQualityCompletion,
     createQualityLedger,
     DualQualityError,
 } = require('../lib/dual/quality-ledger');
@@ -1538,6 +1539,47 @@ test('Review3-Finding 4: rejects total_tasks > 1024 and completed_task_ids.lengt
         }),
         /DualQualityError/
     );
+});
+
+test('quality completion counts only the current diff-fingerprint generation and retains stale history', () => {
+    const generationA = 'a'.repeat(64);
+    const generationB = 'b'.repeat(64);
+    const makeEvent = (cycle, fingerprint) => ({
+        type: 'gate.result',
+        gate_id: `quality-cycle-${cycle}`,
+        status: 'PASSED',
+        cycle_index: cycle,
+        evidence_sha256: DUMMY_SHA256,
+        reason: `Quality cycle ${cycle} passed`,
+        details: {
+            required: true,
+            cycle_index: cycle,
+            attempt: 1,
+            threshold: cycleThresholds(1)[cycle - 1],
+            total_tasks: 1,
+            completed_task_ids: ['TASK-1'],
+            plan_revision: 1,
+            diff_fingerprint: fingerprint,
+            commands: [{ command: 'node --version', exit_code: 0, duration_ms: 1 }],
+            verdict: 'PASSED',
+            blockers: [],
+        },
+    });
+    const eventsA = [1, 2, 3].map((cycle) => makeEvent(cycle, generationA));
+    assert.equal(evaluateQualityCompletion({
+        allEvents: eventsA, totalTasks: 1, planRevision: 1, diffFingerprint: generationA,
+        derivedTasks: { 'TASK-1': { state: 'TASK_VERIFIED' } },
+    }).passed, true);
+    assert.equal(evaluateQualityCompletion({
+        allEvents: eventsA, totalTasks: 1, planRevision: 1, diffFingerprint: generationB,
+        derivedTasks: { 'TASK-1': { state: 'TASK_VERIFIED' } },
+    }).passed, false);
+    const eventsB = [...eventsA, ...[1, 2, 3].map((cycle) => makeEvent(cycle, generationB))];
+    assert.equal(evaluateQualityCompletion({
+        allEvents: eventsB, totalTasks: 1, planRevision: 1, diffFingerprint: generationB,
+        derivedTasks: { 'TASK-1': { state: 'TASK_VERIFIED' } },
+    }).passed, true);
+    assert.equal(eventsA.length, 3, 'Historical generation remains append-only and queryable');
 });
 
 test('provenance binds input fingerprint and rejects a fresh execution replay across cycles', () => {

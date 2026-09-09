@@ -52,9 +52,9 @@ test('lib/dual/mcp-server.mjs exports createOmniDualMcpServer factory and main f
 });
 
 // --------------------------------------------------------------------------
-// 2. Initialize Handshake & Tools Listing (Exact 5 Tools)
+// 2. Initialize Handshake & Tools Listing (Complete Supported Surface)
 // --------------------------------------------------------------------------
-test('MCP initialize handshake succeeds and tools/list exposes exactly the 5 approved tools with strict schemas', async (t) => {
+test('MCP initialize handshake succeeds and tools/list exposes the complete approved surface with strict schemas', async (t) => {
     const wsRoot = createTempWorkspace(t);
     const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
 
@@ -83,9 +83,13 @@ test('MCP initialize handshake succeeds and tools/list exposes exactly the 5 app
         'omni_dual_register_plan',
         'omni_dual_resume',
         'omni_dual_status',
+        'omni_dual_acceptance_review_submit',
+        'omni_dual_acceptance_correction_start',
+        'omni_dual_acceptance_correction_complete',
+        'omni_dual_session_block',
     ].sort();
 
-    assert.deepEqual(toolNames, expectedToolNames, 'Must expose exactly the 5 approved omni_dual tools');
+    assert.deepEqual(toolNames, expectedToolNames, 'Must expose the complete approved omni_dual tool surface');
 
     // Verify all tools have strict input schemas (additionalProperties: false)
     for (const tool of toolListResult.tools) {
@@ -737,9 +741,9 @@ test('session-specific tools require healthy daemon and matching session_id befo
 });
 
 // --------------------------------------------------------------------------
-// 8. Exact RPC Delegation for All 5 Tools
+// 8. Exact RPC Delegation for All 8 Tools
 // --------------------------------------------------------------------------
-test('all 5 tools delegate exact client methods and parameters', async (t) => {
+test('all supported tools delegate exact client methods and parameters', async (t) => {
     const wsRoot = createTempWorkspace(t);
     const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
 
@@ -811,6 +815,39 @@ test('all 5 tools delegate exact client methods and parameters', async (t) => {
                 };
             }
             throw new Error(`Unexpected method: ${method}`);
+        },
+        startAcceptanceCorrection: async (sessionId, params) => {
+            calls.push({ method: 'startAcceptanceCorrection', sessionId, params });
+            return {
+                started: true,
+                session_id: sessionId,
+                task_id: params.task_id,
+                correction_id: '00000000-0000-4000-8000-000000000001',
+                attempt: 1,
+            };
+        },
+        completeAcceptanceCorrection: async (sessionId, params) => {
+            calls.push({ method: 'completeAcceptanceCorrection', sessionId, params });
+            return {
+                completed: true,
+                session_id: sessionId,
+                correction_id: params.correction_id,
+                status: 'PASSED',
+            };
+        },
+        submitAcceptanceReview: async (sessionId, taskId, planRevision, reviewEvidence) => {
+            calls.push({ method: 'submitAcceptanceReview', sessionId, taskId, planRevision, reviewEvidence });
+            return { status: 'NEEDS_FIX', task_id: taskId, result_sha256: 'c'.repeat(64) };
+        },
+        blockSession: async (sessionId, params) => {
+            calls.push({ method: 'blockSession', sessionId, params });
+            return {
+                blocked: true,
+                session_id: sessionId,
+                session_state: 'BLOCKED',
+                blocker_code: params.blocker_code,
+                reason: params.reason,
+            };
         },
     };
 
@@ -911,6 +948,96 @@ test('all 5 tools delegate exact client methods and parameters', async (t) => {
     const resumeCall = calls.find((c) => c.method === 'request:session.resume');
     assert.ok(resumeCall);
     assert.equal(resumeCall.params.session_id, 'sess-delegation');
+
+    // 6. omni_dual_acceptance_review_submit
+    const reviewRes = await client.callTool({
+        name: 'omni_dual_acceptance_review_submit',
+        arguments: {
+            workspace_root: wsRoot,
+            session_id: 'sess-delegation',
+            task_id: 'TASK-1',
+            plan_revision: 1,
+            review_evidence: {
+                policy_sha256: 'a'.repeat(64),
+                task_id: 'TASK-1',
+                result_sha256: 'c'.repeat(64),
+                check_results: [{ check_id: 'REQ-1', status: 'FAIL', findings: ['Fix needed'] }],
+                evidence_sha256: 'b'.repeat(64),
+            },
+        },
+    });
+    assert.equal(reviewRes.isError, undefined);
+    const reviewCall = calls.find((c) => c.method === 'submitAcceptanceReview');
+    assert.ok(reviewCall);
+    assert.equal(reviewCall.sessionId, 'sess-delegation');
+    assert.equal(reviewCall.taskId, 'TASK-1');
+    assert.equal(reviewCall.planRevision, 1);
+
+    // 7. omni_dual_acceptance_correction_start
+    const correctionStartRes = await client.callTool({
+        name: 'omni_dual_acceptance_correction_start',
+        arguments: {
+            workspace_root: wsRoot,
+            session_id: 'sess-delegation',
+            task_id: 'TASK-1',
+            reason: 'Repair the registered acceptance failure.',
+            expected_sequence: 7,
+            start_fingerprint: 'c'.repeat(64),
+            failure_check_id: 'REQ-1',
+        },
+    });
+    assert.equal(correctionStartRes.isError, undefined);
+    const correctionStartCall = calls.find((c) => c.method === 'startAcceptanceCorrection');
+    assert.ok(correctionStartCall);
+    assert.equal(correctionStartCall.sessionId, 'sess-delegation');
+    assert.deepEqual(correctionStartCall.params, {
+        task_id: 'TASK-1',
+        reason: 'Repair the registered acceptance failure.',
+        expected_sequence: 7,
+        start_fingerprint: 'c'.repeat(64),
+        failure_check_id: 'REQ-1',
+    });
+    assert.equal(correctionStartRes.structuredContent.correction_id, '00000000-0000-4000-8000-000000000001');
+
+    // 8. omni_dual_acceptance_correction_complete
+    const correctionCompleteRes = await client.callTool({
+        name: 'omni_dual_acceptance_correction_complete',
+        arguments: {
+            workspace_root: wsRoot,
+            session_id: 'sess-delegation',
+            correction_id: '00000000-0000-4000-8000-000000000001',
+            summary: 'Validator passed after the bounded repair.',
+        },
+    });
+    assert.equal(correctionCompleteRes.isError, undefined);
+    const correctionCompleteCall = calls.find((c) => c.method === 'completeAcceptanceCorrection');
+    assert.ok(correctionCompleteCall);
+    assert.equal(correctionCompleteCall.sessionId, 'sess-delegation');
+    assert.deepEqual(correctionCompleteCall.params, {
+        correction_id: '00000000-0000-4000-8000-000000000001',
+        summary: 'Validator passed after the bounded repair.',
+    });
+    assert.equal(correctionCompleteRes.structuredContent.status, 'PASSED');
+
+    // 9. omni_dual_session_block
+    const blockRes = await client.callTool({
+        name: 'omni_dual_session_block',
+        arguments: {
+            workspace_root: wsRoot,
+            session_id: 'sess-delegation',
+            reason: 'Manual stop requested for review.',
+            blocker_code: 'MANUAL_REVIEW',
+        },
+    });
+    assert.equal(blockRes.isError, undefined);
+    const blockCall = calls.find((c) => c.method === 'blockSession');
+    assert.ok(blockCall);
+    assert.equal(blockCall.sessionId, 'sess-delegation');
+    assert.deepEqual(blockCall.params, {
+        reason: 'Manual stop requested for review.',
+        blocker_code: 'MANUAL_REVIEW',
+    });
+    assert.equal(blockRes.structuredContent.session_state, 'BLOCKED');
 });
 
 // --------------------------------------------------------------------------
@@ -1394,7 +1521,7 @@ test('stdio MCP child process runs cleanly, emits pure JSON-RPC on stdout, and e
 
     // List tools
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 5);
+    assert.equal(tools.tools.length, 9);
 
     // Call begin tool
     const beginRes = await client.callTool({
@@ -2686,7 +2813,7 @@ test('MCP recovery resumes only after evidenced recovery, never while a process 
     assert.equal(resumes, 1);
 });
 
-test('Codex MCP list-tools wire schema compatibility: all 5 tools expose object-only items and omni_dual_completion passes strict schema constraints', async (t) => {
+test('Codex MCP list-tools wire schema compatibility: all supported tools expose object-only items and omni_dual_completion passes strict schema constraints', async (t) => {
     const wsRoot = createTempWorkspace(t);
     const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
 
@@ -2725,7 +2852,7 @@ test('Codex MCP list-tools wire schema compatibility: all 5 tools expose object-
 
     const listResult = await client.listTools();
     assert.ok(listResult && Array.isArray(listResult.tools));
-    assert.equal(listResult.tools.length, 5, 'Must list exactly 5 tools over the wire');
+    assert.equal(listResult.tools.length, 9, 'Must list the complete supported tool surface over the wire');
 
     // Helper: Recursively validate that wire schema adheres to Codex / OpenAI tool schema constraints
     function validateCodexWireSchema(node, jsonPath) {
@@ -2896,4 +3023,28 @@ test('omni_dual_completion MCP tool passes through safe diagnostic reason in err
     assert.equal(parsed.error.message, 'Failed to evaluate completion with Dual authority daemon');
     assert.ok(parsed.error.details);
     assert.equal(parsed.error.details.reason, 'Diff fingerprint mismatch: fresh diff is abc123, input got def456');
+});
+
+test('MCP completion rejects standalone review_evidence instead of silently dropping it', async (t) => {
+    const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
+    const root = createTempWorkspace(t);
+    let completionCalls = 0;
+    const server = createOmniDualMcpServer({ workspaceRoot: root, createClient: () => ({
+        async health() { return { status: 'healthy', workspace_root: root, session_id: '550e8400-e29b-41d4-a716-446655440000' }; },
+        async evaluateCompletion() { completionCalls += 1; return { verified: false, session_state: 'ACCEPTANCE', blockers: [] }; },
+    }) });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
+    await server.connect(st); await client.connect(ct);
+    t.after(async () => { await client.close(); await server.close(); });
+    const response = await client.callTool({ name: 'omni_dual_completion', arguments: {
+        workspace_root: root,
+        session_id: '550e8400-e29b-41d4-a716-446655440000',
+        review_evidence: {
+            policy_sha256: 'a'.repeat(64), task_id: 'T1', result_sha256: 'b'.repeat(64),
+            check_results: [], evidence_sha256: 'c'.repeat(64),
+        },
+    } });
+    assert.equal(response.isError, true);
+    assert.equal(completionCalls, 0);
 });

@@ -142,14 +142,31 @@ describe('dual scope guard', () => {
     it('fingerprints tracked and untracked changes deterministically', () => {
         const repo = makeRepo();
         const base = git(repo, ['rev-parse', 'HEAD']).trim();
+        fs.appendFileSync(path.join(repo, '.git', 'info', 'exclude'), 'ignored-source.txt\n');
         fs.writeFileSync(path.join(repo, 'index.html'), '<main>changed</main>\n');
         fs.writeFileSync(path.join(repo, 'styles.css'), 'body {}\n');
+        fs.writeFileSync(path.join(repo, 'ignored-source.txt'), 'ignored source\n');
 
         const first = captureDiffFingerprint({ repoRoot: repo, baseCommit: base });
         const second = captureDiffFingerprint({ repoRoot: repo, baseCommit: base });
-        assert.deepEqual(first.files, ['index.html', 'styles.css']);
+        assert.deepEqual(first.files, ['ignored-source.txt', 'index.html', 'styles.css']);
         assert.equal(first.patchSha256, second.patchSha256);
         assert.match(first.patchSha256, /^[0-9a-f]{64}$/);
+    });
+
+    it('fingerprints ignored product files instead of treating build directories as control paths', () => {
+        const repo = makeRepo();
+        const base = git(repo, ['rev-parse', 'HEAD']).trim();
+        const productFiles = ['dist/escape.js', 'build/escape.js', '.next/escape.js', 'out/escape.js'];
+        fs.appendFileSync(path.join(repo, '.git', 'info', 'exclude'), `${productFiles.join('\n')}\n`);
+        for (const file of productFiles) {
+            const target = path.join(repo, ...file.split('/'));
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            fs.writeFileSync(target, `product ${file}\n`);
+        }
+
+        const fingerprint = captureDiffFingerprint({ repoRoot: repo, baseCommit: base });
+        assert.deepEqual(fingerprint.files, productFiles.slice().sort());
     });
 
     it('excludes only explicit transaction paths from source fingerprints', () => {

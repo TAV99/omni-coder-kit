@@ -342,6 +342,21 @@ test('omni dual status reads the live authority task in a greenfield snapshot wo
     assert.equal(fs.existsSync(path.join(wsRoot, '.omni', 'runtime', 'dual', 'daemon.json')), false);
 });
 
+test('omni dual public acceptance and blocking commands expose the supported authority surface', async () => {
+    const res = await runOmniCli(['dual', '--help']);
+    assert.equal(res.code, 0);
+    assert.ok(res.stdout.includes('acceptance'));
+    assert.ok(res.stdout.includes('block'));
+
+    const acceptance = await runOmniCli(['dual', 'acceptance', '--help']);
+    assert.equal(acceptance.code, 0);
+    assert.ok(acceptance.stdout.includes('submit'));
+
+    const qc = await runOmniCli(['dual', 'qc', '--help']);
+    assert.equal(qc.code, 0);
+    assert.ok(qc.stdout.includes('--review-evidence'));
+});
+
 // ---------------------------------------------------------------------------
 // 4. Daemon Stop
 // ---------------------------------------------------------------------------

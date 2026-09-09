@@ -367,6 +367,50 @@ test('isolated QC RPC budget covers the declared validator batch rather than the
     assert.equal(result.status, 'TASK_VERIFIED');
 });
 
+test('plan registration RPC budget covers artifact and capability preflight rather than the short discovery timeout', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    let observedTimeout;
+    const server = http.createServer((req, res) => {
+        req.resume();
+        req.on('end', () => setTimeout(() => res.end(JSON.stringify({ result: { registered: true } })), 30));
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    fs.mkdirSync(getRuntimeDir(wsRoot), { recursive: true });
+    fs.writeFileSync(path.join(getRuntimeDir(wsRoot), 'daemon.json'), JSON.stringify({
+        protocol_version: 1, workspace_id: computeWorkspaceId(wsRoot), workspace_root: wsRoot,
+        pid: process.pid, started_at: new Date().toISOString(), host: '127.0.0.1', port: server.address().port, token: 'a'.repeat(64),
+    }));
+    const client = createDaemonClient({ workspaceRoot: wsRoot, timeoutMs: 1, httpImpl: {
+        request(options, callback) { observedTimeout = options.timeout; return http.request(options, callback); },
+    } });
+    const result = await client.registerPlan('session', {});
+    assert.ok(observedTimeout >= 35_000, 'RPC timeout covers plan artifact and capability preflight');
+    assert.equal(result.registered, true);
+});
+
+test('completion RPC budget covers synchronous integrity measurement rather than the short discovery timeout', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    let observedTimeout;
+    const server = http.createServer((req, res) => {
+        req.resume();
+        req.on('end', () => setTimeout(() => res.end(JSON.stringify({ result: { verified: false, session_state: 'DISCOVERED', blockers: [] } })), 30));
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    fs.mkdirSync(getRuntimeDir(wsRoot), { recursive: true });
+    fs.writeFileSync(path.join(getRuntimeDir(wsRoot), 'daemon.json'), JSON.stringify({
+        protocol_version: 1, workspace_id: computeWorkspaceId(wsRoot), workspace_root: wsRoot,
+        pid: process.pid, started_at: new Date().toISOString(), host: '127.0.0.1', port: server.address().port, token: 'a'.repeat(64),
+    }));
+    const client = createDaemonClient({ workspaceRoot: wsRoot, timeoutMs: 1, httpImpl: {
+        request(options, callback) { observedTimeout = options.timeout; return http.request(options, callback); },
+    } });
+    const result = await client.evaluateCompletion('session', {});
+    assert.ok(observedTimeout >= 15_000, 'RPC timeout covers synchronous completion integrity measurement');
+    assert.equal(result.verified, false);
+});
+
 test('daemon RPC uses a fresh connection instead of a pooled socket across long worker gaps', async (t) => {
     const wsRoot = createTempWorkspace(t);
     const sockets = new Set();

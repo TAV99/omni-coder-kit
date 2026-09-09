@@ -300,6 +300,17 @@ describe('createGitBaseline', () => {
         assert.match(fp.patchSha256, /^[0-9a-f]{64}$/);
     });
 
+    it('diff includes ignored untracked source changes', () => {
+        const repo = makeRepo();
+        const baseline = createGitBaseline({ root: repo });
+        const identity = baseline.capture();
+
+        fs.appendFileSync(path.join(repo, '.git', 'info', 'exclude'), 'ignored-source.txt\n');
+        fs.writeFileSync(path.join(repo, 'ignored-source.txt'), 'ignored source\n', 'utf8');
+
+        assert.deepEqual(baseline.diff(identity), [{ path: 'ignored-source.txt' }]);
+    });
+
     it('assertScope reuses assertAllowedDiff and handles allowlist, deny-patterns, and excludedPaths', () => {
         const repo = makeRepo();
         const baseline = createGitBaseline({ root: repo });
