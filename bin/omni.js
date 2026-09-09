@@ -28,6 +28,7 @@ const {
     handleDualSetupRun,
     handleDualBootstrap,
     handleDualQc,
+    handleDualMonitor,
 } = require('../lib/commands/dual');
 
 // `omni skills` no-arg = auto-equip + status (one-stop "show me my skills").
@@ -174,6 +175,12 @@ dual.command('qc [task-id]')
     .description('Tự động đo đạc snapshot diff, nộp QC Evidence và hoàn tất 3 chu kỳ Quality Gate')
     .option('--json', 'Xuất một JSON object cho AUTO workflow')
     .action(handleDualQc);
+
+dual.command('monitor [workspace]')
+    .description('Theo dõi real-time ledger và trạng thái Dual Authority session')
+    .option('--poll <ms>', 'Chu kỳ polling ms (mặc định: 500)')
+    .option('--json', 'Xuất từng event dạng raw JSON line')
+    .action(handleDualMonitor);
 
 const dualDaemon = dual
     .command('daemon')

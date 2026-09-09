@@ -12,6 +12,7 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 
 - Complete `.omni/sdlc/setup.json`, design/context sources, `todo.md` and `dual-plan.json` before `omni dual bootstrap --json` (pass `--worker-model <model>` if specified by user prompt or config). Bootstrap is the single AUTO entrypoint: never create `bootstrap-plan-artifacts` or directly call begin/register as a workaround.
 - For new low-risk AGY slices use `execution_mode: "isolated"`, 1–10 exact `allowed_files`, explicit `context_files`, `deny_patterns`, and typed `validation_commands` (`program`, `args`, `cwd`). Declare `depends_on: ["TASK-1"]` when predecessor output is needed. Unknown/cyclic dependencies are invalid. Validation commands for isolated AGY slices must be source verification checks (e.g. typecheck, unit tests); full-project build commands (e.g. npm run build) producing bundle artifacts (dist/) belong to the controller integration/QA phase on the root workspace.
+- **Pre-Integration Acceptance Policy:** Plans may declare an `acceptance_policy` containing `pre_integration_checks` (evaluated on isolated tasks before integration) and `session_acceptance_checks` (evaluated before session verification). For any task subject to pre-integration checks, independent review evidence (`review_evidence`) must be presented during isolated QC before integration is permitted.
 - Multiple AGY tasks require an all-isolated worker graph. Architecture/security/migration/ambiguous/high-risk work stays with Codex outside that graph; do not mislabel risky work as low risk. Existing shared plans remain compatible but retain a single AGY slice.
 - Overlapping write/read-context scopes wait in deterministic dependency order. Do not remove ownership checks or merge competing edits by last-writer-wins. The adapter currently dispatches serially; do not claim parallel throughput.
 - Resolve the worker model from user preference (`--worker-model`), configured capability evidence in `.omni/manifest.json`, `OMNI_DUAL_WORKER_MODEL`, and `agy models` (supported: `gemini-3.8-flash-high`, `gemini-3.7-flash-high`, `gemini-3.1-pro-high`, `claude-sonnet-4-6`, `claude-opus-4-6-thinking`); model examples are not proof of availability. No silent fallback to another model.
@@ -72,7 +73,58 @@ For correction, call the same `omni_dual_resume` with `correction` instead of `c
 
 Correction preserves scope and old artifacts, creating attempt 2 then at most 3. It requires a recorded failed outcome and released lease. Do not reset the graph, change validation commands to force success or create another task merely to evade the attempt budget.
 
-For isolated QC, call `omni_dual_completion` with `isolated_qc: {"task_id":"TASK-1","plan_revision":1}` plus current workspace/session, or `omni dual qc TASK-1 --json`. Keep `isolated_qc` separate from quality/UI evidence. The daemon runs exact registered validators, rechecks private evidence, integrates under Codex authority, and records task completion only with valid integration evidence.
+For isolated QC, call `omni_dual_completion` with `isolated_qc: {"task_id":"TASK-1","plan_revision":1}` plus current workspace/session, or `omni dual qc TASK-1 --json`. If the task is subject to pre-integration acceptance checks, include `review_evidence`:
+```json
+{
+  "workspace_root": "<current canonical workspace>",
+  "session_id": "<current session>",
+  "isolated_qc": {
+    "task_id": "TASK-1",
+    "plan_revision": 1,
+    "review_evidence": {
+      "reviewer": "codex",
+      "status": "PASSED",
+      "notes": "Pre-integration acceptance criteria verified.",
+      "checks_evaluated": ["CHK-001"]
+    }
+  }
+}
+```
+The daemon runs exact registered validators, rechecks private evidence, binds independent review evidence, integrates under Codex authority, and records task completion only with valid integration evidence.
+
+### Post-integration acceptance correction
+
+When the session is in `ACCEPTANCE` state and integrated verification discovers a defect requiring code changes, start an authorized, bounded acceptance correction targeting a verified task:
+```json
+{
+  "workspace_root": "<current canonical workspace>",
+  "session_id": "<current session>",
+  "task_id": "TASK-1",
+  "reason": "Fix button contrast ratio in mobile viewport",
+  "allowed_files": ["src/components/Button.tsx"],
+  "validation_commands": [{ "program": "npm", "args": ["test"] }],
+  "attempt": 1
+}
+```
+Rules:
+1. Target task must be in `TASK_VERIFIED`.
+2. `allowed_files` must be a non-empty subset of the task's original allowed files (max 10).
+3. `attempt` is strictly sequential (1..3). Max 3 attempts per task across the session.
+4. Only one active correction is permitted at a time.
+5. Complete the correction with status `PASSED` or `FAILED`. Failed corrections or active corrections strictly block session completion (`completion.evaluate`) and session verification (`session.verified`).
+
+### Durable failures and session blocking
+
+When an attempt limit is exhausted (attempt 3 failed) or an unrecoverable blocker occurs, the session must be durably blocked rather than looping endlessly:
+```json
+{
+  "workspace_root": "<current canonical workspace>",
+  "session_id": "<current session>",
+  "reason": "Task TASK-1 exhausted maximum correction attempts",
+  "blocker_code": "BUDGET_EXHAUSTED"
+}
+```
+Once a session is `BLOCKED`, the Stop hook cleanly halts execution and PreToolUse denies mutations with `[omni-blocked]`.
 
 ## Completion and evidence
 

@@ -75,9 +75,9 @@ function workerThatExpiresBeforeFinalValidation(clock) {
                 command_outputs: [{ command: 'node --check index.js', exit_code: 0, output: '' }], unverified_items: [],
                 self_review: { checks: ['scope', 'syntax', 'result'], remaining_risks: [] } };
         } else {
-            payload = { ...common, recommendation: 'APPROVE', risk_level: 'LOW', findings: [], review_checks: ['scope'],
+            payload = { ...common, recommendation: 'APPROVE', risk_level: 'LOW', findings: [], review_checks: ['scope', 'syntax', 'result'],
                 challenge_summary: 'Compared the change.' };
-            clock.advance(31_000);
+            clock.advance(121_000);
         }
         return { exitCode: 0, stdout: JSON.stringify({ status: 'success', structured_output: payload }), stderr: '',
             timedOut: false, startedAt: new Date(), endedAt: new Date(), durationMs: 1 };

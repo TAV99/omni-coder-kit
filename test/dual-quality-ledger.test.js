@@ -1539,3 +1539,42 @@ test('Review3-Finding 4: rejects total_tasks > 1024 and completed_task_ids.lengt
         /DualQualityError/
     );
 });
+
+test('provenance binds input fingerprint and rejects a fresh execution replay across cycles', () => {
+    const events = [];
+    const store = {
+        derive: () => ({
+            planRevision: 1,
+            plan: { totalTasks: 2, total_tasks: 2 },
+            tasks: { 'TASK-1': { state: 'TASK_VERIFIED' }, 'TASK-2': { state: 'TASK_VERIFIED' } },
+        }),
+        readEvents: () => events,
+        append: (event) => { events.push(event); return event; },
+    };
+    const ledger = createQualityLedger({ authorityStore: store, readDiffFingerprint: () => DUMMY_SHA256 });
+    const common = {
+        total_tasks: 2,
+        plan_revision: 1,
+        diff_fingerprint: DUMMY_SHA256,
+        gate_results: [{ id: 'test', required: true, status: 'PASSED' }],
+        commands: [{ command: 'node --version', exit_code: 0, duration_ms: 1 }],
+        evidence_sha256: DIFF_SHA256,
+    };
+    const provenance = {
+        execution_id: 'c'.repeat(64),
+        input_fingerprint: DUMMY_SHA256,
+        mode: 'fresh',
+    };
+
+    ledger.recordCycle({ ...common, cycle_index: 1, attempt: 1, completed_task_ids: ['TASK-1'], provenance });
+    assert.throws(
+        () => ledger.recordCycle({
+            ...common,
+            cycle_index: 2,
+            attempt: 1,
+            completed_task_ids: ['TASK-1', 'TASK-2'],
+            provenance,
+        }),
+        (err) => err.code === 'DUAL_QUALITY_DUPLICATE_EXECUTION'
+    );
+});

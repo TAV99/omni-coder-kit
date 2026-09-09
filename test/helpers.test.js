@@ -234,12 +234,16 @@ describe('getAgentFlags', () => {
         assert.equal(getAgentFlags({ ide: 'codex' }), '--agent codex');
     });
 
+    it('returns correct flags for antigravity (maps to codex)', () => {
+        assert.equal(getAgentFlags({ ide: 'antigravity' }), '--agent codex');
+    });
+
     it('returns correct flags for dual', () => {
-        assert.equal(getAgentFlags({ ide: 'dual' }), '--agent claude-code codex');
+        assert.equal(getAgentFlags({ ide: 'dual' }), '--agent claude-code --agent codex');
     });
 
     it('returns correct flags for agents', () => {
-        assert.equal(getAgentFlags({ ide: 'agents' }), '--agent claude-code codex antigravity');
+        assert.equal(getAgentFlags({ ide: 'agents' }), '--agent claude-code --agent codex');
     });
 
     it('returns empty string for generic', () => {

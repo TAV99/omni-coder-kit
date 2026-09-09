@@ -591,8 +591,9 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
             const { readInitialSnapshot } = require('../lib/dual/snapshot-store');
             const authorityDir = path.join(tmpDir, '.omni', 'runs', 'dual-authority');
             const initialSnapshot = readInitialSnapshot({ authorityDir, sessionId, workspaceId: beginRes.workspace_id, workspaceRoot: tmpDir });
-            const snapBaseline = createSnapshotBaseline({ root: tmpDir });
-            const diffInfo = snapBaseline.fingerprint(initialSnapshot.identity, initialSnapshot.manifest, { excludedPaths: ['.omni'] });
+            const { createConfiguredSnapshotBaseline } = require('../lib/dual/snapshot-policy');
+            const { baseline: snapBaseline, excludedPaths } = createConfiguredSnapshotBaseline({ root: tmpDir });
+            const diffInfo = snapBaseline.fingerprint(initialSnapshot.identity, initialSnapshot.manifest, { excludedPaths });
             await client.evaluateCompletion(sessionId, {
                 qc_evidence: {
                     task_id: 'TASK-1',
@@ -810,8 +811,9 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
             const { readInitialSnapshot } = require('../lib/dual/snapshot-store');
             const authorityDir = path.join(tmpDir, '.omni', 'runs', 'dual-authority');
             const initialSnapshot = readInitialSnapshot({ authorityDir, sessionId, workspaceId: beginRes.workspace_id, workspaceRoot: tmpDir });
-            const snapBaseline = createSnapshotBaseline({ root: tmpDir });
-            const diffInfo = snapBaseline.fingerprint(initialSnapshot.identity, initialSnapshot.manifest, { excludedPaths: ['.omni'] });
+            const { createConfiguredSnapshotBaseline } = require('../lib/dual/snapshot-policy');
+            const { baseline: snapBaseline, excludedPaths } = createConfiguredSnapshotBaseline({ root: tmpDir });
+            const diffInfo = snapBaseline.fingerprint(initialSnapshot.identity, initialSnapshot.manifest, { excludedPaths });
             await client.evaluateCompletion(sessionId, {
                 qc_evidence: {
                     task_id: 'TASK-1',

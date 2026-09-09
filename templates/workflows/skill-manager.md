@@ -98,7 +98,11 @@ Cài tất cả? Gõ số để loại bỏ (vd: "loại 3"), hoặc gõ y để
 ### Step 6: Install
 - **Universal skills:** `omni skills -y`
 - **Discovered skills:** `omni skills add <source> --name <short-name>` for each approved skill
-- **Antigravity:** Dùng `AGENTS.md` + `.agents/` directory — cài skills bình thường qua `omni skills add`
+- **Agent Target Mapping & Compatibility:**
+  - **Codex & Antigravity:** `omni skills` passes `--agent codex` to `skills.sh`, installing skills into `.agents/skills/<name>/SKILL.md`. Antigravity natively discovers and executes all workspace skills from `.agents/skills`.
+  - **Claude Code:** Uses `--agent claude-code`, installing skills into `.claude/skills/<name>/SKILL.md`.
+  - **Dual Mode:** Passes `--agent claude-code --agent codex`. `skills.sh` installs the canonical skill folder into `.agents/skills/` and creates a symlink from `.claude/skills/`. Both agents share the identical skill definitions seamlessly.
+  - *Note on installation summary:* If you see `universal: Codex` and `symlink → Claude Code`, Antigravity works 100% with these skills because they are stored in `.agents/skills`.
 
 **Sandbox fallback:** If ANY install command fails due to sandbox/network restrictions, collect ALL failed commands and output them as a single copy-paste block:
 ```
