@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
-const { preparePrivateDependencies, verifyPrivateDependencies, dependencyFingerprint, inspectPrivateDependencyReadiness } = require('../lib/dual/private-dependencies');
+const { preparePrivateDependencies, verifyPrivateDependencies, dependencyFingerprint, dependencyFingerprintAsync, inspectPrivateDependencyReadiness } = require('../lib/dual/private-dependencies');
 
 function fixture(t) {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-incident-deps-')));
@@ -126,3 +126,34 @@ test('read-only readiness without installed dependencies does not fabricate a re
     assert.match(result.inputs['package-lock.json'], /^[a-f0-9]{64}$/);
     assert.equal(fs.existsSync(path.join(input.artifactRoot, 'dependency-setup.json')), false);
 });
+
+test('dependencyFingerprintAsync yields to event loop and triggers onTick callback', async (t) => {
+    const input = fixture(t);
+    for (let i = 0; i < 25; i++) {
+        const file = path.join(input.workerRoot, `node_modules/pkg-${i}/index.js`);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, `module.exports = ${i};`);
+    }
+
+    const syncHash = dependencyFingerprint(input.workerRoot);
+
+    let tickCount = 0;
+    let timerFired = false;
+    const timer = setTimeout(() => {
+        timerFired = true;
+    }, 5);
+
+    const asyncHash = await dependencyFingerprintAsync(input.workerRoot, {
+        yieldEvery: 5,
+        onTick: () => {
+            tickCount++;
+        },
+    });
+
+    clearTimeout(timer);
+
+    assert.equal(asyncHash, syncHash, 'async fingerprint matches sync fingerprint exactly');
+    assert.ok(tickCount > 0, 'onTick was called during traversal');
+    assert.ok(timerFired, 'event loop timer fired during async traversal without being starved');
+});
+

@@ -394,6 +394,12 @@ test('classifyTool handles apply_patch, Bash allowlist, Bash denials, MCP tools,
         'node bin/omni.js --version',
         'node bin/omni.js dual daemon recover --if-pristine',
         'node bin/omni.js dual bootstrap',
+        'git init',
+        'git init -b main',
+        'git init --initial-branch=main',
+        'omni skills add https://github.com/foo/bar --name my-skill',
+        'omni skills add vercel-deploy --name deploy --target .agents/skills -y',
+        'npx skills add gh:owner/repo --name repo-skill --yes',
     ];
 
     for (const cmd of allowCommands) {
@@ -433,6 +439,9 @@ test('classifyTool handles apply_patch, Bash allowlist, Bash denials, MCP tools,
         'git log --textconv',
         'git diff --output=out.txt',
         'git show --output out.txt',
+        'git init --template=/tmp/malicious',
+        'git init -c core.editor=calc',
+        'git init --exec-path=/tmp',
     ];
     for (const cmd of escapeCommands) {
         const res = classifyTool('Bash', { command: cmd });

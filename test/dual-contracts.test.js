@@ -70,6 +70,28 @@ describe('dual contracts', () => {
         assert.equal(parsed.tasks[0].owner, 'agy');
     });
 
+    it('accepts explicit model configuration on tasks in dual plan manifest', () => {
+        const parsed = DualPlanManifestSchema.parse({
+            schema_version: 1,
+            plan_revision: 1,
+            tasks: [{
+                task_id: 'WAITLIST-1',
+                title: 'Build waitlist form',
+                owner: 'agy',
+                goal: 'Implement the tested waitlist form',
+                model: 'gemini-3.7-flash-high',
+                category: 'frontend',
+                complexity: 'medium',
+                risk: 'low',
+                allowed_files: ['src/WaitlistForm.tsx'],
+                context_files: ['.omni/sdlc/design-spec.md'],
+                deny_patterns: ['package.json'],
+                validation_commands: [{ program: 'npm', args: ['test'], cwd: '.' }],
+            }],
+        });
+        assert.equal(parsed.tasks[0].model, 'gemini-3.7-flash-high');
+    });
+
     it('rejects duplicate IDs and incomplete or unsafe dual plan tasks', () => {
         const task = {
             task_id: 'TASK-1', title: 'Task', owner: 'codex', goal: 'Do work',
