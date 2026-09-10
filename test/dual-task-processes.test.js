@@ -11,10 +11,10 @@ const { createTrackedSpawn, recoverTaskLease, releaseSettledTaskLease } = requir
 const { startDaemonServer } = require('../lib/dual/daemon-server');
 const { createDaemonClient } = require('../lib/dual/daemon-client');
 
-function fixture(t, ownerPid = process.pid) {
+function fixture(t, ownerPid = process.pid, options = {}) {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-process-recovery-')));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-    const store = createAuthorityStore(path.join(root, '.omni/runs/dual-authority'));
+    const store = createAuthorityStore(path.join(root, '.omni/runs/dual-authority'), options);
     store.append({ schema_version: 2, type: 'session.created', state: 'DISCOVERED', workspace_root: root,
         workspace_id: 'ws', session_id: 'session', plan_revision: 1, expected_baseline: { kind: 'snapshot', id: 'a'.repeat(64) }, mode: 'auto' });
     store.append({ schema_version: 2, type: 'capability.result', from_state: 'DISCOVERED', to_state: 'CAPABILITY_SAFE',
@@ -132,3 +132,41 @@ process.stdout.write('OWNER_READY'); setInterval(()=>{},1000);`;
     assert.equal(reopened.derive().leases[lease.lease_id].status, 'released');
     assert.notEqual(reopened.derive().tasks['TASK-1'].state, 'TASK_VERIFIED');
 });
+
+test('same-process recovery succeeds when lease expired and children all exited', (t) => {
+    let nowMs = 10000;
+    const { root, store, lease } = fixture(t, process.pid, { clock: () => new Date(nowMs) });
+    store.append({ schema_version: 2, type: 'task.process.intent', task_id: 'TASK-1', lease_id: lease.lease_id, process_id: 'proc-1' });
+    store.append({ schema_version: 2, type: 'task.process.started', task_id: 'TASK-1', lease_id: lease.lease_id, process_id: 'proc-1', pid: 999999 });
+    store.append({ schema_version: 2, type: 'task.process.exited', task_id: 'TASK-1', lease_id: lease.lease_id, process_id: 'proc-1', exit_code: 0 });
+
+    const request = { workspaceRoot: root, authorityStore: store, sessionId: 'session', taskId: 'TASK-1', planRevision: 1 };
+    // Before lease expiry, still active
+    assert.equal(recoverTaskLease(request).status, 'WAITING_FOR_PROCESS');
+
+    // Advance clock past expiry
+    nowMs += 60000;
+    assert.equal(store.derive().leases[lease.lease_id].status, 'expired');
+    const result = recoverTaskLease(request);
+    assert.equal(result.status, 'RECOVERED');
+    assert.equal(store.derive().leases[lease.lease_id].status, 'released');
+    assert.equal(store.derive().leases[lease.lease_id].release_reason, 'recovered_dead_execution');
+});
+
+test('unexecuted expired lease recovers cleanly with empty confirmed_dead_pids', (t) => {
+    let nowMs = 10000;
+    const { root, store, lease } = fixture(t, null, { clock: () => new Date(nowMs) });
+    const request = { workspaceRoot: root, authorityStore: store, sessionId: 'session', taskId: 'TASK-1', planRevision: 1 };
+
+    // While lease is active, needs process evidence
+    assert.equal(recoverTaskLease(request).status, 'NEEDS_PROCESS_EVIDENCE');
+
+    // Advance clock past expiry
+    nowMs += 60000;
+    assert.equal(store.derive().leases[lease.lease_id].status, 'expired');
+    const result = recoverTaskLease(request);
+    assert.equal(result.status, 'RECOVERED');
+    assert.equal(store.derive().leases[lease.lease_id].status, 'released');
+    assert.equal(store.derive().leases[lease.lease_id].release_reason, 'recovered_unexecuted_lease');
+});
+

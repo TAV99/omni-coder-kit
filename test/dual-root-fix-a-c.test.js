@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const { runBoundedCommand, buildQualityPlan, executeQualityPlan } = require('../lib/dual/quality-runner');
-const { cleanupEphemeralValidationArtifacts, manifestWorker } = require('../lib/dual/isolated-qc');
+const { cleanupEphemeralValidationArtifacts, cleanupEphemeralValidationArtifactsAsync, manifestWorker, manifestWorkerAsync } = require('../lib/dual/isolated-qc');
 
 function temp(t) { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-root-fix-')); t.after(() => fs.rmSync(root, { recursive: true, force: true })); return root; }
 
@@ -47,3 +47,38 @@ test('declared generated output cannot overlap handed-off source or control-plan
     const controlOverlap = cleanupEphemeralValidationArtifacts(root, { sourceFiles: [], generated_outputs: ['.omni'] }, { result: { changes: [] } }, { beforeManifest: before });
     assert.equal(controlOverlap.ok, false); assert.equal(fs.existsSync(path.join(root, '.omni', 'runtime', 'lease')), true);
 });
+
+test('manifestWorkerAsync yields and reuses prior sha256 for unchanged files', async (t) => {
+    const root = temp(t);
+    fs.mkdirSync(path.join(root, 'pkg'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'pkg', 'a.js'), 'content-a');
+    fs.writeFileSync(path.join(root, 'pkg', 'b.js'), 'content-b');
+    let ticks = 0;
+    const initial = await manifestWorkerAsync(root, { yieldEvery: 1, onTick: () => { ticks++; } });
+    assert.equal(initial.entries.size, 2);
+    assert.equal(initial.failures.length, 0);
+    assert.ok(ticks >= 2);
+    assert.equal(initial.entries.get('pkg/a.js').sha256, manifestWorker(root).entries.get('pkg/a.js').sha256);
+
+    // Second run reuses prior sha256
+    const cached = await manifestWorkerAsync(root, { priorManifest: initial });
+    assert.equal(cached.entries.get('pkg/a.js').sha256, initial.entries.get('pkg/a.js').sha256);
+    assert.equal(cached.entries.get('pkg/b.js').sha256, initial.entries.get('pkg/b.js').sha256);
+});
+
+test('cleanupEphemeralValidationArtifactsAsync removes declared outputs and checks mutations', async (t) => {
+    const root = temp(t);
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src', 'app.js'), 'code');
+    const before = await manifestWorkerAsync(root);
+    fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'dist', 'output.js'), 'built');
+    const clean = await cleanupEphemeralValidationArtifactsAsync(root,
+        { sourceFiles: [{ path: 'src/app.js' }], generated_outputs: ['dist'] },
+        { result: { changes: [] } },
+        { beforeManifest: before }
+    );
+    assert.equal(clean.ok, true);
+    assert.equal(fs.existsSync(path.join(root, 'dist')), false);
+});
+
