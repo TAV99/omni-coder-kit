@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const { runBoundedCommand, buildQualityPlan, executeQualityPlan } = require('../lib/dual/quality-runner');
-const { cleanupEphemeralValidationArtifacts, cleanupEphemeralValidationArtifactsAsync, manifestWorker, manifestWorkerAsync } = require('../lib/dual/isolated-qc');
+const { cleanupEphemeralValidationArtifacts, cleanupEphemeralValidationArtifactsAsync, cleanEphemeralRunnerCaches, isEphemeralRunnerCache, manifestWorker, manifestWorkerAsync } = require('../lib/dual/isolated-qc');
 
 function temp(t) { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-root-fix-')); t.after(() => fs.rmSync(root, { recursive: true, force: true })); return root; }
 
@@ -80,5 +80,68 @@ test('cleanupEphemeralValidationArtifactsAsync removes declared outputs and chec
     );
     assert.equal(clean.ok, true);
     assert.equal(fs.existsSync(path.join(root, 'dist')), false);
+});
+
+test('isEphemeralRunnerCache correctly identifies tool runner caches inside node_modules', () => {
+    assert.equal(isEphemeralRunnerCache('node_modules/.vite'), true);
+    assert.equal(isEphemeralRunnerCache('node_modules/.vite/vitest/results.json'), true);
+    assert.equal(isEphemeralRunnerCache('node_modules/.cache/jest/cache.json'), true);
+    assert.equal(isEphemeralRunnerCache('node_modules/.vitest/results.json'), true);
+    assert.equal(isEphemeralRunnerCache('packages/foo/node_modules/.vite/deps/chunk.js'), true);
+    assert.equal(isEphemeralRunnerCache('node_modules'), false);
+    assert.equal(isEphemeralRunnerCache('node_modules/.bin'), false);
+    assert.equal(isEphemeralRunnerCache('node_modules/.bin/vitest'), false);
+    assert.equal(isEphemeralRunnerCache('node_modules/.package-lock.json'), false);
+    assert.equal(isEphemeralRunnerCache('node_modules/lodash/index.js'), false);
+    assert.equal(isEphemeralRunnerCache('src/index.js'), false);
+});
+
+test('isolated QC allows and cleans ephemeral test runner caches in node_modules without workspace mutation error', async (t) => {
+    const root = temp(t);
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src', 'app.js'), 'code');
+    fs.mkdirSync(path.join(root, 'node_modules', 'existing-lib'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'node_modules', 'existing-lib', 'index.js'), 'module.exports = 1;');
+
+    const before = await manifestWorkerAsync(root);
+    assert.equal(before.entries.has('node_modules/existing-lib/index.js'), true);
+
+    // Simulate Vitest running during validation and writing results.json into node_modules/.vite
+    fs.mkdirSync(path.join(root, 'node_modules', '.vite', 'vitest', 'hash123'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'node_modules', '.vite', 'vitest', 'hash123', 'results.json'), JSON.stringify({ passed: true }));
+    fs.mkdirSync(path.join(root, 'node_modules', '.cache', 'eslint'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'node_modules', '.cache', 'eslint', 'cache.json'), '{}');
+
+    // Ephemeral caches should be skipped by manifestWorker and manifestWorkerAsync
+    const after = manifestWorker(root);
+    assert.equal(after.entries.has('node_modules/.vite/vitest/hash123/results.json'), false);
+    assert.equal(after.entries.has('node_modules/.cache/eslint/cache.json'), false);
+
+    // Cleanup should succeed: no dependency_mutations, no unexpected_outputs
+    const clean = await cleanupEphemeralValidationArtifactsAsync(root,
+        { sourceFiles: [{ path: 'src/app.js' }] },
+        { result: { changes: [] } },
+        { beforeManifest: before }
+    );
+    assert.equal(clean.ok, true);
+    assert.deepEqual(clean.dependency_mutations, []);
+    assert.deepEqual(clean.unexpected_outputs, []);
+    assert.deepEqual(clean.source_mutations, []);
+
+    // Ephemeral runner caches were cleaned from worker sandbox
+    assert.equal(fs.existsSync(path.join(root, 'node_modules', '.vite')), false);
+    assert.equal(fs.existsSync(path.join(root, 'node_modules', '.cache')), false);
+    // Real library was preserved intact
+    assert.equal(fs.existsSync(path.join(root, 'node_modules', 'existing-lib', 'index.js')), true);
+
+    // Real package mutation inside node_modules must still be rejected
+    fs.writeFileSync(path.join(root, 'node_modules', 'existing-lib', 'index.js'), 'mutated');
+    const mutated = await cleanupEphemeralValidationArtifactsAsync(root,
+        { sourceFiles: [{ path: 'src/app.js' }] },
+        { result: { changes: [] } },
+        { beforeManifest: before }
+    );
+    assert.equal(mutated.ok, false);
+    assert.ok(mutated.dependency_mutations.includes('node_modules/existing-lib/index.js'));
 });
 
