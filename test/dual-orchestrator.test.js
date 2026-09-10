@@ -360,8 +360,14 @@ test('complete Gemini path reaches CODEX_QC with all transaction artifacts', asy
         const input = fs.readFileSync(path.join(runDir, 'raw', `${phase}.1.input.md`), 'utf8');
         assert.ok(input.includes(JSON.stringify(spec.validation_commands)), `${phase} receives exact typed checks`);
         assert.ok(input.includes(JSON.stringify(spec.deny_patterns)), `${phase} receives deny patterns`);
+        assert.ok(input.includes('Deny Patterns (FORBIDDEN): **/.env*'), `${phase} renders prominent deny patterns header`);
+        assert.ok(input.includes('Deny Patterns (STRICTLY FORBIDDEN): **/.env*'), `${phase} renders task brief deny patterns`);
         assert.ok(input.includes('.omni/codex-gemini/runs/TASK-FULL/spec.json'), `${phase} knows the spec path`);
     }
+
+    const implementInput = fs.readFileSync(path.join(runDir, 'raw', 'implement.1.input.md'), 'utf8');
+    assert.ok(implementInput.includes('NEVER create or touch files matching Deny Patterns'), 'implement prompt includes strict deny pattern rule');
+    assert.ok(implementInput.includes('Do NOT run production build commands'), 'implement prompt forbids production build');
 
     const routeJson = JSON.parse(fs.readFileSync(path.join(runDir, 'route.json'), 'utf8'));
     assert.equal(routeJson.owner, 'gemini');

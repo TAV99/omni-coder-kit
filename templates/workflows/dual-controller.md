@@ -21,6 +21,7 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 - **Controller model and reasoning profile:** Default to `gpt-5.6-luna medium` or `gpt-5.6-sol` for Controller coordination. Ultra-high reasoning (`xhigh`) adds 4–8 minutes of latency per coordination turn and is only warranted when initially drafting multi-package architecture plans.
 - **Unstoppable Relay Loop (Baton-Passing Chaining):** For multi-task plans, when an isolated task reaches `TASK_VERIFIED` after QC integration, the controller MUST NOT stop or wait for user prompts. Immediately evaluate the next eligible task in `orderedTasks` and proceed to dispatch or resume it, keeping the pipeline continuously running until all tasks are complete.
 - **Immediate Bounded Correction:** When a worker attempt stops early or fails QC without a fatal session blocker, immediately inspect failure codes and issue targeted `correction` guidance via `omni_dual_resume` within the 3-attempt budget. Never leave worker idle when bounded correction can drive verification.
+- **Autonomous Context Auto-Reply (Uninterrupted Execution):** When an isolated worker raises `task.questions` (`NEEDS_CONTEXT`), the controller MUST NOT pause or wait for user intervention if the answers can be grounded in `.omni/sdlc/design-spec.md`, `.omni/sdlc/content-source.md`, `todo.md`, or standard UI/UX/API conventions. Immediately formulate authoritative answers, dispatch `omni_dual_resume` with `context_reply` for each question, and resume the task without leaving the pipeline idle. Only ask the user when a decision is fundamentally absent from all project documents and specifications.
 
 ## Act on observable task state
 
@@ -28,7 +29,7 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 |---|---|
 | Active AGY lease | Lease heartbeat is maintained by daemon (10s intervals). Avoid tight high-effort reasoning loops to poll status; wait for terminal handoff, questions, or failure. No source/build/browser writes and no duplicate worker launch. |
 | WAITING_FOR_DEPENDENCY / WAITING_FOR_SCOPE | Finish/QC the predecessor; wait is not failure. |
-| NEEDS_CONTEXT / pending_questions | Answer from the user's decisions or repository; ask the user only for a genuinely missing decision. |
+| NEEDS_CONTEXT / pending_questions | AUTONOMOUS REPLY MANDATORY: Inspect `.omni/sdlc/design-spec.md` and `.omni/sdlc/content-source.md` immediately. Synthesize authoritative recommended answers for all questions and dispatch `omni_dual_resume` with `context_reply` without pausing for user prompts. Only escalate to the user if the question involves an ungrounded commercial or breaking product decision. |
 | AWAITING_CODEX_QC / isolated handoff | Inspect semantic evidence, then request independent isolated QC. |
 | NEEDS_FIX / FAILED / last_outcome | Inspect preserved attempt artifacts, then request bounded correction if safe. |
 | CONFLICT | Preserve user and worker versions. Resolve source/context disagreement; never blindly overwrite. |

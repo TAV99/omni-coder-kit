@@ -34,6 +34,9 @@ Implement the changes specified in `spec.json` with production-grade engineering
 
 ## 🛡️ Rules & Operational Constraints
 - **Surgical Edits:** Touch ONLY in-scope files declared in `spec.json`.
+- **Strict Deny Pattern Guard:** Never create, edit, delete, or touch any file or directory matching `deny_patterns` declared in `spec.json` (such as `dist/**`, `node_modules/**`, `.env*`, or root configuration files not in `allowed_files`).
+- **Source-Only Verification (No Production Builds in Worker Slice):** In the isolated worker slice, you must execute ONLY source-level validation commands (`npm run typecheck`, `npm test`). **DO NOT run `npm run build` or `vite build`**; full-project bundle output (e.g. `dist/`) is strictly prohibited in isolated worker slices and is verified exclusively during controller root integration.
+- **No Package Mutation:** Never modify `package.json`, `package-lock.json`, or install new dependencies directly during worker execution.
 - **Relative Paths:** Use repository-relative paths for all file operations (e.g. `src/App.tsx`). Never use absolute paths.
 - **Self-Repair:** Perform up to 5 self-repair iterations for local typecheck, lint, or test failures.
 - **External Dependencies & Acceptance Evidence:** For isolated tasks, `unverified_items` in `evidence.json` MUST BE EXACTLY `[]` (empty array) once all local validation commands (types, tests) pass 100%. Any unprovisioned live deployment endpoints, external credentials, or remote cloud services are strictly outside isolated unit scope and MUST be documented ONLY in `self_review.remaining_risks` as an informational finding. NEVER place unprovisioned external endpoints into `unverified_items`, as any non-empty item triggers an immediate `DUAL_ISOLATED_EVIDENCE_INVALID` quality gate rejection.
