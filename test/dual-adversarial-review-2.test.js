@@ -24,6 +24,27 @@ const {
     recordUiEvidence,
 } = require('../lib/dual');
 const { createOmniDualMcpServer } = require('../lib/dual/mcp-server.mjs');
+const { SessionEventSchema } = require('../lib/dual/contracts');
+const { createTrustedQualityRunner } = require('../lib/dual/quality-runner');
+const { createDaemonServerOptions } = require('../bin/omni-daemon');
+
+function createPassingTrustedQualityRunner() {
+    return createTrustedQualityRunner({
+        executeQualityPlanImpl: (plan) => plan.commands.map((command) => ({
+            ...command,
+            command: `${command.program} ${command.args.join(' ')}`.trim(),
+            exit_code: 0,
+            duration_ms: 1,
+            ok: true,
+            failure: null,
+            signal: null,
+            started_at: '2026-09-11T00:00:00.000Z',
+            ended_at: '2026-09-11T00:00:00.001Z',
+            stdout: '',
+            stderr: '',
+        })),
+    });
+}
 
 function createTempDir(prefix = 'omni-dual-adv2-') {
     return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -395,7 +416,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
             assert.ok(comp.blockers.some((b) => b.includes('TASK_UNVERIFIED')));
         });
 
-        it('Reducer rejects AGY self-approval (verified_by must be codex)', () => {
+        it('Contract rejects AGY self-approval (verified_by must be codex)', () => {
             const authorityStore = createAuthorityStore(path.join(tmpDir, '.omni', 'runs', 'dual-authority'));
             const wsId = 'ws-1';
             authorityStore.append({
@@ -439,22 +460,35 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
 
             const lease = authorityStore.acquireLease('TASK-1', 'agy');
 
-            // Attempting to append task.completed with verified_by: 'agy' must be rejected
+            const derived = authorityStore.derive();
+            const completionEvent = {
+                schema_version: 2,
+                event_id: crypto.randomUUID(),
+                causation_id: derived.lastEventId,
+                sequence: derived.lastSequence + 1,
+                workspace_id: derived.workspaceId,
+                session_id: derived.sessionId,
+                plan_revision: derived.planRevision,
+                expected_baseline: derived.currentBaseline,
+                timestamp: lease.acquired_at,
+                type: 'task.completed',
+                task_id: 'TASK-1',
+                owner: 'agy',
+                authority_state: 'TASK_VERIFIED',
+                modified_files: ['index.html'],
+                diff_fingerprint: 'd'.repeat(64),
+                verdict: 'SUCCESS',
+            };
+            assert.doesNotThrow(() => SessionEventSchema.parse({ ...completionEvent, verified_by: 'codex' }));
+
+            // The same otherwise-valid completion cannot be self-approved by AGY.
             assert.throws(
-                () => {
-                    authorityStore.append({
-                        schema_version: 2,
-                        type: 'task.completed',
-                        task_id: 'TASK-1',
-                        owner: 'agy',
-                        authority_state: 'TASK_VERIFIED',
-                        modified_files: ['index.html'],
-                        diff_fingerprint: 'd'.repeat(64),
-                        verdict: 'SUCCESS',
-                        verified_by: 'agy', // INVALID self-approval
-                    });
+                () => authorityStore.append({ ...completionEvent, verified_by: 'agy' }),
+                (error) => {
+                    assert.equal(error.code, 'DUAL_INTEGRITY_CORRUPT');
+                    assert.match(error.message, /Invalid event contract/i);
+                    return true;
                 },
-                /verified_by|codex/i
             );
         });
 
@@ -779,11 +813,11 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
             rmDir(tmpDir);
         });
 
-        it('Receipt binds accepted snapshot identity and cleans up on ledger append error', async (t) => {
+        it('Receipt binds accepted snapshot identity', async (t) => {
             const authorityStore = createAuthorityStore(path.join(tmpDir, '.omni', 'runs', 'dual-authority'));
             const daemon = await startDaemonServer({
-                workspaceRoot: tmpDir,
-                authorityStore,
+                ...createDaemonServerOptions({ workspaceRoot: tmpDir, authorityStore }),
+                trustedQualityRunner: createPassingTrustedQualityRunner(),
                 agyVersion: '1.1.19',
                 agyModels: ['gemini-3.7-flash-high'],
             });
@@ -797,11 +831,17 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'a'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: {
+                    protocol_version: 1,
+                    checks: [],
+                    ui: { required: false, viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true },
+                },
                 tasks: [{
                     task_id: 'TASK-1',
                     title: 'Task 1',
                     owner: 'codex',
                     allowed_files: ['package.json'],
+                    validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
                 }],
             });
 
@@ -828,18 +868,9 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
 
             // Submit 3 quality cycles
             for (let c = 1; c <= 3; c++) {
+                const execution = await client.executeQualityCycle(sessionId, c);
                 await client.evaluateCompletion(sessionId, {
-                    quality_evidence: {
-                        cycle_index: c,
-                        attempt: 1,
-                        total_tasks: 1,
-                        completed_task_ids: ['TASK-1'],
-                        plan_revision: 1,
-                        diff_fingerprint: diffInfo.patchSha256,
-                        gate_results: [{ id: `gate-${c}`, required: true, status: 'PASSED' }],
-                        commands: [{ command: 'node --version', exit_code: 0, duration_ms: 10 }],
-                        evidence_sha256: 'a'.repeat(64),
-                    },
+                    quality_evidence: execution.quality_evidence,
                 });
             }
 

@@ -181,6 +181,198 @@ process.exit(1);
 `);
 }
 
+test('T5 templates define grounded context replies, bounded body fields, and user-decision gates', () => {
+    const templatePaths = [
+        path.join(__dirname, '..', 'templates', 'workflows', 'dual-controller.md'),
+        path.join(__dirname, '..', 'templates', 'codex-gemini', 'prompts', 'implement.md'),
+    ];
+
+    const controllerContent = fs.readFileSync(templatePaths[0], 'utf8');
+    const replyBlock = [...controllerContent.matchAll(/```json\s*([\s\S]*?)```/g)]
+        .map((match) => match[1])
+        .find((block) => block.includes('"context_reply"'));
+    assert.ok(replyBlock, 'controller template must include a context_reply JSON example');
+    const replyEnvelope = JSON.parse(replyBlock);
+    assert.deepEqual(Object.keys(replyEnvelope).sort(), ['context_reply', 'session_id', 'workspace_root']);
+    assert.deepEqual(Object.keys(replyEnvelope.context_reply).sort(), [
+        'body', 'message_id', 'plan_revision', 'reply_to', 'task_id',
+    ]);
+    assert.equal(replyEnvelope.context_reply.message_id, 'reply-1');
+    assert.equal(replyEnvelope.context_reply.reply_to, 'question-1');
+    assert.equal(replyEnvelope.context_reply.plan_revision, 1);
+    assert.equal(replyEnvelope.context_reply.task_id, 'TASK-1');
+    for (const field of ['Decision', 'Source file/section', 'Question ID', 'Plan revision']) {
+        assert.match(replyEnvelope.context_reply.body, new RegExp(field.replace(/[ /]/g, '[ \\/]'), 'i'));
+    }
+
+    for (const templatePath of templatePaths) {
+        const content = fs.readFileSync(templatePath, 'utf8');
+        assert.match(content, /grounded in .*design.*content|design\/content source/i);
+        assert.match(content, /in-scope implementation convention/i);
+        assert.match(content, /never .*solely .*worker recommendation/i);
+        assert.match(content, /decision/i);
+        assert.match(content, /source file\/section/i);
+        assert.match(content, /question ID/i);
+        assert.match(content, /plan revision/i);
+        assert.match(content, /commerce/i);
+        assert.match(content, /sensitive data/i);
+        assert.match(content, /external write/i);
+        assert.match(content, /paid action/i);
+        assert.match(content, /breaking change/i);
+        assert.match(content, /scope expansion/i);
+        assert.match(content, /message_id/i);
+        assert.match(content, /reply_to/i);
+        assert.match(content, /changed .*content.*reject|reject.*changed .*content/i);
+        assert.match(content, /unknown schema fields/i);
+        assert.match(content, /authorized next action/i);
+        assert.match(content, /exhausted retry/i);
+        assert.match(content, /must not reset/i);
+        assert.match(content, /paid service.*user decision|user decision.*paid service/i);
+        assert.match(content, /auto-reply is limited to non-safety in-scope implementation conventions/i);
+        assert.match(content, /always require user input .*commerce.*sensitive data.*external write.*paid action.*breaking change.*scope expansion.*even when grounded/i);
+    }
+
+    const needsContextRow = controllerContent.split(/\r?\n/)
+        .find((line) => line.includes('| NEEDS_CONTEXT / pending_questions |'));
+    assert.ok(needsContextRow, 'controller state table must contain a NEEDS_CONTEXT row');
+    assert.doesNotMatch(needsContextRow, /Only escalate to the user if the question involves an ungrounded commercial or breaking product decision/i);
+    assert.match(needsContextRow, /commerce.*sensitive data.*external write.*paid action.*breaking change.*scope expansion/i);
+    assert.match(needsContextRow, /regardless of grounding|even when grounded/i);
+});
+
+test('T5 empty deny patterns preserve an explicit scope guard in the final worker prompt', async (t) => {
+    const { repoRoot, head, scratchDir } = makeRepoFixture(t);
+    const validScript = standardFakeAgyScript(scratchDir);
+    const orch = createDualOrchestrator({
+        cwd: repoRoot,
+        agyCommand: process.execPath,
+        agyPrefixArgs: [validScript],
+    });
+
+    orch.newTask('T5-EMPTY-DENY');
+    await orch.runPhase('preflight', 'T5-EMPTY-DENY');
+    await orch.runPhase('scout', 'T5-EMPTY-DENY');
+
+    const runDir = path.join(repoRoot, '.omni', 'codex-gemini', 'runs', 'T5-EMPTY-DENY');
+    fs.writeFileSync(path.join(runDir, 'spec.json'), JSON.stringify({
+        schema_version: 1,
+        task_id: 'T5-EMPTY-DENY',
+        expected_base_commit: head,
+        goal: 'Keep the implementation scope bounded',
+        allowed_files: ['index.html'],
+        deny_patterns: [],
+        validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
+        risk_flags: [],
+        permission_authority: 'dual-init-dangerous-auto-v1',
+    }, null, 2), 'utf8');
+
+    const result = await orch.run('T5-EMPTY-DENY');
+    assert.equal(result.state, 'CODEX_QC');
+    const prompt = fs.readFileSync(path.join(runDir, 'raw', 'implement.1.input.md'), 'utf8');
+    assert.match(prompt, /Allowed Files: index\.html/);
+    assert.match(prompt, /Deny Patterns \(FORBIDDEN\): none/);
+    assert.match(prompt, /Deny Patterns \(STRICTLY FORBIDDEN\): none/);
+    assert.match(prompt, /Touch ONLY Allowed Files/);
+    assert.match(prompt, /NEVER create or touch files matching Deny Patterns/);
+    assert.doesNotMatch(prompt, /undefined/);
+});
+
+test('T5 exhausted technical retries preserve evidence and stop without resetting the session', async (t) => {
+    const { repoRoot, head } = makeRepoFixture(t);
+    let workerCalls = 0;
+    const orch = createDualOrchestrator({
+        cwd: repoRoot,
+        authoritativeCapabilityEvidence: { version: 'agy version 1.1.20-test', model: 'gemini-3.7-flash-high' },
+        processRunner: async () => {
+            workerCalls += 1;
+            return {
+                exitCode: 0,
+                stdout: '',
+                stderr: 'empty worker output',
+                timedOut: false,
+                startedAt: new Date('2026-09-10T00:00:00.000Z'),
+                endedAt: new Date('2026-09-10T00:00:01.000Z'),
+                durationMs: 1000,
+            };
+        },
+    });
+
+    orch.newTask('T5-RETRY-STOP');
+    await orch.runPhase('preflight', 'T5-RETRY-STOP');
+    await assert.rejects(
+        () => orch.runPhase('scout', 'T5-RETRY-STOP'),
+        (error) => error.code === 'DUAL_AGY_EMPTY_OUTPUT',
+    );
+    assert.equal(workerCalls, 3);
+    const status = orch.status('T5-RETRY-STOP');
+    assert.equal(status.state, 'PREFLIGHT_SAFE');
+    assert.equal(status.nextAction, 'blocked');
+    assert.equal(status.attempts.scout, 3);
+
+    const runDir = path.join(repoRoot, '.omni', 'codex-gemini', 'runs', 'T5-RETRY-STOP');
+    assert.ok(fs.existsSync(path.join(runDir, 'raw', 'scout.1.stdout.json')));
+    assert.ok(fs.existsSync(path.join(runDir, 'raw', 'scout.3.meta.json')));
+    const events = fs.readFileSync(path.join(runDir, 'events.ndjson'), 'utf8')
+        .trim().split('\n').map((line) => JSON.parse(line));
+    const failures = events.filter((event) => event.type === 'phase.failed' && event.phase === 'scout');
+    assert.equal(failures.length, 3);
+    assert.equal(failures.at(-1).retryable, false);
+    assert.equal(events.some((event) => event.type === 'transaction.reset'), false);
+    assert.equal(events.some((event) => event.type === 'transaction.completed'), false);
+    assert.equal(events.at(-1).error_code, 'DUAL_AGY_EMPTY_OUTPUT');
+    assert.equal(events.at(-1).task_id, 'T5-RETRY-STOP');
+    assert.equal(events.at(-1).expected_base_commit, head);
+});
+
+test('T5 missing authoritative capability is a durable terminal preflight failure', async (t) => {
+    const { repoRoot } = makeRepoFixture(t);
+    let capabilityProbeCalls = 0;
+    const orch = createDualOrchestrator({
+        cwd: repoRoot,
+        authoritativeCapabilityEvidence: { model: 'gemini-3.7-flash-high' },
+        capabilityProcessRunner: async () => {
+            capabilityProbeCalls += 1;
+            throw new Error('capability probe must not run when authority was supplied');
+        },
+    });
+
+    orch.newTask('T5-MISSING-AUTH');
+    await assert.rejects(
+        () => orch.runPhase('preflight', 'T5-MISSING-AUTH'),
+        (error) => error.code === 'DUAL_PREFLIGHT_AUTHORITY_INVALID',
+    );
+    assert.equal(capabilityProbeCalls, 0);
+
+    const runDir = path.join(repoRoot, '.omni', 'codex-gemini', 'runs', 'T5-MISSING-AUTH');
+    const eventsPath = path.join(runDir, 'events.ndjson');
+    const events = fs.readFileSync(eventsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+    const phaseStarted = events.find((event) => event.type === 'phase.started' && event.phase === 'preflight');
+    const phaseFailed = events.find((event) => event.type === 'phase.failed' && event.phase === 'preflight');
+    assert.equal(phaseStarted.attempt, 1);
+    assert.equal(phaseFailed.attempt, 1);
+    assert.equal(phaseFailed.error_code, 'DUAL_PREFLIGHT_AUTHORITY_INVALID');
+    assert.equal(phaseFailed.retryable, false);
+
+    const failurePath = path.join(runDir, 'raw', 'preflight.1.failure.json');
+    assert.ok(fs.existsSync(failurePath));
+    const failureEvidence = JSON.parse(fs.readFileSync(failurePath, 'utf8'));
+    assert.equal(failureEvidence.phase, 'preflight');
+    assert.equal(failureEvidence.error_code, 'DUAL_PREFLIGHT_AUTHORITY_INVALID');
+    assert.match(failureEvidence.reason, /version|authority/i);
+
+    const status = orch.status('T5-MISSING-AUTH');
+    assert.equal(status.state, 'NEW');
+    assert.equal(status.nextAction, 'blocked');
+    assert.ok(status.warnings.some((warning) => warning.includes('DUAL_PREFLIGHT_AUTHORITY_INVALID')));
+
+    const beforeResume = fs.readFileSync(eventsPath, 'utf8');
+    await assert.rejects(
+        () => orch.resume('T5-MISSING-AUTH'),
+        (error) => error.code === 'DUAL_PREFLIGHT_AUTHORITY_INVALID',
+    );
+    assert.equal(fs.readFileSync(eventsPath, 'utf8'), beforeResume);
+});
+
 test('newTask rejects non-repository, empty repo, dirty tree, duplicate and unsafe IDs', (t) => {
     const { repoRoot, head } = makeRepoFixture(t);
 

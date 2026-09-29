@@ -13,6 +13,26 @@ const {
     createAuthorityStore,
 } = require('../lib/dual');
 const { captureDiffFingerprint } = require('../lib/dual/scope-guard');
+const { createTrustedQualityRunner } = require('../lib/dual/quality-runner');
+const { createDaemonServerOptions } = require('../bin/omni-daemon');
+
+function createPassingTrustedQualityRunner() {
+    return createTrustedQualityRunner({
+        executeQualityPlanImpl: (plan) => plan.commands.map((command) => ({
+            ...command,
+            command: `${command.program} ${command.args.join(' ')}`.trim(),
+            exit_code: 0,
+            duration_ms: 1,
+            ok: true,
+            failure: null,
+            signal: null,
+            started_at: '2026-09-11T00:00:00.000Z',
+            ended_at: '2026-09-11T00:00:00.001Z',
+            stdout: '',
+            stderr: '',
+        })),
+    });
+}
 
 function createTempDir(prefix = 'omni-dual-git-drift-') {
     return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -43,8 +63,8 @@ test('git baseline allows idempotent evaluateCompletion when uncommitted files m
     const authorityStore = createAuthorityStore(path.join(wsRoot, '.omni', 'runs', 'dual-authority'));
 
     const daemon = await startDaemonServer({
-        workspaceRoot: wsRoot,
-        authorityStore,
+        ...createDaemonServerOptions({ workspaceRoot: wsRoot, authorityStore }),
+        trustedQualityRunner: createPassingTrustedQualityRunner(),
         planArtifactVerifier: async () => ({ plan_path: '.omni/sdlc/dual-plan.json', plan_sha256: 'a'.repeat(64) }),
         capabilityPreflight: async () => ({
             status: 'PASSED',
@@ -72,11 +92,17 @@ test('git baseline allows idempotent evaluateCompletion when uncommitted files m
         plan_sha256: 'a'.repeat(64),
         plan_revision: 1,
         total_tasks: 1,
+        acceptance_policy: {
+            protocol_version: 1,
+            checks: [],
+            ui: { required: false, viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true },
+        },
         tasks: [{
             task_id: 'TASK-1',
             title: 'Create App',
             owner: 'codex',
             allowed_files: ['src/app.js'],
+            validation_commands: [{ program: 'node', args: ['--check', 'src/app.js'], cwd: '.' }],
         }],
     });
     assert.equal(regRes.plan_revision, 1);
@@ -108,18 +134,9 @@ test('git baseline allows idempotent evaluateCompletion when uncommitted files m
 
     // 6. Record 3 Quality Cycles
     for (let cycle = 1; cycle <= 3; cycle++) {
+        const execution = await client.executeQualityCycle(sessionId, cycle);
         const evalRes = await client.evaluateCompletion(sessionId, {
-            quality_evidence: {
-                cycle_index: cycle,
-                attempt: 1,
-                total_tasks: 1,
-                completed_task_ids: ['TASK-1'],
-                plan_revision: 1,
-                diff_fingerprint: patchSha,
-                gate_results: [{ id: 'unit-tests', required: true, status: 'PASSED' }],
-                commands: [{ command: 'npm test', exit_code: 0, duration_ms: 100 }],
-                evidence_sha256: 'b'.repeat(64),
-            },
+            quality_evidence: execution.quality_evidence,
         });
         if (cycle < 3) {
             assert.equal(evalRes.verified, false);

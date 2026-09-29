@@ -1169,13 +1169,23 @@ describe('defaultResolveExecutable and Custom fsImpl', () => {
     });
 
     it('POSIX defaultResolveExecutable rejects non-executable files on PATH', () => {
-        const binDir = makeTemp('posix-bin-');
-        const nonExecFile = path.join(binDir, 'my-tool');
-        fs.writeFileSync(nonExecFile, '#!/bin/sh\necho hi\n');
+        const binDir = '/virtual/bin';
+        const nonExecFile = '/virtual/bin/my-tool';
+        const accessCalls = [];
 
         const fakeFsImpl = {
             ...fs,
+            existsSync: (filePath) => filePath === nonExecFile,
+            statSync: (filePath) => {
+                if (filePath === nonExecFile) {
+                    return { isFile: () => true };
+                }
+                const err = new Error('ENOENT');
+                err.code = 'ENOENT';
+                throw err;
+            },
             accessSync: (filePath, mode) => {
+                accessCalls.push({ filePath, mode });
                 if (filePath === nonExecFile) {
                     const err = new Error('EACCES: permission denied');
                     err.code = 'EACCES';
@@ -1192,6 +1202,9 @@ describe('defaultResolveExecutable and Custom fsImpl', () => {
         });
 
         assert.equal(res, null, 'Non-executable file must be rejected by default POSIX resolver');
+        assert.deepEqual(accessCalls, [
+            { filePath: nonExecFile, mode: fs.constants.X_OK },
+        ], 'POSIX PATH lookup must use POSIX path semantics and verify X_OK');
     });
 });
 

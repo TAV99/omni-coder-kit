@@ -29,10 +29,25 @@ function workspace(t) {
     return root;
 }
 
+function acceptancePolicy() {
+    return {
+        protocol_version: 1,
+        checks: [{
+            id: 'accept-1',
+            requirement_id: 'requirement-1',
+            phase: 'session',
+            kind: 'command',
+            required: true,
+            command: { program: 'node', args: ['--version'], cwd: '.' },
+        }],
+    };
+}
+
 function validPlan() {
     return {
         schema_version: 1,
         plan_revision: 1,
+        acceptance_policy: acceptancePolicy(),
         tasks: [{
             task_id: 'TASK-1', title: 'Implement feature', owner: 'codex',
             goal: 'Implement a bounded feature', category: 'frontend', complexity: 'small', risk: 'low',
@@ -54,7 +69,7 @@ test('private dependency readiness fails before session creation on escaping or 
         const root = workspace(t);
         const task = { ...validPlan().tasks[0], owner: 'agy', execution_mode: 'isolated', dependency_mode: 'npm-ci',
             context_files: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] };
-        writePlan(root, { schema_version: 1, plan_revision: 1, tasks: [task] });
+        writePlan(root, { schema_version: 1, plan_revision: 1, acceptance_policy: acceptancePolicy(), tasks: [task] });
         fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'fixture', version: '1.0.0',
             ...(kind === 'escape' ? { dependencies: { outside: 'file:../escape' } } : {}) }));
         fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({ name: 'fixture', lockfileVersion: 3, packages: {} }));
@@ -97,6 +112,7 @@ test('bootstrap rejects multiple AGY slices before side effects because sessions
     writePlan(root, {
         schema_version: 1,
         plan_revision: 1,
+        acceptance_policy: acceptancePolicy(),
         tasks: [task, { ...task, task_id: 'AGY-2', allowed_files: ['src/b.js'] }],
     });
     let sessionCalls = 0;
@@ -112,6 +128,7 @@ test('bootstrap rejects setup and final-QC pseudo tasks because they belong to c
     writePlan(root, {
         schema_version: 1,
         plan_revision: 1,
+        acceptance_policy: acceptancePolicy(),
         tasks: [{ ...task, category: 'qa', title: 'Final QC' }],
     });
     await assert.rejects(

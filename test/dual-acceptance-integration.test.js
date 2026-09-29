@@ -14,6 +14,7 @@ const {
 const { createAuthorityStore } = require('../lib/dual/authority-store');
 const { startDaemonServer } = require('../lib/dual/daemon-server');
 const { createDaemonClient } = require('../lib/dual/daemon-client');
+const { captureDiffFingerprint } = require('../lib/dual/scope-guard');
 
 const sha = (content) => crypto.createHash('sha256').update(content).digest('hex');
 const withEvidenceDigest = (evidence) => ({ ...evidence, evidence_sha256: hashReviewEvidence(evidence) });
@@ -214,6 +215,164 @@ test('session completion blocks when mandatory session acceptance checks are not
     }
 });
 
+test('daemon derives UI authority from persisted policy and rejects mismatched evidence before append', async () => {
+    const workspaceRoot = createTempDir('dual-ui-policy');
+    const baseCommit = initGitRepo(workspaceRoot);
+    const authorityDir = path.join(workspaceRoot, '.omni', 'sessions', 'test-ui-policy');
+    const authorityStore = createAuthorityStore(authorityDir);
+    let daemon = await startDaemonServer({
+        workspaceRoot,
+        authorityStore,
+        preflightRunner: mockPreflightRunner,
+        planArtifactVerifier: async (_root, p) => ({ plan_path: p.plan_path, plan_sha256: p.plan_sha256 }),
+    });
+    let client = createDaemonClient({ workspaceRoot, timeoutMs: 10000 });
+
+    try {
+        const session = await client.beginSession({ workspace_root: workspaceRoot, mode: 'auto' });
+        const policy = {
+            protocol_version: 1,
+            checks: [],
+            ui: { required: true, viewport_widths: [390, 768], reduced_motion_required: true },
+        };
+        await client.registerPlan(session.session_id, {
+            plan_path: '.omni/plan.json',
+            plan_sha256: sha('ui-policy-plan'),
+            acceptance_policy: policy,
+            tasks: [{
+                task_id: 'task-1', title: 'Task 1', owner: 'codex',
+                allowed_files: ['README.md'], context_files: [], deny_patterns: [],
+                validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
+            }],
+        });
+
+        const missing = await client.evaluateCompletion(session.session_id);
+        assert.equal(missing.verified, false);
+        assert.ok(missing.blockers.some((blocker) => blocker.includes('UI_EVIDENCE_MISSING')));
+
+        const sourceFingerprint = captureDiffFingerprint({
+            repoRoot: workspaceRoot,
+            baseCommit,
+            excludedPaths: ['.omni'],
+        }).patchSha256;
+        const valid = {
+            requirement: {
+                gate_id: 'responsive_visual_qa', required: true,
+                viewport_widths: [390, 768], reduced_motion_required: true,
+            },
+            evidence: {
+                runtime_status: 'AVAILABLE', evidence_sha256: sha('ui-evidence'),
+                policy_sha256: hashAcceptancePolicy(policy),
+                source_fingerprint: sourceFingerprint,
+                requested_viewports: [390, 768],
+                artifact_hashes: [sha('shot-390'), sha('shot-768')],
+                viewports: [
+                    { width: 390, passed: true, horizontal_overflow: false },
+                    { width: 768, passed: true, horizontal_overflow: false },
+                ],
+                reduced_motion: { tested: true, passed: true },
+            },
+        };
+        const ledgerPath = path.join(authorityDir, 'events.ndjson');
+        const mutations = [
+            { label: 'required', payload: { ...valid, requirement: { ...valid.requirement, required: false } } },
+            { label: 'viewports', payload: { ...valid, requirement: { ...valid.requirement, viewport_widths: [390] } } },
+            { label: 'reduced motion', payload: { ...valid, requirement: { ...valid.requirement, reduced_motion_required: false } } },
+            { label: 'policy hash', payload: { ...valid, evidence: { ...valid.evidence, policy_sha256: '0'.repeat(64) } } },
+            { label: 'source fingerprint', payload: { ...valid, evidence: { ...valid.evidence, source_fingerprint: '0'.repeat(64) } } },
+            { label: 'requested viewports', payload: { ...valid, evidence: { ...valid.evidence, requested_viewports: [390] } } },
+        ];
+        for (const mutation of mutations) {
+            const before = fs.readFileSync(ledgerPath);
+            await assert.rejects(
+                () => client.evaluateCompletion(session.session_id, { ui_evidence: mutation.payload }),
+                (error) => /^DUAL_UI_(POLICY|BINDING|GATE)/.test(error.code),
+                mutation.label
+            );
+            assert.deepEqual(fs.readFileSync(ledgerPath), before, `${mutation.label} rejection must not append`);
+        }
+
+        const beforeForgedAvailable = fs.readFileSync(ledgerPath);
+        await assert.rejects(
+            () => client.evaluateCompletion(session.session_id, { ui_evidence: valid }),
+            (error) => error?.code === 'DUAL_UI_ATTESTATION_REQUIRED'
+        );
+        assert.deepEqual(fs.readFileSync(ledgerPath), beforeForgedAvailable, 'Caller-supplied AVAILABLE evidence must not append without a trusted adapter run');
+
+        await daemon.close();
+        const runUiDir = path.join(workspaceRoot, '.omni', 'runs', 'dual-authority', 'ui');
+        fs.mkdirSync(runUiDir, { recursive: true });
+        const artifactPaths = [path.join(runUiDir, '390.png'), path.join(runUiDir, '768.png')];
+        fs.writeFileSync(artifactPaths[0], Buffer.from('trusted-390'));
+        fs.writeFileSync(artifactPaths[1], Buffer.from('trusted-768'));
+        const artifactHashes = artifactPaths.map((artifactPath) => sha(fs.readFileSync(artifactPath)));
+        const evidenceData = {
+            runtime_status: 'AVAILABLE',
+            policy_sha256: hashAcceptancePolicy(policy),
+            source_fingerprint: sourceFingerprint,
+            requested_viewports: [390, 768],
+            viewports: [
+                { width: 390, passed: false, horizontal_overflow: true },
+                { width: 768, passed: true, horizontal_overflow: false },
+            ],
+            reduced_motion: { tested: true, passed: false },
+        };
+        const trustedEvidence = {
+            ...evidenceData,
+            artifact_hashes: artifactHashes,
+            evidence_sha256: sha(JSON.stringify({ evidenceData, artifactHashes })),
+        };
+        let adapterCalls = 0;
+        daemon = await startDaemonServer({
+            workspaceRoot,
+            authorityStore,
+            preflightRunner: mockPreflightRunner,
+            planArtifactVerifier: async (_root, p) => ({ plan_path: p.plan_path, plan_sha256: p.plan_sha256 }),
+            trustedUiAdapter: async () => {
+                adapterCalls += 1;
+                return { evidence: trustedEvidence, artifact_paths: artifactPaths };
+            },
+        });
+        client = createDaemonClient({ workspaceRoot, timeoutMs: 10000 });
+        const trustedResult = await client.evaluateCompletion(session.session_id, {
+            ui_evidence: { requirement: valid.requirement, evidence: trustedEvidence },
+        });
+        assert.equal(trustedResult.verified, false);
+        assert.equal(adapterCalls, 1);
+        assert.equal(authorityStore.derive().gates.responsive_visual_qa.status, 'FAILED');
+
+        const forgedPassEvidence = {
+            ...trustedEvidence,
+            viewports: trustedEvidence.viewports.map((viewport) => ({ ...viewport, passed: true, horizontal_overflow: false })),
+            reduced_motion: { tested: true, passed: true },
+        };
+        const eventsBeforeForgedReplay = authorityStore.readEvents().length;
+        await assert.rejects(
+            () => client.evaluateCompletion(session.session_id, {
+                ui_evidence: { requirement: valid.requirement, evidence: forgedPassEvidence },
+            }),
+            (error) => error?.code === 'DUAL_UI_ATTESTATION_INVALID'
+        );
+        assert.equal(adapterCalls, 1, 'Forged replay must not re-run or replace the attested adapter result');
+        assert.equal(authorityStore.readEvents().length, eventsBeforeForgedReplay, 'Changed replay measurements must not append');
+        assert.equal(authorityStore.derive().gates.responsive_visual_qa.status, 'FAILED');
+
+        fs.writeFileSync(artifactPaths[0], Buffer.from('tampered-390'));
+        const eventsBeforeTamperedRetry = authorityStore.readEvents().length;
+        await assert.rejects(
+            () => client.evaluateCompletion(session.session_id, {
+                ui_evidence: { requirement: valid.requirement, evidence: trustedEvidence },
+            }),
+            (error) => error?.code === 'DUAL_UI_ARTIFACT_HASH_MISMATCH'
+        );
+        assert.equal(adapterCalls, 1, 'Idempotent retry must use the private current-process registry');
+        assert.equal(authorityStore.readEvents().length, eventsBeforeTamperedRetry, 'Tampered UI retry must not append');
+    } finally {
+        await daemon.close();
+        fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
 test('isolated QC enforces pre-integration review evidence before integrating task', async (t) => {
     const { completeIsolatedTask } = require('../lib/dual/isolated-qc');
     const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
@@ -330,7 +489,7 @@ test('isolated QC enforces pre-integration review evidence before integrating ta
     assert.deepEqual(missingRes.missing, ['review-task1']);
     assert.equal(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), 'module.exports = 1;\n', 'root files untouched');
 
-    // 2. With failing review evidence: completeIsolatedTask must return NEEDS_FIX and not integrate
+    // 2. Caller-computable review evidence is never trusted and cannot integrate.
     const handoff = store.derive().tasks['TASK-1'].isolatedHandoff;
     const policySha = hashAcceptancePolicy(policy);
     const failingEvidence = withEvidenceDigest({
@@ -342,10 +501,10 @@ test('isolated QC enforces pre-integration review evidence before integrating ta
         ],
     });
     const failRes = await completeIsolatedTask({ ...qcRequest, reviewEvidence: failingEvidence });
-    assert.equal(failRes.status, 'NEEDS_FIX');
+    assert.equal(failRes.status, 'NEEDS_REVIEW');
     assert.equal(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), 'module.exports = 1;\n', 'root files untouched');
 
-    // 3. With passing review evidence: completeIsolatedTask integrates and sets TASK_VERIFIED
+    // 3. A forged PASS remains untrusted.
     const passingEvidence = withEvidenceDigest({
         policy_sha256: policySha,
         task_id: 'TASK-1',
@@ -354,7 +513,52 @@ test('isolated QC enforces pre-integration review evidence before integrating ta
             { check_id: 'review-task1', status: 'PASS', findings: [] },
         ],
     });
-    const passRes = await completeIsolatedTask({ ...qcRequest, reviewEvidence: passingEvidence });
+    const forgedPassRes = await completeIsolatedTask({ ...qcRequest, reviewEvidence: passingEvidence });
+    assert.equal(forgedPassRes.status, 'NEEDS_REVIEW');
+    assert.equal(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), 'module.exports = 1;\n', 'root files untouched');
+
+    // 4. Only a daemon-issued execution and daemon-persisted attestation can authorize integration.
+    let daemon = await startDaemonServer({ workspaceRoot: root, authorityStore: store });
+    t.after(async () => daemon.close());
+    const client = createDaemonClient({ workspaceRoot: root, timeoutMs: 10000 });
+    await assert.rejects(
+        () => client.submitAcceptanceReview('session-qc', 'TASK-1', 1, passingEvidence),
+        (error) => error.code === 'DUAL_REVIEW_ATTESTATION_REQUIRED'
+    );
+    const prepared = await client.prepareAcceptanceReview('session-qc', 'TASK-1', 1);
+    assert.equal(prepared.review_phase, 'pre_integration');
+    await daemon.close();
+    daemon = await startDaemonServer({ workspaceRoot: root, authorityStore: store });
+    const eventsBeforeIncomplete = store.readEvents().length;
+    const incomplete = await client.submitAcceptanceReview('session-qc', 'TASK-1', 1, {
+        review_execution_id: prepared.review_execution_id,
+        check_results: [],
+    });
+    assert.equal(incomplete.status, 'NEEDS_REVIEW');
+    assert.equal(store.readEvents().length, eventsBeforeIncomplete,
+        'incomplete findings must not consume the single-use review execution');
+    const submitted = await client.submitAcceptanceReview('session-qc', 'TASK-1', 1, {
+        review_execution_id: prepared.review_execution_id,
+        check_results: [{ check_id: 'review-task1', status: 'PASS', findings: [] }],
+    });
+    assert.equal(submitted.status, 'PASSED');
+    const preparedRetry = await client.prepareAcceptanceReview('session-qc', 'TASK-1', 1);
+    assert.equal(preparedRetry.review_execution_id, prepared.review_execution_id,
+        'same candidate binding must reuse the consumed execution and stay immutable');
+    const replayed = await client.submitAcceptanceReview('session-qc', 'TASK-1', 1, {
+        review_execution_id: prepared.review_execution_id,
+        check_results: [{ check_id: 'review-task1', status: 'PASS', findings: [] }],
+    });
+    assert.equal(replayed.attestation_sha256, submitted.attestation_sha256);
+    await assert.rejects(
+        () => client.submitAcceptanceReview('session-qc', 'TASK-1', 1, {
+            review_execution_id: prepared.review_execution_id,
+            check_results: [{ check_id: 'review-task1', status: 'FAIL', findings: ['changed'] }],
+        }),
+        (error) => error.code === 'DUAL_ACCEPTANCE_EVIDENCE_CONFLICT'
+    );
+
+    const passRes = await completeIsolatedTask(qcRequest);
     assert.equal(passRes.status, 'TASK_VERIFIED');
     assert.equal(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), 'module.exports = 2;\n', 'root files integrated');
     assert.ok(store.derive().gates['acceptance-review-task1']);

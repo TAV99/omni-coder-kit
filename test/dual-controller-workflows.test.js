@@ -17,9 +17,31 @@ test('every native workflow entrypoint in Codex-AGY loads the same controller co
     }
     const workflow = config.files.find((entry) => entry.path === path.join('.omni', 'workflows', 'dual-controller.md'));
     const source = content(workflow);
-    for (const word of ['context_reply', 'isolated_qc', 'expected_attempt', 'depends_on', 'NEEDS_CONTEXT', 'NEEDS_FIX']) {
+    for (const word of ['context_reply', 'isolated_qc', 'omni_dual_quality', 'expected_attempt', 'depends_on', 'NEEDS_CONTEXT', 'NEEDS_FIX', 'NEEDS_REVIEW']) {
         assert.ok(source.includes(word), word);
     }
+});
+
+test('controller documents daemon-owned quality generations, timeout recovery, and required review handling', () => {
+    const source = fs.readFileSync(path.resolve(__dirname, '../templates/workflows/dual-controller.md'), 'utf8');
+    for (const phrase of [
+        'current source fingerprint generation',
+        'restart the required checkpoint sequence from cycle 1',
+        'successful same-generation replay is read-only',
+        'inspect `omni_dual_status` for that same session',
+        'missing_truncated',
+        'All required tasks, quality gates, and reviews must be complete',
+    ]) {
+        assert.ok(source.includes(phrase), phrase);
+    }
+    assert.match(source, /Do not build or submit `quality_evidence` through `omni_dual_completion`/);
+    assert.match(source, /Never fabricate PASS findings or waive a check/);
+    assert.match(source, /Use `omni_dual_quality` once for each required `cycle_index`/);
+    assert.ok(source.includes('Use `omni_dual_completion` only for the remaining isolated-task QC (`isolated_qc`), root QC (`qc_evidence`), required UI (`ui_evidence`) inputs, and completion-readiness evaluation as applicable'));
+    assert.doesNotMatch(source, /Root Diff Fingerprint Calculation/);
+    assert.doesNotMatch(source, /In `quality_evidence`, `diff_fingerprint` must reflect/);
+    assert.doesNotMatch(source, /Fast-Track Quality Inheritance/);
+    assert.doesNotMatch(source, /Quality Cycle 1 may inherit the verified command outputs from the isolated QC pass/);
 });
 
 test('generated Codex-AGY and Claude-Codex configs describe their actual pairing', () => {

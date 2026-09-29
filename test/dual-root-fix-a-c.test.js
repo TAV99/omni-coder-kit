@@ -48,7 +48,7 @@ test('declared generated output cannot overlap handed-off source or control-plan
     assert.equal(controlOverlap.ok, false); assert.equal(fs.existsSync(path.join(root, '.omni', 'runtime', 'lease')), true);
 });
 
-test('manifestWorkerAsync yields and reuses prior sha256 for unchanged files', async (t) => {
+test('manifestWorkerAsync yields and rehashes content instead of trusting prior metadata', async (t) => {
     const root = temp(t);
     fs.mkdirSync(path.join(root, 'pkg'), { recursive: true });
     fs.writeFileSync(path.join(root, 'pkg', 'a.js'), 'content-a');
@@ -144,4 +144,3 @@ test('isolated QC allows and cleans ephemeral test runner caches in node_modules
     assert.equal(mutated.ok, false);
     assert.ok(mutated.dependency_mutations.includes('node_modules/existing-lib/index.js'));
 });
-

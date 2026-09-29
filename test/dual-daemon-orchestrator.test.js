@@ -10,7 +10,7 @@ const { execSync, spawn, spawnSync } = require('child_process');
 
 const {
     startDaemonServer: startDaemonServerImpl,
-    createDaemonClient,
+    createDaemonClient: createDaemonClientImpl,
     createAuthorityStore,
     runCapabilityPreflight,
     evaluateHook,
@@ -25,8 +25,19 @@ const {
     executeSetupManifest,
 } = require('../lib/dual');
 const { createOmniDualMcpServer } = require('../lib/dual/mcp-server.mjs');
+const { hashAcceptancePolicy } = require('../lib/dual/acceptance-policy');
+const {
+    buildQualityPlan,
+    createTrustedQualityRunner,
+    deriveQualityExecutionId,
+    persistQualityExecutionArtifact,
+    qualityGateResults,
+    readQualityExecutionArtifact,
+} = require('../lib/dual/quality-runner');
+const { createTrustedUiAdapter } = require('../lib/dual/visual-qa');
 const { captureDiffFingerprint } = require('../lib/dual/scope-guard');
 const { buildCodexConfig, buildCodexHooks, buildInitConfig } = require('../lib/init');
+const { createDaemonServerOptions } = require('../bin/omni-daemon');
 
 function createTempDir(prefix = 'omni-dual-orch-') {
     return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -36,6 +47,123 @@ function rmDir(dir) {
     try {
         fs.rmSync(dir, { recursive: true, force: true });
     } catch {}
+}
+
+function coreOnlyAcceptancePolicy() {
+    return {
+        protocol_version: 1,
+        checks: [],
+        ui: {
+            required: false,
+            viewport_widths: [390, 768, 1024, 1440],
+            reduced_motion_required: true,
+        },
+    };
+}
+
+function createDaemonClient(options = {}) {
+    const client = createDaemonClientImpl(options);
+    const registerPlan = client.registerPlan.bind(client);
+    // These integration fixtures exercise daemon behavior other than policy
+    // omission. Supply the new required neutral policy at the fixture boundary;
+    // raw omission remains covered by dual-flow-checkpoints.test.js.
+    client.registerPlan = (sessionId, plan, requestOptions) => registerPlan(sessionId, {
+        ...plan,
+        ...(plan?.acceptance_policy || plan?.acceptancePolicy
+            ? {}
+            : { acceptance_policy: coreOnlyAcceptancePolicy() }),
+    }, requestOptions);
+    return client;
+}
+
+async function submitPersistedQualityCycles({
+    client,
+    authorityStore,
+    workspaceRoot,
+    sessionId,
+    diffFingerprint,
+    completedTaskIds,
+    acceptancePolicy,
+    cycleIndices = [1, 2, 3],
+}) {
+    const derived = authorityStore.derive();
+    const registeredCommands = Object.values(derived.tasks || {})
+        .flatMap((task) => Array.isArray(task.validation_commands) ? task.validation_commands : []);
+    const qualityPlan = buildQualityPlan(workspaceRoot, fs, { validationCommands: registeredCommands });
+    const totalTasks = Object.keys(derived.tasks || {}).length;
+    const submissions = [];
+    for (const cycleIndex of cycleIndices) {
+        const executionId = deriveQualityExecutionId({
+            workspaceRoot,
+            sessionId,
+            workspaceId: derived.workspaceId,
+            baseline: derived.currentBaseline,
+            planRevision: derived.planRevision,
+            policySha256: hashAcceptancePolicy(acceptancePolicy),
+            diffFingerprint,
+            cycleIndex,
+            attempt: 1,
+            totalTasks,
+            completedTaskIds,
+            commandPlan: qualityPlan.commands,
+        });
+        const startedAt = `2026-09-10T01:02:0${cycleIndex}.000Z`;
+        const endedAt = `2026-09-10T01:02:0${cycleIndex}.010Z`;
+        const results = qualityPlan.commands.map((command) => ({
+            ...command,
+            cwd: command.cwd || '.',
+            command: `${command.program} ${command.args.join(' ')}`.trim(),
+            exit_code: 0,
+            duration_ms: 10,
+            ok: true,
+            failure: null,
+            signal: null,
+            started_at: startedAt,
+            ended_at: endedAt,
+            stdout: 'fixture pass',
+            stderr: '',
+        }));
+        const gateResults = results.map((result) => ({
+            id: result.id,
+            required: true,
+            status: 'PASSED',
+            reason: `${result.name} exited 0`,
+        }));
+        const artifact = persistQualityExecutionArtifact({
+            authorityDir: path.join(workspaceRoot, '.omni', 'runs', 'dual-authority'),
+            workspaceRoot,
+            sessionId,
+            workspaceId: derived.workspaceId,
+            baseline: derived.currentBaseline,
+            planRevision: derived.planRevision,
+            policySha256: hashAcceptancePolicy(acceptancePolicy),
+            diffFingerprint,
+            cycleIndex,
+            attempt: 1,
+            executionId,
+            totalTasks,
+            completedTaskIds,
+            gateResults,
+            startedAt,
+            endedAt,
+            results,
+        });
+        submissions.push(await client.evaluateCompletion(sessionId, {
+            quality_evidence: {
+                cycle_index: cycleIndex,
+                attempt: 1,
+                total_tasks: totalTasks,
+                completed_task_ids: completedTaskIds,
+                plan_revision: derived.planRevision,
+                diff_fingerprint: diffFingerprint,
+                gate_results: artifact.artifact.gate_results,
+                commands: artifact.artifact.commands.map(({ command, exit_code, duration_ms }) => ({ command, exit_code, duration_ms })),
+                evidence_sha256: artifact.sha256,
+                provenance: { execution_id: executionId, input_fingerprint: diffFingerprint, mode: 'fresh' },
+            },
+        }));
+    }
+    return submissions;
 }
 
 function createPassingCapability() {
@@ -85,6 +213,12 @@ async function startDaemonServer(options = {}) {
     const effectiveOptions = {
         ...options,
         planArtifactVerifier: options.planArtifactVerifier || testPlanArtifactVerifier,
+        trustedQualityRunner: Object.prototype.hasOwnProperty.call(options, 'trustedQualityRunner')
+            ? options.trustedQualityRunner
+            : async ({ authorityDir, executionId }) => {
+                const loaded = readQualityExecutionArtifact({ authorityDir, executionId });
+                return { execution_id: executionId, artifact_sha256: loaded.sha256 };
+            },
     };
     const injected = options.capabilityPreflight || options.preflightRunner;
     if (!injected) return startDaemonServerImpl(effectiveOptions);
@@ -1040,6 +1174,120 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             rmDir(helperDir);
         });
 
+        it('production trust factories rerun quality outcomes and stay fail-closed without a UI provider', async () => {
+            const authorityDir = path.join(tmpDir, '.omni', 'runs', 'dual-authority');
+            fs.mkdirSync(authorityDir, { recursive: true });
+            const commandPlan = [{
+                id: 'registered-node',
+                name: 'registered node check',
+                program: 'node',
+                args: ['--version'],
+                cwd: '.',
+                available: true,
+            }];
+            const startedAt = '2026-09-10T01:00:00.000Z';
+            const endedAt = '2026-09-10T01:00:00.010Z';
+            const claimedResults = commandPlan.map((command) => ({
+                ...command,
+                command: 'node --version',
+                exit_code: 0,
+                duration_ms: 10,
+                ok: true,
+                failure: null,
+                signal: null,
+                started_at: startedAt,
+                ended_at: endedAt,
+                stdout: 'v20.0.0\n',
+                stderr: '',
+            }));
+            const qualityIdentity = {
+                sessionId: crypto.randomUUID(),
+                workspaceId: '1'.repeat(64),
+                baseline: { kind: 'snapshot', id: '2'.repeat(64) },
+                planRevision: 1,
+                policySha256: '3'.repeat(64),
+                diffFingerprint: '4'.repeat(64),
+                cycleIndex: 1,
+                attempt: 1,
+                totalTasks: 1,
+                completedTaskIds: ['TASK-1'],
+            };
+            const executionId = deriveQualityExecutionId({
+                ...qualityIdentity,
+                workspaceRoot: tmpDir,
+                commandPlan,
+            });
+            const persisted = persistQualityExecutionArtifact({
+                ...qualityIdentity,
+                authorityDir,
+                workspaceRoot: tmpDir,
+                executionId,
+                gateResults: qualityGateResults(claimedResults),
+                startedAt,
+                endedAt,
+                results: claimedResults,
+            });
+            const qualityEvidence = {
+                cycle_index: 1,
+                attempt: 1,
+                total_tasks: 1,
+                completed_task_ids: ['TASK-1'],
+                plan_revision: 1,
+                diff_fingerprint: qualityIdentity.diffFingerprint,
+                gate_results: persisted.artifact.gate_results,
+                commands: persisted.artifact.commands.map(({ command, exit_code, duration_ms }) => ({ command, exit_code, duration_ms })),
+                evidence_sha256: persisted.sha256,
+                provenance: { execution_id: executionId, input_fingerprint: qualityIdentity.diffFingerprint, mode: 'fresh' },
+            };
+            const trustedRunner = createTrustedQualityRunner({
+                executeQualityPlanImpl: () => claimedResults.map((result) => ({
+                    ...result,
+                    stdout: 'different daemon-owned output\n',
+                })),
+            });
+            await assert.rejects(
+                () => trustedRunner({
+                    authorityDir,
+                    workspaceRoot: tmpDir,
+                    executionId,
+                    qualityEvidence,
+                    expected: { ...qualityIdentity, workspaceRoot: tmpDir, commandPlan },
+                }),
+                (error) => error?.code === 'DUAL_QUALITY_ATTESTATION_MISMATCH'
+            );
+
+            const trustedUiAdapter = createTrustedUiAdapter();
+            const uiResult = await trustedUiAdapter({
+                authorityDir,
+                workspaceRoot: tmpDir,
+                sessionId: qualityIdentity.sessionId,
+                requirement: {
+                    gate_id: 'responsive_visual_qa',
+                    required: true,
+                    viewport_widths: [390, 768],
+                    reduced_motion_required: true,
+                },
+                policySha256: qualityIdentity.policySha256,
+                sourceFingerprint: qualityIdentity.diffFingerprint,
+                viewports: [390, 768],
+            });
+            assert.equal(uiResult.evidence.runtime_status, 'UNAVAILABLE');
+            assert.deepEqual(uiResult.artifact_paths, []);
+        });
+
+        it('production daemon options install both trust-boundary callbacks', () => {
+            const authorityStore = createAuthorityStore(path.join(tmpDir, '.omni', 'runs', 'dual-authority'));
+            const daemonOptions = createDaemonServerOptions({
+                workspaceRoot: tmpDir,
+                authorityStore,
+                orchestrator: { kind: 'fixture-orchestrator' },
+            });
+            assert.equal(typeof daemonOptions.trustedQualityRunner, 'function');
+            assert.equal(typeof daemonOptions.trustedUiAdapter, 'function');
+            assert.equal(daemonOptions.workspaceRoot, tmpDir);
+            assert.equal(daemonOptions.authorityStore, authorityStore);
+        });
+
         it('AGY artifacts alone leave task unverified, and nonzero QC command cannot append success', async (t) => {
             const authorityStore = createAuthorityStore(path.join(tmpDir, '.omni', 'runs', 'dual-authority'));
             const adapter = createOrchestratorAdapter({
@@ -1049,10 +1297,11 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
                 agyPrefixArgs: [fakeAgyScript],
             });
 
-            const daemon = await startDaemonServer({
+            let daemon = await startDaemonServer({
                 workspaceRoot: tmpDir,
                 authorityStore,
                 orchestrator: adapter,
+                trustedQualityRunner: null,
                 preflightRunner: async () => ({
                     status: 'PASSED',
                     to_state: 'CAPABILITY_SAFE',
@@ -1062,14 +1311,20 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             });
             t.after(() => daemon.close());
 
-            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 10000 });
+            let client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 10000 });
             const beginRes = await client.beginSession({ workspace_root: tmpDir, mode: 'auto' });
             const sessionId = beginRes.session_id;
 
+            const acceptancePolicy = {
+                protocol_version: 1,
+                checks: [],
+                ui: { required: false, viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true },
+            };
             await client.registerPlan(sessionId, {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'a'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: acceptancePolicy,
                 tasks: [{
                     task_id: 'TASK-1',
                     title: 'Task 1',
@@ -1198,23 +1453,182 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
                     return true;
                 }
             );
-            // 8. Quality cycle with nonzero command cannot append success (records FAILED gate)
-            const failQualityRes = await client.evaluateCompletion(sessionId, {
-                quality_evidence: {
-                    cycle_index: 1,
-                    attempt: 1,
-                    total_tasks: 1,
-                    completed_task_ids: ['TASK-1'],
-                    plan_revision: 1,
-                    diff_fingerprint: diffInfo.patchSha256,
-                    gate_results: [{ id: 'unit-tests', required: true, status: 'PASSED' }],
-                    commands: [{ command: 'npm test', exit_code: 1, duration_ms: 50 }],
-                    evidence_sha256: 'a'.repeat(64),
+            // 8. Quality cycle requires a trusted run-owned execution artifact.
+            const qualityDerived = authorityStore.derive();
+            const expectedQualityCommands = buildQualityPlan(tmpDir, fs, {
+                validationCommands: [{ program: 'node', args: ['--version'], cwd: '.' }],
+            }).commands;
+            const qualityExecutionId = deriveQualityExecutionId({
+                workspaceRoot: tmpDir,
+                sessionId,
+                workspaceId: qualityDerived.workspaceId,
+                baseline: qualityDerived.currentBaseline,
+                planRevision: qualityDerived.planRevision,
+                policySha256: hashAcceptancePolicy(acceptancePolicy),
+                diffFingerprint: diffInfo.patchSha256,
+                cycleIndex: 1,
+                attempt: 1,
+                totalTasks: 1,
+                completedTaskIds: ['TASK-1'],
+                commandPlan: expectedQualityCommands,
+            });
+            const qualityEvidence = {
+                cycle_index: 1,
+                attempt: 1,
+                total_tasks: 1,
+                completed_task_ids: ['TASK-1'],
+                plan_revision: 1,
+                diff_fingerprint: diffInfo.patchSha256,
+                gate_results: [{ id: 'unit-tests', required: true, status: 'PASSED' }],
+                commands: [{ command: 'npm test', exit_code: 1, duration_ms: 50 }],
+                evidence_sha256: 'a'.repeat(64),
+                provenance: {
+                    execution_id: qualityExecutionId,
+                    input_fingerprint: diffInfo.patchSha256,
+                    mode: 'fresh',
+                },
+            };
+            await assert.rejects(
+                () => client.evaluateCompletion(sessionId, { quality_evidence: qualityEvidence }),
+                (error) => error && error.code === 'DUAL_QUALITY_ATTESTATION_REQUIRED'
+            );
+
+            const qualityStartedAt = '2026-09-10T01:02:03.000Z';
+            const qualityEndedAt = '2026-09-10T01:02:03.050Z';
+            const qualityResults = expectedQualityCommands.map((command, index) => ({
+                ...command,
+                cwd: command.cwd || '.',
+                command: `${command.program} ${command.args.join(' ')}`.trim(),
+                exit_code: index === 0 ? 1 : 0,
+                duration_ms: 50,
+                ok: index !== 0,
+                failure: index === 0 ? 'nonzero' : null,
+                signal: null,
+                started_at: qualityStartedAt,
+                ended_at: qualityEndedAt,
+                stdout: '',
+                stderr: index === 0 ? 'test failed' : '',
+            }));
+            qualityEvidence.gate_results = qualityGateResults(qualityResults);
+            qualityEvidence.commands = qualityResults.map(({ command, exit_code, duration_ms }) => ({ command, exit_code, duration_ms }));
+            const qualityArtifact = persistQualityExecutionArtifact({
+                authorityDir: path.join(tmpDir, '.omni', 'runs', 'dual-authority'),
+                workspaceRoot: tmpDir,
+                sessionId,
+                workspaceId: qualityDerived.workspaceId,
+                baseline: qualityDerived.currentBaseline,
+                planRevision: qualityDerived.planRevision,
+                policySha256: hashAcceptancePolicy(acceptancePolicy),
+                diffFingerprint: diffInfo.patchSha256,
+                cycleIndex: 1,
+                attempt: 1,
+                executionId: qualityExecutionId,
+                totalTasks: 1,
+                completedTaskIds: ['TASK-1'],
+                gateResults: qualityEvidence.gate_results,
+                startedAt: qualityStartedAt,
+                endedAt: qualityEndedAt,
+                results: qualityResults,
+            });
+            qualityEvidence.evidence_sha256 = qualityArtifact.sha256;
+
+            // 9. Even valid-looking artifact bytes remain untrusted without a
+            // daemon-owned runner callback and cannot append a gate.
+            const eventsBeforeForge = authorityStore.readEvents().length;
+            await assert.rejects(
+                () => client.evaluateCompletion(sessionId, { quality_evidence: qualityEvidence }),
+                (error) => error && error.code === 'DUAL_QUALITY_ATTESTATION_REQUIRED'
+            );
+            assert.equal(authorityStore.readEvents().length, eventsBeforeForge);
+            assert.equal(authorityStore.derive().gates['quality-cycle-1'], undefined);
+
+            // 10. Source mutation during a daemon-owned run is rejected before
+            // any quality gate is appended.
+            await daemon.close();
+            const sourcePath = path.join(tmpDir, 'index.html');
+            const sourceBeforeAttestation = fs.readFileSync(sourcePath);
+            daemon = await startDaemonServer({
+                workspaceRoot: tmpDir,
+                authorityStore,
+                orchestrator: adapter,
+                preflightRunner: async () => ({
+                    status: 'PASSED',
+                    to_state: 'CAPABILITY_SAFE',
+                    checks: [{ name: 'preflight', status: 'PASSED' }],
+                    details: {},
+                }),
+                trustedQualityRunner: async ({ authorityDir, executionId }) => {
+                    fs.appendFileSync(sourcePath, '<!-- changed during trusted run -->\n');
+                    const loaded = readQualityExecutionArtifact({ authorityDir, executionId });
+                    return { execution_id: executionId, artifact_sha256: loaded.sha256 };
                 },
             });
+            client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 10000 });
+            try {
+                await assert.rejects(
+                    () => client.evaluateCompletion(sessionId, { quality_evidence: qualityEvidence }),
+                    (error) => error?.code === 'DUAL_QUALITY_SOURCE_DRIFT'
+                );
+            } finally {
+                fs.writeFileSync(sourcePath, sourceBeforeAttestation);
+            }
+            assert.equal(authorityStore.derive().gates['quality-cycle-1'], undefined);
+
+            // Remove only the unanchored artifact created by this fixture so
+            // step 11 can exercise the independent daemon-owned execute path.
+            fs.unlinkSync(qualityArtifact.path);
+
+            // 11. The production endpoint owns command execution and artifact
+            // creation; matching nonzero outcomes record FAILED, never PASS.
+            await daemon.close();
+            let daemonOwnedExecutions = 0;
+            daemon = await startDaemonServer({
+                workspaceRoot: tmpDir,
+                authorityStore,
+                orchestrator: adapter,
+                preflightRunner: async () => ({
+                    status: 'PASSED',
+                    to_state: 'CAPABILITY_SAFE',
+                    checks: [{ name: 'preflight', status: 'PASSED' }],
+                    details: {},
+                }),
+                trustedQualityRunner: createTrustedQualityRunner({
+                    executeQualityPlanImpl: () => {
+                        daemonOwnedExecutions += 1;
+                        return qualityResults;
+                    },
+                }),
+            });
+            client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 10000 });
+
+            const daemonExecution = await client.executeQualityCycle(sessionId, 1);
+            assert.equal(daemonExecution.quality_evidence.cycle_index, 1);
+            assert.equal(daemonExecution.quality_evidence.provenance.mode, 'fresh');
+            const daemonArtifact = readQualityExecutionArtifact({
+                authorityDir: path.join(tmpDir, '.omni', 'runs', 'dual-authority'),
+                executionId: daemonExecution.quality_evidence.provenance.execution_id,
+            });
+            assert.equal(
+                daemonArtifact.artifact.commands[0].stderr_sha256,
+                crypto.createHash('sha256').update('test failed').digest('hex')
+            );
+
+            // Daemon-owned nonzero command evidence records FAILED, never PASS.
+            const failQualityRes = await client.evaluateCompletion(sessionId, {
+                quality_evidence: daemonExecution.quality_evidence,
+            });
             assert.equal(failQualityRes.verified, false);
+            assert.equal(daemonOwnedExecutions, 1);
             const derivedAfterFailQuality = authorityStore.derive();
             assert.equal(derivedAfterFailQuality.gates['quality-cycle-1'].status, 'FAILED');
+
+            fs.appendFileSync(daemonArtifact.path, ' ');
+            const eventsBeforeTamperedRetry = authorityStore.readEvents().length;
+            await assert.rejects(
+                () => client.evaluateCompletion(sessionId, { quality_evidence: daemonExecution.quality_evidence }),
+                (error) => error?.code === 'DUAL_QUALITY_ARTIFACT_HASH'
+            );
+            assert.equal(authorityStore.readEvents().length, eventsBeforeTamperedRetry, 'Tampered retry must not append another quality gate');
         });
 
         it('Delegation gate append failure prevents task completion', async (t) => {
@@ -1441,6 +1855,11 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
                         gate_results: [{ id: 'test-gate', required: true, status: 'PASSED' }],
                         commands: [{ command: 'npm test', exit_code: 0, duration_ms: 100 }],
                         evidence_sha256: 'b'.repeat(64),
+                        provenance: {
+                            execution_id: 'c'.repeat(64),
+                            input_fingerprint: 'a'.repeat(64),
+                            mode: 'fresh',
+                        },
                     },
                 }),
                 (err) => {
@@ -2322,10 +2741,12 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             assert.ok(initialSnapshot.manifest.files.some(f => f.path === 'README.md'));
 
             // 2. Register plan
+            const acceptancePolicy = coreOnlyAcceptancePolicy();
             const planRes = await client.registerPlan(sessionId, {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'b'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: acceptancePolicy,
                 tasks: [{
                     task_id: 'TASK-SNAP-01',
                     title: 'Implement snapshot homepage feature',
@@ -2398,40 +2819,18 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             });
             assert.equal(qcRes.verified, false); // Still needs quality cycles
 
-            // 6. Record 3 Quality Cycles
-            for (let i = 1; i <= 3; i++) {
-                await client.evaluateCompletion(sessionId, {
-                    quality_evidence: {
-                        cycle_index: i,
-                        attempt: 1,
-                        total_tasks: 1,
-                        completed_task_ids: ['TASK-SNAP-01'],
-                        plan_revision: 1,
-                        diff_fingerprint: diffInfo.patchSha256,
-                        gate_results: [{ id: `gate-cycle-${i}`, required: true, status: 'PASSED' }],
-                        commands: [{ command: 'npm test', exit_code: 0, duration_ms: 100 }],
-                        evidence_sha256: crypto.createHash('sha256').update(`evidence-${i}`).digest('hex'),
-                    },
-                });
-            }
-
-            // 7. Optional UI Evidence with valid schema
-            await client.evaluateCompletion(sessionId, {
-                ui_evidence: {
-                    requirement: {
-                        gate_id: 'ui-snap-01',
-                        required: false,
-                        viewport_widths: [390, 768, 1024, 1440],
-                        reduced_motion_required: true,
-                    },
-                    evidence: {
-                        runtime_status: 'UNAVAILABLE',
-                        evidence_sha256: '0'.repeat(64),
-                        reason: 'Non-UI headless snapshot task',
-                    },
-                },
+            // 6. Record three quality cycles with immutable execution artifacts.
+            await submitPersistedQualityCycles({
+                client,
+                authorityStore,
+                workspaceRoot: snapDir,
+                sessionId,
+                diffFingerprint: diffInfo.patchSha256,
+                completedTaskIds: ['TASK-SNAP-01'],
+                acceptancePolicy,
             });
 
+            // 7. Core-only policy predeclares optional UI; no visual PASS is claimed.
             // 8. Final Completion Evaluation -> VERIFIED
             const finalRes = await client.evaluateCompletion(sessionId);
             assert.equal(finalRes.verified, true);
@@ -2882,10 +3281,12 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             const beginRes = await client.beginSession({ workspace_root: snapDir, mode: 'auto' });
             const sessionId = beginRes.session_id;
 
+            const acceptancePolicy = coreOnlyAcceptancePolicy();
             await client.registerPlan(sessionId, {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'a'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: acceptancePolicy,
                 tasks: [{
                     task_id: 'TASK-DRIFT',
                     title: 'Drift test task',
@@ -2927,21 +3328,15 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
                 },
             });
 
-            for (let i = 1; i <= 3; i++) {
-                await client.evaluateCompletion(sessionId, {
-                    quality_evidence: {
-                        cycle_index: i,
-                        attempt: 1,
-                        total_tasks: 1,
-                        completed_task_ids: ['TASK-DRIFT'],
-                        plan_revision: 1,
-                        diff_fingerprint: diffInfo.patchSha256,
-                        gate_results: [{ id: `gate-${i}`, required: true, status: 'PASSED' }],
-                        commands: [{ command: 'npm test', exit_code: 0, duration_ms: 100 }],
-                        evidence_sha256: crypto.createHash('sha256').update(`evidence-${i}`).digest('hex'),
-                    },
-                });
-            }
+            await submitPersistedQualityCycles({
+                client,
+                authorityStore,
+                workspaceRoot: snapDir,
+                sessionId,
+                diffFingerprint: diffInfo.patchSha256,
+                completedTaskIds: ['TASK-DRIFT'],
+                acceptancePolicy,
+            });
 
             // Final completion -> VERIFIED
             const verifyRes = await client.evaluateCompletion(sessionId);
@@ -3016,10 +3411,12 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             const beginRes = await client.beginSession({ workspace_root: snapDir, mode: 'auto' });
             const sessionId = beginRes.session_id;
 
+            const acceptancePolicy = coreOnlyAcceptancePolicy();
             await client.registerPlan(sessionId, {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'a'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: acceptancePolicy,
                 tasks: [{
                     task_id: 'TASK-FORGE-DIFF',
                     title: 'Forge diff task',
@@ -3061,21 +3458,15 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
                 },
             });
 
-            for (let i = 1; i <= 3; i++) {
-                await client.evaluateCompletion(sessionId, {
-                    quality_evidence: {
-                        cycle_index: i,
-                        attempt: 1,
-                        total_tasks: 1,
-                        completed_task_ids: ['TASK-FORGE-DIFF'],
-                        plan_revision: 1,
-                        diff_fingerprint: diffInfo.patchSha256,
-                        gate_results: [{ id: `gate-${i}`, required: true, status: 'PASSED' }],
-                        commands: [{ command: 'npm test', exit_code: 0, duration_ms: 100 }],
-                        evidence_sha256: crypto.createHash('sha256').update(`evidence-${i}`).digest('hex'),
-                    },
-                });
-            }
+            await submitPersistedQualityCycles({
+                client,
+                authorityStore,
+                workspaceRoot: snapDir,
+                sessionId,
+                diffFingerprint: diffInfo.patchSha256,
+                completedTaskIds: ['TASK-FORGE-DIFF'],
+                acceptancePolicy,
+            });
 
             // Verify cleanly
             const verifyRes = await client.evaluateCompletion(sessionId);
@@ -3121,10 +3512,12 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             const beginRes = await client.beginSession({ workspace_root: snapDir, mode: 'auto' });
             const sessionId = beginRes.session_id;
 
+            const acceptancePolicy = coreOnlyAcceptancePolicy();
             await client.registerPlan(sessionId, {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'a'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: acceptancePolicy,
                 tasks: [{
                     task_id: 'TASK-TAMPER-TASKS',
                     title: 'Tamper tasks task',
@@ -3166,21 +3559,15 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
                 },
             });
 
-            for (let i = 1; i <= 3; i++) {
-                await client.evaluateCompletion(sessionId, {
-                    quality_evidence: {
-                        cycle_index: i,
-                        attempt: 1,
-                        total_tasks: 1,
-                        completed_task_ids: ['TASK-TAMPER-TASKS'],
-                        plan_revision: 1,
-                        diff_fingerprint: diffInfo.patchSha256,
-                        gate_results: [{ id: `gate-${i}`, required: true, status: 'PASSED' }],
-                        commands: [{ command: 'npm test', exit_code: 0, duration_ms: 100 }],
-                        evidence_sha256: crypto.createHash('sha256').update(`evidence-${i}`).digest('hex'),
-                    },
-                });
-            }
+            await submitPersistedQualityCycles({
+                client,
+                authorityStore,
+                workspaceRoot: snapDir,
+                sessionId,
+                diffFingerprint: diffInfo.patchSha256,
+                completedTaskIds: ['TASK-TAMPER-TASKS'],
+                acceptancePolicy,
+            });
 
             const verifyRes = await client.evaluateCompletion(sessionId);
             assert.equal(verifyRes.verified, true);
@@ -3235,10 +3622,12 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             const beginRes = await client.beginSession({ workspace_root: snapDir, mode: 'auto' });
             const sessionId = beginRes.session_id;
 
+            const acceptancePolicy = coreOnlyAcceptancePolicy();
             await client.registerPlan(sessionId, {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'a'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: acceptancePolicy,
                 tasks: [{
                     task_id: 'TASK-RETRY-VERIFY',
                     title: 'Retry verify task',
@@ -3280,46 +3669,27 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
                 },
             });
 
-            await client.evaluateCompletion(sessionId, {
-                quality_evidence: {
-                    cycle_index: 1,
-                    attempt: 1,
-                    total_tasks: 1,
-                    completed_task_ids: ['TASK-RETRY-VERIFY'],
-                    plan_revision: 1,
-                    diff_fingerprint: diffInfo.patchSha256,
-                    gate_results: [{ id: 'gate-1', required: true, status: 'PASSED' }],
-                    commands: [{ command: 'npm test', exit_code: 0, duration_ms: 100 }],
-                    evidence_sha256: crypto.createHash('sha256').update('evidence-1').digest('hex'),
-                },
-            });
-            await client.evaluateCompletion(sessionId, {
-                quality_evidence: {
-                    cycle_index: 2,
-                    attempt: 1,
-                    total_tasks: 1,
-                    completed_task_ids: ['TASK-RETRY-VERIFY'],
-                    plan_revision: 1,
-                    diff_fingerprint: diffInfo.patchSha256,
-                    gate_results: [{ id: 'gate-2', required: true, status: 'PASSED' }],
-                    commands: [{ command: 'npm test', exit_code: 0, duration_ms: 100 }],
-                    evidence_sha256: crypto.createHash('sha256').update('evidence-2').digest('hex'),
-                },
+            await submitPersistedQualityCycles({
+                client,
+                authorityStore,
+                workspaceRoot: snapDir,
+                sessionId,
+                diffFingerprint: diffInfo.patchSha256,
+                completedTaskIds: ['TASK-RETRY-VERIFY'],
+                acceptancePolicy,
+                cycleIndices: [1, 2],
             });
 
             // 3rd quality cycle triggers completion evaluation, which writes accepted snapshot and fails on append(session.verified)
-            const firstTry = await client.evaluateCompletion(sessionId, {
-                quality_evidence: {
-                    cycle_index: 3,
-                    attempt: 1,
-                    total_tasks: 1,
-                    completed_task_ids: ['TASK-RETRY-VERIFY'],
-                    plan_revision: 1,
-                    diff_fingerprint: diffInfo.patchSha256,
-                    gate_results: [{ id: 'gate-3', required: true, status: 'PASSED' }],
-                    commands: [{ command: 'npm test', exit_code: 0, duration_ms: 100 }],
-                    evidence_sha256: crypto.createHash('sha256').update('evidence-3').digest('hex'),
-                },
+            const [firstTry] = await submitPersistedQualityCycles({
+                client,
+                authorityStore,
+                workspaceRoot: snapDir,
+                sessionId,
+                diffFingerprint: diffInfo.patchSha256,
+                completedTaskIds: ['TASK-RETRY-VERIFY'],
+                acceptancePolicy,
+                cycleIndices: [3],
             });
             assert.equal(firstTry.verified, false);
             assert.ok(firstTry.blockers.some(b => /VERIFICATION_APPEND_FAILED/i.test(b)));

@@ -11,13 +11,33 @@ const { startDaemonServer } = require('../lib/dual/daemon-server');
 const { createDaemonClient } = require('../lib/dual/daemon-client');
 const { evaluateHook } = require('../lib/dual/hook-bridge');
 const { captureDiffFingerprint } = require('../lib/dual/scope-guard');
-const { hashAcceptancePolicy, hashReviewEvidence } = require('../lib/dual/acceptance-policy');
+const { createTrustedQualityRunner } = require('../lib/dual/quality-runner');
+const { createDaemonServerOptions } = require('../bin/omni-daemon');
 
 const sha = (content) => crypto.createHash('sha256').update(content).digest('hex');
+
+function createPassingTrustedQualityRunner() {
+    return createTrustedQualityRunner({
+        executeQualityPlanImpl: (plan) => plan.commands.map((command) => ({
+            ...command,
+            command: `${command.program} ${command.args.join(' ')}`.trim(),
+            exit_code: 0,
+            duration_ms: 1,
+            ok: true,
+            failure: null,
+            signal: null,
+            started_at: '2026-09-11T00:00:00.000Z',
+            ended_at: '2026-09-11T00:00:00.001Z',
+            stdout: '',
+            stderr: '',
+        })),
+    });
+}
 
 function acceptancePolicy({ correctionCommand = { program: 'node', args: ['--version'], cwd: '.' } } = {}) {
     return {
         protocol_version: 1,
+        ui: { required: false, viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true },
         checks: [{
             id: 'review-task-1', requirement_id: 'REQ-TASK-1', task_id: 'task-1',
             phase: 'pre_integration', kind: 'review', required: true,
@@ -57,15 +77,18 @@ function correctionPrereqs(workspaceRoot, baseCommit, authorityStore, overrides 
     };
 }
 
-async function submitAcceptanceFailure(client, sessionId, workspaceRoot, baseCommit, policy) {
-    const evidence = {
-        policy_sha256: hashAcceptancePolicy(policy),
-        task_id: 'task-1',
-        result_sha256: captureDiffFingerprint({ repoRoot: workspaceRoot, baseCommit, excludedPaths: ['.omni'] }).patchSha256,
-        check_results: [{ check_id: 'acceptance-task-1', status: 'FAIL', findings: ['Heading contrast'] }],
-    };
-    evidence.evidence_sha256 = hashReviewEvidence(evidence);
-    return client.submitAcceptanceReview(sessionId, 'task-1', 1, evidence);
+async function submitPreparedReview(client, sessionId, checkResults) {
+    const prepared = await client.prepareAcceptanceReview(sessionId, 'task-1', 1);
+    return client.submitAcceptanceReview(sessionId, 'task-1', 1, {
+        review_execution_id: prepared.review_execution_id,
+        check_results: checkResults,
+    });
+}
+
+async function submitAcceptanceFailure(client, sessionId) {
+    return submitPreparedReview(client, sessionId, [
+        { check_id: 'acceptance-task-1', status: 'FAIL', findings: ['Heading contrast'] },
+    ]);
 }
 
 function createTempDir(prefix) {
@@ -175,14 +198,11 @@ test('public daemon path completes isolated QC, correction, and fresh review wit
     assert.equal(qc.status, 'TASK_VERIFIED', JSON.stringify(qc));
     assert.equal((await client.status(session.session_id)).session_state, 'ACCEPTANCE');
 
-    const failedReview = {
-        policy_sha256: hashAcceptancePolicy(policy),
-        task_id: 'task-1',
-        result_sha256: captureDiffFingerprint({ repoRoot: workspaceRoot, baseCommit, excludedPaths: ['.omni'] }).patchSha256,
-        check_results: [{ check_id: 'acceptance-task-1', status: 'FAIL', findings: ['Heading contrast'] }],
-    };
-    failedReview.evidence_sha256 = hashReviewEvidence(failedReview);
-    assert.equal((await client.submitAcceptanceReview(session.session_id, 'task-1', 1, failedReview)).status, 'NEEDS_FIX');
+    assert.equal((await submitAcceptanceFailure(client, session.session_id)).status, 'NEEDS_FIX');
+    assert.equal(authorityStore.readEvents().filter((event) => event.type === 'review.attested').length, 1);
+    assert.equal(authorityStore.readEvents().some((event) => event.type === 'gate.result'
+        && event.details?.review_phase === 'post_integration'), false,
+        'one review attestation event must atomically derive every acceptance gate');
 
     const correction = await client.startAcceptanceCorrection(session.session_id, correctionPrereqs(
         workspaceRoot, baseCommit, authorityStore, { task_id: 'task-1', reason: 'Fix heading from public flow' }
@@ -195,13 +215,9 @@ test('public daemon path completes isolated QC, correction, and fresh review wit
     assert.ok(blockedUntilReview.blockers.some((blocker) => blocker.includes('SESSION_ACCEPTANCE_FAILED')),
         `correction must not mint acceptance PASS: ${JSON.stringify(blockedUntilReview)}`);
 
-    const freshReview = {
-        policy_sha256: hashAcceptancePolicy(policy),
-        task_id: 'task-1', result_sha256: corrected.diff_fingerprint,
-        check_results: [{ check_id: 'acceptance-task-1', status: 'PASS', findings: [] }],
-    };
-    freshReview.evidence_sha256 = hashReviewEvidence(freshReview);
-    assert.equal((await client.submitAcceptanceReview(session.session_id, 'task-1', 1, freshReview)).status, 'PASSED');
+    assert.equal((await submitPreparedReview(client, session.session_id, [
+        { check_id: 'acceptance-task-1', status: 'PASS', findings: [] },
+    ])).status, 'PASSED');
 
     fs.writeFileSync(path.join(workspaceRoot, 'index.html'), '<h1>Workspace drift after review</h1>\n');
     const staleReview = await client.evaluateCompletion(session.session_id);
@@ -217,8 +233,8 @@ test('acceptance correction lifecycle: start, authorization, bounded files, and 
     const authorityStore = createAuthorityStore(path.join(workspaceRoot, '.omni', 'sessions', 'test-sess-corr'));
 
     const daemon = await startDaemonServer({
-        workspaceRoot,
-        authorityStore,
+        ...createDaemonServerOptions({ workspaceRoot, authorityStore }),
+        trustedQualityRunner: createPassingTrustedQualityRunner(),
         preflightRunner: mockPreflightRunner,
         planArtifactVerifier: async (_root, p) => ({ plan_path: p.plan_path, plan_sha256: p.plan_sha256 }),
     });
@@ -265,14 +281,7 @@ test('acceptance correction lifecycle: start, authorization, bounded files, and 
         verified_by: 'codex',
     });
     authorityStore.releaseLease(taskLease.lease_id, 'test_task_completed');
-    const failedReview = {
-        policy_sha256: hashAcceptancePolicy(acceptancePolicy()),
-        task_id: 'task-1',
-        result_sha256: captureDiffFingerprint({ repoRoot: workspaceRoot, baseCommit, excludedPaths: ['.omni'] }).patchSha256,
-        check_results: [{ check_id: 'acceptance-task-1', status: 'FAIL', findings: ['Heading contrast'] }],
-    };
-    failedReview.evidence_sha256 = hashReviewEvidence(failedReview);
-    const reviewResult = await client.submitAcceptanceReview(session.session_id, 'task-1', 1, failedReview);
+    const reviewResult = await submitAcceptanceFailure(client, session.session_id);
     assert.equal(reviewResult.status, 'NEEDS_FIX');
 
     const preStatus = await client.status(session.session_id);
@@ -435,31 +444,19 @@ test('acceptance correction lifecycle: start, authorization, bounded files, and 
     assert.equal(replayed.gates['acceptance-acceptance-task-1'].status, 'FAILED');
     assert.ok(reopened.readEvents().some((event) => event.type === 'quality.generation.invalidated'));
 
-    const freshReview = {
-        policy_sha256: hashAcceptancePolicy(acceptancePolicy()),
-        task_id: 'task-1',
-        result_sha256: completeRes.diff_fingerprint,
-        check_results: [{ check_id: 'acceptance-task-1', status: 'PASS', findings: [] }],
-    };
-    freshReview.evidence_sha256 = hashReviewEvidence(freshReview);
-    const freshReviewResult = await client.submitAcceptanceReview(session.session_id, 'task-1', 1, freshReview);
+    const freshReviewResult = await submitPreparedReview(client, session.session_id, [
+        { check_id: 'acceptance-task-1', status: 'PASS', findings: [] },
+    ]);
     assert.equal(freshReviewResult.status, 'PASSED');
 
     for (const cycle of [1, 2, 3]) {
+        const execution = await client.executeQualityCycle(session.session_id, cycle);
         const qualityRes = await client.evaluateCompletion(session.session_id, {
-            quality_evidence: {
-                cycle_index: cycle,
-                attempt: 1,
-                total_tasks: 1,
-                completed_task_ids: ['task-1'],
-                plan_revision: 1,
-                diff_fingerprint: completeRes.diff_fingerprint,
-                gate_results: [{ id: `correction-quality-${cycle}`, required: true, status: 'PASSED' }],
-                commands: [{ command: 'node --version', exit_code: 0, duration_ms: 1 }],
-                evidence_sha256: sha(`correction-quality-${cycle}`),
-            },
+            quality_evidence: execution.quality_evidence,
         });
-        assert.equal(qualityRes.verified, cycle === 3);
+        const recordedGate = authorityStore.derive().gates[`quality-cycle-${cycle}`];
+        assert.equal(recordedGate?.status, 'PASSED', JSON.stringify(recordedGate));
+        assert.equal(qualityRes.verified, cycle === 3, JSON.stringify(qualityRes));
     }
     const verified = await client.evaluateCompletion(session.session_id);
     assert.equal(verified.verified, true, `New quality generation must be required before verification: ${JSON.stringify(verified)}`);

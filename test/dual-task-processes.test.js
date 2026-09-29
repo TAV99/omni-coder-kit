@@ -96,23 +96,27 @@ test('deferred cleanup releases the lease when the tracked child finally closes'
     assert.equal(store.derive().leases[lease.lease_id].release_reason, 'waiting_for_close');
 });
 
-test('daemon recovery verifies process death and preserves idempotent released state', async (t) => {
+test('daemon recovery waits for lease expiry, then verifies process death and preserves idempotent released state', async (t) => {
+    let nowMs = 10000;
     const dead = spawnSync(process.execPath, ['-e', 'process.exit(0)'], { shell: false, windowsHide: true });
-    const { root, store, lease } = fixture(t, dead.pid);
+    const { root, store, lease } = fixture(t, dead.pid, { clock: () => new Date(nowMs) });
     const daemon = await startDaemonServer({ workspaceRoot: root, authorityStore: store });
     t.after(() => daemon.close());
     const client = createDaemonClient({ workspaceRoot: root });
+    assert.equal((await client.recoverTask('session', 'TASK-1', 1)).status, 'WAITING_FOR_PROCESS');
+    nowMs += 60000;
     assert.equal((await client.recoverTask('session', 'TASK-1', 1)).status, 'RECOVERED');
     assert.equal(store.derive().leases[lease.lease_id].status, 'released');
     assert.equal((await client.recoverTask('session', 'TASK-1', 1)).status, 'NO_RECOVERY_NEEDED');
 });
 
 test('real controller kill before worker spawn recovers from reopened durable execution evidence', async (t) => {
-    const { root, store, lease } = fixture(t, null);
+    let nowMs = 10000;
+    const { root, store, lease } = fixture(t, null, { clock: () => new Date(nowMs) });
     const modulePath = path.resolve(__dirname, '../lib/dual/authority-store.js');
     const directory = path.join(root, '.omni/runs/dual-authority');
     const script = `const {createAuthorityStore}=require(${JSON.stringify(modulePath)});
-const s=createAuthorityStore(${JSON.stringify(directory)});
+const s=createAuthorityStore(${JSON.stringify(directory)},{clock:()=>new Date(${nowMs})});
 s.append({schema_version:2,type:'task.execution.started',task_id:'TASK-1',lease_id:${JSON.stringify(lease.lease_id)},controller_pid:process.pid});
 process.stdout.write('OWNER_READY'); setInterval(()=>{},1000);`;
     const controller = spawn(process.execPath, ['-e', script], { cwd: root, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -127,13 +131,15 @@ process.stdout.write('OWNER_READY'); setInterval(()=>{},1000);`;
     const closed = new Promise((resolve) => controller.once('close', resolve));
     controller.kill();
     await closed;
+    assert.equal(recoverTaskLease(request).status, 'WAITING_FOR_PROCESS');
+    nowMs += 60000;
     const reopened = createAuthorityStore(directory);
     assert.equal(recoverTaskLease({ ...request, authorityStore: reopened }).status, 'RECOVERED');
     assert.equal(reopened.derive().leases[lease.lease_id].status, 'released');
     assert.notEqual(reopened.derive().tasks['TASK-1'].state, 'TASK_VERIFIED');
 });
 
-test('same-process recovery succeeds when lease expired and children all exited', (t) => {
+test('same-process recovery requires settled operation when lease expired and children all exited', (t) => {
     let nowMs = 10000;
     const { root, store, lease } = fixture(t, process.pid, { clock: () => new Date(nowMs) });
     store.append({ schema_version: 2, type: 'task.process.intent', task_id: 'TASK-1', lease_id: lease.lease_id, process_id: 'proc-1' });
@@ -148,9 +154,8 @@ test('same-process recovery succeeds when lease expired and children all exited'
     nowMs += 60000;
     assert.equal(store.derive().leases[lease.lease_id].status, 'expired');
     const result = recoverTaskLease(request);
-    assert.equal(result.status, 'RECOVERED');
-    assert.equal(store.derive().leases[lease.lease_id].status, 'released');
-    assert.equal(store.derive().leases[lease.lease_id].release_reason, 'recovered_dead_execution');
+    assert.equal(result.status, 'NEEDS_PROCESS_EVIDENCE');
+    assert.equal(store.derive().leases[lease.lease_id].status, 'expired');
 });
 
 test('unexecuted expired lease recovers cleanly with empty confirmed_dead_pids', (t) => {
@@ -168,5 +173,7 @@ test('unexecuted expired lease recovers cleanly with empty confirmed_dead_pids',
     assert.equal(result.status, 'RECOVERED');
     assert.equal(store.derive().leases[lease.lease_id].status, 'released');
     assert.equal(store.derive().leases[lease.lease_id].release_reason, 'recovered_unexecuted_lease');
+    const recovery = store.readEvents().find((event) => event.type === 'task.lease.recovered');
+    assert.equal(recovery.recovery_kind, 'unexecuted');
+    assert.deepEqual(recovery.confirmed_dead_pids, []);
 });
-

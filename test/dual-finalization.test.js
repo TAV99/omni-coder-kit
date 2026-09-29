@@ -4,14 +4,21 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const test = require('node:test');
 
 const { createAuthorityStore } = require('../lib/dual/authority-store');
 const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
-const { releaseSettledTaskLease } = require('../lib/dual/task-processes');
+const { recoverTaskLease, releaseSettledTaskLease } = require('../lib/dual/task-processes');
 const { recordTaskOutcome } = require('../lib/dual/task-correction');
+const { inspectOperation } = require('../lib/dual/operation-lifecycle');
+const { createOperationLifecycleWriter } = require('../lib/dual/operation-lifecycle-writer');
 const { createConfiguredSnapshotBaseline } = require('../lib/dual/snapshot-policy');
 const { writeInitialSnapshot } = require('../lib/dual/snapshot-store');
+
+function beginOperation({ authorityStore, ...params }) {
+    return createOperationLifecycleWriter(authorityStore).begin(params);
+}
 
 function fakeClock() {
     let current = Date.parse('2026-09-08T00:00:00.000Z');
@@ -147,6 +154,47 @@ test('expired finalization settles only after a tracked child has a numeric clos
     assert.equal(reopened.verifyIntegrity().valid, true);
 });
 
+test('expired finalization stays unsettled while the matching durable operation is active', (t) => {
+    const input = fixture(t);
+    const clock = fakeClock();
+    const { store } = seedAuthority(input, clock);
+    const lease = startTrackedExecution(store, input.task.task_id);
+    const operationId = crypto.randomUUID();
+    beginOperation({ authorityStore: store, taskId: input.task.task_id, leaseId: lease.lease_id, operationId });
+    appendTrackedChild(store, input.task.task_id, lease);
+    clock.advance(31_000);
+
+    const recorded = store.recordFinalizationFailure({ taskId: input.task.task_id, leaseId: lease.lease_id,
+        attempt: 1, code: 'DUAL_ISOLATED_EVIDENCE_INVALID', stage: 'post_worker_collection' });
+    assert.equal(recorded.settled, false);
+    assert.equal(recorded.recovery, 'NEEDS_PROCESS_EVIDENCE');
+    assert.equal(store.derive().leases[lease.lease_id].status, 'expired');
+    assert.equal(inspectOperation({ authorityStore: store, taskId: input.task.task_id,
+        leaseId: lease.lease_id, operationId }).active, true);
+    const recovery = recoverTaskLease({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+        sessionId: input.sessionId, taskId: input.task.task_id, planRevision: 1 });
+    assert.equal(recovery.status, 'NEEDS_PROCESS_EVIDENCE');
+    assert.equal(store.readEvents().some((event) => event.type === 'task.lease.recovered'), false);
+});
+
+test('replay rejects settled finalization evidence while the matching durable operation is active', (t) => {
+    const input = fixture(t);
+    const clock = fakeClock();
+    const { store } = seedAuthority(input, clock);
+    const lease = startTrackedExecution(store, input.task.task_id);
+    beginOperation({ authorityStore: store, taskId: input.task.task_id,
+        leaseId: lease.lease_id, operationId: crypto.randomUUID() });
+    appendTrackedChild(store, input.task.task_id, lease);
+    clock.advance(31_000);
+
+    assert.throws(() => store.append({ schema_version: 2, type: 'task.execution.finalization_failed',
+        task_id: input.task.task_id, lease_id: lease.lease_id, attempt: 1, controller_pid: process.pid,
+        status: 'FAILED', stage: 'post_worker_collection', code: 'DUAL_ISOLATED_EVIDENCE_INVALID',
+        summary: 'Finalization failed at post_worker_collection; code=DUAL_ISOLATED_EVIDENCE_INVALID; recovery=NONE.',
+        recovery: 'NONE', settled: true }),
+    (error) => error.code === 'DUAL_INTEGRITY_CORRUPT');
+});
+
 test('expired finalization records recovery without settlement for pending, running, or unknown child close evidence', (t) => {
     for (const [state, expectedRecovery, exitCode] of [
         ['pending', 'NEEDS_PROCESS_EVIDENCE'],
@@ -228,7 +276,7 @@ test('cleanup failure never replaces the original finalization error', async (t)
     store.recordFinalizationFailure = (...args) => {
         const result = originalRecord(...args);
         calls += 1;
-        if (calls === 2) {
+        if (calls === 1) {
             const cleanup = new Error('private cleanup detail must not replace original');
             cleanup.code = 'DUAL_FINALIZATION_CLEANUP_FAILED';
             throw cleanup;

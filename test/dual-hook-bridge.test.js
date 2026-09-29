@@ -355,18 +355,7 @@ test('classifyTool handles apply_patch, Bash allowlist, Bash denials, MCP tools,
         'pwd',
         'node -c lib/dual/hook-bridge.js',
         'node --check bin/omni-hook.js',
-        'node --test test/dual-hook-bridge.test.js',
-        'node test/codex-smoke.test.js',
-        'npm test',
-        'pnpm test',
-        'yarn test',
-        'bun test',
-        'npm run test:dual',
-        'npm run typecheck',
-        'npm run build',
         'npm audit --audit-level=high',
-        'npm run dev',
-        'npm run preview',
         'omni dual setup run',
         'omni dual setup run --dry-run',
         'omni dual setup run --force --json',
@@ -383,7 +372,6 @@ test('classifyTool handles apply_patch, Bash allowlist, Bash denials, MCP tools,
         'omni skills list',
         'omni skills find react',
         'npx skills find react',
-        'node -e "JSON.parse(\'{}\')"',
         'node bin/omni.js dual setup run',
         'node bin/omni.js dual setup run --dry-run',
         'node bin/omni.js dual --help',
@@ -480,30 +468,22 @@ test('classifyTool handles apply_patch, Bash allowlist, Bash denials, MCP tools,
         assert.equal(res.classification, 'denied', `Expected denied for: ${cmd}`);
     }
 
-    // 6. Finding 2: MCP mixed-name verbs precedence
-    // Mutating verb wins over read verb in mixed names
+    // 6. Unknown and ambiguous MCP identities fail closed even when their names contain known verbs.
     const mcpMixed1 = classifyTool('mcp__server__get_metadata_and_delete', { path: 'src/a.js' });
-    assert.equal(mcpMixed1.classification, 'write');
-    assert.deepEqual(mcpMixed1.paths, ['src/a.js']);
+    assert.equal(mcpMixed1.classification, 'denied');
 
     const mcpMixed2 = classifyTool('mcp__server__get_and_delete', { path: 'src/a.js' });
-    assert.equal(mcpMixed2.classification, 'write');
+    assert.equal(mcpMixed2.classification, 'denied');
 
     const mcpMixed3 = classifyTool('mcp__server__read_then_write', { path: 'src/a.js' });
-    assert.equal(mcpMixed3.classification, 'write');
+    assert.equal(mcpMixed3.classification, 'denied');
 
     const mcpMixed4 = classifyTool('mcp__server__delete_and_read', { path: 'src/a.js' });
-    assert.equal(mcpMixed4.classification, 'write');
+    assert.equal(mcpMixed4.classification, 'denied');
 
     // Normal read MCP
     const mcpNormalRead = classifyTool('mcp__fs__read_file', { path: 'README.md' });
     assert.equal(mcpNormalRead.classification, 'read');
-
-    const mcpNodeRepl = classifyTool('mcp__node_repl__js', { code: '1+1' });
-    assert.equal(mcpNodeRepl.classification, 'read');
-
-    const mcpBrowserNav = classifyTool('mcp__browser__navigate', { url: 'http://localhost:5173' });
-    assert.equal(mcpBrowserNav.classification, 'read');
 
     const mcpBrowserSnap = classifyTool('mcp__browser__screenshot', {});
     assert.equal(mcpBrowserSnap.classification, 'read');
@@ -519,6 +499,104 @@ test('classifyTool handles apply_patch, Bash allowlist, Bash denials, MCP tools,
     // 7. Unknown tool
     const unknownTool = classifyTool('UnknownTool', {});
     assert.equal(unknownTool.classification, 'denied');
+});
+
+test('classifyTool never treats executable Node or package scripts as read-only', () => {
+    const cases = [
+        ['Bash', { command: `node -e "require('node:fs')['writeFile'+'Sync']('outside.txt','owned')"` }],
+        ['Bash', { command: `node --eval "require('node:fs')['writeFile'+'Sync']('outside.txt','owned')"` }],
+        ['Bash', { command: 'node --test test/dual-hook-bridge.test.js' }],
+        ['Bash', { command: 'node test/dual-hook-bridge.test.js' }],
+        ['Bash', { command: 'node test/dual-hook-bridge.test.mjs' }],
+        ['Bash', { command: 'node test/dual-hook-bridge.test.cjs' }],
+        ['Bash', { command: 'node --check --require ./evil.js lib/dual/hook-bridge.js' }],
+        ['Bash', { command: 'npm test' }],
+        ['Bash', { command: 'npm run build' }],
+        ['Bash', { command: 'pnpm test' }],
+        ['Bash', { command: 'pnpm run test' }],
+        ['Bash', { command: 'yarn test' }],
+        ['Bash', { command: 'yarn run test' }],
+        ['Bash', { command: 'yarn start' }],
+        ['Bash', { command: 'bun test' }],
+        ['Bash', { command: 'bun run test' }],
+        ['Bash', { command: 'npm run audit' }],
+        ['Bash', { command: 'npm audit fix' }],
+        ['Bash', { command: 'npx audit' }],
+        ['Bash', { command: 'pnpm audit' }],
+        ['Bash', { command: 'yarn audit' }],
+        ['Bash', { command: 'bun audit' }],
+    ];
+
+    for (const [tool, input] of cases) {
+        assert.equal(classifyTool(tool, input).classification, 'denied', input.command);
+    }
+});
+
+test('classifyTool denies interactive MCP tools without an exact external grant', () => {
+    for (const name of [
+        'mcp__browser__click',
+        'mcp__browser__type',
+        'mcp__browser__fill',
+        'mcp__browser__submit',
+        'mcp__browser__navigate',
+        'mcp__browser__get_and_click',
+        'mcp__browser__send',
+        'mcp__browser__publish',
+        'mcp__browser__upload',
+        'mcp__browser__get_and_send',
+        'mcp__browser__get_and_publish',
+        'mcp__browser__get_and_upload',
+        'mcp__browser__select_option',
+        'mcp__browser__check',
+        'mcp__browser__get_and_tap',
+        'mcp__payments__get_and_charge',
+        'mcp__node_repl__js',
+        'mcp__evil__omni_dual_status',
+    ]) {
+        assert.equal(classifyTool(name, { selector: '#save' }).classification, 'denied', name);
+    }
+});
+
+test('classifyTool denies browser capture tools that declare an output path', () => {
+    for (const tool_input of [
+        { path: 'outside.png' },
+        { file_path: 'outside.png' },
+        { output_path: 'outside.png' },
+        { outputPath: 'outside.png' },
+        { options: { filename: 'outside.png' } },
+    ]) {
+        assert.equal(classifyTool('mcp__browser__screenshot', tool_input).classification, 'denied');
+        assert.equal(classifyTool('mcp__browser__snapshot', tool_input).classification, 'denied');
+    }
+    assert.equal(classifyTool('mcp__browser__screenshot', {}).classification, 'read');
+});
+
+test('evaluateHook never forwards executable commands as daemon read operations', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    const authorityDir = path.join(wsRoot, '.omni', 'runs', 'dual-authority');
+    fs.mkdirSync(authorityDir, { recursive: true });
+    fs.writeFileSync(path.join(authorityDir, 'events.ndjson'), '{}\n', 'utf8');
+    let evaluateCalls = 0;
+
+    const result = await evaluateHook({
+        session_id: 'codex-session',
+        cwd: wsRoot,
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'npm run build' },
+        tool_use_id: 'executable-1',
+    }, {
+        createClient: () => ({
+            health: async () => ({ status: 'healthy', session_id: 'omni-session' }),
+            evaluateHook: async () => {
+                evaluateCalls++;
+                return { permissionDecision: 'allow' };
+            },
+        }),
+    });
+
+    assert.equal(result.hookSpecificOutput?.permissionDecision, 'deny');
+    assert.equal(evaluateCalls, 0);
 });
 
 test('classifyTool allows only exact pre-authority Dual diagnostics', () => {

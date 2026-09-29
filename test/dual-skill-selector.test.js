@@ -53,7 +53,9 @@ test('truthful workflow templates: dual-controller.md aligns with hardened accep
     const content = fs.readFileSync(templatePath, 'utf8');
 
     assert.match(content, /acceptance_policy/, 'must mention acceptance_policy');
-    assert.match(content, /review_evidence/, 'must mention review_evidence in isolated QC');
+    assert.match(content, /review_submission/, 'must document daemon-bound review submissions');
+    assert.match(content, /review-evidence/, 'must document the compatibility CLI alias');
+    assert.match(content, /omni_dual_acceptance_review_prepare/, 'must document daemon-owned review preparation');
     assert.match(content, /omni_dual_acceptance_review_submit/, 'must document the public post-integration review route');
     assert.match(content, /Post-integration acceptance correction/, 'must document acceptance correction');
     assert.match(content, /policy-defined required session review/, 'must bind correction scope to a policy grant');
@@ -66,7 +68,8 @@ test('truthful workflow templates: dual-controller.md aligns with hardened accep
 
 test('dual-controller JSON examples parse through the production MCP schemas', async () => {
     const content = fs.readFileSync(path.join(__dirname, '..', 'templates', 'workflows', 'dual-controller.md'), 'utf8');
-    const { ResumeInputSchema, CompletionInputSchema, CorrectionStartInputSchema, SessionBlockInputSchema } =
+    const { ResumeInputSchema, CompletionInputSchema, AcceptanceReviewSubmitInputSchema,
+        CorrectionStartInputSchema, SessionBlockInputSchema } =
         await import('../lib/dual/mcp-server.mjs');
     const examples = [];
     const fence = /```json\s*\n([\s\S]*?)\n```/gu;
@@ -76,6 +79,7 @@ test('dual-controller JSON examples parse through the production MCP schemas', a
     for (const example of examples) {
         if (example.context_reply || example.correction) ResumeInputSchema.parse(example);
         else if (example.isolated_qc) CompletionInputSchema.parse(example);
+        else if (example.review_submission) AcceptanceReviewSubmitInputSchema.parse(example);
         else if (example.expected_sequence) CorrectionStartInputSchema.parse(example);
         else if (example.blocker_code) SessionBlockInputSchema.parse(example);
         else if (example.external_operations) ExternalOperationSchema.array().parse(example.external_operations);

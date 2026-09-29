@@ -12,6 +12,20 @@ const { createAuthorityStore } = require('../lib/dual/authority-store');
 
 const bin = path.resolve(__dirname, '../bin/omni.js');
 
+function acceptancePolicy() {
+    return {
+        protocol_version: 1,
+        checks: [{
+            id: 'accept-1',
+            requirement_id: 'requirement-1',
+            phase: 'session',
+            kind: 'command',
+            required: true,
+            command: { program: 'node', args: ['--version'], cwd: '.' },
+        }],
+    };
+}
+
 function cli(root, args) {
     return new Promise((resolve, reject) => {
         const child = spawn(process.execPath, [bin, 'dual', ...args], {
@@ -32,7 +46,7 @@ async function fixture(t, { owner = 'codex', orchestrator, executionMode, extraT
     fs.writeFileSync(path.join(root, 'index.js'), 'module.exports = 1;\n');
     fs.writeFileSync(path.join(planDir, 'setup.json'), JSON.stringify({ schema_version: 1, actions: [] }));
     fs.writeFileSync(path.join(planDir, 'dual-plan.json'), JSON.stringify({
-        schema_version: 1, plan_revision: 1, tasks: [{
+        schema_version: 1, plan_revision: 1, acceptance_policy: acceptancePolicy(), tasks: [{
             task_id: 'TASK-1', title: 'Task one', goal: 'Update value', owner,
             ...(executionMode ? { execution_mode: executionMode } : {}),
             category: 'feature', complexity: 'low', risk: 'low', allowed_files: ['index.js'],

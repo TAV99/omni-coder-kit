@@ -8,10 +8,14 @@ const {
     TaskAuthorityStateSchema,
     SetupActionSchema,
     SessionEventSchema,
+    QualityEvidenceSchema,
+    UiEvidenceSchema,
     normalizeBaselineCorrelation,
     DualContractError,
 } = require('../lib/dual/contracts');
 const dualIndex = require('../lib/dual/index');
+const { recordUiEvidence } = require('../lib/dual/ui-gate');
+const { createReviewAttestation } = require('../lib/dual/acceptance-policy');
 
 test('accepts git and snapshot baseline identities', () => {
     assert.equal(BaselineIdentitySchema.parse({ kind: 'git', id: 'a'.repeat(40) }).kind, 'git');
@@ -27,6 +31,184 @@ test('mandatory gate vocabulary has no ambiguous SKIP', () => {
     }
     assert.equal(GateStatusSchema.safeParse('SKIP').success, false);
     assert.equal(GateStatusSchema.safeParse('PASS').success, false);
+});
+
+test('quality evidence requires strict provenance for new submissions', () => {
+    const evidence = {
+        cycle_index: 1,
+        attempt: 1,
+        total_tasks: 1,
+        completed_task_ids: ['TASK-1'],
+        plan_revision: 1,
+        diff_fingerprint: 'a'.repeat(64),
+        gate_results: [{ id: 'tests', required: true, status: 'PASSED' }],
+        commands: [{ command: 'npm test', exit_code: 0, duration_ms: 1 }],
+        evidence_sha256: 'b'.repeat(64),
+        provenance: {
+            execution_id: 'c'.repeat(64),
+            input_fingerprint: 'a'.repeat(64),
+            mode: 'fresh',
+        },
+    };
+    assert.equal(QualityEvidenceSchema.safeParse(evidence).success, true);
+    assert.equal(QualityEvidenceSchema.safeParse({ ...evidence, provenance: undefined }).success, false);
+    assert.equal(QualityEvidenceSchema.safeParse({
+        ...evidence,
+        provenance: { ...evidence.provenance, execution_id: 'short' },
+    }).success, false);
+    assert.equal(QualityEvidenceSchema.safeParse({
+        ...evidence,
+        provenance: { ...evidence.provenance, unexpected: true },
+    }).success, false);
+});
+
+test('UI evidence contract binds policy, source, requested viewports, and artifacts', () => {
+    const payload = {
+        requirement: {
+            gate_id: 'responsive_visual_qa',
+            required: true,
+            viewport_widths: [390, 768],
+            reduced_motion_required: true,
+        },
+        evidence: {
+            runtime_status: 'AVAILABLE',
+            evidence_sha256: '1'.repeat(64),
+            policy_sha256: '2'.repeat(64),
+            source_fingerprint: '3'.repeat(64),
+            requested_viewports: [390, 768],
+            artifact_hashes: ['4'.repeat(64), '5'.repeat(64)],
+            viewports: [
+                { width: 390, passed: true, horizontal_overflow: false },
+                { width: 768, passed: true, horizontal_overflow: false },
+            ],
+            reduced_motion: { tested: true, passed: true },
+        },
+    };
+    assert.equal(UiEvidenceSchema.safeParse(payload).success, true);
+    for (const key of ['policy_sha256', 'source_fingerprint', 'requested_viewports', 'artifact_hashes']) {
+        assert.equal(UiEvidenceSchema.safeParse({
+            ...payload,
+            evidence: { ...payload.evidence, [key]: undefined },
+        }).success, false, `missing ${key} must fail`);
+    }
+    assert.equal(UiEvidenceSchema.safeParse({
+        ...payload,
+        evidence: { ...payload.evidence, artifact_hashes: ['not-a-digest'] },
+    }).success, false);
+});
+
+test('UI gate append acknowledgement must retain every evidence binding field', () => {
+    const requirement = {
+        gate_id: 'responsive_visual_qa', required: true,
+        viewport_widths: [390], reduced_motion_required: true,
+    };
+    const evidence = {
+        runtime_status: 'AVAILABLE', evidence_sha256: '1'.repeat(64),
+        policy_sha256: '2'.repeat(64), source_fingerprint: '3'.repeat(64),
+        requested_viewports: [390], artifact_hashes: ['4'.repeat(64)],
+        viewports: [{ width: 390, passed: true, horizontal_overflow: false }],
+        reduced_motion: { tested: true, passed: true },
+    };
+    assert.throws(
+        () => recordUiEvidence({
+            authorityStore: {
+                append: (event) => ({
+                    ...event,
+                    details: {
+                        required: event.details.required,
+                        runtime_status: event.details.runtime_status,
+                    },
+                }),
+            },
+            requirement,
+            evidence,
+        }),
+        /acknowledgement fields mismatch/i
+    );
+});
+
+test('recovery events distinguish new recovery evidence while retaining legacy readability', () => {
+    const base = {
+        schema_version: 2,
+        event_id: '11111111-1111-4111-8111-111111111111',
+        causation_id: '22222222-2222-4222-8222-222222222222',
+        sequence: 5,
+        workspace_id: 'ws-main',
+        session_id: 'sess-001',
+        plan_revision: 1,
+        expected_baseline: { kind: 'git', id: 'a'.repeat(40) },
+        timestamp: '2026-08-24T12:00:00.000Z',
+        type: 'task.lease.recovered',
+        task_id: 'TASK-1',
+        lease_id: '33333333-3333-4333-8333-333333333333',
+    };
+    assert.equal(SessionEventSchema.safeParse({ ...base, confirmed_dead_pids: [] }).success, true, 'legacy event readable');
+    assert.equal(SessionEventSchema.safeParse({
+        ...base, recovery_kind: 'unexecuted', confirmed_dead_pids: [],
+    }).success, true);
+    assert.equal(SessionEventSchema.safeParse({
+        ...base, recovery_kind: 'owner_dead', confirmed_dead_pids: [1234],
+    }).success, true);
+    assert.equal(SessionEventSchema.safeParse({
+        ...base,
+        recovery_kind: 'operation_settled',
+        operation_id: '44444444-4444-4444-8444-444444444444',
+        operation_outcome: 'completed',
+        confirmed_dead_pids: [],
+    }).success, true);
+    assert.equal(SessionEventSchema.safeParse({
+        ...base, recovery_kind: 'unexecuted', confirmed_dead_pids: [1234],
+    }).success, false);
+    assert.equal(SessionEventSchema.safeParse({
+        ...base, recovery_kind: 'owner_dead', confirmed_dead_pids: [],
+    }).success, false);
+    assert.equal(SessionEventSchema.safeParse({
+        ...base, recovery_kind: 'operation_settled', confirmed_dead_pids: [],
+    }).success, false);
+});
+
+test('review execution and attestation events use strict durable envelopes', () => {
+    const eventBase = {
+        schema_version: 2,
+        event_id: '11111111-1111-4111-8111-111111111111',
+        causation_id: '22222222-2222-4222-8222-222222222222',
+        sequence: 5,
+        workspace_id: 'ws-main',
+        session_id: 'sess-001',
+        plan_revision: 1,
+        expected_baseline: { kind: 'git', id: 'a'.repeat(40) },
+        timestamp: '2026-09-17T12:00:00.000Z',
+    };
+    const execution = {
+        schema_version: 1,
+        review_execution_id: '33333333-3333-4333-8333-333333333333',
+        session_id: eventBase.session_id,
+        task_id: 'TASK-1',
+        plan_revision: 1,
+        policy_sha256: 'b'.repeat(64),
+        result_sha256: 'c'.repeat(64),
+        diff_fingerprint: 'c'.repeat(64),
+        review_phase: 'pre_integration',
+        reviewer_role: 'codex',
+        provenance_mode: 'fresh',
+    };
+    const attestation = createReviewAttestation(execution, {
+        review_execution_id: execution.review_execution_id,
+        check_results: [{ check_id: 'review-TASK-1', status: 'PASS', findings: [] }],
+    });
+
+    assert.equal(SessionEventSchema.safeParse({
+        ...eventBase, type: 'review.execution.prepared', execution,
+    }).success, true);
+    assert.equal(SessionEventSchema.safeParse({
+        ...eventBase, type: 'review.attested', attestation,
+    }).success, true);
+    assert.equal(SessionEventSchema.safeParse({
+        ...eventBase, type: 'review.execution.prepared', execution, unexpected: true,
+    }).success, false);
+    assert.equal(SessionEventSchema.safeParse({
+        ...eventBase, type: 'review.attested', attestation: { ...attestation, reviewer_role: 'worker' },
+    }).success, false);
 });
 
 test('setup actions are argv-only', () => {

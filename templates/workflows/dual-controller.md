@@ -12,7 +12,7 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 
 - Complete `.omni/sdlc/setup.json`, design/context sources, `todo.md` and `dual-plan.json` before `omni dual bootstrap --json` (pass `--worker-model <model>` if specified by user prompt or config). Bootstrap is the single AUTO entrypoint: never create `bootstrap-plan-artifacts` or directly call begin/register as a workaround.
 - For new low-risk AGY slices use `execution_mode: "isolated"`, 1–10 exact `allowed_files`, explicit `context_files`, `deny_patterns`, and typed `validation_commands` (`program`, `args`, `cwd`). Declare `depends_on: ["TASK-1"]` when predecessor output is needed. Unknown/cyclic dependencies are invalid. Validation commands for isolated AGY slices must be source verification checks (e.g. typecheck, unit tests); full-project build commands (e.g. npm run build) producing bundle artifacts (dist/) belong to the controller integration/QA phase on the root workspace.
-- **Pre-Integration Acceptance Policy:** Plans may declare a strict `acceptance_policy` with `protocol_version: 1` and a `checks` array. Each check uses `id`, `requirement_id`, `phase` (`pre_integration` or `session`), `kind` (`command` or `review`), `required`, optional `task_id`, and a typed command (`program`, `args`, `cwd`) for command checks. For any pre-integration check, canonical `review_evidence` must be presented during isolated QC before integration is permitted.
+- **Pre-Integration Acceptance Policy:** Plans may declare a strict `acceptance_policy` with `protocol_version: 1` and a `checks` array. Each check uses `id`, `requirement_id`, `phase` (`pre_integration` or `session`), `kind` (`command` or `review`), `required`, optional `task_id`, and a typed command (`program`, `args`, `cwd`) for command checks. For a required pre-integration review, first prepare a daemon-owned review execution, then submit untrusted findings against its `review_execution_id`; isolated QC only trusts the resulting durable daemon attestation.
 - Multiple AGY tasks require an all-isolated worker graph. Architecture/security/migration/ambiguous/high-risk work stays with Codex outside that graph; do not mislabel risky work as low risk. Existing shared plans remain compatible but retain a single AGY slice.
 - Overlapping write/read-context scopes wait in deterministic dependency order. Do not remove ownership checks or merge competing edits by last-writer-wins. The adapter currently dispatches serially; do not claim parallel throughput.
 - Resolve the worker model from user preference (`--worker-model`), configured capability evidence in `.omni/manifest.json`, `OMNI_DUAL_WORKER_MODEL`, and `agy models` (supported: `gemini-3.8-flash-high`, `gemini-3.7-flash-high`, `gemini-3.1-pro-high`, `claude-sonnet-4-6`, `claude-opus-4-6-thinking`); model examples are not proof of availability. No silent fallback to another model.
@@ -21,7 +21,10 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 - **Controller model and reasoning profile:** Default to `gpt-5.6-luna medium` or `gpt-5.6-sol` for Controller coordination. Ultra-high reasoning (`xhigh`) adds 4–8 minutes of latency per coordination turn and is only warranted when initially drafting multi-package architecture plans.
 - **Unstoppable Relay Loop (Baton-Passing Chaining):** For multi-task plans, when an isolated task reaches `TASK_VERIFIED` after QC integration, the controller MUST NOT stop or wait for user prompts. Immediately evaluate the next eligible task in `orderedTasks` and proceed to dispatch or resume it, keeping the pipeline continuously running until all tasks are complete.
 - **Immediate Bounded Correction:** When a worker attempt stops early or fails QC without a fatal session blocker, immediately inspect failure codes and issue targeted `correction` guidance via `omni_dual_resume` within the 3-attempt budget. Never leave worker idle when bounded correction can drive verification.
-- **Autonomous Context Auto-Reply (Uninterrupted Execution):** When an isolated worker raises `task.questions` (`NEEDS_CONTEXT`), the controller MUST NOT pause or wait for user intervention if the answers can be grounded in `.omni/sdlc/design-spec.md`, `.omni/sdlc/content-source.md`, `todo.md`, or standard UI/UX/API conventions. Immediately formulate authoritative answers, dispatch `omni_dual_resume` with `context_reply` for each question, and resume the task without leaving the pipeline idle. Only ask the user when a decision is fundamentally absent from all project documents and specifications.
+- **Autonomous Context Auto-Reply (Uninterrupted Execution):** When an isolated worker raises `task.questions` (`NEEDS_CONTEXT`), auto-reply is limited to non-safety in-scope implementation conventions grounded in `.omni/sdlc/design-spec.md`, `.omni/sdlc/content-source.md`, `todo.md`, or an equivalent source. Always require user input for commerce, sensitive data, an external write, a paid action, a breaking change, or scope expansion, even when the decision is grounded in a source. Dispatch `omni_dual_resume` and resume only after that boundary is satisfied; never let a worker recommendation authorize a safety-sensitive decision.
+- **Grounded context-reply contract:** A context reply must be grounded in a design/content source or an in-scope implementation convention already within scope, never solely in a worker recommendation. Keep the existing `context_reply` envelope and add no unknown schema fields. Its `body` must state `Decision`, `Source file/section`, `Question ID`, and `Plan revision`.
+- **User-decision boundary:** Always require user input before deciding anything involving commerce, sensitive data, an external write, a paid action, a breaking change, or scope expansion, even when grounded in a source. A worker suggestion of a paid service is only a proposal and requires a user decision; it is never authorization.
+- **Reply identity and continuation:** Preserve stable `message_id` and exact `reply_to` across retries. Same ID/content may be acknowledged, but duplicate ID with changed content must reject through the existing mechanism. AUTO may continue only when an authorized next action exists. If authority is missing or an exhausted retry budget is reached, stop with the preserved evidence and must not reset the session.
 
 ## Act on observable task state
 
@@ -29,7 +32,7 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 |---|---|
 | Active AGY lease | Lease heartbeat is maintained by daemon (10s intervals). Avoid tight high-effort reasoning loops to poll status; wait for terminal handoff, questions, or failure. No source/build/browser writes and no duplicate worker launch. |
 | WAITING_FOR_DEPENDENCY / WAITING_FOR_SCOPE | Finish/QC the predecessor; wait is not failure. |
-| NEEDS_CONTEXT / pending_questions | AUTONOMOUS REPLY MANDATORY: Inspect `.omni/sdlc/design-spec.md` and `.omni/sdlc/content-source.md` immediately. Synthesize authoritative recommended answers for all questions and dispatch `omni_dual_resume` with `context_reply` without pausing for user prompts. Only escalate to the user if the question involves an ungrounded commercial or breaking product decision. |
+| NEEDS_CONTEXT / pending_questions | AUTONOMOUS REPLY MANDATORY for non-safety, in-scope conventions: inspect `.omni/sdlc/design-spec.md` and `.omni/sdlc/content-source.md` immediately, synthesize an authoritative answer, and dispatch `omni_dual_resume` with `context_reply` without pausing. For commerce, sensitive data, an external write, a paid action, a breaking change, or scope expansion, always require user input regardless of grounding. |
 | AWAITING_CODEX_QC / isolated handoff | Inspect semantic evidence, then request independent isolated QC. |
 | NEEDS_FIX / FAILED / last_outcome | Inspect preserved attempt artifacts, then request bounded correction if safe. |
 | CONFLICT | Preserve user and worker versions. Resolve source/context disagreement; never blindly overwrite. |
@@ -51,7 +54,7 @@ Reply and resume through `omni_dual_resume`:
   "context_reply": {
     "task_id": "TASK-1", "plan_revision": 1,
     "message_id": "reply-1", "reply_to": "question-1",
-    "body": "Use Student."
+    "body": "Decision: Use Student; Source file/section: design-spec.md#labels; Question ID: question-1; Plan revision: 1"
   }
 }
 ```
@@ -74,29 +77,25 @@ For correction, call the same `omni_dual_resume` with `correction` instead of `c
 
 Correction preserves scope and old artifacts, creating attempt 2 then at most 3. It requires a recorded failed outcome and released lease. Do not reset the graph, change validation commands to force success or create another task merely to evade the attempt budget.
 
-For isolated QC, call `omni_dual_completion` with `isolated_qc: {"task_id":"TASK-1","plan_revision":1}` plus current workspace/session, or `omni dual qc TASK-1 --json`. If the task is subject to pre-integration acceptance checks, include `review_evidence`:
+For isolated QC, call `omni_dual_completion` with `isolated_qc: {"task_id":"TASK-1","plan_revision":1}` plus current workspace/session, or `omni dual qc TASK-1 --json`. If the task is subject to pre-integration review checks, call `omni_dual_acceptance_review_prepare`, perform the review against its exact bindings, then call `omni_dual_acceptance_review_submit` with untrusted findings:
 ```json
 {
   "workspace_root": "<current canonical workspace>",
   "session_id": "<current session>",
-  "isolated_qc": {
-    "task_id": "TASK-1",
-    "plan_revision": 1
-  },
-  "review_evidence": {
-    "policy_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "task_id": "TASK-1",
-    "result_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "check_results": [{"check_id": "CHK-001", "status": "PASS", "findings": []}],
-    "evidence_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  "task_id": "TASK-1",
+  "plan_revision": 1,
+  "review_submission": {
+    "review_execution_id": "00000000-0000-4000-8000-000000000001",
+    "check_results": [{"check_id": "CHK-001", "status": "PASS", "findings": []}]
   }
 }
 ```
+Then run isolated QC without caller-built review evidence. The compatibility CLI option `--review-evidence` remains available as an alias for a review-submission file, but legacy files containing policy/result/evidence hashes are rejected.
 The daemon runs exact registered validators, rechecks private evidence, binds independent review evidence, integrates under Codex authority, and records task completion only with valid integration evidence.
 
 ### Post-integration acceptance correction
 
-When the session is in `ACCEPTANCE` state, submit post-integration review evidence first through `omni_dual_acceptance_review_submit` (or `omni dual acceptance submit <task-id> --plan-revision <n> --review-evidence <file>`). The daemon binds the evidence to the registered policy, current integrated diff fingerprint and verified task result. A failed required session check creates the durable correction gate.
+When the session is in `ACCEPTANCE` state, prepare a fresh execution through `omni_dual_acceptance_review_prepare` (or `omni dual acceptance prepare <task-id> --plan-revision <n> --json`), then submit findings through `omni_dual_acceptance_review_submit` (or `omni dual acceptance submit <task-id> --plan-revision <n> --review-submission <file>`). The daemon binds and attests the findings to the registered policy, current integrated diff fingerprint and verified task result. A failed required session check creates the durable correction gate.
 
 Only then start an authorized, bounded acceptance correction targeting a verified task:
 ```json
@@ -133,6 +132,14 @@ Once a session is `BLOCKED`, the Stop hook cleanly halts execution and PreToolUs
 
 ## Completion and evidence
 
+### Daemon-owned quality checkpoints
+
+Use `omni_dual_quality` once for each required `cycle_index` (1, 2, then 3), with the current canonical `workspace_root` and `session_id`. The daemon binds each checkpoint to the current source fingerprint generation and records the exact quality gate and evidence. Do not build or submit `quality_evidence` through `omni_dual_completion`.
+
+If source changes before the session is verified, restart the required checkpoint sequence from cycle 1 for the new fingerprint generation; later cycles must wait until their current-generation prerequisites are recorded. A successful same-generation replay is read-only. If the quality call times out, inspect `omni_dual_status` for that same session before taking another action; do not blindly replay a possibly active mutation. After the daemon reports `VERIFIED`, source changes require a new session.
+
+If isolated QC returns `NEEDS_REVIEW`, use its returned `missing` check IDs to call `omni_dual_acceptance_review_prepare`, review the exact returned execution bindings, and submit real findings through `omni_dual_acceptance_review_submit`. MCP may bound the displayed list; when `missing_truncated` is true, submit the displayed IDs and rerun isolated QC to obtain the remaining required IDs. Never fabricate PASS findings or waive a check. All required tasks, quality gates, and reviews must be complete before the daemon can report session `VERIFIED`.
+
 ### Incident prevention: source binding, dependencies and external tools
 
 - Keep source `agyProjectId` and global project mappings intact. The daemon passes source binding separately; only shared execution selects that project. Isolated workers never inherit it. Explicit unsafe worker flags remain rejected.
@@ -162,9 +169,7 @@ When an execution wrapper returns a process handle, retain the complete result (
 
 A missing Git `HEAD` in a positively proven unborn repository is distinct from `.git/index.lock`: fresh snapshot bootstrap does not require an automatic initial commit, and an index lock is a separate ownership/recovery condition. Do not infer lock ownership from age or size and do not remove it automatically.
 
-TASK_VERIFIED is not session VERIFIED. Record three real quality cycles and required UI evidence on the integrated project through `omni_dual_completion`, then inspect the session receipt. Never fabricate command output or infer visual QA from static checks. A green simulated-worker suite does not qualify live AGY, platforms or release packaging.
-- **Root Diff Fingerprint Calculation:** In `quality_evidence`, `diff_fingerprint` must reflect the fresh root workspace diff measured against `current_baseline.id` (excluding `.omni`). Do NOT reuse the isolated sandbox attempt's patch SHA.
-- **Fast-Track Quality Inheritance:** When an isolated task has passed independent QC and the root workspace has no competing or unverified modifications, Quality Cycle 1 may inherit the verified command outputs from the isolated QC pass rather than re-running the exact same test suites a third time. Full-pipeline integration checks (e.g. `npm run build`, `audit`) and real browser UI verification complete the remaining cycles.
+TASK_VERIFIED is not session VERIFIED. The three quality cycles are recorded only through `omni_dual_quality` as described above; never construct `quality_evidence` manually or inherit cycle 1 from isolated-QC outputs. Use `omni_dual_completion` only for the remaining isolated-task QC (`isolated_qc`), root QC (`qc_evidence`), required UI (`ui_evidence`) inputs, and completion-readiness evaluation as applicable, then inspect the session receipt. Never fabricate command output or infer visual QA from static checks. A green simulated-worker suite does not qualify live AGY, platforms or release packaging.
 - **Uncommitted Working Tree Verification:** The daemon verifies that the uncommitted workspace diff matches the approved receipt diff fingerprint. Do not force an unauthorized `git commit` or `git push` to pass completion.
 
 If transport observation times out, inspect the same daemon/lease/attempt; do not launch another process just because the previous response was lost. Preserve all evidence and report the exact missing capability/authority when safe progress truly requires the user.

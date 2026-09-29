@@ -11,7 +11,22 @@ function task(id, file, dependencies = []) {
         context_files: [], deny_patterns: [], depends_on: dependencies,
         validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] };
 }
-const plan = (tasks) => ({ schema_version: 1, plan_revision: 1, tasks });
+const plan = (tasks) => ({
+    schema_version: 1,
+    plan_revision: 1,
+    acceptance_policy: {
+        protocol_version: 1,
+        checks: [{
+            id: 'accept-1',
+            requirement_id: 'requirement-1',
+            phase: 'session',
+            kind: 'command',
+            required: true,
+            command: { program: 'node', args: ['--version'], cwd: '.' },
+        }],
+    },
+    tasks,
+});
 const state = (tasks) => ({ tasks: Object.fromEntries(tasks.map((item) => [item.task_id, { ...item, state: 'ROUTED' }])) });
 
 test('multiple isolated workers are allowed only with a valid dependency graph', () => {

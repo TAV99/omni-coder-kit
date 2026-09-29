@@ -30,6 +30,7 @@ const {
     handleDualQc,
     handleDualMonitor,
     handleDualAcceptanceStart,
+    handleDualAcceptanceReviewPrepare,
     handleDualAcceptanceReviewSubmit,
     handleDualAcceptanceComplete,
     handleDualBlock,
@@ -179,7 +180,8 @@ dual.command('bootstrap')
 dual.command('qc [task-id]')
     .description('Tự động đo đạc snapshot diff, nộp QC Evidence và hoàn tất 3 chu kỳ Quality Gate')
     .option('--json', 'Xuất một JSON object cho AUTO workflow')
-    .option('--review-evidence <file>', 'Đọc canonical review_evidence JSON để submit trước isolated integration')
+    .option('--review-submission <file>', 'Nộp untrusted review submission đã bind với daemon execution trước isolated integration')
+    .option('--review-evidence <file>', 'Alias tương thích của --review-submission; caller-built evidence cũ bị từ chối')
     .action(handleDualQc);
 
 const dualAcceptance = dual
@@ -196,11 +198,18 @@ dualAcceptance.command('start <task-id>')
     .action(handleDualAcceptanceStart);
 
 dualAcceptance.command('submit <task-id>')
-    .description('Nộp post-integration acceptance review evidence đã ký và policy-bound')
+    .description('Nộp untrusted review findings cho daemon-owned review execution')
     .requiredOption('--plan-revision <n>', 'Plan revision của acceptance review')
-    .requiredOption('--review-evidence <file>', 'File JSON review_evidence canonical')
+    .option('--review-submission <file>', 'File JSON chứa review_execution_id và check_results')
+    .option('--review-evidence <file>', 'Alias tương thích của --review-submission; evidence hash cũ bị từ chối')
     .option('--json', 'Xuất một JSON object duy nhất')
     .action(handleDualAcceptanceReviewSubmit);
+
+dualAcceptance.command('prepare <task-id>')
+    .description('Chuẩn bị daemon-owned review execution với candidate bindings hiện tại')
+    .requiredOption('--plan-revision <n>', 'Plan revision của acceptance review')
+    .option('--json', 'Xuất một JSON object duy nhất')
+    .action(handleDualAcceptanceReviewPrepare);
 
 dualAcceptance.command('complete <correction-id>')
     .description('Hoàn tất acceptance correction; status do daemon validator quyết định')

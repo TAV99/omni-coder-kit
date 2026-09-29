@@ -36,6 +36,18 @@ const VALID_SPEC = {
     permission_authority: 'dual-init-dangerous-auto-v1',
 };
 
+const VALID_PLAN_ACCEPTANCE_POLICY = {
+    protocol_version: 1,
+    checks: [{
+        id: 'accept-1',
+        requirement_id: 'requirement-1',
+        phase: 'session',
+        kind: 'command',
+        required: true,
+        command: { program: 'node', args: ['--version'], cwd: '.' },
+    }],
+};
+
 const DEPTH_EVIDENCE = {
     research_trace: [
         { question: 'Where is the feature implemented?', source: 'index.html', source_type: 'REPOSITORY', conclusion: 'The main element owns the feature.' },
@@ -53,6 +65,7 @@ describe('dual contracts', () => {
         const parsed = DualPlanManifestSchema.parse({
             schema_version: 1,
             plan_revision: 1,
+            acceptance_policy: VALID_PLAN_ACCEPTANCE_POLICY,
             tasks: [{
                 task_id: 'WAITLIST-1',
                 title: 'Build waitlist form',
@@ -74,6 +87,7 @@ describe('dual contracts', () => {
         const parsed = DualPlanManifestSchema.parse({
             schema_version: 1,
             plan_revision: 1,
+            acceptance_policy: VALID_PLAN_ACCEPTANCE_POLICY,
             tasks: [{
                 task_id: 'WAITLIST-1',
                 title: 'Build waitlist form',
@@ -99,17 +113,18 @@ describe('dual contracts', () => {
             allowed_files: ['src/a.js'], context_files: [], deny_patterns: [], validation_commands: [],
         };
         assert.equal(DualPlanManifestSchema.safeParse({
-            schema_version: 1, plan_revision: 1, tasks: [task, { ...task }],
+            schema_version: 1, plan_revision: 1, acceptance_policy: VALID_PLAN_ACCEPTANCE_POLICY, tasks: [task, { ...task }],
         }).success, false);
         assert.equal(DualPlanManifestSchema.safeParse({
-            schema_version: 1, plan_revision: 1, tasks: [{ ...task, goal: undefined }],
+            schema_version: 1, plan_revision: 1, acceptance_policy: VALID_PLAN_ACCEPTANCE_POLICY, tasks: [{ ...task, goal: undefined }],
         }).success, false);
         assert.equal(DualPlanManifestSchema.safeParse({
-            schema_version: 1, plan_revision: 1, tasks: [{ ...task, allowed_files: ['../escape.js'] }],
+            schema_version: 1, plan_revision: 1, acceptance_policy: VALID_PLAN_ACCEPTANCE_POLICY, tasks: [{ ...task, allowed_files: ['../escape.js'] }],
         }).success, false);
         assert.equal(DualPlanManifestSchema.safeParse({
             schema_version: 1,
             plan_revision: 1,
+            acceptance_policy: VALID_PLAN_ACCEPTANCE_POLICY,
             tasks: [{ ...task, validation_commands: [{ program: 'npm test', args: [], cwd: '.' }] }],
         }).success, false);
         const agyTask = {
@@ -121,21 +136,25 @@ describe('dual contracts', () => {
         assert.equal(DualPlanManifestSchema.safeParse({
             schema_version: 1,
             plan_revision: 1,
+            acceptance_policy: VALID_PLAN_ACCEPTANCE_POLICY,
             tasks: [agyTask, { ...agyTask, task_id: 'TASK-2', allowed_files: ['src/b.js'] }],
         }).success, false);
         assert.equal(DualPlanManifestSchema.safeParse({
             schema_version: 1,
             plan_revision: 1,
+            acceptance_policy: VALID_PLAN_ACCEPTANCE_POLICY,
             tasks: [{ ...agyTask, allowed_files: Array.from({ length: 10 }, (_, index) => `src/${index}.js`) }],
         }).success, true);
         assert.equal(DualPlanManifestSchema.safeParse({
             schema_version: 1,
             plan_revision: 1,
+            acceptance_policy: VALID_PLAN_ACCEPTANCE_POLICY,
             tasks: [{ ...agyTask, allowed_files: Array.from({ length: 11 }, (_, index) => `src/${index}.js`) }],
         }).success, false);
         assert.equal(DualPlanManifestSchema.safeParse({
             schema_version: 1,
             plan_revision: 1,
+            acceptance_policy: VALID_PLAN_ACCEPTANCE_POLICY,
             tasks: [{ ...task, category: 'qa', title: 'Final QC' }],
         }).success, false);
     });

@@ -275,6 +275,34 @@ test('records successful quality cycle and appends exact gate.result event to au
     assert.equal(lastEvent.required, undefined);
 });
 
+test('recordCycle accepts the quality contract maximum of 50 command records', (t) => {
+    const { store } = setupStoreWithVerifiedTasks(t, 1, 1);
+    const ledger = createQualityLedger({
+        authorityStore: store,
+        readDiffFingerprint: () => DIFF_SHA256,
+    });
+    const commands = Array.from({ length: 50 }, (_, index) => ({
+        command: `node check-${index + 1}.js`,
+        exit_code: 0,
+        duration_ms: index + 1,
+    }));
+
+    const record = ledger.recordCycle({
+        cycle_index: 1,
+        total_tasks: 1,
+        completed_task_ids: ['TASK-1'],
+        plan_revision: 1,
+        diff_fingerprint: DIFF_SHA256,
+        gate_results: [{ id: 'quality-contract-limit', required: true, status: 'PASSED' }],
+        commands,
+        evidence_sha256: DUMMY_SHA256,
+        attempt: 1,
+    });
+
+    assert.equal(record.verdict, 'PASSED');
+    assert.equal(store.derive().gates['quality-cycle-1'].details.commands.length, 50);
+});
+
 test('three distinct cycle records can be recorded for duplicate small-N thresholds (e.g. N=1)', (t) => {
     const { store } = setupStoreWithVerifiedTasks(t, 1, 1);
     const ledger = createQualityLedger({
@@ -1563,6 +1591,11 @@ test('quality completion counts only the current diff-fingerprint generation and
             commands: [{ command: 'node --version', exit_code: 0, duration_ms: 1 }],
             verdict: 'PASSED',
             blockers: [],
+            provenance: {
+                execution_id: `${fingerprint.slice(0, 62)}${String(cycle).padStart(2, '0')}`,
+                input_fingerprint: fingerprint,
+                mode: 'fresh',
+            },
         },
     });
     const eventsA = [1, 2, 3].map((cycle) => makeEvent(cycle, generationA));
@@ -1582,13 +1615,89 @@ test('quality completion counts only the current diff-fingerprint generation and
     assert.equal(eventsA.length, 3, 'Historical generation remains append-only and queryable');
 });
 
+test('quality completion keeps provenance-less legacy history readable but never treats it as fresh qualification', () => {
+    const events = [1, 2, 3].map((cycle) => ({
+        type: 'gate.result',
+        gate_id: `quality-cycle-${cycle}`,
+        status: 'PASSED',
+        cycle_index: cycle,
+        evidence_sha256: DUMMY_SHA256,
+        reason: `Legacy quality cycle ${cycle} passed`,
+        details: {
+            required: true,
+            cycle_index: cycle,
+            attempt: 1,
+            threshold: cycleThresholds(1)[cycle - 1],
+            total_tasks: 1,
+            completed_task_ids: ['TASK-1'],
+            plan_revision: 1,
+            diff_fingerprint: DIFF_SHA256,
+            commands: [{ command: 'node --version', exit_code: 0, duration_ms: 1 }],
+            verdict: 'PASSED',
+            blockers: [],
+        },
+    }));
+
+    const result = evaluateQualityCompletion({
+        allEvents: events,
+        totalTasks: 1,
+        planRevision: 1,
+        diffFingerprint: DIFF_SHA256,
+        derivedTasks: { 'TASK-1': { state: 'TASK_VERIFIED' } },
+    });
+
+    assert.equal(result.passed, false);
+    assert.ok(result.blockers.some((blocker) => blocker.includes('DUAL_QC_REUSE_UNAUTHORIZED')));
+    assert.equal(events.length, 3, 'Legacy history is not rewritten during qualification evaluation');
+
+    const reusedEvents = events.map((event, index) => ({
+        ...event,
+        details: {
+            ...event.details,
+            provenance: {
+                execution_id: `${'c'.repeat(62)}${String(index + 1).padStart(2, '0')}`,
+                input_fingerprint: DIFF_SHA256,
+                mode: 'reused',
+            },
+        },
+    }));
+    const reused = evaluateQualityCompletion({
+        allEvents: reusedEvents,
+        totalTasks: 1,
+        planRevision: 1,
+        diffFingerprint: DIFF_SHA256,
+        derivedTasks: { 'TASK-1': { state: 'TASK_VERIFIED' } },
+    });
+    assert.equal(reused.passed, false);
+    assert.ok(reused.blockers.some((blocker) => blocker.includes('DUAL_QC_REUSE_UNAUTHORIZED')));
+});
+
 test('provenance binds input fingerprint and rejects a fresh execution replay across cycles', () => {
     const events = [];
+    const executionId = 'c'.repeat(64);
+    const attestation = {
+        execution_id: executionId,
+        artifact_sha256: DIFF_SHA256,
+        policy_sha256: 'e'.repeat(64),
+        diff_fingerprint: DUMMY_SHA256,
+        cycle_index: 1,
+        attempt: 1,
+        total_tasks: 2,
+        completed_task_ids: ['TASK-1'],
+        plan_revision: 1,
+        session_id: 'sess-test',
+        workspace_id: 'ws-test',
+        expected_baseline: { kind: 'git', id: 'c'.repeat(40) },
+    };
     const store = {
         derive: () => ({
             planRevision: 1,
-            plan: { totalTasks: 2, total_tasks: 2 },
+            sessionId: 'sess-test',
+            workspaceId: 'ws-test',
+            currentBaseline: attestation.expected_baseline,
+            plan: { totalTasks: 2, total_tasks: 2, acceptancePolicySha256: attestation.policy_sha256 },
             tasks: { 'TASK-1': { state: 'TASK_VERIFIED' }, 'TASK-2': { state: 'TASK_VERIFIED' } },
+            qualityExecutions: { [executionId]: attestation },
         }),
         readEvents: () => events,
         append: (event) => { events.push(event); return event; },
@@ -1603,12 +1712,17 @@ test('provenance binds input fingerprint and rejects a fresh execution replay ac
         evidence_sha256: DIFF_SHA256,
     };
     const provenance = {
-        execution_id: 'c'.repeat(64),
+        execution_id: executionId,
         input_fingerprint: DUMMY_SHA256,
         mode: 'fresh',
     };
 
-    ledger.recordCycle({ ...common, cycle_index: 1, attempt: 1, completed_task_ids: ['TASK-1'], provenance });
+    const firstInput = { ...common, cycle_index: 1, attempt: 1, completed_task_ids: ['TASK-1'], provenance };
+    const first = ledger.recordCycle(firstInput);
+    const retry = ledger.recordCycle(firstInput);
+    assert.equal(retry.idempotent, true);
+    assert.equal(retry.event, first.event);
+    assert.equal(events.length, 1, 'same delivery must not append duplicate gate evidence');
     assert.throws(
         () => ledger.recordCycle({
             ...common,
@@ -1619,4 +1733,64 @@ test('provenance binds input fingerprint and rejects a fresh execution replay ac
         }),
         (err) => err.code === 'DUAL_QUALITY_DUPLICATE_EXECUTION'
     );
+});
+
+test('recordCycle rejects a durable acceptance policy whose persisted digest is inconsistent', () => {
+    const { hashAcceptancePolicy } = require('../lib/dual/acceptance-policy');
+    const events = [];
+    const executionId = 'd'.repeat(64);
+    const acceptancePolicy = {
+        protocol_version: 1,
+        checks: [],
+        ui: { required: false, viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true },
+    };
+    const canonicalPolicySha256 = hashAcceptancePolicy(acceptancePolicy);
+    const inconsistentPolicySha256 = 'f'.repeat(64);
+    assert.notEqual(inconsistentPolicySha256, canonicalPolicySha256);
+    const attestation = {
+        execution_id: executionId,
+        artifact_sha256: DUMMY_SHA256,
+        policy_sha256: inconsistentPolicySha256,
+        diff_fingerprint: DIFF_SHA256,
+        cycle_index: 1,
+        attempt: 1,
+        total_tasks: 1,
+        completed_task_ids: ['TASK-1'],
+        plan_revision: 1,
+        session_id: 'sess-test',
+        workspace_id: 'ws-test',
+        expected_baseline: { kind: 'git', id: 'c'.repeat(40) },
+    };
+    const store = {
+        derive: () => ({
+            planRevision: 1,
+            sessionId: 'sess-test',
+            workspaceId: 'ws-test',
+            plan: {
+                totalTasks: 1,
+                total_tasks: 1,
+                acceptance_policy: acceptancePolicy,
+                acceptance_policy_sha256: inconsistentPolicySha256,
+            },
+            tasks: { 'TASK-1': { state: 'TASK_VERIFIED' } },
+            qualityExecutions: { [executionId]: attestation },
+        }),
+        readEvents: () => events,
+        append: (event) => { events.push(event); return event; },
+    };
+    const ledger = createQualityLedger({ authorityStore: store, readDiffFingerprint: () => DIFF_SHA256 });
+
+    assert.throws(() => ledger.recordCycle({
+        cycle_index: 1,
+        total_tasks: 1,
+        completed_task_ids: ['TASK-1'],
+        plan_revision: 1,
+        diff_fingerprint: DIFF_SHA256,
+        gate_results: [{ id: 'test', required: true, status: 'PASSED' }],
+        commands: [{ command: 'node --version', exit_code: 0, duration_ms: 1 }],
+        evidence_sha256: DUMMY_SHA256,
+        attempt: 1,
+        provenance: { execution_id: executionId, input_fingerprint: DIFF_SHA256, mode: 'fresh' },
+    }), (error) => error.code === 'DUAL_QUALITY_ATTESTATION_REQUIRED' && /policy/i.test(error.message));
+    assert.equal(events.length, 0, 'inconsistent policy binding must reject before appending quality evidence');
 });

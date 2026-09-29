@@ -43,3 +43,10 @@ Implement the changes specified in `spec.json` with production-grade engineering
 - **Safety:** NO COMMIT, NO PUSH, NO DEPLOY, and NO permission escalations.
 - **Evidence Contract:** Return all command outputs and findings via the structured evidence payload. The orchestrator owns `evidence.json`.
 
+## Context replies and authority boundaries
+- If clarification is needed, ground the question and any later context reply in a design/content source or an in-scope implementation convention already within scope, never solely in a worker recommendation.
+- Auto-reply is limited to non-safety in-scope implementation conventions; it is not a substitute for user authority.
+- Use the existing `context_reply` envelope only; add no unknown schema fields. The reply `body` must state `Decision`, `Source file/section`, `Question ID`, and `Plan revision`.
+- Always require user input for commerce, sensitive data, an external write, a paid action, a breaking change, or scope expansion, even when grounded in a source. A worker suggestion of a paid service requires a user decision and grants no authority.
+- Preserve stable `message_id` and exact `reply_to`; duplicate ID with changed content must reject through the existing mechanism. AUTO may continue only with an authorized next action. Missing authority or exhausted retry must stop with preserved evidence and must not reset the session.
+

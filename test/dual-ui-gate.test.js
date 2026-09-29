@@ -31,6 +31,10 @@ function createValidEvidence(overrides = {}) {
     return {
         runtime_status: 'AVAILABLE',
         evidence_sha256: DUMMY_SHA256,
+        policy_sha256: 'd'.repeat(64),
+        source_fingerprint: 'e'.repeat(64),
+        requested_viewports: [...VALID_VIEWPORTS],
+        artifact_hashes: ['f'.repeat(64)],
         viewports: [
             { width: 390, passed: true, horizontal_overflow: false },
             { width: 768, passed: true, horizontal_overflow: false },
@@ -101,6 +105,10 @@ test('evaluateUiEvidence returns UNAVAILABLE when browser runtime is missing/can
     const ev = {
         runtime_status: 'UNAVAILABLE',
         evidence_sha256: DUMMY_SHA256,
+        policy_sha256: 'd'.repeat(64),
+        source_fingerprint: 'e'.repeat(64),
+        requested_viewports: [...VALID_VIEWPORTS],
+        artifact_hashes: [],
         reason: 'Chromium binary not found',
     };
 
@@ -116,6 +124,10 @@ test('evaluateUiEvidence returns OPTIONAL_SKIPPED only when browser is unavailab
     const ev = {
         runtime_status: 'UNAVAILABLE',
         evidence_sha256: DUMMY_SHA256,
+        policy_sha256: 'd'.repeat(64),
+        source_fingerprint: 'e'.repeat(64),
+        requested_viewports: [...VALID_VIEWPORTS],
+        artifact_hashes: [],
         reason: 'Optional browser skipped',
     };
 
@@ -132,6 +144,10 @@ test('evaluateUiEvidence keeps status BLOCKED when browser execution was blocked
         const ev = {
             runtime_status: 'BLOCKED',
             evidence_sha256: DUMMY_SHA256,
+            policy_sha256: 'd'.repeat(64),
+            source_fingerprint: 'e'.repeat(64),
+            requested_viewports: [...VALID_VIEWPORTS],
+            artifact_hashes: [],
             reason: 'Display server not accessible',
         };
 

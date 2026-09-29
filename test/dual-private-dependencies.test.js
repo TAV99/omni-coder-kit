@@ -59,6 +59,29 @@ test('async dependency hashing yields and aborts between large-file chunks', asy
     assert.ok(ticks >= 1);
 });
 
+test('async dependency hashing aborts when the final EOF read triggers cancellation', async (t) => {
+    const input = fixture(t);
+    const dependencyPath = path.join(input.workerRoot, 'node_modules', 'pkg', 'payload.bin');
+    fs.mkdirSync(path.dirname(dependencyPath), { recursive: true });
+    fs.writeFileSync(dependencyPath, 'content');
+    const controller = new AbortController();
+    const originalOpen = fs.promises.open;
+    fs.promises.open = async (...args) => {
+        const fd = await originalOpen(...args);
+        const originalRead = fd.read.bind(fd);
+        fd.read = async (...readArgs) => {
+            const result = await originalRead(...readArgs);
+            if (result.bytesRead === 0) controller.abort();
+            return result;
+        };
+        return fd;
+    };
+    t.after(() => { fs.promises.open = originalOpen; });
+
+    await assert.rejects(() => dependencyFingerprintAsync(input.workerRoot, { signal: controller.signal }),
+        (error) => error.code === 'DUAL_PRIVATE_SETUP_ABORTED');
+});
+
 test('fresh dependency install aborts during post-install hashing before writing a receipt', async (t) => {
     const input = fixture(t);
     const dependencyPath = path.join(input.workerRoot, 'node_modules', 'large-pkg', 'payload.bin');
@@ -172,7 +195,7 @@ test('npm shrinkwrap cannot replace the validated lockfile during setup or repla
     assert.equal(fs.existsSync(path.join(fresh.workerRoot, 'node_modules')), false);
 });
 
-test('ephemeral build cache directories (.vite, .cache, .* caches) inside node_modules do not cause setup drift', async (t) => {
+test('allowlisted build cache directories (.vite, .cache) inside node_modules do not cause setup drift', async (t) => {
     const input = fixture(t);
     const reference = await preparePrivateDependencies(input);
 
@@ -181,17 +204,33 @@ test('ephemeral build cache directories (.vite, .cache, .* caches) inside node_m
     fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.vite/deps/chunk.js'), 'export default "cached"');
     fs.mkdirSync(path.join(input.workerRoot, 'node_modules/.cache/test-tool'), { recursive: true });
     fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.cache/test-tool/meta.json'), '{"cache":true}');
-    fs.mkdirSync(path.join(input.workerRoot, 'node_modules/.turbopack/cache'), { recursive: true });
-    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.turbopack/cache/data.bin'), Buffer.alloc(64));
-    fs.mkdirSync(path.join(input.workerRoot, 'node_modules/.custom-tool-cache'), { recursive: true });
-    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.custom-tool-cache/index.json'), '{}');
-
-    // Verification must pass despite any top-level ephemeral dot-cache presence
+    // Only the frozen top-level cache allowlist is ignored.
     assert.doesNotThrow(() => verifyPrivateDependencies({ ...input, reference }));
 
     // Real package mutation must still be rejected
     fs.mkdirSync(path.join(input.workerRoot, 'node_modules/forged-pkg'), { recursive: true });
     fs.writeFileSync(path.join(input.workerRoot, 'node_modules/forged-pkg/index.js'), 'module.exports = 1');
+    assert.throws(() => verifyPrivateDependencies({ ...input, reference }),
+        (error) => error.code === 'DUAL_PRIVATE_SETUP_DRIFT');
+});
+
+test('private dependency verification rejects unknown dot entries and protected npm metadata', async (t) => {
+    const input = fixture(t);
+    const reference = await preparePrivateDependencies(input);
+
+    fs.mkdirSync(path.join(input.workerRoot, 'node_modules/.payload'), { recursive: true });
+    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.payload/data.bin'), 'unexpected');
+    assert.throws(() => verifyPrivateDependencies({ ...input, reference }),
+        (error) => error.code === 'DUAL_PRIVATE_SETUP_DRIFT');
+
+    fs.rmSync(path.join(input.workerRoot, 'node_modules/.payload'), { recursive: true, force: true });
+    fs.mkdirSync(path.join(input.workerRoot, 'node_modules/.bin'), { recursive: true });
+    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.bin/tool'), 'unexpected');
+    assert.throws(() => verifyPrivateDependencies({ ...input, reference }),
+        (error) => error.code === 'DUAL_PRIVATE_SETUP_DRIFT');
+
+    fs.rmSync(path.join(input.workerRoot, 'node_modules/.bin'), { recursive: true, force: true });
+    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.package-lock.json'), '{}');
     assert.throws(() => verifyPrivateDependencies({ ...input, reference }),
         (error) => error.code === 'DUAL_PRIVATE_SETUP_DRIFT');
 });

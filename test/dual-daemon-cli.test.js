@@ -350,10 +350,12 @@ test('omni dual public acceptance and blocking commands expose the supported aut
 
     const acceptance = await runOmniCli(['dual', 'acceptance', '--help']);
     assert.equal(acceptance.code, 0);
+    assert.ok(acceptance.stdout.includes('prepare'));
     assert.ok(acceptance.stdout.includes('submit'));
 
     const qc = await runOmniCli(['dual', 'qc', '--help']);
     assert.equal(qc.code, 0);
+    assert.ok(qc.stdout.includes('--review-submission'));
     assert.ok(qc.stdout.includes('--review-evidence'));
 });
 

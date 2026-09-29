@@ -80,9 +80,11 @@ test('MCP initialize handshake succeeds and tools/list exposes the complete appr
     const expectedToolNames = [
         'omni_dual_begin',
         'omni_dual_completion',
+        'omni_dual_quality',
         'omni_dual_register_plan',
         'omni_dual_resume',
         'omni_dual_status',
+        'omni_dual_acceptance_review_prepare',
         'omni_dual_acceptance_review_submit',
         'omni_dual_acceptance_correction_start',
         'omni_dual_acceptance_correction_complete',
@@ -835,8 +837,24 @@ test('all supported tools delegate exact client methods and parameters', async (
                 status: 'PASSED',
             };
         },
-        submitAcceptanceReview: async (sessionId, taskId, planRevision, reviewEvidence) => {
-            calls.push({ method: 'submitAcceptanceReview', sessionId, taskId, planRevision, reviewEvidence });
+        prepareAcceptanceReview: async (sessionId, taskId, planRevision) => {
+            calls.push({ method: 'prepareAcceptanceReview', sessionId, taskId, planRevision });
+            return {
+                schema_version: 1,
+                review_execution_id: '00000000-0000-4000-8000-000000000001',
+                session_id: sessionId,
+                task_id: taskId,
+                plan_revision: planRevision,
+                policy_sha256: 'a'.repeat(64),
+                result_sha256: 'c'.repeat(64),
+                diff_fingerprint: 'c'.repeat(64),
+                review_phase: 'post_integration',
+                reviewer_role: 'codex',
+                provenance_mode: 'fresh',
+            };
+        },
+        submitAcceptanceReview: async (sessionId, taskId, planRevision, submission) => {
+            calls.push({ method: 'submitAcceptanceReview', sessionId, taskId, planRevision, submission });
             return { status: 'NEEDS_FIX', task_id: taskId, result_sha256: 'c'.repeat(64) };
         },
         blockSession: async (sessionId, params) => {
@@ -949,7 +967,20 @@ test('all supported tools delegate exact client methods and parameters', async (
     assert.ok(resumeCall);
     assert.equal(resumeCall.params.session_id, 'sess-delegation');
 
-    // 6. omni_dual_acceptance_review_submit
+    // 6. daemon-owned acceptance review prepare + submit
+    const reviewPrepareRes = await client.callTool({
+        name: 'omni_dual_acceptance_review_prepare',
+        arguments: {
+            workspace_root: wsRoot,
+            session_id: 'sess-delegation',
+            task_id: 'TASK-1',
+            plan_revision: 1,
+        },
+    });
+    assert.equal(reviewPrepareRes.isError, undefined);
+    const reviewPrepareCall = calls.find((c) => c.method === 'prepareAcceptanceReview');
+    assert.ok(reviewPrepareCall);
+
     const reviewRes = await client.callTool({
         name: 'omni_dual_acceptance_review_submit',
         arguments: {
@@ -957,12 +988,9 @@ test('all supported tools delegate exact client methods and parameters', async (
             session_id: 'sess-delegation',
             task_id: 'TASK-1',
             plan_revision: 1,
-            review_evidence: {
-                policy_sha256: 'a'.repeat(64),
-                task_id: 'TASK-1',
-                result_sha256: 'c'.repeat(64),
+            review_submission: {
+                review_execution_id: '00000000-0000-4000-8000-000000000001',
                 check_results: [{ check_id: 'REQ-1', status: 'FAIL', findings: ['Fix needed'] }],
-                evidence_sha256: 'b'.repeat(64),
             },
         },
     });
@@ -972,6 +1000,7 @@ test('all supported tools delegate exact client methods and parameters', async (
     assert.equal(reviewCall.sessionId, 'sess-delegation');
     assert.equal(reviewCall.taskId, 'TASK-1');
     assert.equal(reviewCall.planRevision, 1);
+    assert.equal(reviewCall.submission.review_execution_id, '00000000-0000-4000-8000-000000000001');
 
     // 7. omni_dual_acceptance_correction_start
     const correctionStartRes = await client.callTool({
@@ -1500,13 +1529,16 @@ test('stdio MCP child process runs cleanly, emits pure JSON-RPC on stdout, and e
     let stderrOutput = '';
     child.stderr.on('data', (d) => (stderrOutput += d.toString('utf8')));
 
-    t.after(() => {
+    t.after(async () => {
         if (!child.killed && child.exitCode === null) {
             try {
                 child.kill('SIGKILL');
             } catch {
                 // ignore
             }
+        }
+        if (child.exitCode === null && child.signalCode === null) {
+            await new Promise((resolve) => child.once('close', resolve));
         }
     });
 
@@ -1517,11 +1549,18 @@ test('stdio MCP child process runs cleanly, emits pure JSON-RPC on stdout, and e
     });
 
     const client = new Client({ name: 'stdio-test-client', version: '1.0.0' }, { capabilities: {} });
+    t.after(async () => {
+        try {
+            await client.close();
+        } catch {
+            // The client may already have closed on the successful path.
+        }
+    });
     await client.connect(transport);
 
     // List tools
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 9);
+    assert.equal(tools.tools.length, 11);
 
     // Call begin tool
     const beginRes = await client.callTool({
@@ -2496,11 +2535,14 @@ test('MCP omni_dual_completion rejects omitted nested fields for QC, quality, an
     assert.equal(clientCalls.length, 0);
 });
 
-test('omni_dual_completion MCP tool passes through DUAL_SNAPSHOT_EXECUTION_PENDING error on snapshot quality submission', async (t) => {
+test('omni_dual_completion rejects caller quality evidence before daemon access', async (t) => {
     const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
 
+    let healthCalls = 0;
+    let completionCalls = 0;
     const fakeClient = {
         async health() {
+            healthCalls += 1;
             return {
                 status: 'healthy',
                 workspace_root: process.cwd(),
@@ -2508,9 +2550,8 @@ test('omni_dual_completion MCP tool passes through DUAL_SNAPSHOT_EXECUTION_PENDI
             };
         },
         async evaluateCompletion() {
-            const err = new Error('DUAL_SNAPSHOT_EXECUTION_PENDING: Snapshot baseline quality execution is pending in this slice');
-            err.code = 'DUAL_SNAPSHOT_EXECUTION_PENDING';
-            throw err;
+            completionCalls += 1;
+            return { verified: false, session_state: 'EXECUTING', blockers: [] };
         },
     };
 
@@ -2545,13 +2586,18 @@ test('omni_dual_completion MCP tool passes through DUAL_SNAPSHOT_EXECUTION_PENDI
                 gate_results: [{ id: 'unit-tests', required: true, status: 'PASSED' }],
                 commands: [{ command: 'npm test', exit_code: 0, duration_ms: 100 }],
                 evidence_sha256: 'b'.repeat(64),
+                provenance: {
+                    execution_id: 'c'.repeat(64),
+                    input_fingerprint: 'a'.repeat(64),
+                    mode: 'fresh',
+                },
             },
         },
     });
 
     assert.equal(result.isError, true);
-    const parsed = JSON.parse(result.content[0].text);
-    assert.equal(parsed.error.code, 'DUAL_MCP_COMPLETION_ERROR');
+    assert.equal(healthCalls, 0, 'schema-valid caller evidence must reject before any daemon request');
+    assert.equal(completionCalls, 0);
 });
 
 test('MCP omni_dual_register_plan rejects omitted args or cwd inside validation_commands before client call', async (t) => {
@@ -2852,7 +2898,7 @@ test('Codex MCP list-tools wire schema compatibility: all supported tools expose
 
     const listResult = await client.listTools();
     assert.ok(listResult && Array.isArray(listResult.tools));
-    assert.equal(listResult.tools.length, 9, 'Must list the complete supported tool surface over the wire');
+    assert.equal(listResult.tools.length, 11, 'Must list the complete supported tool surface over the wire');
 
     // Helper: Recursively validate that wire schema adheres to Codex / OpenAI tool schema constraints
     function validateCodexWireSchema(node, jsonPath) {
@@ -2918,6 +2964,10 @@ test('Codex MCP list-tools wire schema compatibility: all supported tools expose
                 evidence: {
                     runtime_status: 'AVAILABLE',
                     evidence_sha256: 'c'.repeat(64),
+                    policy_sha256: 'd'.repeat(64),
+                    source_fingerprint: 'e'.repeat(64),
+                    requested_viewports: [390, 768, 1024, 1440],
+                    artifact_hashes: ['f'.repeat(64)],
                     viewports: [
                         { width: 390, passed: true, horizontal_overflow: false },
                         { width: 768, passed: true, horizontal_overflow: false },
@@ -2931,7 +2981,7 @@ test('Codex MCP list-tools wire schema compatibility: all supported tools expose
     });
     assert.notEqual(validUiResult.isError, true, 'Valid omni_dual_completion with UI evidence must succeed');
 
-    // Test rejection with invalid viewport widths (e.g. wrong count or values)
+    // Test rejection when evidence does not match the requested viewport policy.
     const invalidUiResult = await client.callTool({
         name: 'omni_dual_completion',
         arguments: {
@@ -2947,11 +2997,15 @@ test('Codex MCP list-tools wire schema compatibility: all supported tools expose
                 evidence: {
                     runtime_status: 'AVAILABLE',
                     evidence_sha256: 'c'.repeat(64),
+                    policy_sha256: 'd'.repeat(64),
+                    source_fingerprint: 'e'.repeat(64),
+                    requested_viewports: [390],
+                    artifact_hashes: ['f'.repeat(64)],
                 },
             },
         },
     });
-    assert.equal(invalidUiResult.isError, true, 'Invalid viewport widths count must fail validation');
+    assert.equal(invalidUiResult.isError, true, 'Mismatched requested viewports must fail validation');
 
     const duplicateUiResult = await client.callTool({
         name: 'omni_dual_completion',
@@ -2968,11 +3022,15 @@ test('Codex MCP list-tools wire schema compatibility: all supported tools expose
                 evidence: {
                     runtime_status: 'AVAILABLE',
                     evidence_sha256: 'c'.repeat(64),
+                    policy_sha256: 'd'.repeat(64),
+                    source_fingerprint: 'e'.repeat(64),
+                    requested_viewports: [390, 390, 768, 1024],
+                    artifact_hashes: ['f'.repeat(64)],
                 },
             },
         },
     });
-    assert.equal(duplicateUiResult.isError, true, 'Viewport widths must preserve the exact required sequence');
+    assert.equal(duplicateUiResult.isError, true, 'Requested viewport widths must be unique');
 });
 
 test('omni_dual_completion MCP tool passes through safe diagnostic reason in error.details without leaking paths or secrets', async (t) => {

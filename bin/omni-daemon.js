@@ -8,6 +8,8 @@ const { startDaemonServer } = require('../lib/dual/daemon-server');
 const { createAuthorityStore } = require('../lib/dual/authority-store');
 const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
 const { resolveRegisteredAgyProjectId } = require('../lib/dual/agy-project');
+const { createTrustedQualityRunner } = require('../lib/dual/quality-runner');
+const { createTrustedUiAdapter } = require('../lib/dual/visual-qa');
 
 function parseArguments(argv) {
     if (argv.length === 2 && argv[0] === '--workspace' && argv[1] && !argv[1].startsWith('--')) {
@@ -20,6 +22,16 @@ function parseArguments(argv) {
         }
     }
     return null;
+}
+
+function createDaemonServerOptions({ workspaceRoot, authorityStore, orchestrator }) {
+    return {
+        workspaceRoot,
+        authorityStore,
+        orchestrator,
+        trustedQualityRunner: createTrustedQualityRunner(),
+        trustedUiAdapter: createTrustedUiAdapter(),
+    };
 }
 
 async function runDaemon(argv = process.argv.slice(2)) {
@@ -58,11 +70,11 @@ async function runDaemon(argv = process.argv.slice(2)) {
 
     let daemon;
     try {
-        daemon = await startDaemonServer({
+        daemon = await startDaemonServer(createDaemonServerOptions({
             workspaceRoot: canonicalWorkspace,
             authorityStore,
             orchestrator: orchestratorAdapter,
-        });
+        }));
     } catch (err) {
         process.stderr.write(`omni-daemon fatal error [${err.code || 'ERR'}]: ${err.message}\n`);
         process.exitCode = 1;
@@ -98,6 +110,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+    createDaemonServerOptions,
     runDaemon,
     parseArguments,
 };

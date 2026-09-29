@@ -9,9 +9,20 @@ const { spawn, spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const { runIsolatedTask } = require('../lib/dual/isolated-runner');
 const { integrateTaskResult } = require('../lib/dual/task-integration');
-const { createAuthorityStore } = require('../lib/dual/authority-store');
+const { createAuthorityStore, computeEventHash } = require('../lib/dual/authority-store');
 const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
 const { startDaemonServer } = require('../lib/dual/daemon-server');
+const { listOperations } = require('../lib/dual/operation-lifecycle');
+const { createOperationLifecycleWriter } = require('../lib/dual/operation-lifecycle-writer');
+const { releaseSettledTaskLease } = require('../lib/dual/task-processes');
+
+function beginOperation({ authorityStore, ...params }) {
+    return createOperationLifecycleWriter(authorityStore).begin(params);
+}
+
+function settleOperation({ authorityStore, ...params }) {
+    return createOperationLifecycleWriter(authorityStore).settle(params);
+}
 
 function fixture(t) {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-isolated-runner-')));
@@ -174,28 +185,62 @@ test('isolated handoff requires outputs for the registered validation command', 
     }
 });
 
-function seedAuthority(input, extraTasks = []) {
+function seedAuthority(input, extraTasks = [], options = {}) {
     const { createConfiguredSnapshotBaseline } = require('../lib/dual/snapshot-policy');
     const { writeInitialSnapshot } = require('../lib/dual/snapshot-store');
     const dir = path.join(input.workspaceRoot, '.omni/runs/dual-authority');
+    const workspaceId = options.workspaceId || 'workspace-test';
     const snapshot = createConfiguredSnapshotBaseline({ root: input.workspaceRoot }).baseline.capture();
     const store = createAuthorityStore(dir);
     store.append({ schema_version: 2, type: 'session.created', state: 'DISCOVERED', workspace_root: input.workspaceRoot,
-        workspace_id: 'workspace-test', session_id: input.sessionId, plan_revision: 1,
+        workspace_id: workspaceId, session_id: input.sessionId, plan_revision: 1,
         expected_baseline: snapshot.identity, mode: 'auto' });
-    writeInitialSnapshot({ authorityDir: dir, sessionId: input.sessionId, workspaceId: 'workspace-test',
+    writeInitialSnapshot({ authorityDir: dir, sessionId: input.sessionId, workspaceId,
         workspaceRoot: input.workspaceRoot, identity: snapshot.identity, manifest: snapshot.manifest });
     store.append({ schema_version: 2, type: 'capability.result', from_state: 'DISCOVERED', to_state: 'CAPABILITY_SAFE',
         status: 'PASSED', checks: [{ name: 'agy_cli_and_model', status: 'PASSED' }],
         details: { agy_version: input.capability.version, agy_model: input.capability.model } });
     store.append({ schema_version: 2, type: 'plan.registered', from_state: 'INTERVIEWING', to_state: 'PLANNED',
         plan_path: 'spec.md', plan_sha256: 'b'.repeat(64), total_tasks: 1 + extraTasks.length,
+        ...(options.acceptancePolicy ? { acceptance_policy: options.acceptancePolicy } : {}),
+        ...(options.acceptancePolicySha256 ? { acceptance_policy_sha256: options.acceptancePolicySha256 } : {}),
         tasks: [{ ...input.task, title: 'Task one', owner: 'agy', risk: 'low', execution_mode: 'isolated' }, ...extraTasks] });
     store.append({ schema_version: 2, type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
         allowed_files: input.task.allowed_files, model: input.capability.model, reason: 'Private task' });
     for (const task of extraTasks) store.append({ schema_version: 2, type: 'task.routed', task_id: task.task_id,
         owner: 'agy', authority_state: 'ROUTED', allowed_files: task.allowed_files, model: input.capability.model, reason: 'Private dependent task' });
     return { store, dir, snapshot };
+}
+
+async function createAuthoritativeHandoff(input, store, processRunner, operationOutcome = null) {
+    const lease = store.acquireLease('TASK-1', 'agy', { ttlMs: 120000 });
+    store.append({ schema_version: 2, type: 'task.execution.started', task_id: 'TASK-1',
+        lease_id: lease.lease_id, controller_pid: process.pid });
+    const operationId = crypto.randomUUID();
+    if (operationOutcome !== 'missing') {
+        beginOperation({ authorityStore: store, taskId: 'TASK-1', leaseId: lease.lease_id, operationId });
+    }
+    const task = store.derive().tasks['TASK-1'];
+    const handoff = await runIsolatedTask({ workspaceRoot: input.workspaceRoot, sessionId: input.sessionId,
+        attempt: 1, planRevision: 1, task, capability: input.capability, processRunner, authorize: () => true,
+        onPrepared(reference) {
+            const { bindingPath, bindingSha256, workerBaselineSha256, workerContractSha256 } = reference;
+            store.append({ schema_version: 2, type: 'task.workspace.prepared', task_id: 'TASK-1',
+                lease_id: lease.lease_id, attempt: 1,
+                reference: { bindingPath, bindingSha256, workerBaselineSha256, workerContractSha256 } });
+        },
+    });
+    assert.equal(handoff.status, 'AWAITING_CODEX_QC');
+    store.append({ schema_version: 2, type: 'task.workspace.handoff', task_id: 'TASK-1',
+        lease_id: lease.lease_id, attempt: 1, handoff_path: handoff.handoffPath,
+        handoff_sha256: handoff.handoffSha256, result_sha256: handoff.result.resultSha256 });
+    if (operationOutcome === 'failed' || operationOutcome === 'wrong-lineage') {
+        settleOperation({ authorityStore: store, taskId: 'TASK-1', leaseId: lease.lease_id, operationId,
+            outcome: operationOutcome === 'failed' ? 'failed' : 'completed' });
+        if (operationOutcome === 'failed' || operationOutcome === 'wrong-lineage') releaseSettledTaskLease({ authorityStore: store,
+            taskId: 'TASK-1', leaseId: lease.lease_id, reason: 'test_operation_fixture' });
+    }
+    return { lease, operationId };
 }
 
 test('authority adapter persists isolated binding and handoff and resumes after reopen without duplicate worker calls', async (t) => {
@@ -232,9 +277,153 @@ test('authority adapter persists isolated binding and handoff and resumes after 
     reopened.append({ schema_version: 2, type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
         model: 'unqualified-model', allowed_files: input.task.allowed_files, reason: 'Same revision model drift' });
     await assert.rejects(() => next.runTask(reopened.derive()), (error) => error.code === 'DUAL_ISOLATED_AUTHORITY_STALE');
-    reopened.append({ schema_version: 2, type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
-        plan_revision: 2, model: input.capability.model, allowed_files: input.task.allowed_files, reason: 'Changed revision' });
-    await assert.rejects(() => next.runTask(reopened.derive()), (error) => error.code === 'DUAL_ISOLATED_AUTHORITY_STALE');
+    assert.throws(() => reopened.append({ schema_version: 2, type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
+        plan_revision: 2, model: input.capability.model, allowed_files: input.task.allowed_files, reason: 'Changed revision' }),
+    (error) => error.code === 'DUAL_OPERATION_CORRUPT');
+});
+
+test('isolated authority records a completed operation before releasing the AGY lease', async (t) => {
+    const input = fixture(t), calls = [];
+    const { store } = seedAuthority(input);
+    const order = [];
+    const writer = createOperationLifecycleWriter(store);
+    const releaseLease = store.releaseLease.bind(store);
+    const operationWriter = {
+        begin: (args) => writer.begin(args),
+        settle: (args) => { order.push('settle'); return writer.settle(args); },
+    };
+    store.releaseLease = (leaseId, reason) => { order.push('release'); return releaseLease(leaseId, reason); };
+
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+        operationWriter, processRunner: fakeWorker(calls) });
+    const result = await adapter.runTask(store.derive());
+
+    assert.equal(result[0].status, 'AWAITING_CODEX_QC');
+    assert.deepEqual(order, ['settle', 'release']);
+    assert.deepEqual(store.readOperationRecords().map((record) => ({ type: record.type, outcome: record.outcome })), [
+        { type: 'started', outcome: undefined }, { type: 'settled', outcome: 'completed' },
+    ]);
+    assert.equal(Object.values(store.derive().leases).every((lease) => lease.status === 'released'), true);
+});
+
+test('a cancellation signal requested after worker completion does not force a cancelled operation', async (t) => {
+    const input = fixture(t), { store } = seedAuthority(input), calls = [];
+    const controller = new AbortController();
+    const worker = fakeWorker(calls);
+    const processRunner = async (...args) => {
+        const result = await worker(...args);
+        controller.abort();
+        return result;
+    };
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+        processRunner, signal: controller.signal });
+    const result = await adapter.runTask(store.derive());
+    assert.equal(result[0].status, 'AWAITING_CODEX_QC');
+    assert.deepEqual(store.readOperationRecords().map((record) => record.outcome), [undefined, 'completed']);
+    assert.equal(Object.values(store.derive().leases).every((lease) => lease.status === 'released'), true);
+});
+
+test('isolated QC rejects missing, active, failed, and wrong-lineage operation evidence before mutation', async (t) => {
+    const { completeIsolatedTask } = require('../lib/dual/isolated-qc');
+    const scenarios = ['missing', 'active', 'failed', 'wrong-lineage'];
+    for (const scenario of scenarios) {
+        const input = fixture(t), calls = [];
+        const { store, dir } = seedAuthority(input);
+        await createAuthoritativeHandoff(input, store, fakeWorker(calls), scenario);
+        if (scenario === 'wrong-lineage') {
+            const operationsPath = path.join(dir, 'operations.ndjson');
+            const envelopes = fs.readFileSync(operationsPath, 'utf8').trim().split('\n').map(JSON.parse);
+            envelopes[0].record.session_id = 'foreign-session';
+            envelopes[0].record_hash = computeEventHash(envelopes[0].previous_hash, envelopes[0].record);
+            fs.writeFileSync(operationsPath, envelopes.map((envelope) => JSON.stringify(envelope)).join('\n') + '\n', 'utf8');
+        }
+        const eventsPath = path.join(input.workspaceRoot, '.omni/runs/dual-authority/events.ndjson');
+        const eventsBefore = fs.readFileSync(eventsPath, 'utf8');
+        const sourceBefore = fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8');
+        await assert.rejects(() => completeIsolatedTask({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+            sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 }), (error) => /^DUAL_/.test(error.code || ''));
+        assert.equal(fs.readFileSync(eventsPath, 'utf8'), eventsBefore, `QC must not append events for ${scenario}`);
+        assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), sourceBefore,
+            `QC must not integrate source for ${scenario}`);
+    }
+});
+
+test('stale isolated writer cannot append handoff, settle, integrate, or complete after lease fencing', async (t) => {
+    const input = fixture(t), calls = [];
+    const { store } = seedAuthority(input);
+    let fenced = false;
+    const worker = fakeWorker(calls);
+    const processRunner = async (invocation, options) => {
+        if (!fenced) {
+            fenced = true;
+            const lease = Object.values(store.derive().leases).find((candidate) => candidate.task_id === 'TASK-1');
+            store.releaseLease(lease.lease_id, 'test_operation_fence');
+        }
+        return worker(invocation, options);
+    };
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, processRunner });
+    await assert.rejects(() => adapter.runTask(store.derive()), (error) => error.code === 'DUAL_ISOLATED_UNAUTHORIZED');
+
+    const events = store.readEvents();
+    assert.equal(events.some((event) => event.type === 'task.workspace.handoff'), false);
+    assert.equal(events.some((event) => event.type === 'task.completed'), false);
+    const operations = store.readOperationRecords();
+    assert.equal(operations.filter((record) => record.type === 'started').length, 1);
+    assert.equal(operations.some((record) => record.type === 'settled'), false);
+    assert.equal(store.derive().tasks['TASK-1'].isolatedHandoff, undefined);
+});
+
+test('aborted isolated work with an unresolved tracked child cannot create settled operation evidence', async (t) => {
+    const input = fixture(t), { store } = seedAuthority(input);
+    const controller = new AbortController();
+    let child;
+    const processRunner = async (_invocation, options) => {
+        child = options.spawn(process.execPath, ['-e', 'setTimeout(() => {}, 5000)'], {
+            cwd: _invocation.cwd, env: options.env, shell: false, windowsHide: true,
+            stdio: ['ignore', 'ignore', 'ignore'],
+        });
+        controller.abort();
+        const error = new Error('worker cancellation requested');
+        error.code = 'DUAL_PRIVATE_SETUP_ABORTED';
+        throw error;
+    };
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+        processRunner, signal: controller.signal });
+    await assert.rejects(() => adapter.runTask(store.derive()), (error) => error.code === 'DUAL_PRIVATE_SETUP_ABORTED');
+    assert.ok(child?.pid > 0);
+    assert.equal(store.readOperationRecords().some((record) => record.type === 'settled'), false);
+    const lease = Object.values(store.derive().leases).find((candidate) => candidate.task_id === 'TASK-1');
+    assert.equal(listOperations({ authorityStore: store, taskId: 'TASK-1', leaseId: lease.lease_id })[0].active, true);
+    child.kill();
+    await new Promise((resolve) => child.once('close', resolve));
+    assert.equal(store.readOperationRecords().some((record) => record.type === 'settled'), false);
+    assert.equal(Object.values(store.derive().leases).some((lease) => lease.status === 'released'), false);
+});
+
+test('isolated failure with an unresolved tracked child cannot record a task outcome before settlement', async (t) => {
+    const input = fixture(t), { store } = seedAuthority(input);
+    let child;
+    const processRunner = async (_invocation, options) => {
+        child = options.spawn(process.execPath, ['-e', 'setTimeout(() => {}, 5000)'], {
+            cwd: _invocation.cwd, env: options.env, shell: false, windowsHide: true,
+            stdio: ['ignore', 'ignore', 'ignore'],
+        });
+        throw new Error('worker stopped while child is still running');
+    };
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+        processRunner });
+    await assert.rejects(() => adapter.runTask(store.derive()), (error) => error.message === 'worker stopped while child is still running');
+    assert.ok(child?.pid > 0);
+    assert.equal(store.derive().tasks['TASK-1'].lastOutcome, undefined);
+    assert.equal(store.readOperationRecords().some((record) => record.type === 'settled'), false);
+    const lease = Object.values(store.derive().leases).find((candidate) => candidate.task_id === 'TASK-1');
+    assert.equal(listOperations({ authorityStore: store, taskId: 'TASK-1', leaseId: lease.lease_id })[0].active, true);
+    assert.equal(Object.values(store.derive().leases).some((lease) => lease.status === 'released'), false);
+    child.kill();
+    await new Promise((resolve) => child.once('close', resolve));
+    assert.equal(store.derive().tasks['TASK-1'].lastOutcome, undefined);
+    assert.equal(store.readOperationRecords().some((record) => record.type === 'settled'), false);
+    assert.equal(Object.values(store.derive().leases).some((lease) => lease.status === 'released'), false);
 });
 
 test('unsafe isolated arguments report preparation failure with released lease and no model call', async (t) => {
@@ -630,34 +819,90 @@ test('missing context failure is durable before model calls or workspace registr
 test('isolated task evidence satisfies existing session gates and produces a verified receipt', async (t) => {
     const { completeIsolatedTask } = require('../lib/dual/isolated-qc');
     const { createDaemonClient } = require('../lib/dual/daemon-client');
-    const { createConfiguredSnapshotBaseline } = require('../lib/dual/snapshot-policy');
-    const input = fixture(t), { store, snapshot } = seedAuthority(input);
+    const { createDaemonServerOptions } = require('../bin/omni-daemon');
+    const input = fixture(t);
+    input.sessionId = crypto.randomUUID();
+    const packageJson = { name: 'isolated-receipt-fixture', version: '1.0.0', private: true };
+    fs.writeFileSync(path.join(input.workspaceRoot, 'package.json'), `${JSON.stringify(packageJson)}\n`);
+    fs.writeFileSync(path.join(input.workspaceRoot, 'package-lock.json'), `${JSON.stringify({
+        ...packageJson,
+        lockfileVersion: 3,
+        requires: true,
+        packages: { '': packageJson },
+    })}\n`);
+    fs.writeFileSync(path.join(input.workspaceRoot, '.npmrc'), 'offline=true\naudit=true\n');
+    const { store } = seedAuthority(input, [], { workspaceId: crypto.createHash('sha256').update('isolated receipt workspace').digest('hex'), acceptancePolicy: {
+        protocol_version: 1,
+        checks: [],
+        ui: { required: false, viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true },
+    } });
+    assert.equal(store.derive().plan.acceptancePolicySha256, undefined,
+        'the durable legacy plan includes a validated acceptance policy without an optional persisted digest');
     await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
         processRunner: fakeWorker([]) }).runTask(store.derive());
     await completeIsolatedTask({ workspaceRoot: input.workspaceRoot, authorityStore: store,
         sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 });
-    const daemon = await startDaemonServer({ workspaceRoot: input.workspaceRoot, authorityStore: store });
+    const daemon = await startDaemonServer(createDaemonServerOptions({
+        workspaceRoot: input.workspaceRoot,
+        authorityStore: store,
+        orchestrator: createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store }),
+    }));
     t.after(() => daemon.close());
     const client = createDaemonClient({ workspaceRoot: input.workspaceRoot });
-    const { baseline, excludedPaths } = createConfiguredSnapshotBaseline({ root: input.workspaceRoot });
-    const fingerprint = baseline.fingerprint(snapshot.identity, snapshot.manifest, { excludedPaths }).patchSha256;
     for (const cycle of [1, 2, 3]) {
-        const testResult = spawnSync(process.execPath, ['--check', 'index.js'], {
-            cwd: input.workspaceRoot, shell: false, windowsHide: true,
-        });
-        assert.equal(testResult.status, 0);
-        await client.evaluateCompletion(input.sessionId, { quality_evidence: {
-            cycle_index: cycle, attempt: 1, total_tasks: 1, completed_task_ids: ['TASK-1'], plan_revision: 1,
-            diff_fingerprint: fingerprint,
-            gate_results: [{ id: 'syntax', required: true, status: 'PASSED' }],
-            commands: [{ command: 'node --check index.js', exit_code: 0, duration_ms: 1 }],
-            evidence_sha256: crypto.createHash('sha256').update(`syntax cycle ${cycle}`).digest('hex'),
-        } });
+        const execution = await client.executeQualityCycle(input.sessionId, cycle);
+        assert.equal(execution.quality_evidence.cycle_index, cycle);
+        await client.evaluateCompletion(input.sessionId, { quality_evidence: execution.quality_evidence });
+        const recordedGate = store.derive().gates[`quality-cycle-${cycle}`];
+        assert.equal(recordedGate?.status, 'PASSED', JSON.stringify(recordedGate));
     }
     const result = await client.evaluateCompletion(input.sessionId);
     assert.equal(result.verified, true, JSON.stringify(result.blockers));
     assert.equal(store.derive().sessionState, 'VERIFIED');
     assert.match(result.receipt?.receipt_sha256, /^[a-f0-9]{64}$/);
+});
+
+test('authority rejects a quality attestation when the explicit stored policy hash is inconsistent', async (t) => {
+    const { completeIsolatedTask } = require('../lib/dual/isolated-qc');
+    const input = fixture(t);
+    input.sessionId = crypto.randomUUID();
+    const acceptancePolicy = {
+        protocol_version: 1,
+        checks: [],
+        ui: { required: false, viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true },
+    };
+    const inconsistentPolicySha256 = 'f'.repeat(64);
+    const { store } = seedAuthority(input, [], {
+        workspaceId: crypto.createHash('sha256').update('mismatched policy workspace').digest('hex'),
+        acceptancePolicy,
+        acceptancePolicySha256: inconsistentPolicySha256,
+    });
+    await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+        processRunner: fakeWorker([]) }).runTask(store.derive());
+    await completeIsolatedTask({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+        sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 });
+    const derived = store.derive();
+    assert.equal(derived.sessionState, 'ACCEPTANCE');
+
+    const eventsBeforeAttestation = store.readEvents().length;
+    assert.throws(() => store.append({
+        schema_version: 2,
+        type: 'quality.execution.attested',
+        session_id: input.sessionId,
+        workspace_id: derived.workspaceId,
+        plan_revision: derived.planRevision,
+        expected_baseline: derived.currentBaseline,
+        execution_id: 'a'.repeat(64),
+        artifact_sha256: 'b'.repeat(64),
+        policy_sha256: inconsistentPolicySha256,
+        diff_fingerprint: 'c'.repeat(64),
+        cycle_index: 1,
+        attempt: 1,
+        total_tasks: 1,
+        completed_task_ids: ['TASK-1'],
+    }), (error) => error?.code === 'DUAL_INTEGRITY_CORRUPT' && /policy/i.test(error.message));
+    assert.equal(store.readEvents().length, eventsBeforeAttestation,
+        'an inconsistent explicit policy hash must reject before appending the attestation');
 });
 
 test('isolated runner prepares declared locked dependencies before invoking model and preserves receipt on resume', async (t) => {
