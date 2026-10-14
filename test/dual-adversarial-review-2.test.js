@@ -309,6 +309,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'a'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: { protocol_version: 1, checks: [] },
                 tasks: [{
                     task_id: 'TASK-1',
                     title: 'Task 1',
@@ -387,6 +388,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'a'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: { protocol_version: 1, checks: [] },
                 tasks: [{
                     task_id: 'TASK-1',
                     title: 'Task 1',
@@ -519,6 +521,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'a'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: { protocol_version: 1, checks: [] },
                 tasks: [{
                     task_id: 'TASK-1',
                     title: 'Task 1',
@@ -611,6 +614,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'a'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: { protocol_version: 1, checks: [] },
                 tasks: [{
                     task_id: 'TASK-1',
                     title: 'Task 1',
@@ -705,6 +709,7 @@ describe('Codex Adversarial Review 2 — P0 Regressions Suite', () => {
                 plan_path: 'plans/plan.md',
                 plan_sha256: 'a'.repeat(64),
                 plan_revision: 1,
+                acceptance_policy: { protocol_version: 1, checks: [] },
                 tasks: [{
                     task_id: 'TASK-1',
                     title: 'Task 1',

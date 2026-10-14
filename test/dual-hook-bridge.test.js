@@ -1850,7 +1850,7 @@ test('daemon registration persists exact external capability and rejects invalid
         context_files: [], deny_patterns: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] };
     const planBytes = JSON.stringify({ schema_version: 1, plan_revision: 1, tasks: [task] });
     fs.writeFileSync(path.join(wsRoot, 'plan.md'), planBytes);
-    const params = { plan_revision: 1, plan_path: 'plan.md', plan_sha256: crypto.createHash('sha256').update(planBytes).digest('hex'), tasks: [{ ...task, owner: 'agy' }] };
+    const params = { plan_revision: 1, plan_path: 'plan.md', plan_sha256: crypto.createHash('sha256').update(planBytes).digest('hex'), acceptance_policy: { protocol_version: 1, checks: [] }, tasks: [{ ...task, owner: 'agy' }] };
     await assert.rejects(() => client.registerPlan(sessionId, params));
     await client.registerPlan(sessionId, { ...params, tasks: [task] });
     const reopened = createAuthorityStore(path.join(wsRoot, '.omni/authority')).derive();

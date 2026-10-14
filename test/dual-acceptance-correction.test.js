@@ -633,3 +633,108 @@ test('failed acceptance correction blocks session completion and verification un
     const evalPass = await client.evaluateCompletion(session.session_id);
     assert.ok(!evalPass.blockers.some((b) => b.includes('ACCEPTANCE_CORRECTION_FAILED')));
 });
+
+test('acceptance correction validator: async responsiveness, mutation fence, and durable ledger records', async (t) => {
+    const workspaceRoot = createTempDir('dual-acc-corr-resp');
+    const baseCommit = initGitRepo(workspaceRoot);
+    const authorityStore = createAuthorityStore(path.join(workspaceRoot, '.omni', 'sessions', 'test-corr-resp'));
+
+    const daemon = await startDaemonServer({
+        ...createDaemonServerOptions({ workspaceRoot, authorityStore }),
+        trustedQualityRunner: createPassingTrustedQualityRunner(),
+        preflightRunner: mockPreflightRunner,
+        planArtifactVerifier: async (_root, p) => ({ plan_path: p.plan_path, plan_sha256: p.plan_sha256 }),
+    });
+    t.after(async () => {
+        try { await daemon.close(); } catch {}
+        fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    });
+
+    const client = createDaemonClient({ workspaceRoot, timeoutMs: 20000 });
+    const session = await client.beginSession({ workspace_root: workspaceRoot, mode: 'auto' });
+
+    // Slow validator command (3 seconds)
+    const slowCorrectionPolicy = acceptancePolicy({
+        correctionCommand: {
+            program: 'node',
+            args: ['-e', 'setTimeout(() => { process.exit(0); }, 3000)'],
+            cwd: '.',
+        },
+    });
+
+    await client.registerPlan(session.session_id, {
+        plan_path: '.omni/plan.json',
+        plan_sha256: sha('plan'),
+        acceptance_policy: slowCorrectionPolicy,
+        tasks: [{ task_id: 'task-1', title: 'Task 1', owner: 'codex', allowed_files: ['index.html'], deny_patterns: [] }],
+    });
+
+    const taskLease = authorityStore.acquireLease('task-1', 'codex');
+    authorityStore.append({
+        schema_version: 2,
+        type: 'task.completed',
+        task_id: 'task-1',
+        owner: 'codex',
+        authority_state: 'TASK_VERIFIED',
+        modified_files: ['index.html'],
+        diff_fingerprint: sha('diff1'),
+        verdict: 'SUCCESS',
+        verified_by: 'codex',
+    });
+    authorityStore.releaseLease(taskLease.lease_id, 'test_task_completed');
+
+    assert.equal((await submitAcceptanceFailure(client, session.session_id, workspaceRoot, baseCommit, slowCorrectionPolicy)).status, 'NEEDS_FIX');
+
+    const correction = await client.startAcceptanceCorrection(session.session_id, correctionPrereqs(workspaceRoot, baseCommit, authorityStore, {
+        task_id: 'task-1',
+        reason: 'Async correction test',
+    }));
+
+    fs.writeFileSync(path.join(workspaceRoot, 'index.html'), '<h1>Corrected async</h1>\n');
+
+    // Launch completion (which runs the 3-second validator)
+    const completionPromise = client.completeAcceptanceCorrection(session.session_id, {
+        correction_id: correction.correction_id,
+    });
+
+    // Wait 300ms for child process to be active
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    // Health must remain responsive (< 1000ms)
+    const healthStart = Date.now();
+    const healthRes = await client.health();
+    const healthElapsed = Date.now() - healthStart;
+    assert.equal(healthRes.status, 'healthy');
+    assert.ok(healthElapsed < 1000, `health took ${healthElapsed}ms, expected < 1000ms`);
+
+    // Status must remain responsive (< 1000ms)
+    const statusStart = Date.now();
+    const statusRes = await client.status(session.session_id);
+    const statusElapsed = Date.now() - statusStart;
+    assert.ok(statusRes && statusRes.session_id === session.session_id);
+    assert.ok(statusElapsed < 1000, `status took ${statusElapsed}ms, expected < 1000ms`);
+
+    // Conflicting stop during active run is rejected with 409
+    await assert.rejects(
+        () => client.stop(),
+        (err) => err.code === 'DUAL_VALIDATOR_ACTIVE' || err.code === 'DUAL_VALIDATOR_BUSY'
+    );
+
+    // Await completion result
+    const completed = await completionPromise;
+    assert.equal(completed.status, 'PASSED');
+
+    // Verify durable validator lifecycle records in validators.ndjson
+    const validatorRecords = authorityStore.readValidatorRecords();
+    const correctionRecords = validatorRecords.filter((r) => r.purpose === 'acceptance-correction');
+    assert.ok(correctionRecords.length >= 2, `expected at least 2 correction records, found ${correctionRecords.length}`);
+    const started = correctionRecords.find((r) => r.type === 'started');
+    const settled = correctionRecords.find((r) => r.type === 'settled');
+    assert.ok(started, 'started validator record must exist');
+    assert.ok(settled, 'settled validator record must exist');
+    assert.equal(started.run_id, settled.run_id);
+    assert.equal(started.session_id, session.session_id);
+    assert.equal(settled.outcome, 'passed');
+    assert.equal(settled.exit_code, 0);
+});
+

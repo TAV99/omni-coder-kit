@@ -15,6 +15,9 @@ const {
     AttemptMetaSchema,
     SetupActionSchema,
     DualPlanManifestSchema,
+    ValidatorRecordStartedSchema,
+    ValidatorRecordSettledSchema,
+    ValidatorRecordSchema,
     parseContract,
     toDraft7Schema,
     validateEventSequence,
@@ -1224,6 +1227,89 @@ describe('dual contracts', () => {
             ];
 
             assert.doesNotThrow(() => validateEventSequence(events, 'TASK-SNAP-SEQ', { kind: 'snapshot', id: SNAPSHOT_ID }));
+        });
+    });
+
+    describe('ValidatorRecordSchema', () => {
+        const validStarted = {
+            schema_version: 1,
+            type: 'started',
+            run_id: 'a0000000-0000-4000-8000-000000000001',
+            session_id: 'session-1',
+            workspace_id: 'ws-1',
+            plan_revision: 1,
+            baseline_id: 'a'.repeat(64),
+            baseline_kind: 'snapshot',
+            source_fingerprint: 'f'.repeat(64),
+            purpose: 'quality',
+            command_policy_digest: 'c'.repeat(64),
+            cycle: 1,
+            attempt: 1,
+            timestamp: new Date().toISOString(),
+        };
+
+        const validSettled = {
+            schema_version: 1,
+            type: 'settled',
+            run_id: 'a0000000-0000-4000-8000-000000000001',
+            session_id: 'session-1',
+            workspace_id: 'ws-1',
+            plan_revision: 1,
+            baseline_id: 'a'.repeat(64),
+            baseline_kind: 'snapshot',
+            source_fingerprint: 'f'.repeat(64),
+            purpose: 'quality',
+            command_policy_digest: 'c'.repeat(64),
+            cycle: 1,
+            attempt: 1,
+            outcome: 'passed',
+            exit_code: 0,
+            signal: null,
+            failure: null,
+            duration_ms: 120,
+            stdout_bytes: 10,
+            stderr_bytes: 0,
+            stdout_sha256: 'e'.repeat(64),
+            stderr_sha256: 'e'.repeat(64),
+            output_sha256: 'e'.repeat(64),
+            result_anchor_digest: 'd'.repeat(64),
+            active_owned_processes: 0,
+            cleanup_verified: true,
+            timestamp: new Date().toISOString(),
+        };
+
+        it('validates a valid started validator record', () => {
+            const parsed = ValidatorRecordSchema.parse(validStarted);
+            assert.equal(parsed.type, 'started');
+            assert.equal(parsed.run_id, validStarted.run_id);
+        });
+
+        it('validates a valid settled validator record', () => {
+            const parsed = ValidatorRecordSchema.parse(validSettled);
+            assert.equal(parsed.type, 'settled');
+            assert.equal(parsed.outcome, 'passed');
+        });
+
+        it('rejects started record with forbidden outcome', () => {
+            assert.throws(
+                () => ValidatorRecordSchema.parse({ ...validStarted, outcome: 'passed' }),
+                /unrecognized_keys/
+            );
+        });
+
+        it('rejects settled record with unproven cleanup or active processes', () => {
+            assert.throws(
+                () => ValidatorRecordSchema.parse({ ...validSettled, cleanup_verified: false })
+            );
+            assert.throws(
+                () => ValidatorRecordSchema.parse({ ...validSettled, active_owned_processes: 1 })
+            );
+        });
+
+        it('rejects invalid outcome value', () => {
+            assert.throws(
+                () => ValidatorRecordSchema.parse({ ...validSettled, outcome: 'invalid_outcome' })
+            );
         });
     });
 });
