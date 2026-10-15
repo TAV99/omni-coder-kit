@@ -11,6 +11,7 @@ const { execFileSync } = require('node:child_process');
 const {
     executeDualBootstrap,
     assertLegacyBootstrapAdoptable,
+    assertRecoveryEligible,
     archiveLegacyBootstrapSession,
     collectLegacyBootstrapChanges,
     handleDualQc,
@@ -304,6 +305,11 @@ test('legacy adoption permits only planning tasks and bounded setup/planning dri
         setupRequired: false,
         changedFiles: ['.agents/skills/design/SKILL.md', '.codex/skills/om-think/SKILL.md'],
     }));
+    assert.doesNotThrow(() => assertLegacyBootstrapAdoptable({ ...status, state: 'BLOCKED' }, {
+        setupReady: true,
+        setupRequired: false,
+        changedFiles: ['.omni/sdlc/todo.md'],
+    }));
     assert.throws(() => assertLegacyBootstrapAdoptable(status, {
         setupReady: true,
         setupRequired: true,
@@ -390,4 +396,30 @@ test('handleDualQc handles non-running daemon fail-closed in JSON mode', async (
     const parsed = JSON.parse(capturedLog);
     assert.equal(parsed.ok, false);
     assert.equal(parsed.code, 'DUAL_DAEMON_NOT_RUNNING');
+});
+
+test('assertRecoveryEligible allows pre-execution blocked session with pristine baseline and zero task evidence', (t) => {
+    const root = workspace(t);
+    const { baseline } = createConfiguredSnapshotBaseline({ root });
+    const initial = baseline.capture();
+    const status = {
+        session_id: 'test-session',
+        state: 'BLOCKED',
+        blocked: { reason: 'preflight failed' },
+        current_baseline: initial.identity,
+        tasks: {},
+        leases: {},
+        gates: {},
+    };
+    assert.doesNotThrow(() => assertRecoveryEligible(root, status));
+
+    // Still fails closed if tasks have execution evidence
+    assert.throws(() => assertRecoveryEligible(root, {
+        ...status,
+        tasks: { t1: { state: 'TASK_VERIFIED' } },
+    }), (error) => error.code === 'DUAL_RECOVERY_UNSAFE');
+
+    // Still fails closed if workspace has source drift
+    fs.writeFileSync(path.join(root, 'drift.txt'), 'drift\n');
+    assert.throws(() => assertRecoveryEligible(root, status), (error) => error.code === 'DUAL_RECOVERY_UNSAFE');
 });

@@ -549,7 +549,7 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             assert.equal(preflight.to_state, 'CAPABILITY_SAFE');
         });
 
-        it('plan.register blocks session when preflight fails', async (t) => {
+        it('plan.register keeps session in DISCOVERED and rejects with DUAL_CAPABILITY_BLOCKED when preflight fails', async (t) => {
             fs.writeFileSync(path.join(tmpDir, 'package.json'), '{"name":"test"}');
             const authorityStore = createAuthorityStore(path.join(tmpDir, '.omni', 'runs', 'dual-authority'));
             const daemon = await startDaemonServer({
@@ -588,6 +588,51 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             );
 
             const status = await client.sessionStatus(sessionId);
+            assert.equal(status.state, 'DISCOVERED');
+        });
+
+        it('plan.register permanently blocks session when authority_ledger_integrity check fails', async (t) => {
+            fs.writeFileSync(path.join(tmpDir, 'package.json'), '{"name":"test"}');
+            const authorityStore = createAuthorityStore(path.join(tmpDir, '.omni', 'runs', 'dual-authority'));
+            const daemon = await startDaemonServerImpl({
+                workspaceRoot: tmpDir,
+                authorityStore,
+                planArtifactVerifier: async (_workspaceRoot, params) => ({
+                    plan_path: params.plan_path,
+                    plan_sha256: params.plan_sha256,
+                }),
+                capabilityPreflight: async () => ({
+                    status: 'BLOCKED',
+                    to_state: 'BLOCKED',
+                    checks: [
+                        { name: 'authority_ledger_integrity', status: 'BLOCKED', reason: 'Authority ledger hash mismatch' },
+                    ],
+                }),
+            });
+            t.after(() => daemon.close());
+
+            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 5000 });
+            const beginRes = await client.beginSession({ workspace_root: tmpDir, mode: 'auto' });
+
+            await assert.rejects(
+                () => client.registerPlan(beginRes.session_id, {
+                    plan_path: 'plans/test-plan.md',
+                    plan_sha256: crypto.createHash('sha256').update('plan').digest('hex'),
+                    plan_revision: 1,
+                    tasks: [{ task_id: 'TASK-1', title: 'Task 1', allowed_files: ['lib/a.js'] }],
+                }),
+                (err) => {
+                    assert.equal(err.code, 'DUAL_CAPABILITY_BLOCKED');
+                    assert.match(err.message, /Authority ledger hash mismatch/);
+                    return true;
+                }
+            );
+
+            const capabilityEvent = authorityStore.readEvents().find((event) => event.type === 'capability.result');
+            assert.ok(capabilityEvent);
+            assert.equal(capabilityEvent.status, 'BLOCKED');
+            assert.equal(capabilityEvent.to_state, 'BLOCKED');
+            const status = await client.sessionStatus(beginRes.session_id);
             assert.equal(status.state, 'BLOCKED');
         });
 
@@ -668,8 +713,9 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             );
 
             const capabilityEvent = authorityStore.readEvents().find((event) => event.type === 'capability.result');
-            assert.equal(capabilityEvent.status, 'BLOCKED');
-            assert.equal(capabilityEvent.to_state, 'BLOCKED');
+            assert.equal(capabilityEvent, undefined);
+            const status = await client.sessionStatus(beginRes.session_id);
+            assert.equal(status.state, 'DISCOVERED');
         });
 
         it('plan.register verifies the actual repository plan bytes before registration', async (t) => {
@@ -1034,6 +1080,58 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             const comp = await client.evaluateCompletion(sessionId);
             assert.equal(comp.verified, false);
             assert.ok(comp.blockers.some(b => b.includes('DELEGATION_EVIDENCE_MISSING') || b.includes('DELEGATION_GATE_UNMET')));
+        });
+
+        it('Non-UI plan omitting ui in acceptance_policy does not produce UI_EVIDENCE_MISSING blocker', async (t) => {
+            fs.writeFileSync(path.join(tmpDir, 'package.json'), '{"name":"non-ui-plan"}');
+            const authorityStore = createAuthorityStore(path.join(tmpDir, '.omni', 'runs', 'dual-authority'));
+            const daemon = await startDaemonServer({
+                workspaceRoot: tmpDir,
+                authorityStore,
+                preflightRunner: async () => ({
+                    status: 'PASSED',
+                    to_state: 'CAPABILITY_SAFE',
+                    checks: [{ name: 'preflight', status: 'PASSED' }],
+                    details: {},
+                }),
+            });
+            t.after(() => daemon.close());
+
+            const client = createDaemonClient({ workspaceRoot: tmpDir, timeoutMs: 5000 });
+            const beginRes = await client.beginSession({
+                workspace_root: tmpDir,
+                mode: 'auto',
+            });
+            const sessionId = beginRes.session_id;
+
+            await client.registerPlan(sessionId, {
+                plan_path: 'plans/plan.md',
+                plan_sha256: 'a'.repeat(64),
+                plan_revision: 1,
+                acceptance_policy: {
+                    protocol_version: 1,
+                    checks: [{
+                        id: 'check-1',
+                        requirement_id: 'req-1',
+                        phase: 'session',
+                        kind: 'command',
+                        required: true,
+                        command: { program: 'node', args: ['--version'], cwd: 'test' },
+                    }],
+                },
+                tasks: [{
+                    task_id: 'TASK-1',
+                    title: 'Task',
+                    owner: 'codex',
+                    allowed_files: ['lib/a.js'],
+                    deny_patterns: [],
+                    validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
+                }],
+            });
+
+            const comp = await client.evaluateCompletion(sessionId);
+            assert.equal(comp.verified, false);
+            assert.ok(!comp.blockers.some(b => b.includes('UI_EVIDENCE_MISSING')), 'Must not require UI evidence for non-UI plan');
         });
 
         it('Snapshot baseline begin records snapshot identity and completion checks unverified task blockers', async (t) => {

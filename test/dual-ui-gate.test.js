@@ -615,3 +615,46 @@ test('Review3-Finding 3: recordUiEvidence requires strict append acknowledgement
         (err) => err.code === 'DUAL_UI_GATE_INVALID_APPEND_ACK' || err.name === 'DualUiGateError'
     );
 });
+
+test('persistedUiRequirement treats missing ui in acceptance policy as optional and distinguishes legacy sessions', () => {
+    const { persistedUiRequirement } = require('../lib/dual/daemon-server');
+
+    // 1. Plan with acceptance policy omitting ui: required = false, legacyFallback = false
+    const nonUiDerived = {
+        plan: {
+            acceptance_policy: {
+                protocol_version: 1,
+                checks: [{ id: 'cmd-1', requirement_id: 'r1', phase: 'session', kind: 'command', required: true, command: { program: 'node', args: ['--version'], cwd: 'test' } }],
+            },
+        },
+    };
+    const nonUiResult = persistedUiRequirement(nonUiDerived);
+    assert.equal(nonUiResult.requirement.required, false);
+    assert.equal(nonUiResult.legacyFallback, false);
+    assert.ok(nonUiResult.policySha256);
+
+    // 2. Plan with explicit ui policy: uses explicit required flag
+    const explicitUiDerived = {
+        plan: {
+            acceptance_policy: {
+                protocol_version: 1,
+                ui: {
+                    required: true,
+                    viewport_widths: [390, 768, 1024, 1440],
+                    reduced_motion_required: true,
+                },
+                checks: [],
+            },
+        },
+    };
+    const explicitResult = persistedUiRequirement(explicitUiDerived);
+    assert.equal(explicitResult.requirement.required, true);
+    assert.equal(explicitResult.legacyFallback, false);
+
+    // 3. Legacy session without acceptance policy: fallback required = true, legacyFallback = true
+    const legacyDerived = { plan: null };
+    const legacyResult = persistedUiRequirement(legacyDerived);
+    assert.equal(legacyResult.requirement.required, true);
+    assert.equal(legacyResult.legacyFallback, true);
+    assert.equal(legacyResult.policySha256, null);
+});

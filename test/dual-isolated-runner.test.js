@@ -7,7 +7,7 @@ const os = require('node:os');
 const test = require('node:test');
 const { spawn, spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
-const { runIsolatedTask } = require('../lib/dual/isolated-runner');
+const { runIsolatedTask, normalizeCommandString } = require('../lib/dual/isolated-runner');
 const { integrateTaskResult } = require('../lib/dual/task-integration');
 const { createAuthorityStore, computeEventHash } = require('../lib/dual/authority-store');
 const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
@@ -949,4 +949,95 @@ test('isolated contract header instructs unverified_items empty array and prompt
     assert.match(implementTemplate, /`unverified_items` in `evidence\.json` MUST BE EXACTLY `\[\]`/);
     const reviewTemplate = fs.readFileSync(path.resolve(__dirname, '../templates/codex-gemini/prompts/review.md'), 'utf8');
     assert.doesNotMatch(reviewTemplate, /Unverified items tagged `\[EXTERNAL_OPTIONAL\]`.*do NOT block APPROVE/);
+});
+
+test('normalizeCommandString standardizes tool extensions and test aliases', () => {
+    assert.equal(normalizeCommandString('npm.cmd run test'), 'npm test');
+    assert.equal(normalizeCommandString('pnpm.exe run test'), 'pnpm test');
+    assert.equal(normalizeCommandString('npx.bat vitest run'), 'npx vitest run');
+    assert.equal(normalizeCommandString('node.exe --check file.js'), 'node --check file.js');
+    assert.equal(normalizeCommandString('  yarn   run   test  '), 'yarn test');
+});
+
+test('isolated runner allows evidence with informational unverified_items when status is SUCCESS', async (t) => {
+    const input = fixture(t);
+    const calls = [];
+    const handoff = await runIsolatedTask({
+        ...input,
+        processRunner: fakeWorker(calls, (payload) => {
+            if (payload.status === 'SUCCESS') {
+                return {
+                    ...payload,
+                    unverified_items: ['Manual smoke test in production environment not performed'],
+                };
+            }
+            return payload;
+        }),
+    });
+    assert.equal(handoff.status, 'AWAITING_CODEX_QC');
+});
+
+test('isolated runner flexibly matches validation commands with npm run test / npm.cmd formatting', async (t) => {
+    const input = fixture(t);
+    input.task.validation_commands = [{ program: 'npm', args: ['test'], cwd: '.' }];
+    const calls = [];
+    const handoff = await runIsolatedTask({
+        ...input,
+        processRunner: fakeWorker(calls, (payload) => {
+            if (payload.status === 'SUCCESS') {
+                return {
+                    ...payload,
+                    command_outputs: [{ command: 'npm.cmd run test', exit_code: 0, output: 'all tests pass' }],
+                };
+            }
+            return payload;
+        }),
+    });
+    assert.equal(handoff.status, 'AWAITING_CODEX_QC');
+});
+
+test('isolated authority QC automatically cleans untracked ephemeral tool caches without generated_outputs declaration', async (t) => {
+    const { completeIsolatedTask } = require('../lib/dual/isolated-qc');
+    const input = fixture(t), calls = [];
+    input.task.generated_outputs = [];
+    input.task.validation_commands = [{
+        program: 'node',
+        args: ['-e', 'require("fs").writeFileSync("tsconfig.tsbuildinfo", "cache"); require("fs").writeFileSync(".eslintcache", "cache");'],
+        cwd: '.',
+    }];
+    const { store } = seedAuthority(input);
+    const worker = fakeWorker(calls, (payload) => {
+        if (payload.command_outputs) {
+            payload.command_outputs = [{ command: `${input.task.validation_commands[0].program} ${input.task.validation_commands[0].args.join(' ')}`, exit_code: 0, output: '' }];
+        }
+        return payload;
+    });
+    await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, processRunner: worker }).runTask(store.derive());
+    const request = { workspaceRoot: input.workspaceRoot, authorityStore: store, sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 };
+    const complete = await completeIsolatedTask(request);
+    assert.equal(complete.status, 'TASK_VERIFIED');
+});
+
+test('isolated runner scrubs ephemeral tool cache and denied build artifacts created during implement phase', async (t) => {
+    const input = fixture(t);
+    input.task.deny_patterns = ['dist/**'];
+    const calls = [];
+    const baseWorker = fakeWorker(calls);
+    const handoff = await runIsolatedTask({
+        ...input,
+        processRunner: async (invocation, options) => {
+            const prompt = invocation.args.find((arg) => arg.startsWith('-p='));
+            if (prompt && prompt.includes('implement phase')) {
+                fs.writeFileSync(path.join(invocation.cwd, 'tsconfig.tsbuildinfo'), 'buildinfo cache');
+                fs.mkdirSync(path.join(invocation.cwd, 'dist'), { recursive: true });
+                fs.writeFileSync(path.join(invocation.cwd, 'dist', 'bundle.js'), 'bundle output');
+            }
+            return baseWorker(invocation, options);
+        },
+    });
+    assert.equal(handoff.status, 'AWAITING_CODEX_QC');
+    assert.equal(handoff.result.changes.length, 1);
+    assert.equal(handoff.result.changes[0].path, 'index.js');
+    assert.equal(fs.existsSync(path.join(handoff.reference.workerRoot, 'tsconfig.tsbuildinfo')), false);
+    assert.equal(fs.existsSync(path.join(handoff.reference.workerRoot, 'dist', 'bundle.js')), false);
 });

@@ -455,7 +455,7 @@ test('classifyTool handles apply_patch, Bash allowlist, Bash denials, MCP tools,
         'pnpm add zod',
         'yarn add commander',
         'git status && rm -rf dist',
-        'git status | grep foo',
+        'git status | bash',
         'node -e "console.log(1)" > out.txt',
         'cat < input.txt',
         'echo `whoami`',
@@ -1861,4 +1861,55 @@ test('daemon registration persists exact external capability and rejects invalid
     const unreserved = await client.evaluateHook(sessionId, { hook_event_name: 'PostToolUse', owner: 'codex', task_id: 'TASK-1',
         tool_name: grant.tool_name, tool_input: grant.tool_input, operation: 'external' });
     assert.equal(unreserved.decision, 'deny');
+});
+
+test('classifyTool allows compound read-only shell commands and expanded git/node inspection', () => {
+    const compoundReads = [
+        'git status && git diff',
+        'git status || git diff',
+        'git status ; git diff',
+        'git log -n 5 2>&1',
+        'git status && git log -n 5 2>&1',
+        'rg "foo" | head -n 30',
+        'git diff | grep -E "^\\+"',
+        'git status | findstr "modified"',
+        'git branch',
+        'git branch -a',
+        'git branch --show-current',
+        'git ls-files',
+        'git symbolic-ref HEAD',
+        'git show-ref',
+        'node -v',
+        'node --version',
+    ];
+
+    for (const cmd of compoundReads) {
+        const res = classifyTool('Bash', { command: cmd });
+        assert.equal(res.classification, 'read', `Expected read for: ${cmd}`);
+    }
+
+    const compoundDenials = [
+        'git status && rm file.txt',
+        'git diff | bash',
+        'git status > out.txt',
+        'git status >> out.txt',
+        'git log 2>out.txt',
+        'git status && $(whoami)',
+        'git status &',
+        'git status ; rm -rf .',
+        'node --test test/dual-hook-bridge.test.js',
+        'node --test --test-concurrency=1 test/dual-hook-bridge.test.js',
+        'node --test --eval "console.log(1)"',
+        'node bin/omni.js skills list && node bin/omni.js dual setup run',
+        'sort -o out.txt file.txt',
+    ];
+
+    for (const cmd of compoundDenials) {
+        const res = classifyTool('Bash', { command: cmd });
+        assert.equal(res.classification, 'denied', `Expected denied for: ${cmd}`);
+    }
+
+    const verifRes = classifyTool('Bash', { command: 'git status && npm audit --json' });
+    assert.equal(verifRes.classification, 'read');
+    assert.equal(verifRes.phaseOperation, 'verification');
 });

@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
-const { prepareTaskWorkspace, collectTaskResult } = require('../lib/dual/task-workspace');
+const { prepareTaskWorkspace, collectTaskResult, isEphemeralWorkspaceArtifact } = require('../lib/dual/task-workspace');
 const dualIndex = require('../lib/dual');
 
 test('task workspace and integration primitives are exported from the Dual public index', () => {
@@ -156,4 +156,58 @@ test('worker environment prevents git from discovering the parent source reposit
     });
     assert.notEqual(detected.status, 0, 'private snapshot must not resolve source Git repository');
     assert.equal(fs.existsSync(path.join(ref.workerRoot, '.git')), false);
+});
+
+test('isEphemeralWorkspaceArtifact identifies transient build and linter caches', () => {
+    assert.equal(isEphemeralWorkspaceArtifact('tsconfig.tsbuildinfo'), true);
+    assert.equal(isEphemeralWorkspaceArtifact('tsconfig.node.tsbuildinfo'), true);
+    assert.equal(isEphemeralWorkspaceArtifact('.eslintcache'), true);
+    assert.equal(isEphemeralWorkspaceArtifact('.prettiercache'), true);
+    assert.equal(isEphemeralWorkspaceArtifact('coverage/lcov.info'), true);
+    assert.equal(isEphemeralWorkspaceArtifact('.vitest-reports/junit.xml'), true);
+    assert.equal(isEphemeralWorkspaceArtifact('.turbo/cache.json'), true);
+    assert.equal(isEphemeralWorkspaceArtifact('src/index.js'), false);
+    assert.equal(isEphemeralWorkspaceArtifact('package.json'), false);
+});
+
+test('collectTaskResult scrubs newly generated untracked caches and denied build outputs while preserving safety', (t) => {
+    const { root, options } = fixture(t);
+    const ref = prepareTaskWorkspace({
+        ...options,
+        allowedFiles: ['src/a.js'],
+        denyPatterns: ['dist/**', 'build/**'],
+    });
+
+    fs.writeFileSync(path.join(ref.workerRoot, 'src/a.js'), 'updated code\n');
+    fs.writeFileSync(path.join(ref.workerRoot, 'tsconfig.tsbuildinfo'), 'dummy-cache');
+    fs.writeFileSync(path.join(ref.workerRoot, '.eslintcache'), 'dummy-cache');
+    fs.mkdirSync(path.join(ref.workerRoot, 'coverage'), { recursive: true });
+    fs.writeFileSync(path.join(ref.workerRoot, 'coverage/lcov.info'), 'TN:');
+    fs.mkdirSync(path.join(ref.workerRoot, 'dist/nested'), { recursive: true });
+    fs.writeFileSync(path.join(ref.workerRoot, 'dist/nested/bundle.js'), 'console.log(1)');
+
+    const result = collectTaskResult({ workspaceRoot: root, reference: ref });
+    assert.equal(result.changes.length, 1);
+    assert.equal(result.changes[0].path, 'src/a.js');
+
+    assert.equal(fs.existsSync(path.join(ref.workerRoot, 'tsconfig.tsbuildinfo')), false);
+    assert.equal(fs.existsSync(path.join(ref.workerRoot, '.eslintcache')), false);
+    assert.equal(fs.existsSync(path.join(ref.workerRoot, 'coverage')), false);
+    assert.equal(fs.existsSync(path.join(ref.workerRoot, 'dist')), false);
+});
+
+test('collectTaskResult does not scrub existing baseline files modified outside allowed scope', (t) => {
+    const { root, options } = fixture(t);
+    const ref = prepareTaskWorkspace({
+        ...options,
+        allowedFiles: ['src/a.js'],
+        denyPatterns: ['dist/**'],
+    });
+
+    fs.writeFileSync(path.join(ref.workerRoot, 'src/b.js'), 'unauthorized edit\n');
+
+    assert.throws(
+        () => collectTaskResult({ workspaceRoot: root, reference: ref }),
+        (error) => error.code === 'DUAL_SCOPE_VIOLATION'
+    );
 });

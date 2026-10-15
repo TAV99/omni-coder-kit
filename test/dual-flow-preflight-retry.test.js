@@ -201,14 +201,9 @@ test('generic typed and untyped injected errors remain terminal and never author
                 () => harness.client.registerPlan(harness.sessionId, harness.payload),
                 (caught) => caught.code === 'DUAL_CAPABILITY_BLOCKED'
             );
-            assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'BLOCKED');
+            assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'DISCOVERED');
             const capabilityEvents = harness.authorityStore.readEvents().filter((event) => event.type === 'capability.result');
-            assert.equal(capabilityEvents.length, 1);
-            assert.equal(capabilityEvents[0].status, 'BLOCKED');
-            await assert.rejects(
-                () => harness.client.registerPlan(harness.sessionId, harness.payload),
-                (caught) => caught.code === 'DUAL_SESSION_BLOCKED'
-            );
+            assert.equal(capabilityEvents.length, 0);
         });
     }
 });
@@ -238,7 +233,7 @@ test('malformed or wrong-model PASS evidence remains fail-closed', async (t) => 
                 () => harness.client.registerPlan(harness.sessionId, harness.payload),
                 (error) => error.code === 'DUAL_CAPABILITY_BLOCKED'
             );
-            assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'BLOCKED');
+            assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'DISCOVERED');
         });
     }
 });
@@ -276,7 +271,7 @@ test('live-child errors, timeouts, missing executable, and nonzero CLI output ar
                 () => harness.client.registerPlan(harness.sessionId, harness.payload),
                 (error) => error.code === 'DUAL_CAPABILITY_BLOCKED'
             );
-            assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'BLOCKED');
+            assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'DISCOVERED');
         });
     }
 });
@@ -289,8 +284,8 @@ test('a terminal check takes precedence over a transient pre-spawn resource erro
         () => harness.client.registerPlan(harness.sessionId, harness.payload),
         (error) => error.code === 'DUAL_CAPABILITY_BLOCKED'
     );
-    assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'BLOCKED');
-    assert.equal(harness.authorityStore.readEvents().filter((event) => event.type === 'capability.result').length, 1);
+    assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'DISCOVERED');
+    assert.equal(harness.authorityStore.readEvents().filter((event) => event.type === 'capability.result').length, 0);
 });
 
 test('a blocked credential check inside real preflight takes precedence over pre-spawn EAGAIN', async (t) => {
@@ -310,15 +305,9 @@ test('a blocked credential check inside real preflight takes precedence over pre
     );
 
     assert.equal(spawnSequence.calls, 1, 'real runCapabilityPreflight must still execute the AGY probe');
-    assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'BLOCKED');
-    const capabilityEvent = harness.authorityStore.readEvents().find((event) => event.type === 'capability.result');
-    assert.equal(capabilityEvent.status, 'BLOCKED');
-    assert.deepEqual(capabilityEvent.checks.find((check) => check.name === 'agy_credentials'), {
-        name: 'agy_credentials',
-        status: 'BLOCKED',
-        reason: 'AGY credentials are unavailable',
-    });
-    assert.equal(capabilityEvent.checks.find((check) => check.name === 'agy_cli_and_model').status, 'BLOCKED');
+    assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'DISCOVERED');
+    const capabilityEvents = harness.authorityStore.readEvents().filter((event) => event.type === 'capability.result');
+    assert.equal(capabilityEvents.length, 0);
 });
 
 test('authority changes during awaited preflight invalidate retry classification', async (t) => {
@@ -370,10 +359,9 @@ test('non-empty gates invalidate an otherwise retryable preflight failure', asyn
         (error) => error.code === 'DUAL_CAPABILITY_BLOCKED'
     );
 
-    assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'BLOCKED');
+    assert.equal((await harness.client.sessionStatus(harness.sessionId)).state, 'DISCOVERED');
     const capabilityEvents = harness.authorityStore.readEvents().filter((event) => event.type === 'capability.result');
-    assert.equal(capabilityEvents.length, 1);
-    assert.equal(capabilityEvents[0].status, 'BLOCKED');
+    assert.equal(capabilityEvents.length, 0);
     assert.equal(spawnSequence.calls, 1);
 });
 
