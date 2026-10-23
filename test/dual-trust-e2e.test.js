@@ -363,6 +363,27 @@ test('E01 E07: CLI command handler and production server create one task, three 
     assert.equal(operationRecords[1].outcome, 'completed');
     const agyLease = Object.values(context.authorityStore.derive().leases).find((lease) => lease.owner === 'agy');
     assert.equal(agyLease.status, 'released');
+
+    // A fully verified session (including its three real quality cycles and
+    // receipt) is terminal for semantic rejection, even with matching hashes.
+    const verified = context.authorityStore.derive();
+    assert.equal(verified.sessionState, 'VERIFIED');
+    const handoff = verified.tasks['TASK-1'].isolatedHandoff;
+    const ledgerPath = path.join(context.authorityDir, 'events.ndjson');
+    const ledgerBefore = fs.readFileSync(ledgerPath);
+    const sourceBefore = fs.readFileSync(path.join(context.root, 'index.html'));
+    const receiptBefore = fs.readFileSync(integrationReceipt);
+    const { rejectTaskHandoff } = require('../lib/dual/handoff-rejection');
+    assert.throws(() => rejectTaskHandoff({ workspaceRoot: context.root, authorityStore: context.authorityStore,
+        session_id: context.sessionId, task_id: 'TASK-1', plan_revision: verified.planRevision,
+        expected_attempt: handoff.attempt, request_id: 'reject-verified-session',
+        expected_handoff_sha256: handoff.handoff_sha256, expected_result_sha256: handoff.result_sha256,
+        findings: [{ id: 'F1', file: 'index.html', line: 1, requirement_id: 'R1', description: 'Terminal session veto attempt.' }] }),
+    (error) => error.code === 'DUAL_HANDOFF_REJECTION_UNSAFE');
+    assert.deepEqual(fs.readFileSync(ledgerPath), ledgerBefore);
+    assert.deepEqual(fs.readFileSync(path.join(context.root, 'index.html')), sourceBefore);
+    assert.deepEqual(fs.readFileSync(integrationReceipt), receiptBefore);
+    assert.equal(context.authorityStore.verifyIntegrity().valid, true);
 });
 
 test('E02: three dependent tasks execute and integrate in order before final acceptance', async (t) => {
@@ -795,10 +816,24 @@ test('E14: a worker that ignores deny_patterns is rejected before handoff, integ
     const context = await beginAndRegister(t, { rogueForbiddenWrite: true });
     await context.client.resumeSession({ session_id: context.sessionId, task_id: 'TASK-1', plan_revision: 1 });
     await waitUntil(
-        () => context.authorityStore.readEvents().some((event) => event.type === 'task.execution.outcome'),
+        () => {
+            const events = context.authorityStore.readEvents();
+            return events.some((event) => event.type === 'task.execution.outcome'
+                || event.type === 'task.workspace.handoff');
+        },
         20_000,
         () => context.authorityStore.readEvents().map((event) => ({ type: event.type, code: event.code })),
     );
+    assert.equal(context.authorityStore.readEvents().some((event) => event.type === 'task.workspace.handoff'), false,
+        'Denied worker output must not reach handoff');
+
+    const acquired = context.authorityStore.readEvents().find((event) =>
+        event.type === 'lease.acquired' && event.task_id === 'TASK-1');
+    assert.ok(acquired?.lease_id);
+    await waitUntil(() => context.authorityStore.readEvents().some((event) =>
+        event.type === 'lease.released' && event.lease_id === acquired.lease_id
+        && event.task_id === 'TASK-1'), 20_000);
+    assert.equal(context.authorityStore.derive().leases[acquired.lease_id].status, 'released');
 
     const events = context.authorityStore.readEvents();
     const outcome = events.find((event) => event.type === 'task.execution.outcome');

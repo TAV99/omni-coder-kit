@@ -69,7 +69,7 @@ test('truthful workflow templates: dual-controller.md aligns with hardened accep
 test('dual-controller JSON examples parse through the production MCP schemas', async () => {
     const content = fs.readFileSync(path.join(__dirname, '..', 'templates', 'workflows', 'dual-controller.md'), 'utf8');
     const { ResumeInputSchema, CompletionInputSchema, AcceptanceReviewSubmitInputSchema,
-        CorrectionStartInputSchema, SessionBlockInputSchema } =
+        CorrectionStartInputSchema, SessionBlockInputSchema, RejectHandoffInputSchema } =
         await import('../lib/dual/mcp-server.mjs');
     const examples = [];
     const fence = /```json\s*\n([\s\S]*?)\n```/gu;
@@ -82,6 +82,7 @@ test('dual-controller JSON examples parse through the production MCP schemas', a
         else if (example.review_submission) AcceptanceReviewSubmitInputSchema.parse(example);
         else if (example.expected_sequence) CorrectionStartInputSchema.parse(example);
         else if (example.blocker_code) SessionBlockInputSchema.parse(example);
+        else if (example.expected_handoff_sha256) RejectHandoffInputSchema.parse(example);
         else if (example.external_operations) ExternalOperationSchema.array().parse(example.external_operations);
         else throw new Error(`Unclassified JSON template example: ${JSON.stringify(example)}`);
     }

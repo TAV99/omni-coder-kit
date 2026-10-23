@@ -12,7 +12,7 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 
 - Complete `.omni/sdlc/setup.json`, design/context sources, `todo.md` and `dual-plan.json` before `omni dual bootstrap --json` (pass `--worker-model <model>` if specified by user prompt or config). Bootstrap is the single AUTO entrypoint: never create `bootstrap-plan-artifacts` or directly call begin/register as a workaround.
 - For new low-risk AGY slices use `execution_mode: "isolated"`, 1–10 exact `allowed_files`, explicit `context_files`, `deny_patterns`, and typed `validation_commands` (`program`, `args`, `cwd`). Declare `depends_on: ["TASK-1"]` when predecessor output is needed. Unknown/cyclic dependencies are invalid. Validation commands for isolated AGY slices must be source verification checks (e.g. typecheck, unit tests); full-project build commands (e.g. npm run build) producing bundle artifacts (dist/) belong to the controller integration/QA phase on the root workspace.
-- **Pre-Integration Acceptance Policy:** Plans may declare a strict `acceptance_policy` with `protocol_version: 1` and a `checks` array. Each check uses `id`, `requirement_id`, `phase` (`pre_integration` or `session`), `kind` (`command` or `review`), `required`, optional `task_id`, and a typed command (`program`, `args`, `cwd`) for command checks. For a required pre-integration review, first prepare a daemon-owned review execution, then submit untrusted findings against its `review_execution_id`; isolated QC only trusts the resulting durable daemon attestation.
+- **Pre-Integration Acceptance Policy:** Plans must declare a strict `acceptance_policy` with `protocol_version: 1` and a `checks` array. Each check uses `id`, `requirement_id`, `phase` (`pre_integration` or `session`), `kind` (`command` or `review`), `required`, optional `task_id`, and a typed command (`program`, `args`, `cwd`) for command checks. For a required pre-integration review, first prepare a daemon-owned review execution, then submit untrusted findings against its `review_execution_id`; isolated QC only trusts the resulting durable daemon attestation.
 - Multiple AGY tasks require an all-isolated worker graph. Architecture/security/migration/ambiguous/high-risk work stays with Codex outside that graph; do not mislabel risky work as low risk. Existing shared plans remain compatible but retain a single AGY slice.
 - Overlapping write/read-context scopes wait in deterministic dependency order. Do not remove ownership checks or merge competing edits by last-writer-wins. The adapter currently dispatches serially; do not claim parallel throughput.
 - Resolve the worker model from user preference (`--worker-model`), configured capability evidence in `.omni/manifest.json`, `OMNI_DUAL_WORKER_MODEL`, and `agy models` (supported: `gemini-3.8-flash-high`, `gemini-3.7-flash-high`, `gemini-3.1-pro-high`, `claude-sonnet-4-6`, `claude-opus-4-6-thinking`); model examples are not proof of availability. No silent fallback to another model.
@@ -33,7 +33,7 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 | Active AGY lease | Lease heartbeat is maintained by daemon (10s intervals). Avoid tight high-effort reasoning loops to poll status; wait for terminal handoff, questions, or failure. No source/build/browser writes and no duplicate worker launch. |
 | WAITING_FOR_DEPENDENCY / WAITING_FOR_SCOPE | Finish/QC the predecessor; wait is not failure. |
 | NEEDS_CONTEXT / pending_questions | AUTONOMOUS REPLY MANDATORY for non-safety, in-scope conventions: inspect `.omni/sdlc/design-spec.md` and `.omni/sdlc/content-source.md` immediately, synthesize an authoritative answer, and dispatch `omni_dual_resume` with `context_reply` without pausing. For commerce, sensitive data, an external write, a paid action, a breaking change, or scope expansion, always require user input regardless of grounding. |
-| AWAITING_CODEX_QC / isolated handoff | Inspect semantic evidence, then request independent isolated QC. |
+| AWAITING_CODEX_QC / isolated handoff | Perform independent semantic review against the registered requirements before normal isolated QC. |
 | NEEDS_FIX / FAILED / last_outcome | Inspect preserved attempt artifacts, then request bounded correction if safe. |
 | CONFLICT | Preserve user and worker versions. Resolve source/context disagreement; never blindly overwrite. |
 | Partial integration journal | Resume its integration/recovery; a new correction attempt is refused. |
@@ -76,6 +76,35 @@ For correction, call the same `omni_dual_resume` with `correction` instead of `c
 ```
 
 Correction preserves scope and old artifacts, creating attempt 2 then at most 3. It requires a recorded failed outcome and released lease. Do not reset the graph, change validation commands to force success or create another task merely to evade the attempt budget.
+
+### Controller semantic rejection before integration
+
+For each released isolated handoff, perform independent semantic review of the exact private diff and artifacts against the registered requirements, even when worker review and command validators passed.
+
+- FAIL: call `omni_dual_reject_handoff` with bound findings; wait for its durable `NEEDS_FIX` acknowledgement, then request the existing bounded correction through `omni_dual_resume.correction` for the same task and attempt. Attempt 3 rejection exhausts the budget and requires durable session blocking.
+- PASS: continue normal isolated QC and all registered acceptance checks. A semantic review PASS alone grants no integration or completion authority.
+
+Exact rejection call (replace all current lineage values and candidate digests from the current handoff; the daemon remeasures them):
+
+```json
+{
+  "workspace_root": "<current canonical workspace>",
+  "session_id": "<current session>",
+  "task_id": "TASK-1",
+  "plan_revision": 1,
+  "expected_attempt": 1,
+  "request_id": "reject-TASK-1-attempt-1",
+  "expected_handoff_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "expected_result_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "findings": [{"id": "F1", "file": "src/example.js", "line": 1, "requirement_id": "R1", "description": "The private result violates the registered requirement at this line."}]
+}
+```
+
+CLI: save the same submission without `workspace_root` to a JSON file, then run `omni dual reject-handoff --submission <file> --json` from the current workspace. The submission contains untrusted findings and candidate hashes, never authority events, tokens, PIDs, status, validators or scope overrides. Each finding must name an exact registered `allowed_files` entry. Keep the stable request ID and identical content on delivery retries; conflicting content under the same ID is rejected. An old duplicate acknowledges only its historical rejected attempt and cannot reject a new handoff.
+
+The exact public acknowledgement is `{acknowledged:true,reused:false,task_id:"TASK-1",attempt:1,status:"NEEDS_FIX"}` (`reused:true` for an identical replay). Inspect `controller_findings` and `next_action` in MCP status or findings in CLI task status before correction. Bounded MCP displays may mark `findings_truncated` or `description_truncated`; the full findings remain in the durable authority event. A rejection blocks QC of that attempt until a new correction attempt exists. Never append ledger events directly, fabricate failed validators, bypass required review, relax immutable acceptance policy/scope/commands, or reset the session. Existing user-decision boundaries still apply.
+
+Migration boundary: old ledgers retain their meaning. Once `task.handoff.rejected` is recorded, downgrade to a daemon without the new schema/reducer support must fail closed; downgrade is not transparent. Preserve the ledger and use a compatible daemon rather than deleting or rewriting the event.
 
 For isolated QC, call `omni_dual_completion` with `isolated_qc: {"task_id":"TASK-1","plan_revision":1}` plus current workspace/session, or `omni dual qc TASK-1 --json`. If the task is subject to pre-integration review checks, call `omni_dual_acceptance_review_prepare`, perform the review against its exact bindings, then call `omni_dual_acceptance_review_submit` with untrusted findings:
 ```json

@@ -28,6 +28,7 @@ const {
     handleDualSetupRun,
     handleDualBootstrap,
     handleDualQc,
+    handleDualRejectHandoff,
     handleDualMonitor,
     handleDualAcceptanceStart,
     handleDualAcceptanceReviewPrepare,
@@ -183,6 +184,12 @@ dual.command('qc [task-id]')
     .option('--review-submission <file>', 'Nộp untrusted review submission đã bind với daemon execution trước isolated integration')
     .option('--review-evidence <file>', 'Alias tương thích của --review-submission; caller-built evidence cũ bị từ chối')
     .action(handleDualQc);
+
+dual.command('reject-handoff')
+    .description('Ghi nhận controller rejection cho released isolated handoff, trước integration')
+    .requiredOption('--submission <file>', 'Strict JSON gồm current session/task/revision/attempt, candidate hashes và findings')
+    .option('--json', 'Xuất exact negative acknowledgement')
+    .action(handleDualRejectHandoff);
 
 const dualAcceptance = dual
     .command('acceptance')

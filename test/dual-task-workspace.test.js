@@ -170,12 +170,30 @@ test('isEphemeralWorkspaceArtifact identifies transient build and linter caches'
     assert.equal(isEphemeralWorkspaceArtifact('package.json'), false);
 });
 
-test('collectTaskResult scrubs newly generated untracked caches and denied build outputs while preserving safety', (t) => {
+for (const [file, deny] of [
+    ['forbidden/rogue.txt', 'forbidden/**'],
+    ['dist/nested/bundle.js', 'dist/**'],
+    ['.eslintcache', '.eslintcache'],
+]) {
+    test(`collectTaskResult preserves and rejects denied output ${file}`, (t) => {
+        const { root, options } = fixture(t);
+        const ref = prepareTaskWorkspace({ ...options, allowedFiles: ['src/a.js'], denyPatterns: [deny] });
+        const target = path.join(ref.workerRoot, file);
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, 'denied diagnostic evidence');
+        assert.throws(() => collectTaskResult({ workspaceRoot: root, reference: ref }),
+            (error) => error.code === 'DUAL_DENY_PATTERN');
+        assert.equal(fs.readFileSync(target, 'utf8'), 'denied diagnostic evidence');
+        assert.equal(fs.existsSync(path.join(root, file)), false);
+    });
+}
+
+test('collectTaskResult scrubs newly generated untracked caches while preserving safety', (t) => {
     const { root, options } = fixture(t);
     const ref = prepareTaskWorkspace({
         ...options,
         allowedFiles: ['src/a.js'],
-        denyPatterns: ['dist/**', 'build/**'],
+        denyPatterns: [],
     });
 
     fs.writeFileSync(path.join(ref.workerRoot, 'src/a.js'), 'updated code\n');
@@ -183,8 +201,6 @@ test('collectTaskResult scrubs newly generated untracked caches and denied build
     fs.writeFileSync(path.join(ref.workerRoot, '.eslintcache'), 'dummy-cache');
     fs.mkdirSync(path.join(ref.workerRoot, 'coverage'), { recursive: true });
     fs.writeFileSync(path.join(ref.workerRoot, 'coverage/lcov.info'), 'TN:');
-    fs.mkdirSync(path.join(ref.workerRoot, 'dist/nested'), { recursive: true });
-    fs.writeFileSync(path.join(ref.workerRoot, 'dist/nested/bundle.js'), 'console.log(1)');
 
     const result = collectTaskResult({ workspaceRoot: root, reference: ref });
     assert.equal(result.changes.length, 1);
@@ -193,7 +209,48 @@ test('collectTaskResult scrubs newly generated untracked caches and denied build
     assert.equal(fs.existsSync(path.join(ref.workerRoot, 'tsconfig.tsbuildinfo')), false);
     assert.equal(fs.existsSync(path.join(ref.workerRoot, '.eslintcache')), false);
     assert.equal(fs.existsSync(path.join(ref.workerRoot, 'coverage')), false);
-    assert.equal(fs.existsSync(path.join(ref.workerRoot, 'dist')), false);
+});
+
+test('read-only result collection ignores eligible new caches without deleting private evidence', (t) => {
+    const { root, options } = fixture(t);
+    const ref = prepareTaskWorkspace({ ...options, allowedFiles: ['src/a.js'] });
+    fs.writeFileSync(path.join(ref.workerRoot, 'src/a.js'), 'updated code\n');
+    const expected = collectTaskResult({ workspaceRoot: root, reference: ref });
+    fs.writeFileSync(path.join(ref.workerRoot, '.eslintcache'), 'private cache');
+    fs.mkdirSync(path.join(ref.workerRoot, 'coverage'));
+    fs.writeFileSync(path.join(ref.workerRoot, 'coverage/lcov.info'), 'TN:');
+    fs.mkdirSync(path.join(ref.workerRoot, 'private-empty'));
+
+    assert.deepEqual(collectTaskResult({ workspaceRoot: root, reference: ref, readOnly: true }), expected);
+    assert.equal(fs.readFileSync(path.join(ref.workerRoot, '.eslintcache'), 'utf8'), 'private cache');
+    assert.equal(fs.readFileSync(path.join(ref.workerRoot, 'coverage/lcov.info'), 'utf8'), 'TN:');
+    assert.equal(fs.existsSync(path.join(ref.workerRoot, 'private-empty')), true);
+});
+
+test('read-only result collection still rejects and preserves explicitly denied ephemeral evidence', (t) => {
+    const { root, options } = fixture(t);
+    const ref = prepareTaskWorkspace({ ...options, allowedFiles: ['src/a.js'], denyPatterns: ['.eslintcache'] });
+    fs.writeFileSync(path.join(ref.workerRoot, '.eslintcache'), 'denied private cache');
+    assert.throws(() => collectTaskResult({ workspaceRoot: root, reference: ref, readOnly: true }),
+        (error) => error.code === 'DUAL_DENY_PATTERN');
+    assert.equal(fs.readFileSync(path.join(ref.workerRoot, '.eslintcache'), 'utf8'), 'denied private cache');
+});
+
+test('read-only result collection cannot hide baseline or explicitly allowed ephemeral files', (t) => {
+    const baseline = fixture(t);
+    baseline.write('.eslintcache', 'baseline cache');
+    const original = prepareTaskWorkspace(baseline.options);
+    fs.writeFileSync(path.join(original.workerRoot, '.eslintcache'), 'changed baseline cache');
+    assert.throws(() => collectTaskResult({ workspaceRoot: baseline.root, reference: original, readOnly: true }),
+        (error) => error.code === 'DUAL_SCOPE_VIOLATION');
+    assert.equal(fs.readFileSync(path.join(original.workerRoot, '.eslintcache'), 'utf8'), 'changed baseline cache');
+
+    const allowed = fixture(t);
+    const ref = prepareTaskWorkspace({ ...allowed.options, allowedFiles: ['.eslintcache'] });
+    fs.writeFileSync(path.join(ref.workerRoot, '.eslintcache'), 'approved source content');
+    const result = collectTaskResult({ workspaceRoot: allowed.root, reference: ref, readOnly: true });
+    assert.deepEqual(result.changes.map(({ path: file, kind }) => [file, kind]), [['.eslintcache', 'created']]);
+    assert.equal(fs.readFileSync(path.join(ref.workerRoot, '.eslintcache'), 'utf8'), 'approved source content');
 });
 
 test('collectTaskResult does not scrub existing baseline files modified outside allowed scope', (t) => {

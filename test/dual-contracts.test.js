@@ -3,6 +3,7 @@
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { z } = require('zod');
 
 const {
     TaskIdSchema,
@@ -295,6 +296,50 @@ describe('dual contracts', () => {
             findings: [],
         };
         assert.equal(ReviewSchema.safeParse(invalidReview).success, false);
+    });
+
+    it('emits AGY-compatible object roots without changing correlated branches', () => {
+        for (const schema of [ContextSchema, SpecSchema, EvidenceSchema, ReviewSchema]) {
+            const before = z.toJSONSchema(schema, { target: 'draft-7' });
+            const output = toDraft7Schema(schema, 'omni-schema-root-test');
+            const expectedBranches = structuredClone(before.anyOf);
+            for (const branch of expectedBranches) {
+                branch.properties.toolAction = { type: 'string' };
+                branch.properties.toolSummary = { type: 'string' };
+            }
+            assert.equal(output.type, 'object');
+            assert.equal(output.$id, 'omni-schema-root-test');
+            assert.equal(output.$schema, 'http://json-schema.org/draft-07/schema#');
+            assert.equal(output.anyOf.length, 2);
+            assert.deepEqual(output.anyOf, expectedBranches);
+            assert.ok(output.anyOf.every(branch => branch.additionalProperties === false));
+            assert.equal(Object.hasOwn(output, 'additionalProperties'), false);
+            assert.deepEqual(z.toJSONSchema(schema, { target: 'draft-7' }), before);
+        }
+    });
+
+    it('preserves non-object schemas and mixed unions', () => {
+        for (const schema of [
+            z.string(),
+            z.array(z.string()),
+            z.object({ value: z.string() }).strict(),
+            z.union([z.object({ value: z.string() }).strict(), z.string()]),
+        ]) {
+            const before = z.toJSONSchema(schema, { target: 'draft-7' });
+            const output = toDraft7Schema(schema, 'unchanged-root');
+            assert.equal(output.type, before.type);
+        }
+    });
+
+    it('keeps strict Git and snapshot spec correlations after schema emission', () => {
+        toDraft7Schema(SpecSchema, 'correlation-safety');
+        const { expected_base_commit, ...rest } = VALID_SPEC;
+        const snapshot = { ...rest, expected_baseline: { kind: 'snapshot', id: 'b'.repeat(64) } };
+        assert.equal(SpecSchema.safeParse(VALID_SPEC).success, true);
+        assert.equal(SpecSchema.safeParse(snapshot).success, true);
+        assert.equal(SpecSchema.safeParse(rest).success, false);
+        assert.equal(SpecSchema.safeParse({ ...snapshot, expected_base_commit }).success, false);
+        assert.equal(SpecSchema.safeParse({ ...snapshot, unexpected: true }).success, false);
     });
 
     it('keeps attempt metadata diagnostic and non-shell', () => {

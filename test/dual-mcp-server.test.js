@@ -83,6 +83,7 @@ test('MCP initialize handshake succeeds and tools/list exposes the complete appr
         'omni_dual_quality',
         'omni_dual_register_plan',
         'omni_dual_resume',
+        'omni_dual_reject_handoff',
         'omni_dual_status',
         'omni_dual_acceptance_review_prepare',
         'omni_dual_acceptance_review_submit',
@@ -1560,7 +1561,7 @@ test('stdio MCP child process runs cleanly, emits pure JSON-RPC on stdout, and e
 
     // List tools
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 11);
+    assert.equal(tools.tools.length, 12);
 
     // Call begin tool
     const beginRes = await client.callTool({
@@ -2898,7 +2899,7 @@ test('Codex MCP list-tools wire schema compatibility: all supported tools expose
 
     const listResult = await client.listTools();
     assert.ok(listResult && Array.isArray(listResult.tools));
-    assert.equal(listResult.tools.length, 11, 'Must list the complete supported tool surface over the wire');
+    assert.equal(listResult.tools.length, 12, 'Must list the complete supported tool surface over the wire');
 
     // Helper: Recursively validate that wire schema adheres to Codex / OpenAI tool schema constraints
     function validateCodexWireSchema(node, jsonPath) {

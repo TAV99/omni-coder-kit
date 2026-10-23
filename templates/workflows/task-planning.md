@@ -99,10 +99,29 @@ For Codex + AGY, read `.omni/workflows/dual-controller.md` first. The example be
 Each task may optionally declare an explicit `"model"` (e.g. `"gemini-3.8-flash-high"`, `"gemini-3.1-pro-high"`, `"claude-sonnet-4-6"`). If omitted, the session-level worker model is used.
 
 Before setup, reject a graph mixing Codex/shared work with more than one AGY task. Either finish design/context before an all-isolated worker graph, or use one cohesive AGY slice after the Codex task. Stitch mutations require exact opt-in `external_operations` from the controller contract; provider IAM is a separate prerequisite. Resolve unknown remote IDs before freezing dependent implementation authority, never add wildcard tool grants.
+
+acceptance_policy là bắt buộc; map checks vào requirement thật. Ví dụ frontend dưới đây bật UI gate; project non-UI phải khai báo UI policy phù hợp, không bỏ gate chỉ để bootstrap pass.
 ```json
 {
   "schema_version": 1,
   "plan_revision": 1,
+  "acceptance_policy": {
+    "protocol_version": 1,
+    "checks": [{
+      "id": "TASK-1-TESTS",
+      "requirement_id": "REQ-001",
+      "task_id": "TASK-1",
+      "phase": "pre_integration",
+      "kind": "command",
+      "required": true,
+      "command": { "program": "npm", "args": ["test"], "cwd": "." }
+    }],
+    "ui": {
+      "required": true,
+      "viewport_widths": [390, 1440],
+      "reduced_motion_required": true
+    }
+  },
   "tasks": [{
     "task_id": "TASK-1",
     "title": "Bounded deliverable",

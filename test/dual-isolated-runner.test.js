@@ -1018,9 +1018,9 @@ test('isolated authority QC automatically cleans untracked ephemeral tool caches
     assert.equal(complete.status, 'TASK_VERIFIED');
 });
 
-test('isolated runner scrubs ephemeral tool cache and denied build artifacts created during implement phase', async (t) => {
+test('isolated runner scrubs ephemeral tool cache created during implement phase', async (t) => {
     const input = fixture(t);
-    input.task.deny_patterns = ['dist/**'];
+    input.task.deny_patterns = [];
     const calls = [];
     const baseWorker = fakeWorker(calls);
     const handoff = await runIsolatedTask({
@@ -1029,8 +1029,6 @@ test('isolated runner scrubs ephemeral tool cache and denied build artifacts cre
             const prompt = invocation.args.find((arg) => arg.startsWith('-p='));
             if (prompt && prompt.includes('implement phase')) {
                 fs.writeFileSync(path.join(invocation.cwd, 'tsconfig.tsbuildinfo'), 'buildinfo cache');
-                fs.mkdirSync(path.join(invocation.cwd, 'dist'), { recursive: true });
-                fs.writeFileSync(path.join(invocation.cwd, 'dist', 'bundle.js'), 'bundle output');
             }
             return baseWorker(invocation, options);
         },
@@ -1039,5 +1037,32 @@ test('isolated runner scrubs ephemeral tool cache and denied build artifacts cre
     assert.equal(handoff.result.changes.length, 1);
     assert.equal(handoff.result.changes[0].path, 'index.js');
     assert.equal(fs.existsSync(path.join(handoff.reference.workerRoot, 'tsconfig.tsbuildinfo')), false);
-    assert.equal(fs.existsSync(path.join(handoff.reference.workerRoot, 'dist', 'bundle.js')), false);
 });
+
+for (const [file, deny] of [
+    ['forbidden/rogue.txt', 'forbidden/**'],
+    ['dist/bundle.js', 'dist/**'],
+    ['.eslintcache', '.eslintcache'],
+]) {
+    test(`isolated runner preserves and rejects denied output ${file}`, async (t) => {
+        const input = fixture(t);
+        input.task.deny_patterns = [deny];
+        const baseWorker = fakeWorker([]);
+        let target;
+        await assert.rejects(() => runIsolatedTask({
+            ...input,
+            processRunner: async (invocation, options) => {
+                const prompt = invocation.args.find((arg) => arg.startsWith('-p='));
+                if (prompt && prompt.includes('implement phase')) {
+                    target = path.join(invocation.cwd, file);
+                    fs.mkdirSync(path.dirname(target), { recursive: true });
+                    fs.writeFileSync(target, 'denied diagnostic evidence');
+                }
+                return baseWorker(invocation, options);
+            },
+        }), (error) => error.code === 'DUAL_DENY_PATTERN');
+        assert.ok(target);
+        assert.equal(fs.readFileSync(target, 'utf8'), 'denied diagnostic evidence');
+        assert.equal(fs.existsSync(path.join(input.workspaceRoot, file)), false);
+    });
+}
