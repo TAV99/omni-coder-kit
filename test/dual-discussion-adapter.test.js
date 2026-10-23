@@ -309,3 +309,23 @@ describe('dual discussion adapter boundary (Task 3: R08-R10, R21)', () => {
         );
     });
 });
+
+
+it('preserves only valid per-invocation expectedKind metadata from live transports', async () => {
+    for (const expectedKind of ['question', 'reply', 'invalid', undefined]) {
+        const adapter = createSyntheticAdapter({
+            invoke: async () => ({ exitCode: 0, stdout: '', stderr: '', expectedKind }),
+        });
+        const raw = await adapter.invoke({
+            binding: BINDING,
+            snapshot: { text: SNAPSHOT_TEXT, sha256: SNAPSHOT_HASH },
+            envelope: { kind: 'question', body: 'fixture' },
+            invocationId: 'inv-expected-kind',
+        });
+        if (expectedKind === 'question' || expectedKind === 'reply') {
+            assert.equal(raw.expectedKind, expectedKind);
+        } else {
+            assert.equal(Object.hasOwn(raw, 'expectedKind'), false);
+        }
+    }
+});

@@ -14,6 +14,10 @@ const { bindingRef } = require('../lib/dual/discussion/contracts');
 const { buildBindings } = require('../lib/dual/discussion/session');
 const { DiscussionPhaseError } = require('../lib/dual/discussion/phase-bridge');
 
+function expectedScoutPrompt(runDir) {
+    return `${fs.readFileSync(path.join(runDir, 'raw/scout.1.input.md'), 'utf8')}\n\n--- PHASE OUTPUT SCHEMA (JSON Schema) ---\n${fs.readFileSync(path.join(runDir, 'raw/scout.1.schema.json'), 'utf8')}\nAnswer with ONLY a JSON object matching this schema.\n`;
+}
+
 async function fixture(t, { enabled, missingResolver = false, disabledSession = false, unknown = false, invalid = false, snapshot = false, taskId = 'TASK-DISCUSSION' } = {}) {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-discussion-orch-'));
     t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
@@ -120,7 +124,7 @@ test('opt-in scout preserves payload, public return shape, raw observation and b
     const question = f.messages[0];
     assert.equal(question.sender_ref, bindingRef(f.session.bindings[0]));
     assert.equal(question.recipient_ref, bindingRef(f.session.bindings[1]));
-    assert.equal(question.body, fs.readFileSync(path.join(f.runDir, 'raw/scout.1.input.md'), 'utf8'));
+    assert.equal(question.body, expectedScoutPrompt(f.runDir));
     const meta = f.read('raw/scout.1.meta.json');
     assert.deepEqual(AttemptMetaSchema.parse(meta), meta);
     assert.equal(meta.transport, 'discussion');
@@ -131,6 +135,16 @@ test('opt-in scout preserves payload, public return shape, raw observation and b
     assert.equal(meta.timed_out, false);
     assert.equal(Date.parse(meta.ended_at) - Date.parse(meta.started_at), meta.duration_ms);
     assert.equal(fs.readFileSync(path.join(f.runDir, 'raw/scout.1.stdout.json'), 'utf8'), f.messages[1].body);
+});
+
+test('discussion scout receives the output schema from its phase schema file', async (t) => {
+    const f = await fixture(t, { enabled: true, snapshot: true });
+    await f.orch.runPhase('scout', f.taskId);
+    const schemaContent = fs.readFileSync(path.join(f.runDir, 'raw/scout.1.schema.json'), 'utf8');
+    assert.ok(schemaContent.includes('research_trace'));
+    assert.ok(f.messages[0].body.includes('--- PHASE OUTPUT SCHEMA (JSON Schema) ---'));
+    assert.ok(f.messages[0].body.includes(schemaContent));
+    assert.ok(f.messages[0].body.endsWith('Answer with ONLY a JSON object matching this schema.\n'));
 });
 
 test('opt-in implement stays on fake AGY; review uses discussion', async (t) => {
@@ -301,6 +315,10 @@ test('discussion review receives delimited diff without altering saved input', a
     assert.ok(prompt.includes('index.html'));
     assert.ok(prompt.includes('Updated for review'));
     assert.ok(prompt.includes('--- END REVIEW DIFF ---'));
+    assert.ok(prompt.includes('--- PHASE OUTPUT SCHEMA (JSON Schema) ---'));
+    const schemaContent = fs.readFileSync(path.join(f.runDir, 'raw/review.1.schema.json'), 'utf8');
+    assert.ok(schemaContent.includes('challenge_summary'));
+    assert.ok(prompt.includes(schemaContent));
     assert.equal(saved.includes('--- BEGIN REVIEW DIFF ---'), false);
     assert.equal(saved.includes('Updated for review'), false);
 });
@@ -328,7 +346,7 @@ test('authority adapter forwards discussion verbatim to its task orchestrator', 
         allowed_files: ['index.html'], deny_patterns: [],
         validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] }, derived), (err) => err === sentinel);
     assert.equal(f.bridgeCalls.length, 1);
-    assert.equal(f.messages[0].body, fs.readFileSync(path.join(f.runDir, 'raw/scout.1.input.md'), 'utf8'));
+    assert.equal(f.messages[0].body, expectedScoutPrompt(f.runDir));
     assert.deepEqual(calls, [{ taskId: f.taskId, snapshotSha256: f.initialSnapshot.identity.id,
         phase: 'scout', workspaceRoot: f.repoRoot }]);
 });
