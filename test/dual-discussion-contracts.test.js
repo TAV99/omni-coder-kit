@@ -177,6 +177,51 @@ describe('dual discussion contracts (Task 1: R03-R07, R18, R21)', () => {
         assert.throws(() => resolveLimits({ ttlMs: 900001 }), { code: 'LIMIT_EXCEEDED' });
     });
 
+    it('accepts mirrored follow-up questions after replies but rejects consecutive questions', () => {
+        const { astra, argon } = makeBindings();
+        const now = 1_700_000_000_000;
+        for (const [sender, recipient] of [[astra, argon], [argon, astra]]) {
+            const context = { bindings: [astra, argon], messages: [], now };
+            const q1 = validateEnvelope({
+                schema_version: 1,
+                message_id: 'q-1',
+                sender_ref: bindingRef(sender),
+                recipient_ref: bindingRef(recipient),
+                sequence: 1,
+                kind: 'question',
+                body: 'Initial question',
+                created_at: now,
+                expires_at: now + 60_000,
+            }, context);
+            const mirrored = {
+                ...q1,
+                message_id: 'q-2',
+                sender_ref: q1.recipient_ref,
+                recipient_ref: q1.sender_ref,
+                binding_ref: q1.sender_ref,
+                sequence: 2,
+            };
+            assert.throws(
+                () => validateEnvelope(mirrored, { ...context, messages: [q1] }),
+                { code: 'CORRELATION_INVALID' },
+            );
+            const r1 = validateEnvelope({
+                ...mirrored, message_id: 'r-1', kind: 'reply', reply_to: q1.message_id,
+            }, { ...context, messages: [q1] });
+            const q2 = validateEnvelope({ ...mirrored, sequence: 3 }, {
+                ...context, messages: [q1, r1],
+            });
+            assert.equal(q2.sender_ref, r1.sender_ref);
+            assert.equal(q2.recipient_ref, r1.recipient_ref);
+            assert.throws(
+                () => validateEnvelope({ ...q1, message_id: 'q-3', sequence: 4 }, {
+                    ...context, messages: [q1, r1, q2],
+                }),
+                { code: 'CORRELATION_INVALID' },
+            );
+        }
+    });
+
     it('R06 & R07 & R21: validates envelope correlation, idempotent receipt vs conflict, and rejects lease/flag fields', () => {
         const { astra, argon } = makeBindings();
         const refA = bindingRef(astra);
