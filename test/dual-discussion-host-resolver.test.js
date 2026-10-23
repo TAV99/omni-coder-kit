@@ -194,13 +194,21 @@ test('closeAll closes every cached relay and clears registry', async (t) => {
     await host.closeAll();
 });
 
-test('daemon wiring uses strict env opt-in and converts validated store events to authority envelopes', async () => {
+test('daemon wiring defaults on with strict env opt-out and converts validated store events to authority envelopes', async () => {
     const vm = require('node:vm');
     const { createRequire } = require('node:module');
     const serverPath = require.resolve('../lib/dual/daemon-server');
     const source = await fs.readFile(serverPath, 'utf8');
     const localRequire = createRequire(serverPath);
-    for (const flag of [undefined, '', '0', 'true', '01', '1']) {
+    const cases = [
+        [undefined, true], ['', true], ['   ', true],
+        ['0', false], ['false', false], ['off', false], ['no', false],
+        ['1', true], ['true', true], ['on', true], ['yes', true],
+        ['banana', false], ['01', false],
+        [' 0 ', false], [' FALSE ', false], [' Off ', false], [' NO ', false],
+        [' 1 ', true], [' TRUE ', true], [' On ', true], [' YES ', true],
+    ];
+    for (const [flag, enabled] of cases) {
         const history = events();
         let revision = 1;
         let hostOptions;
@@ -208,7 +216,7 @@ test('daemon wiring uses strict env opt-in and converts validated store events t
         const sentinel = new Error('adapter construction reached');
         const module = { exports: {} };
         const wrapped = vm.runInNewContext('(function(require, module, exports) {\n' + source + '\n})', {
-            process: { env: { OMNI_DUAL_DISCUSSION_ENABLED: flag }, cwd: () => process.cwd() },
+            process: { env: flag === undefined ? {} : { OMNI_DUAL_DISCUSSION_ENABLED: flag }, cwd: () => process.cwd() },
         }, { filename: serverPath });
         wrapped((name) => {
             if (name === './discussion/host-resolver') return { createDiscussionHost(options) {
@@ -226,13 +234,15 @@ test('daemon wiring uses strict env opt-in and converts validated store events t
             authorityStore: { derive: () => ({ sessionId, planRevision: revision }),
                 readEvents: () => history.map((record) => record.event) },
         }), (err) => err === sentinel);
-        if (flag !== '1') {
-            assert.equal(hostOptions, undefined);
+        if (!enabled) {
+            assert.equal(hostOptions, undefined, `flag=${JSON.stringify(flag)}`);
             assert.equal(Object.hasOwn(adapterOptions, 'discussion'), false);
             continue;
         }
         assert.equal(adapterOptions.discussion.enabled, true);
         assert.equal(adapterOptions.discussion.sessionResolver, resolver);
+        assert.equal(typeof hostOptions.adapters.codex.probeRecovery, 'function');
+        assert.equal(typeof hostOptions.adapters.agy.probeRecovery, 'function');
         assert.equal(hostOptions.daemon.sessionId, sessionId);
         assert.equal(hostOptions.daemon.workspaceRoot, process.cwd());
         assert.deepEqual(JSON.parse(JSON.stringify(hostOptions.daemon.readLeaseEvents())), history);
@@ -278,4 +288,50 @@ test('a slow superseded seed cannot overwrite the current task registry', async 
     await assert.rejects(old.relay.dispatch('question-1'), { code: 'AUTHORITY_STALE' });
     await question(current);
     assert.equal((await current.relay.dispatch('question-1')).provider, 'succeeded');
+});
+
+for (const provider of ['codex', 'agy']) {
+    test(`resolver derives recovery probes from the ${provider} adapter`, async (t) => {
+        const calls = [];
+        const adapters = Object.fromEntries(['codex', 'agy'].map((name) => [name, {
+            ...fakeAdapter(name, async () => ({ exitCode: null, stdout: '', stderr: '', timedOut: true })),
+            probeRecovery(args) {
+                calls.push({ provider: name, ...args });
+                return { processQuiescent: true, providerTerminal: true, providerOutcome: 'failed' };
+            },
+        }]));
+        const { host } = await fixture(t, { adapters });
+        const session = await host.sessionResolver(context);
+        const recipient = session.bindings.find((binding) => binding.provider === provider);
+        const sender = session.bindings.find((binding) => binding.provider !== provider);
+        const now = Date.now();
+        await session.relay.receive({ schema_version: 1, message_id: 'recovery-question',
+            sender_ref: bindingRef(sender), recipient_ref: bindingRef(recipient), sequence: 1,
+            kind: 'question', body: 'Question?', created_at: now, expires_at: now + 300_000 });
+        await assert.rejects(session.relay.dispatch('recovery-question'), { code: 'OUTCOME_UNKNOWN' });
+        const turn = await session.relay.reconcile('recovery-question');
+        assert.equal(turn.reconciled_outcome, 'failed');
+        assert.equal(calls.length, 3);
+        assert.ok(calls.every((call) => call.provider === provider && call.conversationId === recipient.conversation_id));
+    });
+}
+
+test('explicit recovery probes override adapter probes', async (t) => {
+    const calls = [];
+    const { host } = await fixture(t, {
+        adapters: Object.fromEntries(['codex', 'agy'].map((provider) => [provider, {
+            ...fakeAdapter(provider, async () => ({ exitCode: null, stdout: '', stderr: '', timedOut: true })),
+            probeRecovery() { assert.fail('explicit probes must win'); },
+        }])),
+        recoveryProbes: {
+            isProcessQuiescent: (args) => { calls.push(args); return true; },
+            isProviderTerminal: () => true,
+            providerOutcome: () => 'succeeded',
+        },
+    });
+    const session = await host.sessionResolver(context);
+    await question(session);
+    await assert.rejects(session.relay.dispatch('question-1'), { code: 'OUTCOME_UNKNOWN' });
+    assert.equal((await session.relay.reconcile('question-1')).reconciled_outcome, 'succeeded');
+    assert.equal(calls[0].binding.provider, 'agy');
 });

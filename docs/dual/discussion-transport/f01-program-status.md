@@ -49,3 +49,17 @@ Codex và AGY do Muse điều phối và cho trao đổi với nhau. Thiết k�
 - Hành trình tới nghiệm thu (bằng chứng độ tin cậy): (i) prompt discussion thiếu JSON Schema của phase → đã nội tuyến schema vào promptBody (Gói 4c); (ii) model trả JSON trần/object-body → repair xác định trong adapter (evidenceRef ghi loại repair); (iii) prompt dài → AGY thỉnh thoảng trả response RỖNG dù SUCCESS (tỉ lệ lỗi ~2/2 ở payload thực tế, 1/3 ở payload nhỏ) → cơ chế nudge: tối đa 1 câu nhắc sửa trong cùng conversation, nằm trong ngân sách timeout, marker +nudge; sau nudge diag payload thực tế đạt ổn định.
 - Giới hạn còn lại (ghi rõ): đường daemon socket/MCP chưa chạy live được trong sandbox này (EPERM với process/socket — tập fail trùng baseline ở cả hai cây); nghiệm thu dùng đường orchestrator trong tiến trình mà daemon điều khiển qua adapter. Phase 2 (chưa bắt đầu): benchmark lật mặc định trên task thật + chạy live qua daemon ở môi trường không bị sandbox chặn + đánh giá đưa implement vào conversation bền.
 - Toàn bộ Phase 1 đã commit local trên codex/dual-live-experiment; push vẫn chờ người dùng xử lý truy cập GitHub (quyết định 23/10 20:49).
+
+## Phase 2 — benchmark, vá lỗi theo bằng chứng, lật mặc định (24/10/2026)
+
+- [x] Giao thức benchmark chốt trước (f01-phase2-benchmark-protocol.md) + harness đo cặp OLD/NEW.
+- [x] Vòng 1: OLD 0/9 (hợp đồng --json-schema của đường lạnh vỡ với AGY hiện tại — print timeout trả response rỗng), NEW 5/8.
+- [x] P2-F1/F2: khôi phục outcome_unknown 1 lần theo bằng chứng; schema-nudge ngang hàng retryHint; failure artifact giữ excerpt/issues.
+- [x] Review AGY F1/F2: ACCEPT WITH FIXES — vá trần 16 KiB (trùng schema trong correction body) + messageId sau recovery.
+- [x] P2-F3: recovery probes thật từ bookkeeping tiến trình con của adapter, nối host-resolver → daemon production; bridge không nuốt lỗi reconcile.
+- [x] P2-F4: probe chờ quiescence ≤3s; nudge nhận biết denied_actions/response rỗng; re-ask 1 lần khi settled-failed (chung ngân sách khôi phục với F1).
+- [x] Vòng 5: **NEW 9/9 (100%)**, p50 83s so với OLD 195s, 0 unknown chưa khôi phục → đạt cả 4 ngưỡng.
+- [x] **Lật mặc định đường daemon** (opt-out OMNI_DUAL_DISCUSSION_ENABLED=0; CLI giữ opt-in). Gate discussion 290 pass/0 fail; daemon-orchestrator 53/53 (1 test mô phỏng triển khai cổ điển được opt-out tường minh).
+- [ ] P2-Gói 3: đánh giá implement qua conversation bền (thí nghiệm bounded + khuyến nghị).
+- [ ] P2-Gói 4: chạy live qua daemon socket (sandbox hiện tại chặn listen 127.0.0.1 — EPERM; ghi nhận giới hạn môi trường).
+- Báo cáo đầy đủ: docs/dual/discussion-transport/f01-phase2-benchmark-report.md (+ phụ lục các vòng 2–5).

@@ -362,6 +362,12 @@ describe('dual contracts', () => {
         });
         assert.equal(result.success, true);
         assert.equal(AttemptMetaSchema.safeParse({ ...result.data, shell: true }).success, false);
+        for (const discussionRecovery of ['reconciled-retry', 'failed-retry']) {
+            assert.equal(AttemptMetaSchema.safeParse({ ...result.data,
+                discussionRecovery, discussionCorrection: 'schema-nudge' }).success, true);
+        }
+        assert.equal(AttemptMetaSchema.safeParse({ ...result.data, discussionRecovery: 'blind-retry' }).success, false);
+        assert.equal(AttemptMetaSchema.safeParse({ ...result.data, discussionCorrection: 'unbounded' }).success, false);
     });
 
     it('defines explicit Codex handoff events for terminal states', () => {

@@ -8,6 +8,10 @@ const os = require('os');
 const crypto = require('crypto');
 const { execSync, spawn, spawnSync } = require('child_process');
 
+// This suite simulates a classic non-discussion daemon deployment;
+// discussion default-on behavior is covered by the discussion wiring suites.
+process.env.OMNI_DUAL_DISCUSSION_ENABLED = '0';
+
 const {
     startDaemonServer: startDaemonServerImpl,
     createDaemonClient: createDaemonClientImpl,

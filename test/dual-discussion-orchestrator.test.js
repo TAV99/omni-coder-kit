@@ -9,7 +9,6 @@ const { spawnSync } = require('node:child_process');
 const { createDualOrchestrator, DualOrchestratorError } = require('../lib/dual/orchestrator');
 const { AttemptMetaSchema } = require('../lib/dual/contracts');
 const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
-const { DualAgyOutputError } = require('../lib/dual/agy-output');
 const { bindingRef } = require('../lib/dual/discussion/contracts');
 const { buildBindings } = require('../lib/dual/discussion/session');
 const { DiscussionPhaseError } = require('../lib/dual/discussion/phase-bridge');
@@ -186,13 +185,16 @@ test('unknown outcome propagates bridge details after exactly one call without r
     assert.equal(f.agyCalls.length, 0);
 });
 
-test('invalid discussion payload raises the AGY contract error with cause and saves raw evidence', async (t) => {
+test('invalid discussion payload exhausts one correction and saves bounded failure evidence', async (t) => {
     const f = await fixture(t, { enabled: true, invalid: true });
     await assert.rejects(f.orch.runPhase('scout', f.taskId), (err) =>
-        err instanceof DualAgyOutputError && err.code === 'DUAL_AGY_CONTRACT_INVALID' && Boolean(err.cause));
-    assert.equal(f.bridgeCalls.length, 1);
+        err instanceof DiscussionPhaseError && err.code === 'RESULT_MALFORMED');
+    assert.equal(f.bridgeCalls.length, 2);
     assert.equal(f.agyCalls.length, 0);
-    assert.equal(f.read('raw/scout.1.meta.json').transport, 'discussion');
+    const failure = f.read('raw/scout.1.failure.json');
+    assert.ok(failure.rawReplyExcerpt.includes('summary'));
+    assert.ok(failure.rawReplyExcerpt.length <= 4096);
+    assert.ok(failure.validationIssues.includes('Invalid Agy payload contract'));
     assert.equal(fs.existsSync(path.join(f.runDir, 'context.json')), false);
 });
 
@@ -219,8 +221,17 @@ test('CLI discussion env is strict and preserves an injected resolver', async (t
         if (original === undefined) delete process.env.OMNI_DUAL_DISCUSSION_ENABLED;
         else process.env.OMNI_DUAL_DISCUSSION_ENABLED = original;
     });
-    for (const value of ['true', '01', '0', '1']) {
-        process.env.OMNI_DUAL_DISCUSSION_ENABLED = value;
+    const cases = [
+        [undefined, false], ['', false], ['   ', false],
+        ['0', false], ['false', false], ['off', false], ['no', false],
+        ['1', true], ['true', true], ['on', true], ['yes', true],
+        ['banana', false], ['01', false],
+        [' 0 ', false], [' FALSE ', false], [' Off ', false], [' NO ', false],
+        [' 1 ', true], [' TRUE ', true], [' On ', true], [' YES ', true],
+    ];
+    for (const [value, enabled] of cases) {
+        if (value === undefined) delete process.env.OMNI_DUAL_DISCUSSION_ENABLED;
+        else process.env.OMNI_DUAL_DISCUSSION_ENABLED = value;
         const f = await fixture(t);
         const calls = [];
         const orch = getOrchestrator({ cwd: f.repoRoot,
@@ -228,7 +239,7 @@ test('CLI discussion env is strict and preserves an injected resolver', async (t
             discussion: { sessionResolver: async (context) => { calls.push(context); return { enabled: false }; } },
             processRunner: async () => ({ exitCode: 0, stdout: JSON.stringify({ structured_output: f.payloads.scout }), stderr: '' }),
         });
-        if (value === '1') {
+        if (enabled) {
             await assert.rejects(orch.runPhase('scout', f.taskId), { code: 'DUAL_DISCUSSION_SESSION_DISABLED' });
             assert.equal(calls.length, 1);
         } else {
@@ -291,7 +302,12 @@ for (const option of ['unknown', 'invalid', 'missingResolver', 'disabledSession'
         const f = await fixture(t, { enabled: true, snapshot: true, [option]: true });
         let failure;
         await assert.rejects(f.orch.runPhase('scout', f.taskId), (err) => { failure = err; return true; });
-        assert.deepEqual(f.read('raw/scout.1.failure.json'), {
+        const { rawReplyExcerpt, validationIssues, ...storedFailure } = f.read('raw/scout.1.failure.json');
+        if (option === 'invalid') {
+            assert.ok(rawReplyExcerpt.includes('summary'));
+            assert.ok(validationIssues.includes('Invalid Agy payload contract'));
+        }
+        assert.deepEqual(storedFailure, {
             schema_version: 1, task_id: f.taskId, expected_baseline: f.initialSnapshot.identity,
             phase: 'scout', attempt: 1, error_code: failure.code, reason: failure.message.slice(0, 2048), retryable: false,
         });
@@ -378,4 +394,143 @@ test('discussion review preserves the cold-start input bytes', async (t) => {
         assert.equal(f.agyCalls.length, enabled ? 1 : 3);
     }
     assert.deepEqual(inputs[0], inputs[1]);
+});
+
+
+test('schema nudge uses existing payload contract and persists correction metadata', async (t) => {
+    const f = await fixture(t, { enabled: true });
+    const dispatch = f.session.relay.dispatch;
+    f.session.relay.dispatch = async (id) => {
+        const turn = await dispatch(id);
+        if (f.bridgeCalls.length === 1) f.messages.at(-1).body = JSON.stringify({ ...f.payloads.scout, summary: 42 });
+        return turn;
+    };
+    await f.orch.runPhase('scout', f.taskId);
+    assert.equal(f.bridgeCalls.length, 2);
+    assert.equal(f.agyCalls.length, 0);
+    assert.ok(f.messages[2].body.startsWith(expectedScoutPrompt(f.runDir)));
+    assert.ok(f.messages[2].body.includes('summary'));
+    assert.equal(f.read('raw/scout.1.meta.json').discussionCorrection, 'schema-nudge');
+    assert.deepEqual(AttemptMetaSchema.parse(f.read('raw/scout.1.meta.json')), f.read('raw/scout.1.meta.json'));
+    assert.deepEqual(f.read('context.json'), f.payloads.scout);
+});
+
+for (const suffix of ['', '+nudge-denied']) {
+    test(`discussion failure captures raw reply, repair and nudge (${suffix})`, async (t) => {
+        const f = await fixture(t, { enabled: true });
+        const dispatch = f.session.relay.dispatch;
+        f.session.relay.dispatch = async (id) => {
+            const turn = await dispatch(id);
+            f.messages.at(-1).body = JSON.stringify({ summary: 42, text: 'x'.repeat(5000) });
+            return { ...turn, evidence_ref: `agy-json;payload-repair=fence+bare_object+nudge${suffix}` };
+        };
+        await assert.rejects(f.orch.runPhase('scout', f.taskId), { code: 'RESULT_MALFORMED' });
+        const failure = f.read('raw/scout.1.failure.json');
+        assert.equal(failure.rawReplyExcerpt.length, 4096);
+        assert.ok(failure.validationIssues.includes('Invalid Agy payload contract'));
+        assert.equal(failure.repairKind, 'fence+bare_object');
+        assert.equal(failure.nudged, true);
+        assert.equal(f.bridgeCalls.length, 2);
+    });
+}
+
+test('reconciled discussion re-ask persists recovery metadata', async (t) => {
+    const f = await fixture(t, { enabled: true });
+    const dispatch = f.session.relay.dispatch;
+    let recoveries = 0;
+    f.session.relay.reconcile = async () => {
+        recoveries++;
+        return { reconciled: true, reconciled_outcome: 'failed' };
+    };
+    f.session.relay.dispatch = async (id) => {
+        if (recoveries === 0) {
+            f.bridgeCalls.push(id);
+            throw Object.assign(new Error('unknown'), { code: 'OUTCOME_UNKNOWN' });
+        }
+        return dispatch(id);
+    };
+    await f.orch.runPhase('scout', f.taskId);
+    assert.equal(f.bridgeCalls.length, 2);
+    assert.equal(recoveries, 1);
+    assert.equal(f.read('raw/scout.1.meta.json').discussionRecovery, 'reconciled-retry');
+    assert.equal(f.agyCalls.length, 0);
+});
+
+
+test('discussion failure redacts secrets from the last raw reply', async (t) => {
+    const f = await fixture(t, { enabled: true });
+    const dispatch = f.session.relay.dispatch;
+    f.session.relay.dispatch = async (id) => {
+        const turn = await dispatch(id);
+        f.messages.at(-1).body = JSON.stringify({ summary: 42, api_key: 'secret-value',
+            reply: f.bridgeCalls.length === 1 ? 'first reply' : 'last reply' });
+        return turn;
+    };
+    await assert.rejects(f.orch.runPhase('scout', f.taskId), { code: 'RESULT_MALFORMED' });
+    const failure = f.read('raw/scout.1.failure.json');
+    assert.ok(failure.rawReplyExcerpt.includes('last reply'));
+    assert.ok(!failure.rawReplyExcerpt.includes('first reply'));
+    assert.ok(!failure.rawReplyExcerpt.includes('secret-value'));
+    assert.ok(failure.rawReplyExcerpt.includes('[REDACTED]'));
+});
+
+
+test('unknown correction retains last available raw reply and validation issues', async (t) => {
+    const f = await fixture(t, { enabled: true, invalid: true });
+    const dispatch = f.session.relay.dispatch;
+    f.session.relay.dispatch = async (id) => {
+        if (f.bridgeCalls.length === 1) {
+            f.bridgeCalls.push(id);
+            throw Object.assign(new Error('correction unavailable'), { code: 'OUTCOME_UNKNOWN' });
+        }
+        return dispatch(id);
+    };
+    await assert.rejects(f.orch.runPhase('scout', f.taskId), { code: 'OUTCOME_UNKNOWN' });
+    const failure = f.read('raw/scout.1.failure.json');
+    assert.ok(failure.rawReplyExcerpt.includes('summary'));
+    assert.ok(failure.validationIssues.includes('contract'));
+    assert.equal(f.bridgeCalls.length, 2);
+});
+
+for (const diagnostic of [{ recoveryError: 'CAPABILITY_BLOCKED' }, { recoveryOutcome: 'succeeded' }]) {
+    test(`discussion failure artifact preserves ${Object.keys(diagnostic)[0]}`, async (t) => {
+        const f = await fixture(t, { enabled: true, unknown: true, snapshot: true });
+        f.session.relay.reconcile = async () => {
+            if (diagnostic.recoveryError) throw Object.assign(new Error('private'), { code: diagnostic.recoveryError });
+            return { reconciled: true, reconciled_outcome: 'succeeded' };
+        };
+        await assert.rejects(f.orch.runPhase('scout', f.taskId), { code: 'OUTCOME_UNKNOWN' });
+        const failure = f.read('raw/scout.1.failure.json');
+        for (const [key, value] of Object.entries(diagnostic)) assert.equal(failure[key], value);
+    });
+}
+
+test('schema-invalid observation excerpt reaches failure artifact without a stored reply', async (t) => {
+    const f = await fixture(t, { enabled: true, snapshot: true });
+    f.session.relay.dispatch = async () => ({ invocation_id: 'invalid-inv', schema: 'invalid',
+        raw_reply_excerpt: 'token=secret-value\n' + 'x'.repeat(2000) });
+    await assert.rejects(f.orch.runPhase('scout', f.taskId), { code: 'RESULT_MALFORMED' });
+    const failure = f.read('raw/scout.1.failure.json');
+    assert.equal(failure.rawReplyExcerpt.length, 1024);
+    assert.ok(failure.rawReplyExcerpt.includes('[REDACTED]'));
+    assert.ok(!failure.rawReplyExcerpt.includes('secret-value'));
+});
+
+test('settled failed re-ask persists failed-retry metadata', async (t) => {
+    const f = await fixture(t, { enabled: true });
+    const dispatch = f.session.relay.dispatch;
+    f.session.relay.dispatch = async (id) => {
+        if (f.bridgeCalls.length === 0) {
+            f.bridgeCalls.push(id);
+            return { provider: 'failed', message_id: id, invocation_id: 'inv-failed' };
+        }
+        return dispatch(id);
+    };
+    await f.orch.runPhase('scout', f.taskId);
+    assert.equal(f.bridgeCalls.length, 2);
+    assert.equal(f.messages[1].kind, 'reply');
+    assert.equal(f.messages[1].reply_to, f.bridgeCalls[0]);
+    assert.equal(f.messages[0].body, f.messages[2].body);
+    assert.equal(f.read('raw/scout.1.meta.json').discussionRecovery, 'failed-retry');
+    assert.equal(f.agyCalls.length, 0);
 });

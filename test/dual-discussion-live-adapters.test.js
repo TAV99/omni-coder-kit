@@ -136,6 +136,7 @@ test('AGY: object responses follow the same repairs and preserve unknown envelop
 
 for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCodexAdapter]]) {
     for (const [name, first, second, calls] of [
+        ['denied actions recovers', 'invalid', JSON.stringify(envelope), 2],
         ['empty reply recovers', '', JSON.stringify(envelope), 2],
         ['valid reply needs no nudge', JSON.stringify(envelope), '', 1],
         ['repaired reply needs no nudge', JSON.stringify(content), '', 1],
@@ -157,6 +158,10 @@ for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCod
             const failed = name === 'provider failure is untouched';
             const stdout = (response, nudgeFailure = false) => {
                 const raw = output(provider, response);
+                if (name === 'denied actions recovers') {
+                    if (provider === 'agy') return JSON.stringify({ ...JSON.parse(raw.stdout), usage: { denied_actions: ['RunCommand'] } });
+                    return raw.stdout + '\n' + JSON.stringify({ type: 'usage', usage: { denied_actions: ['RunCommand'] } });
+                }
                 if (!failed && !nudgeFailure) return raw.stdout;
                 return provider === 'agy'
                     ? JSON.stringify({ status: 'ERROR', conversation_id: 'conv-fixture', response })
@@ -190,7 +195,7 @@ for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCod
                 assert.equal(result.evidenceRef, provider === 'agy' ? 'agy-json-v1' : 'codex-jsonl-v1');
             }
             if (name === 'nudge applies repairs') {
-                assert.match(result.evidenceRef, /;payload-repair=fence\+bare_object\+nudge$/);
+                assert.match(result.evidenceRef, /;payload-repair=fence\+bare_object\+nudge\+nudge-denied$/);
             }
             if (calls === 2) {
                 assert.ok(recorded[1].includes('conv-fixture'));
@@ -198,6 +203,13 @@ for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCod
                 assert.match(prompt, /previous reply was empty\/invalid/i);
                 assert.match(prompt, /"schema_version":1,"kind":"reply","body"/);
                 assert.match(prompt, /serialized string/i);
+                const denialAware = first === '' || name === 'denied actions recovers';
+                assert.equal(result.evidenceRef.includes('+nudge-denied'), denialAware);
+                if (denialAware) {
+                    assert.match(prompt, /some tool actions were denied/i);
+                    assert.match(prompt, /do NOT call tools/i);
+                    assert.match(prompt, /ONLY from the prompt contents already provided/i);
+                } else assert.doesNotMatch(prompt, /denied/i);
                 if (provider === 'agy') {
                     const seconds = Number.parseInt(recorded[1][recorded[1].indexOf('--print-timeout') + 1]);
                     assert.ok(seconds >= 5 && seconds <= 15);
