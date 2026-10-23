@@ -1,0 +1,47 @@
+# Chương trình F01 — Trạng thái & kỷ luật vận hành
+
+Mandate của chủ repo (23/10/2026, ~22:32): Muse là **người thực hiện chính** nhánh chức năng
+dual, liên tục thay thế/bóc tách/thử nghiệm cho đến khi chức năng hoạt động hoàn hảo.
+Codex và AGY do Muse điều phối và cho trao đổi với nhau. Thiết kế chuẩn:
+`f01-integration-design.md` (thay thế theo lớp, theo phase).
+
+## Kỷ luật bắt buộc
+1. **Không đè code của nhau:** mỗi file có đúng một chủ sở hữu tại một thời điểm (bảng dưới).
+   Muse là người duy nhất sửa file tích hợp sau khi đã đối chiếu.
+2. **Không sửa file của engine khi chưa tới gói việc của nó.** Gói nền = file MỚI + test MỚI.
+3. **Hạn mức Codex:** `codex exec` lỗi usage/rate limit (chu kỳ 5H) → KHÔNG thử lại dồn dập;
+   ghi nhận vào file này, chuyển lane AGY/Muse làm phần không phụ thuộc, quay lại khi hồi phục.
+4. Muse kiểm chứng độc lập mọi giao hàng (chạy test + đọc diff) trước khi nhận.
+5. Commit theo đợt vào nhánh `codex/dual-live-experiment`; push chờ chủ repo xử lý quyền
+   GitHub (đã chốt 23/10) — không tự ý đổi cách xác thực.
+
+## Bảng sở hữu file (Phase 1)
+| Phạm vi | Chủ sở hữu |
+|---|---|
+| `lib/dual/discussion/host-ports.js`, `lib/dual/discussion/session.js` (MỚI) | Codex |
+| `test/dual-discussion-host-*.test.js` (MỚI) | Codex |
+| Review đối kháng toàn bộ gói | AGY (chỉ đọc ở vòng review; sửa file của chính AGY nếu được giao) |
+| `lib/dual/discussion/live-*.js`, contracts/relay/journal | Đã chốt — chỉ sửa khi có gói việc riêng |
+| `orchestrator.js`, `daemon-server.js`, `authority-store.js`, `mcp-server.mjs` | CHƯA AI — mở ở Gói 3 sau khi Gói 1–2 đạt |
+
+## Các gói việc Phase 1
+- [x] **Gói 1 — Nền phiên thảo luận (file mới):** `session.js` (seed 2 conversation → dựng cặp
+  binding → tạo relay với host ports được tiêm vào; flag `enabled` tắt = không seed, không tạo
+  relay) + `host-ports.js` (hợp đồng cổng host dạng tiêm phụ thuộc: authority.check,
+  capabilityVerifier.verify/verifyRecovery bọc các callback do daemon cấp) + test offline.
+- [x] **Gói 2 — Host ports thật:** nối authority-store (lease/revision/snapshot) và
+  capability-preflight vào host-ports; test tích hợp offline bằng store thật trên thư mục tạm.
+- [x] **Gói 3 — Định tuyến orchestrator sau flag:** scout/plan/review qua relay khi
+  `dual.discussion.enabled=true`; implement giữ nguyên. Test hồi quy toàn bộ suite dual.
+- [ ] **Gói 4 — Chạy task thật phạm vi hẹp + nghiệm thu Phase 1** (tiêu chí trong bản thiết kế).
+
+## Kênh tra cứu
+- Phần chưa biết/cần tài liệu: được phép hỏi Gemini bản web (Pro, "Argon") theo nguyên tắc song song — chỉ là manh mối, phải đối chiếu nguồn gốc trước khi dùng.
+
+## Nhật ký
+- 23/10 22:32 — Nhận mandate. Codex bị runtime restart xóa bản cài global, đã cài lại 0.164.0
+  (đăng nhập ChatGPT còn nguyên). Bắt đầu Gói 1.
+
+- 23/10 22:46 — Gói 1 ĐẠT: bộ test 40/40 (host-session 18 sau vòng sửa theo review AGY: P0 authority ép Boolean → strict === true; validate trước seed; lỗi seed mang theo conversationIds; forward models/clock/syncHook/execution; thêm test phủ định). Muse tự chạy kiểm chứng + đọc diff. Mở Gói 2.
+- 23/10 23:05 — Gói 2 ĐẠT sau vòng sửa theo review AGY (liveProfileVerified cho codex phải qua probe CLI thật; cross-check định danh bindingRef/snapshot trong evidence; probe recovery dừng sớm khi tiến trình chưa quiescent; thêm case truncation + codex): **78 pass, 0 fail, 4 skip (live)** trên toàn bộ 9 suite discussion — Muse tự chạy kiểm chứng. Lưu ý môi trường: worktree cần `npm install` chuẩn (zod là dependency đã khai báo) trước khi chạy test. Mở Gói 3a (khảo sát seam + phase-bridge, chưa sửa engine).
+- 23/10 23:41 — Gói 3 ĐẠT (3a seam survey + phase-bridge; 3b nhánh discussion trong executeAgyWithRetry sau flag opt-in, chỉ scout/review; 3c sửa theo review AGY: adapter chuyển tiếp option discussion, context resolver chỉ gồm trường sự thật — host giữ định danh phiên daemon qua closure, ghi failure evidence, parity extraction khi recovery, prompt review qua discussion được nối git diff, AttemptMetaSchema thêm trường transport). Finding 8 (đổi chiều review) bị bác: ngữ nghĩa gốc là AGY lập payload review, Codex QC là cổng độc lập. Toàn bộ suite discussion + contracts: **159 pass, 0 fail, 4 skip** (Muse tự kiểm chứng); gate dual rộng: tập fail trùng baseline sandbox (EPERM), delta rỗng. Commit gộp Phase 1 (Gói 1–3) vào nhánh local.
