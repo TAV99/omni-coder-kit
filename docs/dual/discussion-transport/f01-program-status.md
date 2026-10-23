@@ -61,5 +61,5 @@ Codex và AGY do Muse điều phối và cho trao đổi với nhau. Thiết k�
 - [x] Vòng 5: **NEW 9/9 (100%)**, p50 83s so với OLD 195s, 0 unknown chưa khôi phục → đạt cả 4 ngưỡng.
 - [x] **Lật mặc định đường daemon** (opt-out OMNI_DUAL_DISCUSSION_ENABLED=0; CLI giữ opt-in). Gate discussion 290 pass/0 fail; daemon-orchestrator 53/53 (1 test mô phỏng triển khai cổ điển được opt-out tường minh).
 - [ ] P2-Gói 3: đánh giá implement qua conversation bền (thí nghiệm bounded + khuyến nghị).
-- [ ] P2-Gói 4: chạy live qua daemon socket (sandbox hiện tại chặn listen 127.0.0.1 — EPERM; ghi nhận giới hạn môi trường).
+- [x] P2-Gói 4: **chạy live qua daemon socket ĐẠT ở tầng discussion** (24/10, script test/dual-phase2-daemon-live.js chạy từ shell Muse — các sandbox lồng nhau của test/Codex vẫn bị EPERM): daemon con nghe 127.0.0.1:40859, session + plan OK, scout hoàn thành 78s qua discussion (env unset — mặc định mới), journal 1 cặp question/reply, meta transport='discussion'; preflight/spec/route cũng hoàn thành. Phần chưa chứng minh: trọn vòng task qua implement+QC trong daemon (implement vượt ngân sách stage 240s của script trên fixture tí hon — chậm hay kẹt chưa phân định; gộp vào đánh giá Gói 3).
 - Báo cáo đầy đủ: docs/dual/discussion-transport/f01-phase2-benchmark-report.md (+ phụ lục các vòng 2–5).
