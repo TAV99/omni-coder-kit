@@ -365,7 +365,7 @@ test('T5 exhausted technical retries preserve evidence and stop without resettin
         .trim().split('\n').map((line) => JSON.parse(line));
     const failures = events.filter((event) => event.type === 'phase.failed' && event.phase === 'implement');
     assert.equal(failures.length, 3);
-    assert.equal(failures.at(-1).retryable, false);
+    assert.deepEqual(failures.map(event => event.retryable), [true, true, false]);
     assert.equal(events.some((event) => event.type === 'transaction.reset'), false);
     assert.equal(events.some((event) => event.type === 'transaction.completed'), false);
     assert.equal(events.at(-1).error_code, 'DUAL_AGY_EMPTY_OUTPUT');
@@ -1327,3 +1327,69 @@ test('Slice 3C: Task orchestrator rejects forged / incomplete authoritative capa
         /DUAL_PREFLIGHT_AUTHORITY_INVALID|invalid/i
     );
 });
+
+for (const [orphanAttempt, priorProviderFailures] of [[0, 0], [1, 0], [2, 0], [3, 0], [2, 1], [3, 2]]) {
+    test(`orphan raw attempt ${orphanAttempt}, prior provider failures ${priorProviderFailures}: independent retry budget`, async t => {
+        const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-orphan-budget-'));
+        t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
+        fs.writeFileSync(path.join(repoRoot, 'index.html'), '<html>Hello</html>');
+        const { createSnapshotBaseline } = require('../lib/dual/baseline-snapshot');
+        const initialSnapshot = createSnapshotBaseline({ root: repoRoot }).capture();
+        const head = initialSnapshot.identity.id;
+        const taskId = `ORPHAN-${orphanAttempt}`;
+        let calls = 0;
+        const orch = createDualOrchestrator({
+            cwd: repoRoot, backend: 'snapshot', initialSnapshot,
+            workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
+            discussion: discussionStub({ repoRoot, head }),
+            authoritativeCapabilityEvidence: { version: 'agy version 1.1.20-test', model: 'gemini-3.7-flash-high' },
+            processRunner: async () => {
+                calls++;
+                return { exitCode: 0, stdout: '', stderr: '', timedOut: false,
+                    startedAt: new Date(), endedAt: new Date(), durationMs: 0 };
+            },
+        });
+        orch.newTask(taskId);
+        await orch.runPhase('preflight', taskId);
+        const specPath = path.join(repoRoot, '.omni/codex-gemini/runs', taskId, 'spec.json');
+        fs.writeFileSync(specPath, JSON.stringify({ schema_version: 1, task_id: taskId,
+            expected_baseline: { kind: 'snapshot', id: head }, goal: 'Exercise orphan retries',
+            allowed_files: ['index.html'], deny_patterns: [], risk_flags: [],
+            validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
+            permission_authority: 'dual-init-dangerous-auto-v1' }));
+        await orch.runPhase('scout', taskId);
+        await orch.runPhase('spec', taskId);
+        await orch.runPhase('route', taskId);
+        const runDir = path.join(repoRoot, '.omni/codex-gemini/runs', taskId);
+        const { createStateStore } = require('../lib/dual/state-store');
+        const store = createStateStore(runDir, { taskId, expectedBaseline: initialSnapshot.identity });
+        for (let attempt = 1; attempt <= orphanAttempt; attempt++) {
+            store.append({ type: 'phase.started', phase: 'implement', attempt });
+            // Simulate partially written immutable output left by a dead worker.
+            const partialPath = path.join(runDir, `raw/implement.${attempt}.stdout.json`);
+            fs.writeFileSync(partialPath, 'partial owner output');
+            if (attempt < orphanAttempt) {
+                if (attempt <= priorProviderFailures) {
+                    store.append({ type: 'phase.failed', phase: 'implement', attempt,
+                        error_code: 'DUAL_AGY_TIMEOUT', retryable: true });
+                } else store.settleOrphanedAttempt('implement');
+            }
+        }
+        // Normal execution still refuses an active attempt and never dispatches.
+        if (orphanAttempt > 0) {
+            await assert.rejects(() => orch.runPhase('implement', taskId), { code: 'DUAL_ATTEMPT_SEQUENCE' });
+            assert.equal(calls, 0);
+            store.settleOrphanedAttempt('implement');
+        }
+        assert.equal(store.countProviderFailures('implement'), priorProviderFailures);
+        assert.notEqual(orch.status(taskId).nextAction, 'blocked');
+        await assert.rejects(() => orch.runPhase('implement', taskId), { code: 'DUAL_AGY_EMPTY_OUTPUT' });
+        assert.equal(calls, 3 - priorProviderFailures);
+        const failures = store.readEvents().filter(e => e.type === 'phase.failed' && e.phase === 'implement');
+        assert.deepEqual(failures.filter(e => e.error_code !== 'DUAL_OWNER_DEAD').map(e => e.retryable), [true, true, false]);
+        assert.equal(store.countProviderFailures('implement'), 3);
+        assert.equal(store.nextAttempt('implement'), orphanAttempt + 4 - priorProviderFailures);
+        if (orphanAttempt > 0) assert.equal(fs.readFileSync(path.join(runDir, `raw/implement.${orphanAttempt}.stdout.json`), 'utf8'), 'partial owner output');
+        assert.equal(orch.status(taskId).nextAction, 'blocked');
+    });
+}

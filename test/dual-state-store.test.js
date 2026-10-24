@@ -222,18 +222,33 @@ test('tracks attempts and exposes a successful phase for idempotent callers', (t
     assert.equal(store.hasSuccessfulPhase('scout').attempt, 2);
 });
 
-test('writes immutable artifacts and refuses an overwrite', (t) => {
+test('reuses byte-identical immutable artifacts and refuses different bytes', (t) => {
     const runDir = makeRunDir(t);
     const artifacts = createArtifactStore(runDir);
     const first = artifacts.writeImmutable('attempts/scout.1.output.json', '{"ok":true}\n');
 
     assert.equal(fs.readFileSync(first.path, 'utf8'), '{"ok":true}\n');
     assert.equal(first.sha256, artifacts.sha256('{"ok":true}\n'));
+    const timestamp = new Date('2020-01-01T00:00:00.000Z');
+    fs.utimesSync(first.path, timestamp, timestamp);
+    const before = fs.statSync(first.path);
+    const repeated = artifacts.writeImmutable('attempts/scout.1.output.json', Buffer.from('{"ok":true}\n'));
+    assert.deepEqual(repeated, first);
+    assert.equal(fs.statSync(first.path).mtimeMs, before.mtimeMs);
+    assert.equal(fs.readFileSync(first.path, 'utf8'), '{"ok":true}\n');
     assert.throws(
         () => artifacts.writeImmutable('attempts/scout.1.output.json', 'replacement'),
         (error) => error.code === 'DUAL_ARTIFACT_EXISTS',
     );
     assert.equal(fs.readFileSync(first.path, 'utf8'), '{"ok":true}\n');
+});
+
+test('JSON immutable writes reuse identical serialized bytes', t => {
+    const artifacts = createArtifactStore(makeRunDir(t));
+    const first = artifacts.writeJsonImmutable('schema.json', { type: 'object' });
+    assert.deepEqual(artifacts.writeJsonImmutable('schema.json', { type: 'object' }), first);
+    assert.throws(() => artifacts.writeJsonImmutable('schema.json', { type: 'string' }),
+        { code: 'DUAL_ARTIFACT_EXISTS' });
 });
 
 test('atomically replaces only mutable JSON cache files', (t) => {
@@ -308,3 +323,132 @@ test('state store supports snapshot typed baseline and caches state correctly', 
     );
 });
 
+
+test('explicit orphan settlement preserves raw identity and excludes provider budget', t => {
+    const { store, runDir } = makeStore(t);
+    store.append({ type: 'transaction.created', state: 'NEW' });
+    store.append({ type: 'phase.started', phase: 'preflight', attempt: 1 });
+    assert.throws(() => store.append({ type: 'phase.started', phase: 'preflight', attempt: 2 }),
+        { code: 'DUAL_ATTEMPT_SEQUENCE' });
+    const before = fs.readFileSync(path.join(runDir, 'events.ndjson'), 'utf8');
+    const settlement = store.settleOrphanedAttempt('preflight');
+    assert.equal(settlement.evidence, 'written');
+    assert.equal(settlement.settlement, true);
+    assert.equal(store.current(), 'NEW');
+    assert.equal(store.countProviderFailures('preflight'), 0);
+    assert.equal(store.nextAttempt('preflight'), 2);
+    assert.ok(fs.readFileSync(path.join(runDir, 'events.ndjson'), 'utf8').startsWith(before));
+    const evidence = JSON.parse(fs.readFileSync(path.join(runDir, 'raw/preflight.1.failure.json')));
+    assert.equal(evidence.error_code, 'DUAL_OWNER_DEAD');
+    assert.equal(evidence.provider_output, null);
+    assert.equal(evidence.settlement, true);
+    assert.equal(evidence.retryable, true);
+    assert.throws(() => store.settleOrphanedAttempt('preflight'), { code: 'DUAL_ATTEMPT_SEQUENCE' });
+    store.append({ type: 'phase.started', phase: 'preflight', attempt: 2 });
+    store.append({ type: 'phase.failed', phase: 'preflight', attempt: 2,
+        error_code: 'DUAL_AGY_TIMEOUT', retryable: false });
+    assert.equal(store.countProviderFailures('preflight'), 1);
+});
+
+test('settlement refuses completed and inactive phases without evidence or new events', t => {
+    const { store, runDir } = makeStore(t);
+    store.append({ type: 'transaction.created', state: 'NEW' });
+    store.append({ type: 'phase.started', phase: 'preflight', attempt: 1 });
+    store.append({ type: 'phase.completed', phase: 'preflight', attempt: 1,
+        from_state: 'NEW', to_state: 'PREFLIGHT_SAFE', artifact_hashes: {} });
+    const before = store.readEvents();
+    for (const phase of ['preflight', 'implement']) {
+        assert.throws(() => store.settleOrphanedAttempt(phase), { code: 'DUAL_ATTEMPT_SEQUENCE' });
+    }
+    assert.deepEqual(store.readEvents(), before);
+    assert.equal(fs.existsSync(path.join(runDir, 'raw/preflight.1.failure.json')), false);
+});
+
+for (const kind of ['W1', 'W2']) {
+    test(`${kind} reuses valid evidence after crash without spending provider budget`, t => {
+        const { store, runDir } = makeStore(t);
+        store.append({ type: 'transaction.created', state: 'NEW' });
+        store.append({ type: 'phase.started', phase: 'preflight', attempt: 1 });
+        const evidence = { schema_version: 1, task_id: TASK_ID,
+            expected_base_commit: BASE_COMMIT, phase: 'preflight', attempt: 1,
+            error_code: kind === 'W1' ? 'PROVIDER_FAILURE' : 'DUAL_OWNER_DEAD', retryable: false,
+            ...(kind === 'W2' ? { settlement: true, retryable: true,
+                reason: 'Explicit session resume after owner restart; orphaned active attempt',
+                provider_output: null, provider_outcome: 'unknown' } : {}) };
+        const file = path.join(runDir, 'raw/preflight.1.failure.json');
+        createArtifactStore(runDir).writeJsonImmutable('raw/preflight.1.failure.json', evidence);
+        const bytes = fs.readFileSync(file);
+        const resumed = createStateStore(runDir, { taskId: TASK_ID, expectedBaseCommit: BASE_COMMIT });
+        const event = resumed.settleOrphanedAttempt('preflight');
+        assert.equal(event.evidence, 'reused');
+        assert.equal(event.evidence_path, 'raw/preflight.1.failure.json');
+        assert.equal(event.error_code, 'DUAL_OWNER_DEAD');
+        assert.equal(event.settlement, true);
+        assert.equal(event.retryable, true);
+        assert.deepEqual(fs.readFileSync(file), bytes);
+        assert.equal(resumed.countProviderFailures('preflight'), 0);
+        resumed.append({ type: 'phase.started', phase: 'preflight', attempt: 2 });
+    });
+}
+
+for (const bad of ['json', 'schema_version', 'task_id', 'phase', 'attempt', 'baseline', 'escape', 'parent-escape']) {
+    test(`settlement fails closed for invalid evidence: ${bad}`, t => {
+        const { store, runDir } = makeStore(t);
+        store.append({ type: 'transaction.created', state: 'NEW' });
+        store.append({ type: 'phase.started', phase: 'preflight', attempt: 1 });
+        const evidence = { schema_version: 1, task_id: TASK_ID,
+            expected_base_commit: BASE_COMMIT, phase: 'preflight', attempt: 1 };
+        if (bad === 'baseline') evidence.expected_base_commit = 'c'.repeat(40);
+        else if (!['json', 'escape', 'parent-escape'].includes(bad)) evidence[bad] = 'wrong';
+        const bytes = bad === 'json' ? '{broken' : JSON.stringify(evidence);
+        const file = path.join(runDir, 'raw/preflight.1.failure.json');
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        if (bad === 'escape' || bad === 'parent-escape') {
+            const outside = makeRunDir(t);
+            if (bad === 'parent-escape') {
+                fs.rmdirSync(path.dirname(file));
+                fs.symlinkSync(outside, path.dirname(file));
+                fs.writeFileSync(file, bytes);
+            } else {
+                const target = path.join(outside, 'failure.json');
+                fs.writeFileSync(target, bytes);
+                fs.symlinkSync(target, file);
+            }
+        } else fs.writeFileSync(file, bytes);
+        const before = fs.readFileSync(path.join(runDir, 'events.ndjson'));
+        assert.throws(() => store.settleOrphanedAttempt('preflight'),
+            error => ['DUAL_SETTLEMENT_EVIDENCE_INVALID', 'DUAL_ARTIFACT_PATH'].includes(error.code));
+        assert.deepEqual(fs.readFileSync(path.join(runDir, 'events.ndjson')), before);
+        assert.equal(fs.readFileSync(file, 'utf8'), bytes);
+        assert.equal(store.activeAttempts().get('preflight'), 1);
+    });
+}
+
+test('provider budget excludes either settlement marker independently', t => {
+    const { store } = makeStore(t);
+    store.append({ type: 'transaction.created', state: 'NEW' });
+    for (const [index, marker] of [{ settlement: true }, { error_code: 'DUAL_OWNER_DEAD' }].entries()) {
+        store.append({ type: 'phase.started', phase: 'preflight', attempt: index + 1 });
+        store.append({ type: 'phase.failed', phase: 'preflight', attempt: index + 1,
+            error_code: 'PROVIDER_FAILURE', retryable: true, ...marker });
+    }
+    assert.equal(store.countProviderFailures('preflight'), 0);
+});
+
+test('settlement reuses snapshot baseline evidence and rejects baseline kind drift', t => {
+    const runDir = makeRunDir(t);
+    const baseline = { kind: 'snapshot', id: HASH };
+    const store = createStateStore(runDir, { taskId: TASK_ID, expectedBaseline: baseline });
+    store.append({ type: 'transaction.created', state: 'NEW' });
+    store.append({ type: 'phase.started', phase: 'preflight', attempt: 1 });
+    const file = path.join(runDir, 'raw/preflight.1.failure.json');
+    const evidence = { schema_version: 1, task_id: TASK_ID,
+        expected_base_commit: BASE_COMMIT, phase: 'preflight', attempt: 1 };
+    createArtifactStore(runDir).writeJsonImmutable('raw/preflight.1.failure.json', evidence);
+    assert.throws(() => store.settleOrphanedAttempt('preflight'), { code: 'DUAL_SETTLEMENT_EVIDENCE_INVALID' });
+    delete evidence.expected_base_commit;
+    evidence.expected_baseline = baseline;
+    // Manual fixture repair models coordinator intervention after fail-closed.
+    fs.writeFileSync(file, JSON.stringify(evidence));
+    assert.equal(store.settleOrphanedAttempt('preflight').evidence, 'reused');
+});
