@@ -165,7 +165,7 @@ async function main() {
                 'plans/plan.md': '# Tiny task\nAdd an Array.isArray guard to activeIds in lib/util.js; throw TypeError("Expected array") for non-arrays. Preserve array behavior.\n',
                 '.codex/config.toml': buildCodexConfig('dual', true, opts),
                 '.codex/hooks.json': buildCodexHooks('dual', true, opts),
-                '.omni/manifest.json': JSON.stringify({ workerModel: MODEL }),
+                '.omni/manifest.json': JSON.stringify({ workerModel: MODEL, workerEffort: 'high' }),
             };
             for (const [file, content] of Object.entries(fixture)) {
                 fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
@@ -175,7 +175,7 @@ async function main() {
         });
         await stage('daemonListened', 15000, async () => {
             const env = { ...process.env, PATH: path.join(os.homedir(), '.local/bin') + path.delimiter + (process.env.PATH || ''),
-                OMNI_DUAL_WORKER_MODEL: MODEL };
+                OMNI_DUAL_WORKER_MODEL: MODEL, OMNI_DUAL_WORKER_EFFORT: 'high' };
             delete env.OMNI_DUAL_DISCUSSION_ENABLED;
             report.daemonLog = path.join(path.dirname(root), 'daemon.log');
             const log = fs.openSync(report.daemonLog, 'wx', 0o600);
@@ -271,7 +271,12 @@ async function main() {
             } catch { /* Preserve primary blockage. */ }
             if (report.stages.scoutCompleted.ok) {
                 try {
-                    await stage('taskCompleted', 240000, async (limit, signal) => {
+                    // Budget evidence (25/10/2026, 2 live runs): nominal post-scout
+                    // chain (implement ~115-154s + review ~25-80s) ≈ 180s, but the
+                    // provider-latency tail exceeds 240s (run 1: implement never
+                    // returned inside 240s). 480s keeps the proof from flaking on
+                    // tail latency; the overall 600s deadline cap still applies.
+                    await stage('taskCompleted', 480000, async (limit, signal) => {
                         await waitTask(events => events.some(event => event.type === 'phase.completed' && event.phase === 'review'), limit, signal);
                         report.taskState = json(path.join(runDir, 'state.json')).state;
                         check(['CODEX_QC', 'REVIEW_VALID'].includes(report.taskState), 'TASK_FLOW_INCOMPLETE');
