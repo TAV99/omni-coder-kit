@@ -235,3 +235,136 @@ for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCod
         });
     }
 }
+
+// Execution hooks use synthetic children so these cases cannot invoke provider CLIs.
+function hookChild(stdout, onKill) {
+    const { EventEmitter } = require('node:events');
+    const { PassThrough } = require('node:stream');
+    const child = new EventEmitter();
+    child.pid = 12345;
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = (signal) => {
+        onKill?.(signal);
+        setImmediate(() => {
+            child.stdout.write('drained');
+            child.emit('close', 137, signal);
+        });
+        return true;
+    };
+    if (stdout !== undefined) setImmediate(() => {
+        child.stdout.write(stdout);
+        child.emit('close', 0);
+    });
+    return child;
+}
+function hookParams(provider) {
+    return { binding: binding(provider), snapshot, envelope: { kind: 'question', body: 'ready?' },
+        invocationId: 'hooks-invocation', timeoutMs: 15000 };
+}
+for (const [provider, create, seed] of [
+    ['agy', createAgyAdapter, require('../lib/dual/discussion/live-agy-invoke').seedAgyConversation],
+    ['codex', createCodexAdapter, require('../lib/dual/discussion/live-codex-invoke').seedCodexConversation],
+]) {
+    test(`${provider}: hooks preserve env identity and await guard for turn, nudge and seed`, async () => {
+        const env = { HOOK_ONLY: 'yes' };
+        const phases = [];
+        let calls = 0;
+        let guarded = 0;
+        const hooks = { cwd: process.cwd(), env,
+            prespawnGuard: async (context) => {
+                assert.equal(Object.isFrozen(context), true);
+                assert.equal(context.cwd, process.cwd());
+                assert.equal(context.env, env);
+                await Promise.resolve();
+                phases.push(context.phase);
+                guarded++;
+            },
+            spawnImpl(command, args, opts) {
+                calls++;
+                assert.equal(guarded, calls);
+                assert.equal(opts.env, env);
+                assert.equal(opts.cwd, process.cwd());
+                assert.equal(opts.shell, false);
+                assert.ok(opts.signal || phases.at(-1) === 'seed');
+                return hookChild(output(provider, calls === 1 ? '' : JSON.stringify({
+                    schema_version: 1, kind: 'reply', body: 'ready',
+                })).stdout);
+            } };
+        const raw = await create(hooks).invoke(hookParams(provider));
+        assert.equal(raw.nudged, true);
+        assert.equal(raw.exitCode, 0);
+        assert.equal((await seed(hooks)).conversationId, 'conv-fixture');
+        assert.deepEqual(phases, ['turn', 'nudge', 'seed']);
+        assert.equal(calls, 3);
+    });
+    test(`${provider}: guard rejection preserves identity with zero spawns for adapter and seed`, async () => {
+        const denied = new Error('authority denied');
+        let calls = 0;
+        const hooks = { prespawnGuard: async () => { throw denied; }, spawnImpl: () => { calls++; } };
+        await assert.rejects(create(hooks).invoke(hookParams(provider)), (err) => err === denied);
+        await assert.rejects(seed(hooks), (err) => err === denied);
+        assert.equal(calls, 0);
+    });
+    test(`${provider}: nudge guard denial preserves identity and prevents second spawn`, async () => {
+        const denied = new Error('lease revoked');
+        let calls = 0;
+        const adapter = create({ prespawnGuard: ({ phase }) => { if (phase === 'nudge') throw denied; },
+            spawnImpl: () => { calls++; return hookChild(output(provider, '').stdout); } });
+        await assert.rejects(adapter.invoke(hookParams(provider)), (err) => err === denied);
+        assert.equal(calls, 1);
+    });
+    test(`${provider}: abort during guard prevents spawn`, async () => {
+        const controller = new AbortController();
+        let calls = 0;
+        const adapter = create({ signal: controller.signal,
+            prespawnGuard: async () => { controller.abort(); }, spawnImpl: () => { calls++; } });
+        const raw = await adapter.invoke(hookParams(provider));
+        assert.equal(raw.transportError, true);
+        assert.equal(calls, 0);
+    });
+    for (const source of ['factory', 'invoke']) {
+        test(`${provider}: ${source} signal abort kills and drains child with exit evidence`, async () => {
+            const controller = new AbortController();
+            let killed;
+            let spawned;
+            const started = new Promise((resolve) => { spawned = resolve; });
+            const adapter = create({ ...(source === 'factory' ? { signal: controller.signal } : {}),
+                spawnImpl: () => { spawned(); return hookChild(undefined, (signal) => { killed = signal; }); } });
+            const pending = adapter.invoke({ ...hookParams(provider),
+                ...(source === 'invoke' ? { signal: controller.signal } : {}) });
+            await started;
+            controller.abort();
+            const raw = await pending;
+            assert.equal(killed, 'SIGKILL');
+            assert.equal(raw.exitCode, 137);
+            assert.equal(raw.stdout, 'drained');
+            assert.equal(raw.timedOut, true);
+            assert.equal((await adapter.probeRecovery({ conversationId: 'conv-fixture' })).processQuiescent, true);
+        });
+    }
+}
+
+for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCodexAdapter]]) {
+    test(`${provider}: native child abort drains through AbortError until close`, { timeout: 5000 }, async () => {
+        const { spawn } = require('node:child_process');
+        const controller = new AbortController();
+        let ready;
+        const started = new Promise((resolve) => { ready = resolve; });
+        const adapter = create({ signal: controller.signal, spawnImpl(command, args, options) {
+            const child = spawn('/bin/sh', ['-c', 'printf ready; exec sleep 10'], options);
+            child.stdout.once('data', ready);
+            return child;
+        } });
+        const pending = adapter.invoke(hookParams(provider));
+        await Promise.race([started, pending.then(() => { throw new Error('child closed before ready'); })]);
+        controller.abort();
+        const raw = await pending;
+        assert.equal(raw.stdout, 'ready');
+        assert.equal(raw.timedOut, true);
+        assert.equal(raw.transportError, false);
+        assert.equal(raw.exitCode, null);
+        assert.ok(raw.pid > 0);
+        assert.equal((await adapter.probeRecovery({ conversationId: 'conv-fixture' })).processQuiescent, true);
+    });
+}

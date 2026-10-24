@@ -312,3 +312,91 @@ test('P0-G1 / P0-G2: Capability Preflight Bounded Primitive & Exact Models', asy
         assert.equal(spawnCalls, 0);
     });
 });
+
+test('execution hooks: preflight forwards env, spawnImpl, cwd, signal and guard to both probes', async () => {
+    const env = { GIT_CEILING_DIRECTORIES: '/worker' };
+    const controller = new AbortController();
+    const probes = [];
+    let guarded = 0;
+    const result = await runCapabilityPreflight(process.cwd(), {
+        cwd: '/worker', env, signal: controller.signal, workerModel: 'hook-model',
+        checkLedger: () => ({ name: 'authority_ledger_integrity', status: 'PASSED' }),
+        checkBaseline: () => ({ name: 'baseline_backend', status: 'PASSED' }),
+        checkConfig: () => ({ name: 'project_configuration', status: 'PASSED' }),
+        checkMcp: () => ({ name: 'mcp_and_hook_setup', status: 'PASSED' }),
+        prespawnGuard: async ({ phase, cwd }) => { assert.equal(phase, 'probe'); assert.equal(cwd, '/worker'); guarded++; },
+        spawnImpl(command, args, options) {
+            probes.push(args);
+            assert.equal(guarded, probes.length);
+            assert.equal(options.env, env);
+            assert.equal(options.signal, controller.signal);
+            assert.equal(options.cwd, '/worker');
+            const child = createMockChild();
+            setImmediate(() => {
+                child.stdout.write(args.includes('--version') ? 'agy 1.2.3' : '["hook-model"]');
+                child.emit('close', 0, null);
+            });
+            return child;
+        },
+    });
+    assert.equal(result.status, 'PASSED');
+    assert.deepEqual(probes, [['--version'], ['models']]);
+});
+
+test('execution hooks: bounded abort waits for close and preserves drained output and exit evidence', async () => {
+    const controller = new AbortController();
+    const child = createMockChild();
+    const pending = spawnBoundedProcess('probe', [], { signal: controller.signal, spawnImpl: () => child });
+    let settled = false;
+    pending.then(() => { settled = true; });
+    child.stdout.write('before');
+    controller.abort();
+    child.emit('error', Object.assign(new Error('aborted'), { name: 'AbortError' }));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, false);
+    assert.equal(child.killSignal, 'SIGKILL');
+    child.stdout.write('-after');
+    child.emit('close', 137, 'SIGKILL');
+    const result = await pending;
+    assert.equal(result.ok, false);
+    assert.equal(result.error_code, 'ABORTED');
+    assert.equal(result.code, 137);
+    assert.equal(result.signal, 'SIGKILL');
+    assert.equal(result.stdout, 'before-after');
+});
+
+test('execution hooks: bounded timeout with signal drains and preserves exit evidence', async () => {
+    const controller = new AbortController();
+    const child = createMockChild();
+    const pending = spawnBoundedProcess('probe', [], {
+        signal: controller.signal, timeoutMs: 10, spawnImpl: () => child,
+    });
+    let settled = false;
+    pending.then(() => { settled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(settled, false);
+    assert.equal(child.killSignal, 'SIGKILL');
+    child.stdout.write('tail');
+    child.emit('close', 137, 'SIGKILL');
+    const result = await pending;
+    assert.equal(result.timedOut, true);
+    assert.equal(result.code, 137);
+    assert.equal(result.stdout, 'tail');
+});
+
+test('execution hooks: guard rejection propagates unchanged and pre-abort prevents spawn', async () => {
+    const denied = new Error('guard denied');
+    let calls = 0;
+    const spawnImpl = () => { calls++; };
+    await assert.rejects(spawnBoundedProcess('probe', [], {
+        spawnImpl, prespawnGuard: async () => { throw denied; },
+    }), (error) => error === denied);
+    await assert.rejects(runCapabilityPreflight(process.cwd(), {
+        spawnImpl, prespawnGuard: () => { throw denied; },
+    }), (error) => error === denied);
+    const controller = new AbortController();
+    controller.abort();
+    const result = await spawnBoundedProcess('probe', [], { spawnImpl, signal: controller.signal });
+    assert.equal(result.error_code, 'ABORTED');
+    assert.equal(calls, 0);
+});

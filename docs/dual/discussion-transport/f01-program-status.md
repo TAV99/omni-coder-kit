@@ -201,3 +201,14 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   capability-preflight + daemon-ports context — additive, giữ nguyên hành vi shared);
   **2b-ii** = child factory + wiring isolated + guard 3 chốt + helper test và di trú
   suite isolated.
+- **2b-i — ĐẠT (24/10/2026, Muse kiểm chứng):** nền hooks `{ spawnImpl, env, signal,
+  prespawnGuard }` cho live-agy-invoke, live-codex-invoke (prespawnGuard await trước
+  MỌI spawn kể cả nudge nội bộ; comment phân quyền tracking tại điểm spawn),
+  capability-preflight (chuyển env/signal/spawnImpl xuống spawnBoundedProcess),
+  daemon-ports (trustedExecutionContext optional — có context thì probe dùng
+  workerRoot, không có thì giữ derived root). Additive, defaults giữ hành vi shared.
+  Cổng của Muse: suite discussion **299 tests — 294 pass / 0 fail / 5 skip** (+18
+  case mới); capability-preflight 14/16 — 1 case fail ("injected version/models…
+  exact durable details") **có sẵn tại HEAD trước 2b-i** (đối chứng worktree HEAD:
+  cùng case fail) → nợ môi trường có sẵn, không phải hồi quy; để lại kiểm ở cổng cuối
+  Phase 3.

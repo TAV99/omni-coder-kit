@@ -319,3 +319,84 @@ for (const expired of [false, true]) {
         }
     });
 }
+
+for (const withContext of [false, true]) {
+    test(`capability execution hooks: ${withContext ? 'trusted worker' : 'derived shared'} root reaches preflight and Codex probe`, async (t) => {
+        const workerRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ports-worker-'));
+        t.after(() => fs.rm(workerRoot, { recursive: true, force: true }));
+        const expectedRoot = withContext ? workerRoot : process.cwd();
+        const env = { GIT_CEILING_DIRECTORIES: workerRoot };
+        const controller = new AbortController();
+        const calls = [];
+        const depsContextSpawn = () => {};
+        const deps = createDaemonHostDeps({ authority: () => state(), now: () => now,
+            signal: controller.signal,
+            trustedExecutionContext: withContext ? { workerRoot, env, spawnImpl: depsContextSpawn } : undefined,
+            preflight: {
+                run: async (root, options) => {
+                    calls.push('preflight');
+                    assert.equal(root, expectedRoot);
+                    assert.equal(options.cwd, expectedRoot);
+                    assert.equal(options.signal, controller.signal);
+                    assert.equal(options.env, withContext ? env : undefined);
+                    if (withContext) assert.equal(options.spawnImpl, depsContextSpawn);
+                    return passing(options.workerModel);
+                },
+                codexProbe: async (args, root, hooks) => {
+                    calls.push('codex');
+                    assert.equal(root, expectedRoot);
+                    assert.equal(hooks.signal, controller.signal);
+                    assert.equal(hooks.env, withContext ? env : undefined);
+                    return true;
+                },
+            },
+        });
+        // AGY and Codex must resolve the same execution root.
+        assert.equal((await deps.verifyCapability(capArgs)).allowed, true);
+        const codexArgs = { ...capArgs, binding: bindings[0], bindingRef: bindingRef(bindings[0]), provider: 'codex' };
+        assert.equal((await deps.verifyCapability(codexArgs)).liveProfileVerified, true);
+        assert.deepEqual(calls, ['preflight', 'preflight', 'codex']);
+    });
+}
+
+test('trusted context default Codex version probe uses supplied spawnImpl, env and workerRoot', async (t) => {
+    const { EventEmitter } = require('node:events');
+    const { PassThrough } = require('node:stream');
+    const workerRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ports-default-probe-'));
+    t.after(() => fs.rm(workerRoot, { recursive: true, force: true }));
+    const env = { GIT_CEILING_DIRECTORIES: workerRoot };
+    const controller = new AbortController();
+    let calls = 0;
+    const deps = createDaemonHostDeps({ authority: () => state(), now: () => now,
+        signal: controller.signal,
+        trustedExecutionContext: { workerRoot, env, spawnImpl(command, args, options) {
+            calls++;
+            assert.deepEqual(args, ['--version']);
+            assert.equal(options.cwd, workerRoot);
+            assert.equal(options.env, env);
+            assert.equal(options.signal, controller.signal);
+            const child = new EventEmitter();
+            child.stdout = new PassThrough();
+            child.stderr = new PassThrough();
+            setImmediate(() => child.emit('close', 0, null));
+            return child;
+        } },
+        preflight: { run: async (root, options) => passing(options.workerModel) },
+    });
+    const args = { ...capArgs, binding: bindings[0], bindingRef: bindingRef(bindings[0]), provider: 'codex' };
+    await deps.verifyCapability(args);
+    assert.equal(calls, 1);
+});
+
+test('trusted context probe guard denial propagates unchanged without spawning', async () => {
+    const denied = new Error('probe denied');
+    let spawns = 0;
+    const deps = createDaemonHostDeps({ authority: () => state(), now: () => now,
+        prespawnGuard: async () => { throw denied; },
+        trustedExecutionContext: { workerRoot: process.cwd(), env: {}, spawnImpl: () => { spawns++; } },
+        preflight: { run: async (root, options) => passing(options.workerModel) },
+    });
+    await assert.rejects(deps.verifyCapability({ ...capArgs, binding: bindings[0],
+        bindingRef: bindingRef(bindings[0]), provider: 'codex' }), (error) => error === denied);
+    assert.equal(spawns, 0);
+});
