@@ -247,6 +247,22 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   5 skip** (14 fail trong chạy sandbox của Codex đều là EPERM git subprocess, về shell
   cấp cao nhất đều pass — đúng quy tắc top-level là chuẩn). Đã commit phần này
   (không push; runbook bị gitignore `docs/` nên add bằng `git add -f`).
+- **Fix round sau AGY review toàn Phase 3 — ĐẠT (24/10/2026, Muse kiểm chứng):**
+  AGY review `f01-phase3-full-review-agy.md`: verdict ACCEPT WITH FIXES, 0 P0, 2 P1, 2 P2;
+  H1–H7 TRUE, H8 PARTLY. P1-01 (nợ 20/33 ở `test/dual-daemon-orchestrator.test.js`) ĐÃ BỊ
+  BÁC BẰNG ĐO THỰC TẾ: suite chạy ở shell cấp cao nhất cho **54 pass / 0 fail / 0 skip** —
+  con số 20/33 trong các bản ghi cũ (kể cả mục 2b-ii dưới đây) là trạng thái tại thời điểm
+  đó, KHÔNG còn đúng với source hiện tại; bản ghi này thay thế các bản ghi nợ đó.
+  Codex sửa F1 (P1-02: turn handler của `withDiscussion` dùng `attempt` thực tế, mặc định
+  `1`, thay cho hardcode `.1.`) và F2 (P2-01: proxy `localFs` tổng quát hoá cho mọi hàm fs
+  lấy đường dẫn + `fs.promises`, chỉ rewrite string tương đối, giữ nguyên tuyệt đối/
+  Buffer/URL/fd) trong `test/helpers/dual-discussion-stub.js` (+11/−8) + test hồi quy mới
+  `test/dual-discussion-stub.test.js` (+66, 10 test). Cổng của Muse ở shell cấp cao nhất:
+  3 suite bắt buộc + suite mới **167 pass / 0 fail**; discussion glob **323 pass / 0 fail /
+  5 skip** (14 fail trong chạy sandbox của Codex đều là EPERM listen 127.0.0.1, về shell
+  cấp cao nhất đều pass). P2-02 (orphan `.execution.json` khi crash sớm) giữ làm nợ kỹ
+  thuật retention/GC sau Phase 3, không sửa production trong vòng này. Đã commit phần này
+  (không push; review doc bị gitignore `docs/` nên add bằng `git add -f`).
 - **2b-ii — ĐẠT (24/10/2026, Muse kiểm chứng):** child factory `createIsolatedDiscussion`
   trong host-resolver (executionKey cấu trúc theo thiết kế, stateDir namespace
   `isolated/<key>`, registry/reader riêng, close lũy đẳng + tự unregister);

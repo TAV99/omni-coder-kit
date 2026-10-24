@@ -112,13 +112,16 @@ async function scriptPayload(script, invocation) {
     return new Promise((resolve, reject) => {
         let stdout = '';
         const exited = Symbol('fixture exit');
-        const localFs = new Proxy(fs, { get(target, name) {
-            if (['readFileSync', 'writeFileSync', 'mkdirSync', 'existsSync', 'readdirSync'].includes(name)) {
-                return (file, ...args) => target[name](typeof file === 'string' && !path.isAbsolute(file)
-                    ? path.join(invocation.cwd, file) : file, ...args);
-            }
-            return target[name];
+        const scopeFs = (target) => new Proxy(target, { get(object, name) {
+            const value = Reflect.get(object, name);
+            if (name === 'promises') return scopeFs(value);
+            if (typeof value !== 'function') return value;
+            return (file, ...args) => Reflect.apply(value, object, [
+                typeof file === 'string' && !path.isAbsolute(file)
+                    ? path.join(invocation.cwd, file) : file, ...args,
+            ]);
         } });
+        const localFs = scopeFs(fs);
         const finish = () => {
             try { resolve(JSON.parse(stdout).structured_output); } catch (error) { reject(error); }
         };
@@ -140,8 +143,8 @@ function withDiscussion(options) {
     const { processRunner, agyPrefixArgs = [] } = options;
     const discussion = options.discussion ?? createDiscussionStub({
         authorityStore: options.authorityStore,
-        async turn({ workerRoot, phase, taskId, env, spawnImpl }) {
-            const input = `.omni/codex-gemini/runs/${taskId}/raw/${phase}.1.input.md`;
+        async turn({ workerRoot, phase, taskId, attempt = 1, env, spawnImpl }) {
+            const input = `.omni/codex-gemini/runs/${taskId}/raw/${phase}.${attempt}.input.md`;
             const prompt = `Execute the ${phase} phase. Read ${input}`;
             const invocation = { cwd: workerRoot, transport: 'discussion',
                 args: [`-p=${prompt}${agyPrefixArgs[0] ? '' : `\n${fs.readFileSync(path.join(workerRoot, input), 'utf8')}`}`] };
