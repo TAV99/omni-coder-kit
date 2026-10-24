@@ -1,5 +1,11 @@
 'use strict';
 
+const { withDiscussion } = require('./helpers/dual-discussion-stub');
+
+function createOrchestratorAdapter(options) {
+    return createOrchestratorAdapterImpl(withDiscussion(options));
+}
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -8,7 +14,7 @@ const crypto = require('node:crypto');
 const test = require('node:test');
 
 const { createAuthorityStore } = require('../lib/dual/authority-store');
-const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
+const { createOrchestratorAdapter: createOrchestratorAdapterImpl } = require('../lib/dual/orchestrator-adapter');
 const { recoverTaskLease, releaseSettledTaskLease } = require('../lib/dual/task-processes');
 const { recordTaskOutcome } = require('../lib/dual/task-correction');
 const { inspectOperation } = require('../lib/dual/operation-lifecycle');

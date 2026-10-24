@@ -1,5 +1,11 @@
 'use strict';
 
+const { withDiscussion } = require('./helpers/dual-discussion-stub');
+
+function createOrchestratorAdapter(options) {
+    return createOrchestratorAdapterImpl(withDiscussion(options));
+}
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -8,7 +14,7 @@ const crypto = require('node:crypto');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 const { createAuthorityStore, canonicalizeEvent } = require('../lib/dual/authority-store');
-const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
+const { createOrchestratorAdapter: createOrchestratorAdapterImpl } = require('../lib/dual/orchestrator-adapter');
 const { createConfiguredSnapshotBaseline } = require('../lib/dual/snapshot-policy');
 const { writeInitialSnapshot } = require('../lib/dual/snapshot-store');
 const { hashAcceptancePolicy } = require('../lib/dual/acceptance-policy');

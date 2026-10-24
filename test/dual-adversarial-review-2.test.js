@@ -1,5 +1,11 @@
 'use strict';
 
+const { withDiscussion } = require('./helpers/dual-discussion-stub');
+
+function createOrchestratorAdapter(options) {
+    return createOrchestratorAdapterImpl(withDiscussion(options));
+}
+
 const { describe, it, test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -16,7 +22,7 @@ const {
     detectBaselineBackend,
     createSnapshotBaseline,
     createGitBaseline,
-    createOrchestratorAdapter,
+    createOrchestratorAdapter: createOrchestratorAdapterImpl,
     createDualOrchestrator,
     evaluateMandatoryGates,
     createQualityLedger,

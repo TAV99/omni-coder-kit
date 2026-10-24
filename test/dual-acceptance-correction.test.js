@@ -8,6 +8,8 @@ const test = require('node:test');
 
 const { createAuthorityStore } = require('../lib/dual/authority-store');
 const { startDaemonServer } = require('../lib/dual/daemon-server');
+const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
+const { withDiscussion } = require('./helpers/dual-discussion-stub');
 const { createDaemonClient } = require('../lib/dual/daemon-client');
 const { evaluateHook } = require('../lib/dual/hook-bridge');
 const { captureDiffFingerprint } = require('../lib/dual/scope-guard');
@@ -165,7 +167,9 @@ test('public daemon path completes isolated QC, correction, and fresh review wit
         workspaceRoot,
         authorityStore,
         preflightRunner: mockPreflightRunner,
-        processRunner: publicDaemonWorker(),
+        orchestrator: createOrchestratorAdapter(withDiscussion({
+            workspaceRoot, authorityStore, processRunner: publicDaemonWorker(),
+        })),
         planArtifactVerifier: async (_root, p) => ({ plan_path: p.plan_path, plan_sha256: p.plan_sha256 }),
     });
     t.after(async () => {

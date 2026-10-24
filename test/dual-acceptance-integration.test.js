@@ -376,6 +376,7 @@ test('daemon derives UI authority from persisted policy and rejects mismatched e
 test('isolated QC enforces pre-integration review evidence before integrating task', async (t) => {
     const { completeIsolatedTask } = require('../lib/dual/isolated-qc');
     const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
+    const { withDiscussion } = require('./helpers/dual-discussion-stub');
     const { createConfiguredSnapshotBaseline } = require('../lib/dual/snapshot-policy');
     const { writeInitialSnapshot } = require('../lib/dual/snapshot-store');
 
@@ -473,9 +474,9 @@ test('isolated QC enforces pre-integration review evidence before integrating ta
         };
     };
 
-    const adapter = createOrchestratorAdapter({
+    const adapter = createOrchestratorAdapter(withDiscussion({
         workspaceRoot: root, authorityStore: store, processRunner: fakeWorker,
-    });
+    }));
     await adapter.runTask(store.derive());
 
     const qcRequest = {

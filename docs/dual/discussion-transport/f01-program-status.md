@@ -219,6 +219,15 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   dual-cli + dual-e2e đã di trú sang kỳ vọng fail-closed/stub; cổng của Muse:
   **68/68 pass** (kèm discussion-orchestrator) — gồm cả các luồng E2E đã di trú chạy
   thật, điều sandbox của Codex không chứng minh được.
+- **2c-ii — ĐẠT MỘT PHẦN (24/10/2026):** Codex chạm HẠN MỨC 5H giữa lượt chạy
+  (báo thử lại 6:19 AM) — theo lệnh thường trực của chủ repo: chờ hồi phục, không
+  dồn thử lại. Phần đã làm được Muse đối chứng worktree-tại-HEAD trên 11 suite:
+  tổng 73→108 pass; **35 case được sửa, 0 hồi quy**; đã commit phần này. Còn lại:
+  3 suite chưa di trú (acceptance-policy, incident-routing, incident-dependencies),
+  test âm mới "daemon không discussion" (fail ở bước chụp baseline git của fixture
+  greenfield — chưa chạm tới assertion fail-closed, không phải hồi quy production),
+  và 65 case fail CÓ SẴN ở cả hai cây (nợ cũ ngoài phạm vi Phase 3, giữ nguyên
+  làm đường cơ sở cho cổng cuối).
 - **2b-ii — ĐẠT (24/10/2026, Muse kiểm chứng):** child factory `createIsolatedDiscussion`
   trong host-resolver (executionKey cấu trúc theo thiết kế, stateDir namespace
   `isolated/<key>`, registry/reader riêng, close lũy đẳng + tự unregister);

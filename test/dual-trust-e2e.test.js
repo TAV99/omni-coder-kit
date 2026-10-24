@@ -1,5 +1,11 @@
 'use strict';
 
+const { withDiscussion } = require('./helpers/dual-discussion-stub');
+
+function createOrchestratorAdapter(options) {
+    return createOrchestratorAdapterImpl(withDiscussion(options));
+}
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -12,7 +18,7 @@ const {
     startDaemonServer,
     createDaemonClient,
     createAuthorityStore,
-    createOrchestratorAdapter,
+    createOrchestratorAdapter: createOrchestratorAdapterImpl,
 } = require('../lib/dual');
 const { createDaemonServerOptions } = require('../bin/omni-daemon');
 const { handleDualQc } = require('../lib/commands/dual');

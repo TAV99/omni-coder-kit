@@ -1,6 +1,10 @@
 'use strict';
 
 const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const { createRequire } = require('node:module');
 const { randomUUID, createHash } = require('node:crypto');
 const { buildBindings } = require('../../lib/dual/discussion/session');
 
@@ -36,7 +40,7 @@ function createDiscussionStub(options = {}) {
                 record.bindings = buildBindings({ sessionId: context.sessionId, taskId: context.taskId,
                     planRevision: context.planRevision, snapshotSha256,
                     codexConversationId: codex.conversationId, agyConversationId: agy.conversationId,
-                    execution: { attempt: context.attempt, workspace_binding_sha256: context.reference.bindingSha256 } });
+                    ...(context.reference ? { execution: { attempt: context.attempt, workspace_binding_sha256: context.reference.bindingSha256 } } : {}) });
                 return record.bindings;
             })();
             return pending;
@@ -88,7 +92,71 @@ function createDiscussionStub(options = {}) {
             },
         };
     }
-    return { enabled: true, createIsolatedDiscussion, executions, counters };
+    const shared = new Map();
+    return { enabled: true, createIsolatedDiscussion, executions, counters,
+        async sessionResolver(args) {
+            const derived = options.authorityStore.derive();
+            const key = JSON.stringify([derived.sessionId, derived.planRevision, args.taskId, args.snapshotSha256]);
+            if (!shared.has(key)) shared.set(key, await createIsolatedDiscussion({
+                workerRoot: args.workspaceRoot, workerBaselineId: args.snapshotSha256,
+                sessionId: derived.sessionId, taskId: args.taskId, planRevision: derived.planRevision,
+            }));
+            return shared.get(key).sessionResolver(args);
+        },
+    };
 }
 
-module.exports = { createDiscussionStub };
+// Execute existing fake CLI payload generators in memory at the relay boundary.
+// Relative fixture file access is scoped to the worker; no provider process runs.
+async function scriptPayload(script, invocation) {
+    return new Promise((resolve, reject) => {
+        let stdout = '';
+        const exited = Symbol('fixture exit');
+        const localFs = new Proxy(fs, { get(target, name) {
+            if (['readFileSync', 'writeFileSync', 'mkdirSync', 'existsSync', 'readdirSync'].includes(name)) {
+                return (file, ...args) => target[name](typeof file === 'string' && !path.isAbsolute(file)
+                    ? path.join(invocation.cwd, file) : file, ...args);
+            }
+            return target[name];
+        } });
+        const finish = () => {
+            try { resolve(JSON.parse(stdout).structured_output); } catch (error) { reject(error); }
+        };
+        const fixtureRequire = createRequire(script);
+        const run = (fn) => {
+            try { fn(); } catch (error) { if (error !== exited) reject(error); }
+        };
+        run(() => new vm.Script(fs.readFileSync(script, 'utf8'), { filename: script }).runInNewContext({
+            require: (name) => ['fs', 'node:fs'].includes(name) ? localFs : fixtureRequire(name),
+            process: { argv: [process.execPath, script, ...invocation.args], version: process.version,
+                stdout: { write(value) { stdout += value; finish(); } },
+                exit(code) { if (code) reject(new Error(`Fixture exited ${code}`)); throw exited; } },
+            setTimeout: (fn, delay) => setTimeout(() => run(fn), delay),
+        }));
+    });
+}
+
+function withDiscussion(options) {
+    const { processRunner, agyPrefixArgs = [] } = options;
+    const discussion = options.discussion ?? createDiscussionStub({
+        authorityStore: options.authorityStore,
+        async turn({ workerRoot, phase, taskId, env, spawnImpl }) {
+            const input = `.omni/codex-gemini/runs/${taskId}/raw/${phase}.1.input.md`;
+            const prompt = `Execute the ${phase} phase. Read ${input}`;
+            const invocation = { cwd: workerRoot, transport: 'discussion',
+                args: [`-p=${prompt}${agyPrefixArgs[0] ? '' : `\n${fs.readFileSync(path.join(workerRoot, input), 'utf8')}`}`] };
+            if (agyPrefixArgs[0]) return scriptPayload(agyPrefixArgs[0], invocation);
+            const result = await processRunner(invocation, { env, spawn: spawnImpl });
+            return JSON.parse(result.stdout).structured_output;
+        },
+    });
+    // Script-based fixtures also keep their implement invocation on runProcess.
+    const { runProcess } = require('../../lib/dual/agy-runner');
+    return { ...options, discussion, processRunner: (invocation, deps) => {
+        assert.ok(invocation.args.some((arg) => arg.includes('implement phase')),
+            'Only implement may call processRunner; scout/review must use discussion');
+        return (processRunner ?? runProcess)(invocation, deps);
+    } };
+}
+
+module.exports = { createDiscussionStub, withDiscussion };

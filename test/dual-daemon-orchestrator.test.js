@@ -1,5 +1,11 @@
 'use strict';
 
+const { withDiscussion } = require('./helpers/dual-discussion-stub');
+
+function createOrchestratorAdapter(options) {
+    return createOrchestratorAdapterImpl(withDiscussion(options));
+}
+
 const { describe, it, test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -7,10 +13,6 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const { execSync, spawn, spawnSync } = require('child_process');
-
-// This suite simulates a classic non-discussion daemon deployment;
-// discussion default-on behavior is covered by the discussion wiring suites.
-process.env.OMNI_DUAL_DISCUSSION_ENABLED = '0';
 
 const {
     startDaemonServer: startDaemonServerImpl,
@@ -21,7 +23,7 @@ const {
     detectBaselineBackend,
     createSnapshotBaseline,
     createGitBaseline,
-    createOrchestratorAdapter,
+    createOrchestratorAdapter: createOrchestratorAdapterImpl,
     writeInitialSnapshot,
     readInitialSnapshot,
     readAcceptedSnapshot,
@@ -216,6 +218,7 @@ async function startDaemonServer(options = {}) {
     });
     const effectiveOptions = {
         ...options,
+        orchestrator: options.orchestrator ?? createOrchestratorAdapter(options),
         planArtifactVerifier: options.planArtifactVerifier || testPlanArtifactVerifier,
         trustedQualityRunner: Object.prototype.hasOwnProperty.call(options, 'trustedQualityRunner')
             ? options.trustedQualityRunner
@@ -2787,6 +2790,41 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             rmDir(scriptDir);
         });
 
+        it('Daemon without discussion rejects scout as a precondition without poisoning the task journal', async (t) => {
+            const authorityStore = createAuthorityStore(path.join(snapDir, '.omni', 'runs', 'dual-authority'));
+            let processCalls = 0;
+            const adapter = createOrchestratorAdapterImpl({ workspaceRoot: snapDir, authorityStore,
+                discussion: { enabled: false },
+                processRunner: async () => { processCalls++; assert.fail('No worker may run before scout'); } });
+            let rejected;
+            const daemon = await startDaemonServer({ workspaceRoot: snapDir, authorityStore,
+                preflightRunner: async () => createPassingCapability(),
+                orchestrator: { async runTask(derived) {
+                    try { return await adapter.runTask(derived); }
+                    catch (error) { rejected = error; throw error; }
+                } } });
+            t.after(() => daemon.close());
+            const client = createDaemonClient({ workspaceRoot: snapDir, timeoutMs: 10000 });
+            const begin = await client.beginSession({ workspace_root: snapDir, mode: 'auto' });
+            await client.registerPlan(begin.session_id, {
+                plan_path: 'plans/plan.md', plan_sha256: 'b'.repeat(64),
+                tasks: [{ task_id: 'TASK-NO-DISCUSSION', title: 'Requires discussion', owner: 'agy',
+                    goal: 'Update index.html', risk: 'low', complexity: 'low', category: 'feature',
+                    allowed_files: ['index.html'], deny_patterns: [],
+                    validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] }],
+            });
+            await client.resumeSession(begin.session_id);
+            for (let i = 0; i < 100 && !rejected; i++) await new Promise((resolve) => setTimeout(resolve, 20));
+            assert.equal(rejected?.code, 'DUAL_DISCUSSION_REQUIRED');
+            assert.equal(processCalls, 0);
+            const runDir = path.join(snapDir, '.omni/codex-gemini/runs/TASK-NO-DISCUSSION');
+            const events = fs.readFileSync(path.join(runDir, 'events.ndjson'), 'utf8').trim().split('\n').map(JSON.parse);
+            assert.equal(events.some((event) => event.type === 'phase.failed'), false);
+            assert.equal(events.some((event) => event.type === 'phase.completed' && event.phase === 'scout'), false);
+            assert.equal(fs.existsSync(path.join(runDir, 'raw/scout.1.failure.json')), false);
+            assert.equal(fs.existsSync(path.join(runDir, 'raw/scout.1.input.md')), false);
+        });
+
         it('Full snapshot lifecycle: begin -> plan -> resume (scout/spec/route/implement/scope/review) -> QC -> quality -> verify', async (t) => {
             const authorityStore = createAuthorityStore(path.join(snapDir, '.omni', 'runs', 'dual-authority'));
             let heartbeatScheduledMs = null;
@@ -3860,6 +3898,9 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             assert.equal(spawnSync('git', ['commit', '-m', 'add dual config'], { cwd: repoRoot }).status, 0);
 
             const authorityStore = createAuthorityStore(path.join(repoRoot, '.omni', 'runs', 'dual-authority'));
+            const executionOptions = withDiscussion({ workspaceRoot: repoRoot, authorityStore,
+                agyCommand: process.execPath, agyPrefixArgs: [customAgyScript], processRunner });
+            const discussion = executionOptions.discussion;
             daemon = await startDaemonServer({
                 workspaceRoot: repoRoot,
                 authorityStore,
@@ -3867,6 +3908,7 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
                 agyPrefixArgs: [customAgyScript],
                 spawnImpl,
                 processRunner,
+                orchestrator: createOrchestratorAdapterImpl(executionOptions),
             });
 
             client = createDaemonClient({
@@ -3933,12 +3975,17 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             assert.equal(preflightInvocations.length, 2, 'Task execution must not repeat daemon capability probes');
             assert.equal(taskInvocations.some((entry) => entry.args.includes('--version')), false);
             assert.equal(taskInvocations.some((entry) => entry.args.slice(-1)[0] === 'models'), false);
-            assert.ok(taskInvocations.length >= 3, 'Scout, implement, and review model phases must still execute');
+            assert.equal(taskInvocations.length, 1, 'Exactly one implement process call must execute');
+            assert.ok(taskInvocations[0].args.some((arg) => arg.includes('implement phase')));
+            assert.deepEqual(discussion.counters.turns.map((turn) => turn.phase), ['scout', 'review'],
+                'Scout and review must execute as discussion turns');
 
             const callsAfterFirstResume = taskInvocations.length;
+            const turnsAfterFirstResume = discussion.counters.turns.length;
             await client.resumeSession(sessionId);
             await new Promise((resolve) => setTimeout(resolve, 200));
             assert.equal(taskInvocations.length, callsAfterFirstResume, 'Resume must reuse completed phases without probes or model calls');
+            assert.equal(discussion.counters.turns.length, turnsAfterFirstResume, 'Resume must reuse completed discussion turns');
             assert.equal(preflightInvocations.length, 2);
         });
 
