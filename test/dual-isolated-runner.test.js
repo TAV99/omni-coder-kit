@@ -7,14 +7,42 @@ const os = require('node:os');
 const test = require('node:test');
 const { spawn, spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
-const { runIsolatedTask, normalizeCommandString } = require('../lib/dual/isolated-runner');
+const { runIsolatedTask: runRealIsolatedTask, normalizeCommandString } = require('../lib/dual/isolated-runner');
 const { integrateTaskResult } = require('../lib/dual/task-integration');
 const { createAuthorityStore, computeEventHash } = require('../lib/dual/authority-store');
-const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
+const { createOrchestratorAdapter: createRealOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
 const { startDaemonServer } = require('../lib/dual/daemon-server');
 const { listOperations } = require('../lib/dual/operation-lifecycle');
 const { createOperationLifecycleWriter } = require('../lib/dual/operation-lifecycle-writer');
 const { releaseSettledTaskLease } = require('../lib/dual/task-processes');
+
+const { createDiscussionStub } = require('./helpers/dual-discussion-stub');
+
+function discussionForWorker(worker, hooks = {}) {
+    return createDiscussionStub({
+        ...hooks,
+        async turn({ workerRoot, phase, taskId, env, spawnImpl }) {
+            const runDir = path.join(workerRoot, '.omni/codex-gemini/runs', taskId);
+            const prompt = fs.readFileSync(path.join(runDir, `raw/${phase}.1.input.md`), 'utf8');
+            const result = await worker({ cwd: workerRoot, transport: 'discussion', args: [`-p=Execute the ${phase} phase. Read .omni/codex-gemini/runs/${taskId}/raw/${phase}.1.input.md\n${prompt}`] }, { env, spawn: spawnImpl });
+            return JSON.parse(result.stdout).structured_output;
+        },
+    });
+}
+
+function withDiscussionWorker(options) {
+    const { worker = fakeWorker([]), ...rest } = options;
+    const discussion = options.discussion ?? discussionForWorker(worker);
+    return { ...rest, discussion,
+        processRunner: async (invocation, deps) => {
+            assert.ok(invocation.args.some((arg) => arg.startsWith('-p=') && arg.includes('implement phase')),
+                'Only implement may call processRunner; scout/review must use discussion');
+            return worker(invocation, deps);
+        },
+    };
+}
+function runIsolatedTask(options) { return runRealIsolatedTask(withDiscussionWorker(options)); }
+function createOrchestratorAdapter(options) { return createRealOrchestratorAdapter(withDiscussionWorker(options)); }
 
 function beginOperation({ authorityStore, ...params }) {
     return createOperationLifecycleWriter(authorityStore).begin(params);
@@ -68,7 +96,7 @@ function fakeWorker(calls, transform = (payload) => payload) {
 
 test('existing orchestrator runs worker phases in private snapshot and returns a QC handoff without source mutation', async (t) => {
     const input = fixture(t), calls = [];
-    const handoff = await runIsolatedTask({ ...input, processRunner: fakeWorker(calls) });
+    const handoff = await runIsolatedTask({ ...input, worker: fakeWorker(calls) });
     assert.equal(handoff.status, 'AWAITING_CODEX_QC');
     assert.equal(calls.length, 3);
     assert.equal(calls.every((invocation) => invocation.cwd === handoff.reference.workerRoot), true);
@@ -77,7 +105,7 @@ test('existing orchestrator runs worker phases in private snapshot and returns a
     assert.equal(Buffer.from(handoff.result.changes[0].contentBase64, 'base64').toString(), 'module.exports = 2;\n');
     assert.equal(fs.existsSync(path.join(input.workspaceRoot, handoff.handoffPath)), true);
     assert.match(handoff.handoffSha256, /^[a-f0-9]{64}$/);
-    const resumed = await runIsolatedTask({ ...input, processRunner: fakeWorker(calls), reference: handoff.reference });
+    const resumed = await runIsolatedTask({ ...input, worker: fakeWorker(calls), reference: handoff.reference });
     assert.equal(resumed.handoffSha256, handoff.handoffSha256);
     assert.equal(calls.length, 3, 'resume does not call completed phases again');
 });
@@ -101,7 +129,7 @@ test('isolated dispatch refuses inherited AGY project selection', async (t) => {
 test('private worker handoff can pass independent real validation and integrate through the controller', async (t) => {
     const input = fixture(t);
     const calls = [];
-    const handoff = await runIsolatedTask({ ...input, processRunner: fakeWorker(calls) });
+    const handoff = await runIsolatedTask({ ...input, worker: fakeWorker(calls) });
     const validation = spawnSync(process.execPath, ['--check', 'index.js'], {
         cwd: handoff.reference.workerRoot, shell: false, windowsHide: true, encoding: 'utf8',
     });
@@ -116,7 +144,7 @@ test('private worker handoff can pass independent real validation and integrate 
 test('revoked authority after preparation prevents worker invocation and preserves source', async (t) => {
     const input = fixture(t), calls = [];
     let permitted = true;
-    await assert.rejects(() => runIsolatedTask({ ...input, processRunner: fakeWorker(calls),
+    await assert.rejects(() => runIsolatedTask({ ...input, worker: fakeWorker(calls),
         authorize: () => permitted, onPrepared() { permitted = false; } }),
     (error) => error.code === 'DUAL_ISOLATED_UNAUTHORIZED');
     assert.equal(calls.length, 0);
@@ -125,7 +153,7 @@ test('revoked authority after preparation prevents worker invocation and preserv
 
 test('completed handoff detects evidence rewritten together with its mutable phase log', async (t) => {
     const input = fixture(t), calls = [];
-    const handoff = await runIsolatedTask({ ...input, processRunner: fakeWorker(calls) });
+    const handoff = await runIsolatedTask({ ...input, worker: fakeWorker(calls) });
     const runDir = path.join(handoff.reference.workerRoot, handoff.artifactPath);
     const evidencePath = path.join(runDir, 'evidence.json');
     const evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
@@ -136,7 +164,7 @@ test('completed handoff detects evidence rewritten together with its mutable pha
     const events = fs.readFileSync(eventsPath, 'utf8').trim().split('\n').map(JSON.parse);
     events.find((event) => event.type === 'phase.completed' && event.phase === 'implement').artifact_hashes['evidence.json'] = digest;
     fs.writeFileSync(eventsPath, events.map((event) => JSON.stringify(event)).join('\n') + '\n');
-    await assert.rejects(() => runIsolatedTask({ ...input, reference: handoff.reference, processRunner: fakeWorker(calls) }),
+    await assert.rejects(() => runIsolatedTask({ ...input, reference: handoff.reference, worker: fakeWorker(calls) }),
         (error) => error.code === 'DUAL_ISOLATED_EVIDENCE_INVALID');
     assert.equal(calls.length, 3);
 });
@@ -148,7 +176,7 @@ test('prepared reference pins worker model before any phase is started', async (
         reference = ref; throw new Error('interrupted before worker');
     } }), /interrupted before worker/);
     await assert.rejects(() => runIsolatedTask({ ...input, reference,
-        capability: { ...input.capability, model: 'another-model' }, processRunner: fakeWorker([]) }),
+        capability: { ...input.capability, model: 'another-model' }, worker: fakeWorker([]) }),
     (error) => error.code === 'DUAL_SPEC_CORRELATION');
 });
 
@@ -162,7 +190,7 @@ test('redirected runtime is rejected before orchestrator writes into the source 
     fs.mkdirSync(target);
     fs.mkdirSync(path.join(reference.workerRoot, '.omni'), { recursive: true });
     fs.symlinkSync(target, path.join(reference.workerRoot, '.omni/codex-gemini'), 'junction');
-    await assert.rejects(() => runIsolatedTask({ ...input, reference, processRunner: fakeWorker([]) }),
+    await assert.rejects(() => runIsolatedTask({ ...input, reference, worker: fakeWorker([]) }),
         (error) => error.code === 'DUAL_PATH_ESCAPE');
     assert.deepEqual(fs.readdirSync(target), [], 'no artifact writes outside private runtime');
 });
@@ -170,7 +198,7 @@ test('redirected runtime is rejected before orchestrator writes into the source 
 test('isolated semantic evidence must correlate to the registered task and baseline', async (t) => {
     for (const field of ['task_id', 'expected_baseline']) {
         const input = fixture(t);
-        await assert.rejects(() => runIsolatedTask({ ...input, processRunner: fakeWorker([], (payload) => ({
+        await assert.rejects(() => runIsolatedTask({ ...input, worker: fakeWorker([], (payload) => ({
             ...payload, [field]: field === 'task_id' ? 'UNRELATED-TASK' : { kind: 'snapshot', id: 'a'.repeat(64) },
         })) }), (error) => error.code === 'DUAL_ISOLATED_EVIDENCE_INVALID');
     }
@@ -179,7 +207,7 @@ test('isolated semantic evidence must correlate to the registered task and basel
 test('isolated handoff requires outputs for the registered validation command', async (t) => {
     for (const outputs of [[], [{ command: 'unregistered command', exit_code: 0, output: '' }]]) {
         const input = fixture(t);
-        await assert.rejects(() => runIsolatedTask({ ...input, processRunner: fakeWorker([], (payload) => (
+        await assert.rejects(() => runIsolatedTask({ ...input, worker: fakeWorker([], (payload) => (
             payload.status === 'SUCCESS' ? { ...payload, command_outputs: outputs } : payload
         )) }), (error) => error.code === 'DUAL_ISOLATED_EVIDENCE_INVALID');
     }
@@ -222,7 +250,7 @@ async function createAuthoritativeHandoff(input, store, processRunner, operation
     }
     const task = store.derive().tasks['TASK-1'];
     const handoff = await runIsolatedTask({ workspaceRoot: input.workspaceRoot, sessionId: input.sessionId,
-        attempt: 1, planRevision: 1, task, capability: input.capability, processRunner, authorize: () => true,
+        attempt: 1, planRevision: 1, task, capability: input.capability, worker: processRunner, authorize: () => true,
         onPrepared(reference) {
             const { bindingPath, bindingSha256, workerBaselineSha256, workerContractSha256 } = reference;
             store.append({ schema_version: 2, type: 'task.workspace.prepared', task_id: 'TASK-1',
@@ -247,7 +275,7 @@ test('authority adapter persists isolated binding and handoff and resumes after 
     const input = fixture(t), calls = [];
     const { store, dir } = seedAuthority(input);
     const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        agyProjectId: '12345678-1234-1234-1234-123456789abc', processRunner: fakeWorker(calls) });
+        agyProjectId: '12345678-1234-1234-1234-123456789abc', worker: fakeWorker(calls) });
     const result = await adapter.runTask(store.derive());
     assert.equal(result[0].status, 'AWAITING_CODEX_QC');
     assert.equal(store.derive().tasks['TASK-1'].isolatedWorkspace.attempt, 1);
@@ -255,7 +283,7 @@ test('authority adapter persists isolated binding and handoff and resumes after 
     assert.equal(Object.values(store.derive().leases).every((lease) => lease.status === 'released'), true);
     const reopened = createAuthorityStore(dir);
     const next = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: reopened,
-        processRunner: fakeWorker(calls) });
+        worker: fakeWorker(calls) });
     assert.equal((await next.runTask(reopened.derive()))[0].status, 'AWAITING_CODEX_QC');
     assert.equal(calls.length, 3);
     assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 1;\n');
@@ -264,7 +292,7 @@ test('authority adapter persists isolated binding and handoff and resumes after 
         (error) => error.code === 'DUAL_ISOLATED_AUTHORITY_STALE');
     const foreign = fixture(t);
     const wrongRoot = createOrchestratorAdapter({ workspaceRoot: foreign.workspaceRoot, authorityStore: reopened,
-        processRunner: fakeWorker(calls) });
+        worker: fakeWorker(calls) });
     await assert.rejects(() => wrongRoot.runTask(reopened.derive()),
         (error) => error.code === 'DUAL_ISOLATED_AUTHORITY_STALE');
     const handoffPath = reopened.derive().tasks['TASK-1'].isolatedHandoff.handoff_path;
@@ -295,7 +323,7 @@ test('isolated authority records a completed operation before releasing the AGY 
     store.releaseLease = (leaseId, reason) => { order.push('release'); return releaseLease(leaseId, reason); };
 
     const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        operationWriter, processRunner: fakeWorker(calls) });
+        operationWriter, worker: fakeWorker(calls) });
     const result = await adapter.runTask(store.derive());
 
     assert.equal(result[0].status, 'AWAITING_CODEX_QC');
@@ -310,13 +338,9 @@ test('a cancellation signal requested after worker completion does not force a c
     const input = fixture(t), { store } = seedAuthority(input), calls = [];
     const controller = new AbortController();
     const worker = fakeWorker(calls);
-    const processRunner = async (...args) => {
-        const result = await worker(...args);
-        controller.abort();
-        return result;
-    };
+    const discussion = discussionForWorker(worker, { close() { controller.abort(); } });
     const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner, signal: controller.signal });
+        worker, discussion, signal: controller.signal });
     const result = await adapter.runTask(store.derive());
     assert.equal(result[0].status, 'AWAITING_CODEX_QC');
     assert.deepEqual(store.readOperationRecords().map((record) => record.outcome), [undefined, 'completed']);
@@ -361,7 +385,7 @@ test('stale isolated writer cannot append handoff, settle, integrate, or complet
         }
         return worker(invocation, options);
     };
-    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, processRunner });
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker: processRunner });
     await assert.rejects(() => adapter.runTask(store.derive()), (error) => error.code === 'DUAL_ISOLATED_UNAUTHORIZED');
 
     const events = store.readEvents();
@@ -388,7 +412,7 @@ test('aborted isolated work with an unresolved tracked child cannot create settl
         throw error;
     };
     const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner, signal: controller.signal });
+        worker: processRunner, signal: controller.signal });
     await assert.rejects(() => adapter.runTask(store.derive()), (error) => error.code === 'DUAL_PRIVATE_SETUP_ABORTED');
     assert.ok(child?.pid > 0);
     assert.equal(store.readOperationRecords().some((record) => record.type === 'settled'), false);
@@ -411,7 +435,7 @@ test('isolated failure with an unresolved tracked child cannot record a task out
         throw new Error('worker stopped while child is still running');
     };
     const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner });
+        worker: processRunner });
     await assert.rejects(() => adapter.runTask(store.derive()), (error) => error.message === 'worker stopped while child is still running');
     assert.ok(child?.pid > 0);
     assert.equal(store.derive().tasks['TASK-1'].lastOutcome, undefined);
@@ -429,7 +453,7 @@ test('isolated failure with an unresolved tracked child cannot record a task out
 test('unsafe isolated arguments report preparation failure with released lease and no model call', async (t) => {
     const input = fixture(t), { store } = seedAuthority(input), calls = [];
     const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        agyPrefixArgs: ['--project', 'source'], processRunner: fakeWorker(calls) });
+        agyPrefixArgs: ['--project', 'source'], worker: fakeWorker(calls) });
     await assert.rejects(() => adapter.runTask(store.derive()), { code: 'DUAL_ISOLATED_PROJECT_UNSAFE' });
     assert.equal(calls.length, 0);
     assert.match(store.derive().tasks['TASK-1'].lastOutcome.summary, /before model invocation/);
@@ -441,7 +465,7 @@ test('isolated authority QC runs registered validators and integrates before tas
     const input = fixture(t), calls = [];
     const { store } = seedAuthority(input);
     await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: fakeWorker(calls) }).runTask(store.derive());
+        worker: fakeWorker(calls) }).runTask(store.derive());
     const request = { workspaceRoot: input.workspaceRoot, authorityStore: store,
         sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 };
     const complete = await completeIsolatedTask(request);
@@ -476,7 +500,7 @@ test('isolated authority QC cleans ephemeral build artifacts generated by valida
         }
         return payload;
     });
-    await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, processRunner: worker }).runTask(store.derive());
+    await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker: worker }).runTask(store.derive());
     const request = { workspaceRoot: input.workspaceRoot, authorityStore: store, sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 };
     const complete = await completeIsolatedTask(request);
     assert.equal(complete.status, 'TASK_VERIFIED');
@@ -492,7 +516,7 @@ test('isolated authority QC rejects undeclared generated validation output', asy
     const { store } = seedAuthority(input);
     const command = `${input.task.validation_commands[0].program} ${input.task.validation_commands[0].args.join(' ')}`;
     await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: fakeWorker([], (payload) => payload.status === 'SUCCESS' ? { ...payload, command_outputs: [{ command, exit_code: 0, output: '' }] } : payload) }).runTask(store.derive());
+        worker: fakeWorker([], (payload) => payload.status === 'SUCCESS' ? { ...payload, command_outputs: [{ command, exit_code: 0, output: '' }] } : payload) }).runTask(store.derive());
     const result = await completeIsolatedTask({ workspaceRoot: input.workspaceRoot, authorityStore: store, sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 });
     assert.equal(result.status, 'NEEDS_FIX'); assert.ok(result.cleanup.unexpected_outputs.includes('dist/output.txt'));
     assert.notEqual(store.derive().tasks['TASK-1'].state, 'TASK_VERIFIED');
@@ -508,7 +532,7 @@ test('isolated QC failure and source conflict do not integrate or verify the tas
             command_outputs: [{ command: `${input.task.validation_commands[0].program} ${input.task.validation_commands[0].args.join(' ')}`,
                 exit_code: 0, output: 'untrusted worker claim' }] } : payload);
         await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-            processRunner: worker }).runTask(store.derive());
+            worker: worker }).runTask(store.derive());
         if (conflict) fs.writeFileSync(path.join(input.workspaceRoot, 'index.js'), 'user new version');
         const result = await completeIsolatedTask({ workspaceRoot: input.workspaceRoot, authorityStore: store,
             sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 });
@@ -522,7 +546,7 @@ test('omni dual qc completes a private handoff via daemon without legacy source 
     const input = fixture(t);
     const { store } = seedAuthority(input);
     await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: fakeWorker([]) }).runTask(store.derive());
+        worker: fakeWorker([]) }).runTask(store.derive());
     const daemon = await startDaemonServer({ workspaceRoot: input.workspaceRoot, authorityStore: store });
     t.after(() => daemon.close());
     const response = await new Promise((resolve, reject) => {
@@ -550,7 +574,7 @@ test('dependent private task waits for integration then snapshots the accepted p
         execution_mode: 'isolated', risk: 'low', depends_on: ['TASK-1'] }]);
     const worker = fakeWorker(calls);
     const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: async (invocation, options) => {
+        worker: async (invocation, options) => {
             const ids = fs.readdirSync(path.join(invocation.cwd, '.omni/codex-gemini/runs'));
             if (ids.includes('TASK-2')) assert.equal(fs.readFileSync(path.join(invocation.cwd, 'index.js'), 'utf8'), 'module.exports = 2;\n');
             return worker(invocation, options);
@@ -565,7 +589,7 @@ test('dependent private task waits for integration then snapshots the accepted p
     // Stop before second implementation: the assertion in its scout proves a fresh accepted snapshot.
     let seen = false;
     const second = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: async (invocation) => {
+        worker: async (invocation) => {
             assert.equal(fs.readFileSync(path.join(invocation.cwd, 'index.js'), 'utf8'), 'module.exports = 2;\n');
             seen = true; throw new Error('snapshot observed');
         } });
@@ -583,7 +607,7 @@ test('two independent isolated tasks complete through QC without mixing their di
     const worker = fakeWorker(calls, (payload) => payload.status === 'SUCCESS' && payload.task_id === 'TASK-2'
         ? { ...payload, command_outputs: [{ command: 'node --check second.js', exit_code: 0, output: '' }] } : payload);
     const outcomes = await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: worker }).runTask(store.derive());
+        worker: worker }).runTask(store.derive());
     assert.deepEqual(outcomes.map((item) => item.status), ['AWAITING_CODEX_QC', 'AWAITING_CODEX_QC']);
     assert.equal(calls.length, 6);
     for (const taskId of ['TASK-1', 'TASK-2']) {
@@ -602,7 +626,7 @@ test('rechecking an earlier task accepts a later verified edit on the same file 
         execution_mode: 'isolated', risk: 'low', depends_on: ['TASK-1'] }]);
     const worker = fakeWorker(calls);
     const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: async (invocation, options) => {
+        worker: async (invocation, options) => {
             const result = await worker(invocation, options);
             const prompt = invocation.args.find((arg) => arg.startsWith('-p='));
             if (prompt.includes('implement phase') && fs.existsSync(path.join(invocation.cwd, '.omni/codex-gemini/runs/TASK-2'))) {
@@ -634,7 +658,7 @@ test('worker question waits durably for Codex reply then resumes the same task w
     const input = fixture(t), calls = [];
     const { store, dir } = seedAuthority(input);
     const worker = fakeWorker(calls, (payload) => payload.open_questions ? { ...payload, open_questions: ['Which value is required?'] } : payload);
-    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, processRunner: worker });
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker: worker });
     assert.equal((await adapter.runTask(store.derive()))[0].status, 'NEEDS_CONTEXT');
     assert.equal(calls.length, 1);
     const waiting = createAuthorityStore(dir).derive().tasks['TASK-1'];
@@ -648,7 +672,7 @@ test('worker question waits durably for Codex reply then resumes the same task w
     assert.equal((await client.replyToTask(input.sessionId, { task_id: 'TASK-1', plan_revision: 1,
         message_id: 'reply-1', reply_to: waiting.messages[0].message_id, body: 'Return 2; preserve the existing file scope.' })).acknowledged, true);
     const resumed = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: async (invocation, options) => {
+        worker: async (invocation, options) => {
             const prompt = invocation.args.find((arg) => arg.startsWith('-p='));
             const reference = prompt.match(/Read (\S+)/)[1];
             assert.ok(fs.readFileSync(path.join(invocation.cwd, reference), 'utf8').includes('Return 2; preserve the existing file scope.'));
@@ -662,11 +686,11 @@ test('worker question waits durably for Codex reply then resumes the same task w
 test('worker cannot rewrite the controller clarification between implementation and review', async (t) => {
     const input = fixture(t), calls = [];
     const worker = fakeWorker(calls, (payload) => payload.open_questions ? { ...payload, open_questions: ['Which value?'] } : payload);
-    const waiting = await runIsolatedTask({ ...input, processRunner: worker });
+    const waiting = await runIsolatedTask({ ...input, worker: worker });
     assert.equal(waiting.status, 'NEEDS_CONTEXT');
     await assert.rejects(() => runIsolatedTask({ ...input, reference: waiting.reference,
         expectedQuestions: ['Which value?'], controllerReplies: [{ question: 'Which value?', answer: '2' }],
-        processRunner: async (invocation, options) => {
+        worker: async (invocation, options) => {
             const result = await worker(invocation, options);
             fs.writeFileSync(path.join(invocation.cwd, '.omni/codex-gemini/runs/TASK-1/controller-context.json'),
                 JSON.stringify({ task_id: 'TASK-1', plan_revision: 1, replies: [{ question: 'Which value?', answer: 'forged' }] }));
@@ -679,7 +703,7 @@ test('multiple scout questions are recorded atomically in one authority event', 
     const { store } = seedAuthority(input);
     const worker = fakeWorker([], (payload) => payload.open_questions ? { ...payload, open_questions: ['First?', 'Second?'] } : payload);
     const result = await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: worker }).runTask(store.derive());
+        worker: worker }).runTask(store.derive());
     assert.equal(result[0].status, 'NEEDS_CONTEXT');
     const records = store.readEvents().filter((event) => ['task.message', 'task.questions'].includes(event.type));
     assert.equal(records.length, 1);
@@ -689,7 +713,7 @@ test('multiple scout questions are recorded atomically in one authority event', 
 test('worker cannot invent controller answers when the controller never supplied replies', async (t) => {
     const input = fixture(t);
     const worker = fakeWorker([]);
-    await assert.rejects(() => runIsolatedTask({ ...input, processRunner: async (invocation, options) => {
+    await assert.rejects(() => runIsolatedTask({ ...input, worker: async (invocation, options) => {
         const result = await worker(invocation, options);
         fs.writeFileSync(path.join(invocation.cwd, '.omni/codex-gemini/runs/TASK-1/controller-context.json'), 'FORGED_CONTROLLER_ANSWER');
         return result;
@@ -704,7 +728,7 @@ test('Codex correction after failed QC creates a bounded new attempt and preserv
     const { store, dir } = seedAuthority(input);
     const worker = fakeWorker(calls, (payload) => payload.status === 'SUCCESS' ? { ...payload,
         command_outputs: [{ command: `node ${input.task.validation_commands[0].args.join(' ')}`, exit_code: 0, output: '' }] } : payload);
-    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, processRunner: worker });
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker: worker });
     await adapter.runTask(store.derive());
     const old = store.derive().tasks['TASK-1'].isolatedWorkspace;
     const qcArgs = { workspaceRoot: input.workspaceRoot, authorityStore: store, sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 };
@@ -721,7 +745,7 @@ test('Codex correction after failed QC creates a bounded new attempt and preserv
     assert.deepEqual(store.derive().tasks['TASK-1'].allowed_files, ['index.js']);
     assert.equal(fs.existsSync(path.join(input.workspaceRoot, old.reference.bindingPath)), true);
     const repaired = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: async (invocation, options) => {
+        worker: async (invocation, options) => {
             const prompt = invocation.args.find((arg) => arg.startsWith('-p='));
             const file = prompt.match(/Read (\S+)/)[1];
             assert.ok(fs.readFileSync(path.join(invocation.cwd, file), 'utf8').includes(correction.reason));
@@ -740,7 +764,7 @@ test('correction budget and active-lease checks prevent duplicate or unbounded w
     const { requestTaskCorrection } = require('../lib/dual/task-correction');
     const input = fixture(t), { store } = seedAuthority(input);
     const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: async () => { throw new Error('worker stopped'); } });
+        worker: async () => { throw new Error('worker stopped'); } });
     const base = { workspaceRoot: input.workspaceRoot, authorityStore: store, sessionId: input.sessionId,
         taskId: 'TASK-1', planRevision: 1, reason: 'Retry the failed attempt within its unchanged scope.' };
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -766,7 +790,7 @@ test('correction refuses an attempt with a recorded partial integration', async 
     const { requestTaskCorrection, recordTaskOutcome } = require('../lib/dual/task-correction');
     const input = fixture(t), { store } = seedAuthority(input);
     await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: fakeWorker([]) }).runTask(store.derive());
+        worker: fakeWorker([]) }).runTask(store.derive());
     const task = store.derive().tasks['TASK-1'];
     const lease = store.acquireLease('TASK-1', 'codex');
     recordTaskOutcome({ authorityStore: store, taskId: 'TASK-1', leaseId: lease.lease_id,
@@ -790,7 +814,7 @@ test('preparation failure records an outcome and can be corrected without deleti
     } }), /interrupted before authority/);
     const orphanBytes = fs.readFileSync(path.join(input.workspaceRoot, orphan.bindingPath));
     const { store, dir } = seedAuthority(input), calls = [];
-    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, processRunner: fakeWorker(calls) });
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker: fakeWorker(calls) });
     await assert.rejects(() => adapter.runTask(store.derive()), (error) => error.code === 'DUAL_TASK_WORKSPACE_EXISTS');
     const failed = createAuthorityStore(dir).derive().tasks['TASK-1'];
     assert.equal(failed.lastOutcome.code, 'DUAL_TASK_WORKSPACE_EXISTS');
@@ -809,7 +833,7 @@ test('missing context failure is durable before model calls or workspace registr
     const input = fixture(t);
     input.task.context_files = ['missing.md'];
     const { store } = seedAuthority(input), calls = [];
-    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, processRunner: fakeWorker(calls) });
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker: fakeWorker(calls) });
     await assert.rejects(() => adapter.runTask(store.derive()), (error) => error.code === 'DUAL_TASK_CONTEXT_UNAVAILABLE');
     assert.equal(store.derive().tasks['TASK-1'].lastOutcome.code, 'DUAL_TASK_CONTEXT_UNAVAILABLE');
     assert.equal((await adapter.runTask(store.derive()))[0].status, 'FAILED');
@@ -839,7 +863,7 @@ test('isolated task evidence satisfies existing session gates and produces a ver
     assert.equal(store.derive().plan.acceptancePolicySha256, undefined,
         'the durable legacy plan includes a validated acceptance policy without an optional persisted digest');
     await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: fakeWorker([]) }).runTask(store.derive());
+        worker: fakeWorker([]) }).runTask(store.derive());
     await completeIsolatedTask({ workspaceRoot: input.workspaceRoot, authorityStore: store,
         sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 });
     const daemon = await startDaemonServer(createDaemonServerOptions({
@@ -878,7 +902,7 @@ test('authority rejects a quality attestation when the explicit stored policy ha
         acceptancePolicySha256: inconsistentPolicySha256,
     });
     await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        processRunner: fakeWorker([]) }).runTask(store.derive());
+        worker: fakeWorker([]) }).runTask(store.derive());
     await completeIsolatedTask({ workspaceRoot: input.workspaceRoot, authorityStore: store,
         sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 });
     const derived = store.derive();
@@ -913,10 +937,10 @@ test('isolated runner prepares declared locked dependencies before invoking mode
         name: 'worker-fixture', version: '1.0.0', lockfileVersion: 3, requires: true,
         packages: { '': { name: 'worker-fixture', version: '1.0.0' } },
     }));
-    const result = await runIsolatedTask({ ...input, processRunner: fakeWorker(calls) });
+    const result = await runIsolatedTask({ ...input, worker: fakeWorker(calls) });
     assert.match(result.reference.workerDependencies?.receiptSha256 || '', /^[a-f0-9]{64}$/);
     assert.equal(fs.existsSync(path.join(input.workspaceRoot, 'node_modules')), false);
-    const resumed = await runIsolatedTask({ ...input, reference: result.reference, processRunner: fakeWorker(calls) });
+    const resumed = await runIsolatedTask({ ...input, reference: result.reference, worker: fakeWorker(calls) });
     assert.equal(resumed.reference.workerDependencies.receiptSha256, result.reference.workerDependencies.receiptSha256);
     assert.equal(calls.length, 3);
     // Separate session identity avoids reusing the direct-run attempt above.
@@ -924,7 +948,7 @@ test('isolated runner prepares declared locked dependencies before invoking mode
     for (const file of ['package.json', 'package-lock.json']) fs.copyFileSync(path.join(input.workspaceRoot, file), path.join(input2.workspaceRoot, file));
     input2.task.dependency_mode = 'npm-ci';
     const { store: authority } = seedAuthority(input2);
-    const adapter = createOrchestratorAdapter({ workspaceRoot: input2.workspaceRoot, authorityStore: authority, processRunner: fakeWorker([]) });
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input2.workspaceRoot, authorityStore: authority, worker: fakeWorker([]) });
     assert.equal((await adapter.runTask(authority.derive()))[0].status, 'AWAITING_CODEX_QC');
     assert.match(authority.derive().tasks['TASK-1'].isolatedWorkspace.reference.workerDependencies.receiptSha256, /^[a-f0-9]{64}$/);
     assert.equal((await adapter.runTask(authority.derive()))[0].status, 'AWAITING_CODEX_QC');
@@ -935,7 +959,7 @@ test('isolated contract header instructs unverified_items empty array and prompt
     const calls = [];
     await runIsolatedTask({
         ...input,
-        processRunner: async (invocation, deps) => {
+        worker: async (invocation, deps) => {
             if (invocation.args && invocation.args.includes('implement')) {
                 const runDir = path.join(invocation.cwd, `.omni/codex-gemini/runs/${input.task.task_id}`);
                 const inputMd = fs.readFileSync(path.join(runDir, 'raw/implement.1.input.md'), 'utf8');
@@ -964,7 +988,7 @@ test('isolated runner allows evidence with informational unverified_items when s
     const calls = [];
     const handoff = await runIsolatedTask({
         ...input,
-        processRunner: fakeWorker(calls, (payload) => {
+        worker: fakeWorker(calls, (payload) => {
             if (payload.status === 'SUCCESS') {
                 return {
                     ...payload,
@@ -983,7 +1007,7 @@ test('isolated runner flexibly matches validation commands with npm run test / n
     const calls = [];
     const handoff = await runIsolatedTask({
         ...input,
-        processRunner: fakeWorker(calls, (payload) => {
+        worker: fakeWorker(calls, (payload) => {
             if (payload.status === 'SUCCESS') {
                 return {
                     ...payload,
@@ -1012,7 +1036,7 @@ test('isolated authority QC automatically cleans untracked ephemeral tool caches
         }
         return payload;
     });
-    await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, processRunner: worker }).runTask(store.derive());
+    await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker: worker }).runTask(store.derive());
     const request = { workspaceRoot: input.workspaceRoot, authorityStore: store, sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 };
     const complete = await completeIsolatedTask(request);
     assert.equal(complete.status, 'TASK_VERIFIED');
@@ -1025,7 +1049,7 @@ test('isolated runner scrubs ephemeral tool cache created during implement phase
     const baseWorker = fakeWorker(calls);
     const handoff = await runIsolatedTask({
         ...input,
-        processRunner: async (invocation, options) => {
+        worker: async (invocation, options) => {
             const prompt = invocation.args.find((arg) => arg.startsWith('-p='));
             if (prompt && prompt.includes('implement phase')) {
                 fs.writeFileSync(path.join(invocation.cwd, 'tsconfig.tsbuildinfo'), 'buildinfo cache');
@@ -1051,7 +1075,7 @@ for (const [file, deny] of [
         let target;
         await assert.rejects(() => runIsolatedTask({
             ...input,
-            processRunner: async (invocation, options) => {
+            worker: async (invocation, options) => {
                 const prompt = invocation.args.find((arg) => arg.startsWith('-p='));
                 if (prompt && prompt.includes('implement phase')) {
                     target = path.join(invocation.cwd, file);
@@ -1064,5 +1088,122 @@ for (const [file, deny] of [
         assert.ok(target);
         assert.equal(fs.readFileSync(target, 'utf8'), 'denied diagnostic evidence');
         assert.equal(fs.existsSync(path.join(input.workspaceRoot, file)), false);
+    });
+}
+
+
+test('enabled isolated discussion requires factory before any phase or seed', async (t) => {
+    const input = fixture(t), calls = [];
+    let prepared;
+    await assert.rejects(() => runIsolatedTask({ ...input, discussion: { enabled: true }, worker: fakeWorker(calls),
+        onPrepared(reference) { prepared = reference; } }),
+        { code: 'DUAL_ISOLATED_DISCUSSION_FACTORY_REQUIRED' });
+    assert.equal(calls.length, 0);
+    const events = path.join(prepared.workerRoot, '.omni/codex-gemini/runs/TASK-1/events.ndjson');
+    assert.equal(fs.existsSync(events), false, 'missing factory is rejected before orchestrator phases');
+});
+
+
+test('discussion scout/review use separate execution transport and implement remains cold', async (t) => {
+    const input = fixture(t), calls = [], worker = fakeWorker(calls);
+    const discussion = discussionForWorker(worker);
+    const result = await runIsolatedTask({ ...input, worker, discussion });
+    assert.equal(result.status, 'AWAITING_CODEX_QC');
+    assert.equal(calls.filter((call) => call.transport === 'discussion').length, 2);
+    assert.equal(calls.filter((call) => call.transport !== 'discussion').length, 1);
+    assert.deepEqual(discussion.counters.turns.map((turn) => turn.phase), ['scout', 'review']);
+    assert.equal(discussion.counters.closes.length, 1);
+    assert.ok(discussion.executions.every((execution) => execution.closed));
+});
+
+test('isolated discussion rejects authority reference root mismatch before seeds', async (t) => {
+    const input = fixture(t), calls = [];
+    const discussion = discussionForWorker(fakeWorker(calls));
+    let reference;
+    await assert.rejects(() => runIsolatedTask({ ...input, discussion,
+        onPrepared(ref) { reference = ref; throw new Error('capture reference'); } }), /capture reference/);
+    await assert.rejects(() => runIsolatedTask({ ...input, discussion,
+        reference: { ...reference, workerRoot: input.workspaceRoot } }),
+        { code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID' });
+    assert.equal(discussion.counters.seeds.length, 0);
+    assert.equal(calls.length, 0);
+});
+
+test('revocation between seeds prevents second seed and closes discussion child', async (t) => {
+    const input = fixture(t), calls = [];
+    let allowed = true;
+    const discussion = discussionForWorker(fakeWorker(calls), { afterSeed() { allowed = false; } });
+    await assert.rejects(() => runIsolatedTask({ ...input, discussion, authorize: () => allowed }),
+        { code: 'DUAL_ISOLATED_UNAUTHORIZED' });
+    assert.deepEqual(discussion.counters.seeds.map((seed) => seed.provider), ['codex']);
+    assert.equal(discussion.counters.turns.length, 0);
+    assert.equal(discussion.counters.closes.length, 1);
+});
+
+test('prespawn guard rejects internal nudge after controller context tampering', async (t) => {
+    const input = fixture(t), calls = [];
+    const discussion = discussionForWorker(fakeWorker(calls), { internalNudge: true,
+        beforeNudge({ workerRoot }) {
+            fs.writeFileSync(path.join(workerRoot, '.omni/codex-gemini/runs/TASK-1/controller-context.json'), 'forged');
+        } });
+    await assert.rejects(() => runIsolatedTask({ ...input, discussion }),
+        { code: 'DUAL_ISOLATED_EVIDENCE_INVALID' });
+    assert.equal(discussion.counters.turns.length, 1, 'nudge is denied before a second provider call');
+    assert.equal(discussion.counters.closes.length, 1);
+    assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 1;\n');
+});
+
+test('NEEDS_CONTEXT closes execution and resume creates a new conversation generation', async (t) => {
+    const input = fixture(t), calls = [];
+    const worker = fakeWorker(calls, (payload) => payload.open_questions
+        ? { ...payload, open_questions: ['Which value?'] } : payload);
+    const discussion = discussionForWorker(worker);
+    const waiting = await runIsolatedTask({ ...input, discussion, worker, operationId: 'operation-first' });
+    assert.equal(waiting.status, 'NEEDS_CONTEXT');
+    assert.equal(discussion.counters.closes.length, 1);
+    const result = await runIsolatedTask({ ...input, discussion, worker, operationId: 'operation-second',
+        reference: waiting.reference, expectedQuestions: ['Which value?'],
+        controllerReplies: [{ question: 'Which value?', answer: 'Two' }] });
+    assert.equal(result.status, 'AWAITING_CODEX_QC');
+    assert.deepEqual(discussion.counters.turns.map(({ phase, executionId }) => [phase, executionId]),
+        [['scout', 'operation-first'], ['review', 'operation-second']]);
+    assert.equal(discussion.counters.seeds.length, 4);
+    assert.notEqual(discussion.executions[0].bindings[0].conversation_id,
+        discussion.executions[1].bindings[0].conversation_id);
+    assert.equal(discussion.counters.closes.length, 2);
+});
+
+
+test('failed discussion child close leaves operation and lease unsettled for recovery', async (t) => {
+    const input = fixture(t), { store } = seedAuthority(input), calls = [];
+    const worker = fakeWorker(calls);
+    const discussion = discussionForWorker(worker, { close() {
+        throw Object.assign(new Error('child not quiescent'), { code: 'DUAL_DISCUSSION_CLOSE_UNPROVEN' });
+    } });
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker, discussion });
+    await assert.rejects(() => adapter.runTask(store.derive()), (error) => {
+        assert.equal(error.code, 'DUAL_DISCUSSION_CLOSE_UNPROVEN');
+        assert.equal(error.discussionQuiescent, false);
+        return true;
+    });
+    assert.equal(store.readOperationRecords().some((record) => record.type === 'settled'), false);
+    assert.equal(Object.values(store.derive().leases).some((lease) => lease.status === 'released'), false);
+    assert.equal(store.readEvents().some((event) => event.type === 'task.workspace.handoff'), false);
+});
+
+for (const field of ['workerBaselineSha256', 'workerContractSha256', 'bindingSha256', 'workerRoot']) {
+    test(`isolated discussion denies reference ${field} mismatch before factory or seeds`, async (t) => {
+        const input = fixture(t), calls = [];
+        const discussion = discussionForWorker(fakeWorker(calls));
+        let reference;
+        await assert.rejects(() => runIsolatedTask({ ...input, discussion,
+            onPrepared(ref) { reference = ref; throw new Error('capture reference'); } }), /capture reference/);
+        const value = field === 'workerRoot' ? path.join(input.workspaceRoot, 'nonexistent-worker') : 'f'.repeat(64);
+        await assert.rejects(() => runIsolatedTask({ ...input, discussion, reference: { ...reference, [field]: value } }),
+            { code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID' });
+        assert.equal(discussion.executions.length, 0, 'identity must be checked before factory acquisition');
+        assert.equal(discussion.counters.seeds.length, 0);
+        assert.equal(discussion.counters.turns.length, 0);
+        assert.equal(calls.length, 0);
     });
 }

@@ -212,3 +212,17 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   exact durable details") **có sẵn tại HEAD trước 2b-i** (đối chứng worktree HEAD:
   cùng case fail) → nợ môi trường có sẵn, không phải hồi quy; để lại kiểm ở cổng cuối
   Phase 3.
+- **2b-ii — ĐẠT (24/10/2026, Muse kiểm chứng):** child factory `createIsolatedDiscussion`
+  trong host-resolver (executionKey cấu trúc theo thiết kế, stateDir namespace
+  `isolated/<key>`, registry/reader riêng, close lũy đẳng + tự unregister);
+  daemon-server/bin cấp factory kèm adapters riêng theo execution +
+  trustedExecutionContext đối chiếu ledger; isolated-authority bind exact
+  lease/operation + closure authorize; isolated-runner có guard 3 chốt, 2 mã lỗi đúng
+  phân loại (FACTORY_REQUIRED = PRECONDITION, IDENTITY_INVALID = TERMINAL), finally
+  close child. Helper mới `test/helpers/dual-discussion-stub.js`; suite isolated đã
+  di trú (scout/review qua stub, processRunner chỉ còn implement). Thích ứng trong
+  phạm vi: manifest/evidence đặt cạnh journal (`isolated/<key>.manifest.json`) để
+  tuân thủ allowlist của journal. Cổng của Muse: focused **169/169** (gồm 4 case
+  isolated cần listen 127.0.0.1 mà sandbox của Codex chặn); discussion + capability
+  **316 pass**, chỉ còn case preflight có sẵn tại HEAD; daemon-orchestrator giữ
+  nguyên 20/33 (delta 0).

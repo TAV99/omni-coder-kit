@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { startDaemonServer, createDaemonDiscussionHost, discussionEnabledFromEnv } = require('../lib/dual/daemon-server');
+const { startDaemonServer, createDaemonDiscussionHost, discussionEnabledFromEnv, daemonDiscussionOptions } = require('../lib/dual/daemon-server');
 const { createAuthorityStore } = require('../lib/dual/authority-store');
 const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
 const { resolveRegisteredAgyProjectId } = require('../lib/dual/agy-project');
@@ -41,7 +41,7 @@ function createExecutableOrchestrator({ workspaceRoot, authorityStore, agyProjec
         workspaceRoot,
         authorityStore,
         ...(agyProjectId ? { agyProjectId } : {}),
-        ...(discussionHost ? { discussion: { enabled: true, sessionResolver: discussionHost.sessionResolver } } : {}),
+        ...(discussionHost ? { discussion: daemonDiscussionOptions(discussionHost) } : {}),
     });
     return { orchestrator, discussionHost };
 }

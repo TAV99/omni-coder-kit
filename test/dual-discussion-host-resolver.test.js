@@ -335,3 +335,191 @@ test('explicit recovery probes override adapter probes', async (t) => {
     assert.equal((await session.relay.reconcile('question-1')).reconciled_outcome, 'succeeded');
     assert.equal(calls[0].binding.provider, 'agy');
 });
+
+async function isolatedFixture(t, overrides = {}) {
+    const workerRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'omni-child-worker-'));
+    t.after(() => fs.rm(workerRoot, { recursive: true, force: true }));
+    let authorized = true;
+    const calls = [];
+    const executionOptions = {
+        seeds: Object.fromEntries(['codex', 'agy'].map((provider) => [provider, async (args) => {
+            calls.push({ provider, ...args });
+            return { conversationId: `child-${provider}-${calls.length}` };
+        }])),
+        adapters: { codex: fakeAdapter('codex'), agy: fakeAdapter('agy') },
+        preflight: { run: async (_root, { workerModel }) => ({
+            status: 'PASSED', to_state: 'CAPABILITY_SAFE', checks: preflightChecks(),
+            details: { agy_version: '1.2.3', agy_model: workerModel,
+                agy_evidence: { version: '1.2.3', model: workerModel } },
+        }), codexProbe: async () => true },
+        ...overrides,
+    };
+    const { host, stateDir } = await fixture(t, {
+        createExecutionOptions: async (captured) => ({ ...executionOptions,
+            trustedExecutionContext: { workerRoot: captured.workerRoot,
+                spawnImpl: () => assert.fail('offline child spawned'), env: { GIT_CEILING_DIRECTORIES: path.dirname(captured.workerRoot) } } }),
+    });
+    const execution = { workerRoot, sessionId, taskId: context.taskId, planRevision: 1,
+        attempt: 1, leaseId, operationId: 'child-operation-1', workerBaselineId: 'b'.repeat(64),
+        workerContractSha256: 'c'.repeat(64), reference: { workerRoot,
+            bindingSha256: 'd'.repeat(64), workerContractSha256: 'c'.repeat(64) },
+        authorize: () => authorized, guards: { check: async () => {} } };
+    const request = { taskId: context.taskId, workspaceRoot: workerRoot, snapshotSha256: execution.workerBaselineId };
+    return { host, stateDir, execution, request, calls, revoke() { authorized = false; } };
+}
+
+test('isolated child has its own bindings, journal, authority reader and idempotent close', async (t) => {
+    const { host, stateDir, execution, request, calls } = await isolatedFixture(t);
+    const shared = await host.sessionResolver(context);
+    const child = await host.createIsolatedDiscussion(execution);
+    assert.equal(child.executionKey, sha256Utf8(JSON.stringify(['isolated', sessionId, context.taskId,
+        1, execution.workerRoot, 1, execution.reference.bindingSha256, execution.workerBaselineId,
+        execution.operationId])));
+    const [session, same] = await Promise.all([child.sessionResolver(request), child.sessionResolver(request)]);
+    assert.equal(session, same);
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every((call) => call.cwd === execution.workerRoot));
+    assert.deepEqual(session.bindings[0].execution, { attempt: 1, workspace_binding_sha256: execution.reference.bindingSha256 });
+    assert.notEqual(session.bindings[0].snapshot_sha256, execution.workerBaselineId);
+    assert.equal((await host.authorityReader({ bindings: shared.bindings })).expectedSnapshotSha256, shared.bindings[0].snapshot_sha256);
+    assert.equal((await child.authorityReader({ bindings: shared.bindings })).expectedSnapshotSha256, '');
+    await question(session);
+    assert.equal((await session.relay.dispatch('question-1')).provider, 'succeeded');
+    const manifest = JSON.parse(await fs.readFile(path.join(stateDir, 'isolated', child.executionKey + '.manifest.json')));
+    assert.equal(manifest.worker_root, execution.workerRoot);
+    assert.equal(manifest.discussion_snapshot_sha256, session.bindings[0].snapshot_sha256);
+    assert.equal(child.close(), child.close());
+    await child.close();
+    await host.closeAll();
+    await host.closeAll();
+});
+
+test('isolated resolver rejects missing or foreign roots and baseline before seed', async (t) => {
+    const { host, execution, request, calls } = await isolatedFixture(t);
+    const child = await host.createIsolatedDiscussion(execution);
+    for (const changed of [{ workspaceRoot: undefined }, { workspaceRoot: process.cwd() }, { snapshotSha256: 'x' }]) {
+        await assert.rejects(child.sessionResolver({ ...request, ...changed }), { code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID' });
+    }
+    assert.equal(calls.length, 0);
+    await assert.rejects(host.sessionResolver({ ...context, workspaceRoot: execution.workerRoot }),
+        { code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID' });
+});
+
+test('revocation between isolated seeds prevents the second seed', async (t) => {
+    let fixtureState;
+    const state = await isolatedFixture(t, { seeds: {
+        codex: async () => { fixtureState.revoke(); return { conversationId: 'partial-codex' }; },
+        agy: async () => assert.fail('revoked child reached second seed'),
+    } });
+    fixtureState = state;
+    const child = await state.host.createIsolatedDiscussion(state.execution);
+    await assert.rejects(child.sessionResolver(state.request), { code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID' });
+    const failure = JSON.parse(await fs.readFile(path.join(state.stateDir, 'isolated', child.executionKey + '.seed-failure.json')));
+    assert.equal(failure.conversation_ids.codex, 'partial-codex');
+    await child.close();
+    await state.host.closeAll();
+});
+
+test('different isolated roots produce separate identities and a slow stale seed cannot publish', async (t) => {
+    let unblock;
+    const gate = new Promise((resolve) => { unblock = resolve; });
+    let entered;
+    const started = new Promise((resolve) => { entered = resolve; });
+    let count = 0;
+    const state = await isolatedFixture(t, { seeds: {
+        codex: async () => { const n = ++count; if (n === 1) { entered(); await gate; } return { conversationId: `slow-${n}` }; },
+        agy: async () => ({ conversationId: 'new-agy' }),
+    } });
+    const old = await state.host.createIsolatedDiscussion(state.execution);
+    const pending = old.sessionResolver(state.request);
+    const observed = assert.rejects(pending, { code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID' });
+    await started;
+    const newRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'omni-child-second-'));
+    t.after(() => fs.rm(newRoot, { recursive: true, force: true }));
+    const execution = { ...state.execution, workerRoot: newRoot,
+        reference: { ...state.execution.reference, workerRoot: newRoot }, operationId: 'child-operation-2' };
+    const currentPending = state.host.createIsolatedDiscussion(execution);
+    unblock();
+    const current = await currentPending;
+    assert.notEqual(old.executionKey, current.executionKey);
+    const session = await current.sessionResolver({ ...state.request, workspaceRoot: newRoot });
+    unblock();
+    await observed;
+    assert.equal((await old.authorityReader({ bindings: session.bindings })).expectedSnapshotSha256, '');
+    assert.equal((await current.authorityReader({ bindings: session.bindings })).expectedSnapshotSha256, session.bindings[0].snapshot_sha256);
+    await old.close();
+    await current.close();
+});
+
+test('closeAll aborts a child pending seed and concurrent close remains safe', async (t) => {
+    let entered;
+    const started = new Promise((resolve) => { entered = resolve; });
+    let capturedSignal;
+    const state = await isolatedFixture(t);
+    const pendingHost = createDiscussionHost({ enabled: true, stateDir: state.stateDir,
+        daemon: { sessionId, workspaceRoot: process.cwd(), getPlanRevision: () => 1, readLeaseEvents: async () => events() },
+        createExecutionOptions: async ({ signal, workerRoot }) => {
+            capturedSignal = signal;
+            return { trustedExecutionContext: { workerRoot, spawnImpl: () => assert.fail('offline seed spawned'), env: { GIT_CEILING_DIRECTORIES: path.dirname(workerRoot) } }, adapters: {}, seeds: {
+                codex: async () => { entered(); await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true })); return { conversationId: 'aborted-seed' }; },
+                agy: async () => assert.fail('closing child seeded again'),
+            } };
+        },
+    });
+    const child = await pendingHost.createIsolatedDiscussion(state.execution);
+    const pending = assert.rejects(child.sessionResolver(state.request));
+    await started;
+    await Promise.all([pendingHost.closeAll(), child.close()]);
+    await pending;
+    assert.equal(capturedSignal.aborted, true);
+    await pendingHost.closeAll();
+});
+
+test('child ports bind the exact lease and authorize closure rather than any active lease', async () => {
+    const binding = { session_id: sessionId, task_id: 'TASK-1', plan_revision: 1,
+        snapshot_sha256: 'e'.repeat(64) };
+    const authority = async () => ({ leaseEvents: events(), sessionId,
+        expectedPlanRevision: 1, expectedSnapshotSha256: binding.snapshot_sha256 });
+    let authorized = true;
+    let preflightCalls = 0;
+    const deps = createDaemonHostDeps({ authority, leaseId, authorize: () => authorized,
+        preflight: { run: () => { preflightCalls++; assert.fail('revoked operation probed'); } } });
+    assert.equal(await deps.checkAuthority({ binding }), true);
+    assert.equal(await createDaemonHostDeps({ authority, authorize: () => true,
+        leaseId: '20000000-0000-4000-8000-000000000099' }).checkAuthority({ binding }), false);
+    authorized = false;
+    assert.equal(await deps.checkAuthority({ binding }), false);
+    assert.equal((await deps.verifyCapability({ binding })).allowed, false);
+    assert.equal(preflightCalls, 0);
+});
+
+test('a failed child close blocks every later generation until recovery', async (t) => {
+    let seedCalls = 0;
+    const state = await isolatedFixture(t);
+    const cleanupError = Object.assign(new Error('child process still active'), { code: 'DUAL_OPERATION_CHILDREN_ACTIVE', discussionQuiescent: false });
+    const host = createDiscussionHost({ enabled: true, stateDir: state.stateDir,
+        daemon: { sessionId, workspaceRoot: process.cwd(), getPlanRevision: () => 1, readLeaseEvents: async () => events() },
+        createExecutionOptions: async ({ workerRoot }) => ({
+            trustedExecutionContext: { workerRoot, spawnImpl: () => assert.fail('unexpected spawn'),
+                env: { GIT_CEILING_DIRECTORIES: path.dirname(workerRoot) } },
+            assertQuiescent() { throw cleanupError; },
+            seeds: { codex: async () => { seedCalls++; return { conversationId: 'never-seeded' }; } },
+        }),
+    });
+    await host.createIsolatedDiscussion(state.execution);
+    const concurrent = await Promise.allSettled(['generation-B', 'generation-C'].map((operationId) =>
+        host.createIsolatedDiscussion({ ...state.execution, operationId })));
+    assert.ok(concurrent.every((result) => result.status === 'rejected' && result.reason === cleanupError));
+    for (const operationId of ['generation-2', 'generation-3']) {
+        await assert.rejects(host.createIsolatedDiscussion({ ...state.execution, operationId }), (error) => error === cleanupError);
+    }
+    await assert.rejects(host.closeAll(), (error) => error === cleanupError);
+    assert.equal(seedCalls, 0);
+});
+
+test('closeAll prevents new isolated factories before any seed', async (t) => {
+    const state = await isolatedFixture(t);
+    await state.host.closeAll();
+    await assert.rejects(state.host.createIsolatedDiscussion(state.execution), { code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID' });
+    assert.equal(state.calls.length, 0);
+});
