@@ -220,13 +220,14 @@ test('omni dual status: outputs task, state, base commit, attempts, owner, and e
     assert.doesNotMatch(notFoundRes.stderr, /\bat\s+/);
 });
 
-test('omni dual phase: executes preflight and scout with fake Agy seam', (t) => {
+test('omni dual phase: preflight succeeds and standalone scout fails closed', (t) => {
     const { repoRoot, scratchDir } = makeRepoFixture(t);
     const fakeAgyScript = createFakeAgyScript(scratchDir);
 
     const env = {
         OMNI_DUAL_AGY_COMMAND: process.execPath,
         OMNI_DUAL_AGY_PREFIX_ARGS: JSON.stringify([fakeAgyScript]),
+        OMNI_DUAL_DISCUSSION_ENABLED: '0',
     };
 
     runCli(['dual', 'new', 'TASK-PHASE-1'], { cwd: repoRoot, env });
@@ -240,12 +241,12 @@ test('omni dual phase: executes preflight and scout with fake Agy seam', (t) => 
 
     // Run scout
     const scoutRes = runCli(['dual', 'phase', 'scout', 'TASK-PHASE-1'], { cwd: repoRoot, env });
-    assert.equal(scoutRes.exitCode, 0);
-    assert.equal(scoutRes.stderr, '');
-    assert.match(scoutRes.stdout, /SCOUT_VALID/);
-    assert.match(scoutRes.stdout, /spec/);
+    assert.equal(scoutRes.exitCode, 1);
+    assert.match(scoutRes.stderr, /\[DUAL_DISCUSSION_REQUIRED\]/);
+    assert.ok(scoutRes.stderr.includes('Scout/review cần discussion transport do daemon cấp. Hãy chạy qua authority daemon; CLI độc lập không có discussion host, tắt discussion không khôi phục đường chạy lạnh.'));
+    assert.doesNotMatch(scoutRes.stderr, /\bat\s+/);
 
-    // Normal success does not expose raw Agy stdout in terminal
+    // Fail-closed output does not expose raw Agy stdout in terminal
     assert.doesNotMatch(scoutRes.stdout, /"structured_output"/);
 
     // Invalid phase fails cleanly without stack trace
@@ -255,48 +256,37 @@ test('omni dual phase: executes preflight and scout with fake Agy seam', (t) => 
     assert.doesNotMatch(badPhaseRes.stderr, /\bat\s+/);
 });
 
-test('omni dual run: executes pipeline and reaches CODEX_QC / CODEX_OWNED with exit code 0', (t) => {
-    const { repoRoot, head, scratchDir } = makeRepoFixture(t);
+test('omni dual run: standalone CLI fails closed with discussion disabled or enabled', (t) => {
+    const { repoRoot, scratchDir } = makeRepoFixture(t);
     const fakeAgyScript = createFakeAgyScript(scratchDir);
-
-    const env = {
-        OMNI_DUAL_AGY_COMMAND: process.execPath,
-        OMNI_DUAL_AGY_PREFIX_ARGS: JSON.stringify([fakeAgyScript]),
-    };
-
-    // 1. Run task until spec is needed (stops at SCOUT_VALID with exit code 0)
-    runCli(['dual', 'new', 'TASK-RUN-1'], { cwd: repoRoot, env });
-    const run1 = runCli(['dual', 'run', 'TASK-RUN-1'], { cwd: repoRoot, env });
-    assert.equal(run1.exitCode, 0);
-    assert.match(run1.stdout, /SCOUT_VALID/);
-
-    // 2. Provide spec.json and run to completion (CODEX_QC)
-    const runDir = path.join(repoRoot, '.omni', 'codex-gemini', 'runs', 'TASK-RUN-1');
-    const spec = {
-        schema_version: 1,
-        task_id: 'TASK-RUN-1',
-        expected_base_commit: head,
-        goal: 'Update index.html',
-        allowed_files: ['index.html'],
-        deny_patterns: [],
-        validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
-        risk_flags: [],
-        permission_authority: 'dual-init-dangerous-auto-v1',
-    };
-    fs.writeFileSync(path.join(runDir, 'spec.json'), JSON.stringify(spec, null, 2), 'utf8');
-
-    const run2 = runCli(['dual', 'run', 'TASK-RUN-1'], { cwd: repoRoot, env });
-    assert.equal(run2.exitCode, 0);
-    assert.match(run2.stdout, /CODEX_QC/);
+    for (const enabled of ['0', '1']) {
+        const taskId = `TASK-RUN-${enabled}`;
+        const env = {
+            OMNI_DUAL_AGY_COMMAND: process.execPath,
+            OMNI_DUAL_AGY_PREFIX_ARGS: JSON.stringify([fakeAgyScript]),
+            OMNI_DUAL_DISCUSSION_ENABLED: enabled,
+        };
+        assert.equal(runCli(['dual', 'new', taskId], { cwd: repoRoot, env }).exitCode, 0);
+        const result = runCli(['dual', 'run', taskId], { cwd: repoRoot, env });
+        assert.equal(result.exitCode, 1);
+        const code = enabled === '0' ? 'DUAL_DISCUSSION_REQUIRED' : 'DUAL_DISCUSSION_RESOLVER_REQUIRED';
+        const message = enabled === '0'
+            ? 'Scout/review cần discussion transport do daemon cấp. Hãy chạy qua authority daemon; CLI độc lập không có discussion host, tắt discussion không khôi phục đường chạy lạnh.'
+            : 'Thiếu discussion session resolver. Hãy chạy scout/review qua authority daemon; CLI độc lập không có discussion host.';
+        assert.ok(result.stderr.includes(`[${code}] ${message}`), result.stderr);
+        assert.doesNotMatch(result.stderr, /\bat\s+/);
+        assert.equal(fs.existsSync(path.join(repoRoot, '.omni/codex-gemini/runs', taskId, 'context.json')), false);
+    }
 });
 
-test('omni dual run: risky spec routes to CODEX_OWNED with exit code 0', (t) => {
+test('omni dual run: risky spec cannot bypass required discussion', (t) => {
     const { repoRoot, head, scratchDir } = makeRepoFixture(t);
     const fakeAgyScript = createFakeAgyScript(scratchDir);
 
     const env = {
         OMNI_DUAL_AGY_COMMAND: process.execPath,
         OMNI_DUAL_AGY_PREFIX_ARGS: JSON.stringify([fakeAgyScript]),
+        OMNI_DUAL_DISCUSSION_ENABLED: '0',
     };
 
     const newRes = runCli(['dual', 'new', 'TASK-RUN-RISKY'], { cwd: repoRoot, env });
@@ -317,23 +307,69 @@ test('omni dual run: risky spec routes to CODEX_OWNED with exit code 0', (t) => 
     fs.writeFileSync(path.join(runDirRisky, 'spec.json'), JSON.stringify(spec, null, 2), 'utf8');
 
     const runRisky = runCli(['dual', 'run', 'TASK-RUN-RISKY'], { cwd: repoRoot, env });
-    assert.equal(runRisky.exitCode, 0);
-    assert.match(runRisky.stdout, /CODEX_OWNED/);
+    assert.equal(runRisky.exitCode, 1);
+    assert.ok(runRisky.stderr.includes('[DUAL_DISCUSSION_REQUIRED] Scout/review cần discussion transport do daemon cấp. Hãy chạy qua authority daemon; CLI độc lập không có discussion host, tắt discussion không khôi phục đường chạy lạnh.'));
+    assert.equal(fs.existsSync(path.join(runDirRisky, 'route.json')), false);
 });
 
-test('omni dual resume: re-runs from durable state idempotently', (t) => {
-    const { repoRoot, head, scratchDir } = makeRepoFixture(t);
+test('omni dual resume: missing discussion preserves durable state for retry', (t) => {
+    const { repoRoot, scratchDir } = makeRepoFixture(t);
     const fakeAgyScript = createFakeAgyScript(scratchDir);
 
     const env = {
         OMNI_DUAL_AGY_COMMAND: process.execPath,
         OMNI_DUAL_AGY_PREFIX_ARGS: JSON.stringify([fakeAgyScript]),
+        OMNI_DUAL_DISCUSSION_ENABLED: '0',
     };
 
     runCli(['dual', 'new', 'TASK-RESUME-1'], { cwd: repoRoot, env });
     runCli(['dual', 'phase', 'preflight', 'TASK-RESUME-1'], { cwd: repoRoot, env });
 
-    const resumeRes = runCli(['dual', 'resume', 'TASK-RESUME-1'], { cwd: repoRoot, env });
-    assert.equal(resumeRes.exitCode, 0);
-    assert.match(resumeRes.stdout, /SCOUT_VALID/);
+    const runDir = path.join(repoRoot, '.omni/codex-gemini/runs/TASK-RESUME-1');
+    const eventsBefore = fs.readFileSync(path.join(runDir, 'events.ndjson'), 'utf8');
+    for (let retry = 0; retry < 2; retry++) {
+        const resumeRes = runCli(['dual', 'resume', 'TASK-RESUME-1'], { cwd: repoRoot, env });
+        assert.equal(resumeRes.exitCode, 1);
+        assert.ok(resumeRes.stderr.includes('[DUAL_DISCUSSION_REQUIRED] Scout/review cần discussion transport do daemon cấp. Hãy chạy qua authority daemon; CLI độc lập không có discussion host, tắt discussion không khôi phục đường chạy lạnh.'));
+        assert.equal(fs.readFileSync(path.join(runDir, 'events.ndjson'), 'utf8'), eventsBefore);
+        assert.equal(fs.existsSync(path.join(runDir, 'raw/scout.1.input.md')), false);
+    }
 });
+
+// Keep exact user-facing translations covered without requiring a subprocess host.
+const discussionMessages = {
+    DUAL_DISCUSSION_REQUIRED: 'Scout/review cần discussion transport do daemon cấp. Hãy chạy qua authority daemon; CLI độc lập không có discussion host, tắt discussion không khôi phục đường chạy lạnh.',
+    DUAL_DISCUSSION_RESOLVER_REQUIRED: 'Thiếu discussion session resolver. Hãy chạy scout/review qua authority daemon; CLI độc lập không có discussion host.',
+    DUAL_DISCUSSION_SESSION_DISABLED: 'Discussion session đã tắt nên scout/review bị chặn. Hãy bật discussion và chạy qua authority daemon; không có đường chạy lạnh.',
+    DUAL_DISCUSSION_BINDINGS_REQUIRED: 'Discussion session thiếu binding Astra hoặc Argon. Hãy kiểm tra cấu hình discussion host của daemon trước khi chạy scout/review.',
+    DUAL_DISCUSSION_FAILED: 'Pha đối thoại qua discussion transport thất bại. Hãy kiểm tra evidence và trạng thái discussion trên daemon trước khi xử lý tiếp.',
+    DUAL_ISOLATED_DISCUSSION_FACTORY_REQUIRED: 'Thiếu factory cấp discussion cho isolated execution. Hãy chạy qua authority daemon có discussion host; tắt discussion không khôi phục đường chạy lạnh.',
+    DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID: 'Định danh discussion không khớp isolated execution. Hãy kiểm tra evidence và binding workspace/task trên daemon; không tái dùng session khác.',
+};
+
+for (const [code, message] of Object.entries(discussionMessages)) {
+    test(`CLI translates ${code}`, (t) => {
+        const { handleDualError } = require('../lib/commands/dual');
+        const previousExitCode = process.exitCode;
+        t.after(() => { process.exitCode = previousExitCode; });
+        const output = t.mock.method(console, 'error', () => {});
+        handleDualError(Object.assign(new Error('transport failure'), { code }));
+        assert.equal(process.exitCode, 1);
+        assert.ok(output.mock.calls[0].arguments[0].includes(`[${code}] ${message}`));
+    });
+}
+
+for (const [code, message] of Object.entries(discussionMessages)) {
+    test(`CLI JSON translates ${code}`, async (t) => {
+        const { handleDualQc } = require('../lib/commands/dual');
+        const previousExitCode = process.exitCode;
+        t.after(() => { process.exitCode = previousExitCode; });
+        const output = t.mock.method(console, 'log', () => {});
+        await handleDualQc('TASK', { json: true, client: {
+            async health() { return { status: 'healthy', session_id: 'session' }; },
+            async status() { throw Object.assign(new Error('transport failure'), { code }); },
+        } });
+        assert.equal(process.exitCode, 1);
+        assert.deepEqual(JSON.parse(output.mock.calls[0].arguments[0]), { ok: false, code, message });
+    });
+}

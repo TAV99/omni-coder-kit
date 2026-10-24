@@ -7,6 +7,9 @@ const path = require('node:path');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 
+const { createDualOrchestrator } = require('../lib/dual');
+const { createDiscussionStub } = require('./helpers/dual-discussion-stub');
+
 const BIN = path.resolve(__dirname, '../bin/omni.js');
 const { AttemptMetaSchema, ContextSchema, EvidenceSchema, ReviewSchema, SpecSchema } = require('../lib/dual/contracts');
 
@@ -51,12 +54,47 @@ function runCli(args, options = {}) {
     };
 }
 
-function createLoggingFakeAgyScript(dir) {
+function createLoggingFakeAgyScript(dir, { repoRoot, head, taskId }) {
     const logFile = path.join(dir, 'agy-invocations.json');
     const countersFile = path.join(dir, 'agy-counters.json');
     fs.writeFileSync(logFile, JSON.stringify([]), 'utf8');
     fs.writeFileSync(countersFile, JSON.stringify({ version: 0, models: 0, scout: 0, implement: 0, review: 0 }), 'utf8');
 
+    const baseCommit = head;
+    const payloads = {
+        scout: {
+            schema_version: 1,
+            task_id: taskId,
+            expected_base_commit: baseCommit,
+            summary: 'E2E Scout reconnaissance complete: index.html identified for heading update',
+            relevant_files: [{ path: 'index.html', description: 'Web landing page' }],
+            exact_symbols: [{ name: 'body', file: 'index.html', verified: true, kind: 'element' }],
+            validation_commands: ['node --version'],
+            constraints: ['Keep changes minimal and preserve index.html structure'],
+            risks: [],
+            open_questions: [],
+            research_trace: [
+                { question: 'Where is the page?', source: 'index.html', source_type: 'REPOSITORY', conclusion: 'index.html owns the page.' },
+                { question: 'How is it validated?', source: 'node --version', source_type: 'TEST_OUTPUT', conclusion: 'The validation runtime is available.' },
+            ],
+            alternatives_considered: [
+                { option: 'Edit the body', tradeoff: 'Minimal diff.' },
+                { option: 'Add a script', tradeoff: 'Unnecessary for static copy.' },
+            ],
+            failure_modes: ['The HTML structure may be accidentally replaced.'],
+        },
+        review: {
+            schema_version: 1,
+            task_id: taskId,
+            expected_base_commit: baseCommit,
+            recommendation: 'APPROVE',
+            risk_level: 'LOW',
+            findings: [{ file: 'index.html', line: 1, description: 'Surgical update verified against spec', severity: 'INFO' }],
+            review_checks: ['spec correlated', 'evidence correlated', 'regression challenged'],
+            challenge_summary: 'The strongest concern was structural HTML drift; the inspected output remains valid for the fixture.',
+        },
+    };
+    const discussion = createDiscussionStub({ turn: ({ phase }) => payloads[phase] });
     const scriptPath = path.join(dir, 'fake-agy-e2e.cjs');
     const content = `'use strict';
 const fs = require('node:fs');
@@ -97,9 +135,7 @@ if (args.length === 1 && args[0] === 'models') {
 }
 
 const promptArg = args.find((a) => a.startsWith('-p='));
-const isScout = promptArg && promptArg.includes('scout');
 const isImplement = promptArg && promptArg.includes('implement');
-const isReview = promptArg && promptArg.includes('review');
 
 const addDirIndex = args.indexOf('--add-dir');
 const repoRoot = addDirIndex !== -1 ? args[addDirIndex + 1] : process.cwd();
@@ -117,33 +153,6 @@ if (inputMatch) {
         const commitMatch = inputContent.match(/base\\s*commit:\\s*([0-9a-f]{40})/i);
         if (commitMatch) baseCommit = commitMatch[1].trim();
     }
-}
-
-if (isScout) {
-    incrementCounter('scout');
-    const payload = {
-        schema_version: 1,
-        task_id: taskId,
-        expected_base_commit: baseCommit,
-        summary: 'E2E Scout reconnaissance complete: index.html identified for heading update',
-        relevant_files: [{ path: 'index.html', description: 'Web landing page' }],
-        exact_symbols: [{ name: 'body', file: 'index.html', verified: true, kind: 'element' }],
-        validation_commands: ['node --version'],
-        constraints: ['Keep changes minimal and preserve index.html structure'],
-        risks: [],
-        open_questions: [],
-        research_trace: [
-            { question: 'Where is the page?', source: 'index.html', source_type: 'REPOSITORY', conclusion: 'index.html owns the page.' },
-            { question: 'How is it validated?', source: 'node --version', source_type: 'TEST_OUTPUT', conclusion: 'The validation runtime is available.' },
-        ],
-        alternatives_considered: [
-            { option: 'Edit the body', tradeoff: 'Minimal diff.' },
-            { option: 'Add a script', tradeoff: 'Unnecessary for static copy.' },
-        ],
-        failure_modes: ['The HTML structure may be accidentally replaced.'],
-    };
-    process.stdout.write(JSON.stringify({ status: 'success', structured_output: payload }) + '\\n');
-    process.exit(0);
 }
 
 if (isImplement) {
@@ -164,39 +173,34 @@ if (isImplement) {
     process.exit(0);
 }
 
-if (isReview) {
-    incrementCounter('review');
-    const payload = {
-        schema_version: 1,
-        task_id: taskId,
-        expected_base_commit: baseCommit,
-        recommendation: 'APPROVE',
-        risk_level: 'LOW',
-        findings: [{ file: 'index.html', line: 1, description: 'Surgical update verified against spec', severity: 'INFO' }],
-        review_checks: ['spec correlated', 'evidence correlated', 'regression challenged'],
-        challenge_summary: 'The strongest concern was structural HTML drift; the inspected output remains valid for the fixture.',
-    };
-    process.stdout.write(JSON.stringify({ status: 'success', structured_output: payload }) + '\\n');
-    process.exit(0);
-}
-
 process.stdout.write(JSON.stringify({ status: 'error', message: 'Unhandled worker phase' }) + '\\n');
 process.exit(1);
 `;
     fs.writeFileSync(scriptPath, content, 'utf8');
-    return { scriptPath, logFile, countersFile };
+    return { scriptPath, logFile, countersFile, discussion,
+        async createOrchestrator() {
+            // Git-backed standalone fixture: snapshotSha256 is absent at the resolver boundary.
+            const child = await discussion.createIsolatedDiscussion({
+                sessionId: 'e2e-session', taskId, planRevision: 1, attempt: 1,
+                workerRoot: repoRoot, workerBaselineId: undefined,
+                reference: { bindingSha256: 'a'.repeat(64) },
+            });
+            return { child, orch: createDualOrchestrator({ cwd: repoRoot,
+                agyCommand: process.execPath, agyPrefixArgs: [scriptPath], discussion: child }) };
+        },
+    };
 }
 
-test('Dual end-to-end: full state path to CODEX_QC with metadata and idempotency verification', (t) => {
+test('Dual end-to-end: full state path to CODEX_QC with metadata and idempotency verification', async (t) => {
     const { repoRoot, head, scratchDir } = makeRepoFixture(t);
-    const { scriptPath, logFile, countersFile } = createLoggingFakeAgyScript(scratchDir);
+    const taskId = 'E2E-TASK-001';
+    const fixture = createLoggingFakeAgyScript(scratchDir, { repoRoot, head, taskId });
+    const { scriptPath, logFile, countersFile, discussion } = fixture;
 
     const env = {
         OMNI_DUAL_AGY_COMMAND: process.execPath,
         OMNI_DUAL_AGY_PREFIX_ARGS: JSON.stringify([scriptPath]),
     };
-
-    const taskId = 'E2E-TASK-001';
 
     // 1. Create transaction via public CLI
     const newRes = runCli(['dual', 'new', taskId], { cwd: repoRoot, env });
@@ -208,10 +212,10 @@ test('Dual end-to-end: full state path to CODEX_QC with metadata and idempotency
     assert.ok(fs.existsSync(path.join(runDir, 'state.json')), 'state.json must exist');
     assert.ok(fs.existsSync(path.join(runDir, 'request.md')), 'request.md must exist');
 
-    // 2. Initial run executes preflight and scout, pausing at SCOUT_VALID awaiting spec
-    const run1 = runCli(['dual', 'run', taskId], { cwd: repoRoot, env });
-    assert.equal(run1.exitCode, 0, `initial dual run failed: ${run1.stderr}`);
-    assert.match(run1.stdout, /SCOUT_VALID/);
+    // 2. The injected discussion host runs scout; CLI has no standalone host.
+    const { orch, child } = await fixture.createOrchestrator();
+    t.after(() => child.close());
+    assert.equal((await orch.run(taskId)).state, 'SCOUT_VALID');
 
     const contextPath = path.join(runDir, 'context.json');
     assert.ok(fs.existsSync(contextPath), 'context.json must exist after scout');
@@ -235,10 +239,16 @@ test('Dual end-to-end: full state path to CODEX_QC with metadata and idempotency
     assert.doesNotThrow(() => SpecSchema.parse(spec), 'spec fixture must satisfy SpecSchema');
     fs.writeFileSync(path.join(runDir, 'spec.json'), JSON.stringify(spec, null, 2), 'utf8');
 
-    // 4. Second run executes spec -> route -> implement -> scope -> review -> CODEX_QC
-    const run2 = runCli(['dual', 'run', taskId], { cwd: repoRoot, env });
-    assert.equal(run2.exitCode, 0, `completion dual run failed: ${run2.stderr}`);
-    assert.match(run2.stdout, /CODEX_QC/);
+    // 4. Standalone review fails closed; the injected host can then finish the same task.
+    for (const phase of ['spec', 'route', 'implement', 'scope']) await orch.runPhase(phase, taskId);
+    const eventsBeforeReview = fs.readFileSync(path.join(runDir, 'events.ndjson'), 'utf8');
+    const coldReview = runCli(['dual', 'phase', 'review', taskId], {
+        cwd: repoRoot, env: { ...env, OMNI_DUAL_DISCUSSION_ENABLED: '0' },
+    });
+    assert.equal(coldReview.exitCode, 1);
+    assert.ok(coldReview.stderr.includes('[DUAL_DISCUSSION_REQUIRED] Scout/review cần discussion transport do daemon cấp. Hãy chạy qua authority daemon; CLI độc lập không có discussion host, tắt discussion không khôi phục đường chạy lạnh.'));
+    assert.equal(fs.readFileSync(path.join(runDir, 'events.ndjson'), 'utf8'), eventsBeforeReview);
+    assert.equal((await orch.run(taskId)).state, 'CODEX_QC');
     assert.equal(JSON.parse(fs.readFileSync(path.join(runDir, 'state.json'), 'utf8')).state, 'CODEX_QC');
 
     // 5. Verify semantic artifacts
@@ -287,6 +297,12 @@ test('Dual end-to-end: full state path to CODEX_QC with metadata and idempotency
         assert.equal(meta.shell, false, 'shell must be strictly false');
         assert.equal(meta.cwd, repoRoot, 'meta cwd must be canonical repo root');
         assert.ok(Array.isArray(meta.redacted_argv), 'redacted_argv must be an array');
+        if (phase !== 'implement') {
+            assert.equal(meta.transport, 'discussion');
+            assert.deepEqual(meta.redacted_argv, []);
+            assert.ok(meta.messageId);
+            assert.ok(meta.responseMessageId);
+        }
         assert.match(meta.input_sha256, /^[0-9a-f]{64}$/, 'input_sha256 must be a 64-char sha256 hex');
         assert.match(meta.schema_sha256, /^[0-9a-f]{64}$/, 'schema_sha256 must be a 64-char sha256 hex');
 
@@ -298,7 +314,9 @@ test('Dual end-to-end: full state path to CODEX_QC with metadata and idempotency
     // 8. Assert Agy invocations received canonical repo root and short repo-relative input references
     const invocations = JSON.parse(fs.readFileSync(logFile, 'utf8'));
     const workerInvocations = invocations.filter((inv) => inv.args.some((a) => a.startsWith('-p=')));
-    assert.equal(workerInvocations.length, 3, 'Should have exactly 3 worker invocations (scout, implement, review)');
+    assert.equal(workerInvocations.length, 1, 'Only implement may invoke a cold worker');
+    assert.deepEqual(discussion.counters.turns.map(({ phase }) => phase), ['scout', 'review']);
+    assert.equal(discussion.counters.seeds.length, 2);
 
     for (const inv of workerInvocations) {
         const addDirIdx = inv.args.indexOf('--add-dir');
@@ -309,7 +327,7 @@ test('Dual end-to-end: full state path to CODEX_QC with metadata and idempotency
         assert.ok(promptArg, 'Agy invocation must include -p= argument');
         assert.match(
             promptArg,
-            /^-p=Read \.omni\/codex-gemini\/runs\/E2E-TASK-001\/raw\/(scout|implement|review)\.\d+\.input\.md/,
+            /^-p=Read \.omni\/codex-gemini\/runs\/E2E-TASK-001\/raw\/implement\.\d+\.input\.md/,
             'Prompt argument must use short repo-relative input path, not absolute path or raw json',
         );
 
@@ -371,34 +389,38 @@ test('Dual end-to-end: full state path to CODEX_QC with metadata and idempotency
 
     // 11. Assert resume idempotency (counters must not increment on subsequent resume)
     const countersBefore = JSON.parse(fs.readFileSync(countersFile, 'utf8'));
-    assert.equal(countersBefore.scout, 1);
+    assert.equal(countersBefore.scout, 0);
     assert.equal(countersBefore.implement, 1);
-    assert.equal(countersBefore.review, 1);
+    assert.equal(countersBefore.review, 0);
 
     const resumeRes = runCli(['dual', 'resume', taskId], { cwd: repoRoot, env });
     assert.equal(resumeRes.exitCode, 0, `dual resume failed: ${resumeRes.stderr}`);
     assert.match(resumeRes.stdout, /CODEX_QC/);
 
+    assert.equal(discussion.counters.turns.length, 2, 'Resume must not dispatch discussion turns');
+    assert.equal(discussion.counters.seeds.length, 2, 'Resume must not seed conversations');
     const countersAfter = JSON.parse(fs.readFileSync(countersFile, 'utf8'));
     assert.equal(countersAfter.scout, countersBefore.scout, 'Scout counter must not increment on resume');
     assert.equal(countersAfter.implement, countersBefore.implement, 'Implement counter must not increment on resume');
     assert.equal(countersAfter.review, countersBefore.review, 'Review counter must not increment on resume');
 });
 
-test('Dual end-to-end: routed to CODEX_OWNED when spec contains risk flags or too many files', (t) => {
+test('Dual end-to-end: routed to CODEX_OWNED when spec contains risk flags or too many files', async (t) => {
     const { repoRoot, head, scratchDir } = makeRepoFixture(t);
-    const { scriptPath } = createLoggingFakeAgyScript(scratchDir);
+    const taskId = 'E2E-TASK-RISK';
+    const fixture = createLoggingFakeAgyScript(scratchDir, { repoRoot, head, taskId });
+    const { scriptPath } = fixture;
 
     const env = {
         OMNI_DUAL_AGY_COMMAND: process.execPath,
         OMNI_DUAL_AGY_PREFIX_ARGS: JSON.stringify([scriptPath]),
     };
 
-    const taskId = 'E2E-TASK-RISK';
-
     runCli(['dual', 'new', taskId], { cwd: repoRoot, env });
     runCli(['dual', 'phase', 'preflight', taskId], { cwd: repoRoot, env });
-    runCli(['dual', 'phase', 'scout', taskId], { cwd: repoRoot, env });
+    const { orch, child } = await fixture.createOrchestrator();
+    t.after(() => child.close());
+    assert.equal((await orch.runPhase('scout', taskId)).state, 'SCOUT_VALID');
 
     const runDir = path.join(repoRoot, '.omni', 'codex-gemini', 'runs', taskId);
     const riskySpec = {
@@ -414,9 +436,8 @@ test('Dual end-to-end: routed to CODEX_OWNED when spec contains risk flags or to
     };
     fs.writeFileSync(path.join(runDir, 'spec.json'), JSON.stringify(riskySpec, null, 2), 'utf8');
 
-    const runRes = runCli(['dual', 'run', taskId], { cwd: repoRoot, env });
-    assert.equal(runRes.exitCode, 0);
-    assert.match(runRes.stdout, /CODEX_OWNED/);
+    assert.equal((await orch.run(taskId)).state, 'CODEX_OWNED');
+    assert.deepEqual(fixture.discussion.counters.turns.map(({ phase }) => phase), ['scout']);
 
     const route = JSON.parse(fs.readFileSync(path.join(runDir, 'route.json'), 'utf8'));
     assert.equal(route.owner, 'codex');

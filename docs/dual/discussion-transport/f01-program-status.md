@@ -212,6 +212,13 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   exact durable details") **có sẵn tại HEAD trước 2b-i** (đối chứng worktree HEAD:
   cùng case fail) → nợ môi trường có sẵn, không phải hồi quy; để lại kiểm ở cổng cuối
   Phase 3.
+- **2c-i — ĐẠT (24/10/2026, Muse kiểm chứng):** `DUAL_ERROR_MESSAGES` trong
+  lib/commands/dual.js đã phủ MỌI mã DUAL_DISCUSSION_*/DUAL_ISOLATED_DISCUSSION_*
+  trong lib/ (đối chiếu grep 2 chiều, không thiếu mã nào); thông điệp đúng ngữ nghĩa
+  Phase 3 (đối thoại chỉ qua daemon, tắt env không khôi phục đường lạnh). Suite
+  dual-cli + dual-e2e đã di trú sang kỳ vọng fail-closed/stub; cổng của Muse:
+  **68/68 pass** (kèm discussion-orchestrator) — gồm cả các luồng E2E đã di trú chạy
+  thật, điều sandbox của Codex không chứng minh được.
 - **2b-ii — ĐẠT (24/10/2026, Muse kiểm chứng):** child factory `createIsolatedDiscussion`
   trong host-resolver (executionKey cấu trúc theo thiết kế, stateDir namespace
   `isolated/<key>`, registry/reader riêng, close lũy đẳng + tự unregister);
