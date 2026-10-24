@@ -373,3 +373,57 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   isolated cần listen 127.0.0.1 mà sandbox của Codex chặn); discussion + capability
   **316 pass**, chỉ còn case preflight có sẵn tại HEAD; daemon-orchestrator giữ
   nguyên 20/33 (delta 0).
+
+## Quyết định D — Implement-into-conversation ngoài phạm vi 3.1.2 (25/10/2026)
+
+- **Quyết định: LOẠI KHỎI PHẠM VI 3.1.2.** Không triển khai trong đợt
+  hoàn thiện này: (1) implement qua persistent AGY conversation thay
+  cho isolated-runner cold dispatch hiện tại; (2) vòng sửa sau QC qua
+  conversation tiếp nối cùng conversation thay vì cold correction;
+  (3) mọi thay đổi kiến trúc đi kèm: gắn conversation với
+  lease/baseline/revision/attempt, scope-guard sau mỗi lượt,
+  EvidenceSchema contract cho output conversation, recovery khi
+  chết giữa chừng lúc đang write, benchmark correction so với cold.
+- **Đường implement giữ nguyên trong 3.1.2:** isolated-runner cold
+  dispatch + QC codex (đã chứng minh trọn vòng qua daemon thật).
+- **Lý do:** đánh giá P2-Gói 3 (24/10/2026) đã REJECT conversation
+  implement và không có bằng chứng mới nào làm đổi kết luận: đường
+  lạnh 2/2 đạt, 100–125s, scope sạch; brief lỏng 0/2 (response rỗng,
+  0 file thay đổi, model mở đầu bằng lệnh shell bị từ chối quyền
+  headless rồi bỏ lượt); brief ghim công cụ 1/1 đạt, 115s — không cho
+  thấy tiết kiệm so với lạnh. Năm khoảng trống kiến trúc vẫn mở:
+  conversation không có lease/binding (ID cũ vẫn được CLI nhận dù
+  task đổi revision hoặc lease hết hạn); không scope-guard, chưa thử
+  adversarial write; không EvidenceSchema contract cho output
+  conversation; recovery khi chết sau-write-trước-response chưa định
+  (chưa mô phỏng crash, chưa chứng minh idempotent hay fencing sau
+  timeout); context drift qua nhiều lượt correction chưa xác minh.
+  Khối lượng tương đương một phase mới kiểu Phase 2; nhét vào đợt
+  hoàn thiện sẽ đẩy lùi ngày xuất bản hoặc hạ chuẩn kiểm chứng, và
+  trộn hai thay đổi kiến trúc lớn làm mờ nguyên nhân nếu release gặp
+  sự cố. 3.1.2 đã có định danh rõ: discussion transport làm mặc
+  định, trọn vòng daemon chứng minh được, khôi phục sau restart.
+- **Điều kiện mở lại (giữ nguyên từ P2-Gói 3, mục 5–6):** host gắn
+  conversation với lease/baseline như discussion binding; brief
+  ghim công cụ + kiểm scope sau mỗi lượt; benchmark chốt trước đủ
+  10 cặp fresh workspace, mỗi conversation đủ 2 lượt; 100%
+  smoke/regression pass; ID ổn định; 0 response rỗng/denied action
+  chưa xử lý; 0 write ngoài scope; có trường hợp test mới fail
+  trước correction rồi pass sau correction; fence được lease hết
+  hạn/revision sai; fault injection sau-write-trước-response dẫn
+  tới outcome_unknown/reconcile, không duplicate dispatch, không
+  unknown tồn đọng; median correction wallMs tiết kiệm ít nhất 20%
+  so với cold correction cùng task/model/quyền/schema. Phép đo cold
+  correction hiện chưa tồn tại — phải xây dựng mới trước khi đo.
+  Chỉ cân nhắc hybrid (conversation cho correction, lạnh cho
+  implement ban đầu) khi tất cả gates đạt. Không bật conversation
+  cho vòng sửa sau QC trước khi đủ gates.
+- **Review:** AGY review đối kháng cho dự thảo quyết định này
+  (25/10/2026) cho verdict ACCEPT, 0 finding — 4/4 câu checklist
+  ĐẠT, đặc biệt xác nhận phép đo baseline cold correction chưa tồn
+  tại và là điều kiện bắt buộc trước khi đo tiết kiệm ≥ 20%.
+- **Tác động tới 3.1.2:** 0 file code sản phẩm cho D trong đợt này;
+  tài liệu 3.1.2 phải nêu rõ implement ở lại isolated-runner cold
+  dispatch, tránh hiểu lầm "dual = mọi thứ qua conversation". Nếu
+  AGY review sau này phản đối quyết định này với bằng chứng mới,
+  mở lại đánh giá thay vì giữ quyết định bằng mọi giá.
