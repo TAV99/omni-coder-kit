@@ -337,6 +337,7 @@ for (const withContext of [false, true]) {
                     calls.push('preflight');
                     assert.equal(root, expectedRoot);
                     assert.equal(options.cwd, expectedRoot);
+                    assert.equal(options.configRoot, withContext ? process.cwd() : undefined);
                     assert.equal(options.signal, controller.signal);
                     assert.equal(options.env, withContext ? env : undefined);
                     if (withContext) assert.equal(options.spawnImpl, depsContextSpawn);

@@ -285,6 +285,42 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   chạm ranh giới fail-closed/bảo mật; ghi làm việc tiếp theo sau Phase 3. Nợ kỹ thuật
   còn lại: retention/GC stateDir discussion (P2-02), observer-preflight có sẵn.
   Đã commit phần nghiệm thu (không push).
+- **Đợt trả hết nợ kỹ thuật — ĐẠT (24/10/2026, Muse kiểm chứng, theo lệnh "xử lý hết nợ
+  kể cả các phase trước"):**
+  Codex sửa 3 mục trong một brief (không commit/push; Muse kiểm chứng ở shell cấp cao
+  nhất, số liệu sandbox của Codex dính EPERM nên không dùng):
+  (D1) Daemon isolated live: `runCapabilityPreflight` thêm option `configRoot` (mặc định =
+  workspaceRoot); chỉ 2 check đọc config project (project_configuration, MCP) đánh giá
+  tại configRoot, mọi check còn lại vẫn ở worker root; `verifyCapability` của daemon
+  truyền configRoot = main root của session khi có trusted context. Không copy file
+  control-plane vào worker, không nới lỏng check nào — giới hạn ghi ở nghiệm thu Phase 3
+  nay ĐÃ ĐÓNG.
+  (D2) Orphan marker + GC: marker `.execution.json` có vòng đời seeding (kèm pid +
+  createdAt) → complete sau manifest; creation gặp conflict chỉ reclaim khi marker chưa
+  complete, mtime quá 5 phút và pid vắng/chết; host creation prune đúng orphan, không đụng
+  marker complete/manifest/journal (journal giữ vô thời hạn làm evidence) — P2-02 ĐÃ ĐÓNG.
+  (D3) Observer-preflight case-collision: 2 vòng kiểm trong `prepareTaskWorkspace` so
+  sánh không phân biệt hoa/thường, không đổi `repoPathKey` toàn cục — fail có sẵn từ
+  baseline Phase 2 nay ĐÃ ĐÓNG.
+  Cổng kiểm chứng: 7 suite liên quan **224/224**, discussion glob **332 pass / 0 fail /
+  5 skip** (tăng 9 test mới). Daemon live qua executable thật (env discussion UNSET,
+  context_files chỉ README): handoff ĐẠT, scout/review/implement đều có raw output,
+  implement SUCCESS (`node --check` exit 0), worker entry có sumIds, journal đủ 2
+  conversation, marker `status: complete` — đường isolated live qua daemon nay đi tới
+  handoff thật, không còn `CAPABILITY_BLOCKED`. Lưu ý kiểm chứng: tiêu chí verdict cũ
+  của driver live (đòi `phase.completed` trong authority log) là sai với đường isolated
+  (đường này không emit phase event vào authority log; handoff là tín hiệu kết thúc) —
+  driver đã sửa tiêu chí theo evidence thực chất, chạy lại logic verdict trên artifact
+  của lượt live này cho PASS 9/9 kiểm tra.
+  Hai mục còn lại CHỐT BẰNG QUYẾT ĐỊNH, không sửa code: (a) default model 3.7 giữ nguyên
+  — chỉ là fallback cuối cùng sau task.model > manifest workerModel > env, mọi đường thật
+  đều pin 3.8 theo mandate; đường fallback chạm model không có sẵn sẽ fail-closed ở
+  preflight thay vì chạy nhầm model; đổi default toàn cục là migration ảnh hưởng
+  preflight/init/daemon nên cần duyệt riêng. (b) Workflow restart → reclaim owner →
+  resume terminal phase: nửa orphan marker đã đóng nhờ D2; nửa tái tạo owner/adapters
+  từ journal sau restart vẫn là tính năng phase tương lai, cần thiết kế và duyệt riêng
+  (runbook recovery đã cập nhật thu hẹp giới hạn này); hành vi hiện tại fail-closed
+  (từ chối thay vì dispatch trùng) là đúng mặc định an toàn.
 - **Đính chính E10 trust-e2e trong nghiệm thu (24/10/2026, Muse kiểm chứng):**
   Cổng rộng sau fix round còn 2 fail; observer-preflight đã xác nhận fail sẵn ở baseline
   cuối Phase 2 (`4125c1b`, worktree đối chứng). E10 thì ngược lại: pass ở `4125c1b` nhưng

@@ -96,7 +96,10 @@ relay unblocked không đồng nghĩa task phase có thể tiếp tục. Không 
 close không phải reset/recovery. Host cache/registry và adapter bookkeeping chỉ trong bộ nhớ;
 journal bền không tự tái tạo owner/adapters sau restart. **CHƯA có workflow đã xác minh
 restart → reclaim owner → tiếp tục terminal phase**, cũng chưa có lệnh CLI/RPC resume/reconcile
-end-to-end được runbook này chứng nhận.
+end-to-end được runbook này chứng nhận. (Cập nhật đợt trả nợ 2026-10-24: nửa "orphan marker
+chặn reseed" đã đóng — marker có vòng đời seeding → complete, creation gặp marker seeding
+cũ + pid chết được reclaim; nửa "tái tạo owner/adapters từ journal sau restart" vẫn là
+tính năng của phase tương lai, cần thiết kế và duyệt riêng, không thuộc đợt trả nợ này.)
 
 Dừng tại các trường hợp owner mất/đã đóng, invocation còn active, authority stale, proof
 không đủ, integrity lỗi hoặc phase đã terminal failed (kể cả relay reconcile thành công).

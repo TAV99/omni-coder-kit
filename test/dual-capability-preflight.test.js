@@ -400,3 +400,46 @@ test('execution hooks: guard rejection propagates unchanged and pre-abort preven
     assert.equal(result.error_code, 'ABORTED');
     assert.equal(calls, 0);
 });
+
+test('configRoot reads only project config while probes and other checks stay at worker root', async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preflight-config-root-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const workerRoot = path.join(root, 'worker');
+    fs.mkdirSync(workerRoot);
+    fs.mkdirSync(path.join(root, '.codex'));
+    fs.writeFileSync(path.join(root, '.codex/config.toml'), '[features]\nhooks = true\n[mcp_servers.omni_dual]\n');
+    fs.writeFileSync(path.join(root, '.codex/hooks.json'), '{"hooks":{}}');
+    const probes = [];
+    const options = {
+        workerModel: 'config-root-model',
+        checkLedger(actualRoot) {
+            assert.equal(actualRoot, workerRoot);
+            return { name: 'authority_ledger_integrity', status: 'PASSED' };
+        },
+        checkBaseline(actualRoot) {
+            assert.equal(actualRoot, workerRoot);
+            return { name: 'baseline_backend', status: 'PASSED' };
+        },
+        spawnImpl(command, args, spawnOptions) {
+            assert.equal(spawnOptions.cwd, workerRoot);
+            probes.push(args);
+            const child = createMockChild();
+            setImmediate(() => {
+                child.stdout.write(args.includes('--version') ? 'agy 1.2.3' : '["config-root-model"]');
+                child.emit('close', 0, null);
+            });
+            return child;
+        },
+    };
+    const result = await runCapabilityPreflight(workerRoot, { ...options, configRoot: root });
+    assert.equal(result.status, 'PASSED');
+    for (const name of ['project_configuration', 'mcp_and_hook_setup']) {
+        assert.equal(result.checks.find((check) => check.name === name).status, 'PASSED');
+    }
+    assert.deepEqual(probes, [['--version'], ['models']]);
+    const defaultResult = await runCapabilityPreflight(workerRoot, options);
+    assert.equal(defaultResult.status, 'BLOCKED');
+    for (const name of ['project_configuration', 'mcp_and_hook_setup']) {
+        assert.equal(defaultResult.checks.find((check) => check.name === name).status, 'BLOCKED');
+    }
+});

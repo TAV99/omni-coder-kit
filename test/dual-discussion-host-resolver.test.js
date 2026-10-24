@@ -523,3 +523,103 @@ test('closeAll prevents new isolated factories before any seed', async (t) => {
     await assert.rejects(state.host.createIsolatedDiscussion(state.execution), { code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID' });
     assert.equal(state.calls.length, 0);
 });
+
+async function writeExecutionMarker(stateDir, key, marker, { young = false, manifest = false } = {}) {
+    const directory = path.join(stateDir, 'isolated');
+    await fs.mkdir(directory, { recursive: true });
+    const file = path.join(directory, key + '.execution.json');
+    await fs.writeFile(file, JSON.stringify(marker));
+    if (!young) {
+        const old = new Date(Date.now() - 6 * 60_000);
+        await fs.utimes(file, old, old);
+    }
+    if (manifest) await fs.writeFile(path.join(directory, key + '.manifest.json'), 'audit manifest');
+    return file;
+}
+
+for (const marker of [{ status: 'seeding', pid: 2147483647 }, {}]) {
+    test(`isolated resolver reclaims old dead orphan (${marker.status ?? 'legacy'}) and completes marker`, async (t) => {
+        const state = await isolatedFixture(t);
+        const child = await state.host.createIsolatedDiscussion(state.execution);
+        const file = await writeExecutionMarker(state.stateDir, child.executionKey, marker);
+        await child.sessionResolver(state.request);
+        const completed = JSON.parse(await fs.readFile(file, 'utf8'));
+        assert.equal(completed.status, 'complete');
+        assert.equal(completed.pid, process.pid);
+        assert.ok(Number.isFinite(Date.parse(completed.createdAt)));
+        assert.equal(completed.operation_id, state.execution.operationId);
+        assert.equal(state.calls.length, 2);
+    });
+}
+
+for (const [name, marker, options] of [
+    ['complete', { status: 'complete' }, {}],
+    ['manifest sibling', { status: 'seeding' }, { manifest: true }],
+    ['legacy manifest sibling', {}, { manifest: true }],
+    ['live pid', { status: 'seeding', pid: process.pid }, {}],
+    ['young marker', { status: 'seeding' }, { young: true }],
+]) {
+    test(`isolated resolver preserves ${name} and rejects reseeding`, async (t) => {
+        const state = await isolatedFixture(t);
+        const child = await state.host.createIsolatedDiscussion(state.execution);
+        const file = await writeExecutionMarker(state.stateDir, child.executionKey, marker, options);
+        const before = await fs.readFile(file, 'utf8');
+        await assert.rejects(child.sessionResolver(state.request), {
+            code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID',
+            message: 'Isolated generation already exists; recovery is required before reseeding',
+        });
+        assert.equal(await fs.readFile(file, 'utf8'), before);
+        assert.equal(state.calls.length, 0);
+    });
+}
+
+test('host creation GC removes only old dead orphan markers and retains audit evidence', async (t) => {
+    const { stateDir } = await fixture(t);
+    const fixtures = [
+        ['orphan', { status: 'seeding', pid: 2147483647 }, {}, false],
+        ['legacy-orphan', {}, {}, false],
+        ['complete', { status: 'complete' }, {}, true],
+        ['manifest', { status: 'seeding' }, { manifest: true }, true],
+        ['legacy-manifest', {}, { manifest: true }, true],
+        ['alive', { status: 'seeding', pid: process.pid }, {}, true],
+        ['young', { status: 'seeding' }, { young: true }, true],
+        ['unknown', { status: 'unknown' }, {}, true],
+    ];
+    for (const [key, marker, options] of fixtures) await writeExecutionMarker(stateDir, key, marker, options);
+    const journal = path.join(stateDir, 'isolated', 'orphan', 'journal.jsonl');
+    await fs.mkdir(path.dirname(journal), { recursive: true });
+    await fs.writeFile(journal, 'audit journal');
+    const host = createDiscussionHost({ stateDir });
+    await host.closeAll();
+    for (const [key, , , retained] of fixtures) {
+        const file = path.join(stateDir, 'isolated', key + '.execution.json');
+        if (retained) assert.ok(await fs.stat(file));
+        else await assert.rejects(fs.stat(file), { code: 'ENOENT' });
+    }
+    assert.equal(await fs.readFile(journal, 'utf8'), 'audit journal');
+    for (const key of ['manifest', 'legacy-manifest']) {
+        assert.equal(await fs.readFile(path.join(stateDir, 'isolated', key + '.manifest.json'), 'utf8'), 'audit manifest');
+    }
+});
+
+test('isolated marker records the creating process while seeding before publishing complete', async (t) => {
+    let markerPath;
+    const observed = [];
+    const state = await isolatedFixture(t, { seeds: Object.fromEntries(['codex', 'agy'].map((provider) =>
+        [provider, async () => {
+            observed.push(JSON.parse(await fs.readFile(markerPath, 'utf8')));
+            return { conversationId: `lifecycle-${provider}` };
+        }])) });
+    const child = await state.host.createIsolatedDiscussion(state.execution);
+    markerPath = path.join(state.stateDir, 'isolated', child.executionKey + '.execution.json');
+    await child.sessionResolver(state.request);
+    assert.equal(observed.length, 2);
+    for (const marker of observed) {
+        assert.equal(marker.status, 'seeding');
+        assert.equal(marker.pid, process.pid);
+        assert.ok(Number.isFinite(Date.parse(marker.createdAt)));
+    }
+    const marker = JSON.parse(await fs.readFile(markerPath, 'utf8'));
+    assert.deepEqual(marker, { ...observed[0], status: 'complete' });
+    assert.ok(await fs.stat(markerPath.replace('.execution.json', '.manifest.json')));
+});

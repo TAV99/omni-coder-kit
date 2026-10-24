@@ -333,3 +333,15 @@ test('path and collision preflight: case-colliding task paths are rejected fail-
 
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
 });
+
+
+test('path and collision preflight: allowed path case-colliding with snapshot source is rejected', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dual-snapshot-case-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.writeFileSync(path.join(root, 'package.json'), '{}');
+    assert.throws(() => prepareTaskWorkspace({
+        workspaceRoot: root, sessionId: 'case-snapshot', taskId: 'TASK-CASE',
+        attempt: 1, planRevision: 1, allowedFiles: ['PACKAGE.JSON'],
+        generatedOutputs: [], contextFiles: [], denyPatterns: [], dependencyMode: 'none',
+    }), { code: 'DUAL_TASK_SCOPE_INVALID' });
+});
