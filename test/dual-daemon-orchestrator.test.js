@@ -2805,7 +2805,12 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
                 } } });
             t.after(() => daemon.close());
             const client = createDaemonClient({ workspaceRoot: snapDir, timeoutMs: 10000 });
-            const begin = await client.beginSession({ workspace_root: snapDir, mode: 'auto' });
+            // This case tests discussion preconditions, not Git auto-detection.
+            // A temp directory may inherit unrelated .git metadata from an ancestor.
+            const expectedBaseline = createSnapshotBaseline({ root: snapDir }).capture().identity;
+            const begin = await client.beginSession({ workspace_root: snapDir, mode: 'auto',
+                expected_baseline: expectedBaseline });
+            assert.deepEqual(begin.expected_baseline, expectedBaseline);
             await client.registerPlan(begin.session_id, {
                 plan_path: 'plans/plan.md', plan_sha256: 'b'.repeat(64),
                 tasks: [{ task_id: 'TASK-NO-DISCUSSION', title: 'Requires discussion', owner: 'agy',
@@ -2820,6 +2825,8 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             const runDir = path.join(snapDir, '.omni/codex-gemini/runs/TASK-NO-DISCUSSION');
             const events = fs.readFileSync(path.join(runDir, 'events.ndjson'), 'utf8').trim().split('\n').map(JSON.parse);
             assert.equal(events.some((event) => event.type === 'phase.failed'), false);
+            assert.equal(events.some((event) => event.type === 'phase.started' && event.phase === 'scout'), false,
+                'missing discussion must reject before starting a scout attempt');
             assert.equal(events.some((event) => event.type === 'phase.completed' && event.phase === 'scout'), false);
             assert.equal(fs.existsSync(path.join(runDir, 'raw/scout.1.failure.json')), false);
             assert.equal(fs.existsSync(path.join(runDir, 'raw/scout.1.input.md')), false);
