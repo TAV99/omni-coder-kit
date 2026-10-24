@@ -162,3 +162,42 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   (trước Gói 2a) cho ĐÚNG 20/33 với tập tên case fail trùng khít → 33 fail là nợ di trú
   của chính Gói 1 (suite còn đặt env '0' ở tầm module, scout nay fail-closed), thuộc
   phạm vi Gói 2c (fixture discussion stub), KHÔNG phải hồi quy của 2a.
+
+### Gói 2b — thiết kế isolated: ĐÃ SOẠN + REVIEW, chờ bản sửa theo review (24/10/2026)
+- Codex soạn `f01-phase3-isolated-design.md` (321 dòng): CHỌN phương án A —
+  daemon-side factory cấp child discussion host theo execution, dùng lease/authority
+  của daemon; tách 3 identity W/B/D; NEEDS_CONTEXT đóng execution, generation mới theo
+  operationId; stateDir `.omni/runs/dual-discussion/isolated/<executionKey>`.
+- AGY review (`f01-phase3-isolated-design-review-agy.md`): **ACCEPT WITH FIXES** —
+  2 P0, 3 P1, 2 P2. H2/H5/H6 TRUE; H1/H3/H4/H7 PARTLY; H8 đồng ý có điều kiện cả 5
+  câu hỏi mở.
+- **Muse CHẤP THUẬN TOÀN BỘ findings và CHỐT 5 câu hỏi mở như sau:**
+  (1) Duyệt phương án A KÈM mở rộng hooks spawn/env/signal ở 4 module (live-agy-invoke,
+  live-codex-invoke, daemon-ports, capability-preflight) — đặc tả chữ ký là phần của
+  thiết kế, không phải chi tiết phụ; thiếu hooks thì isolated giữ BLOCKED.
+  (2) Duyệt generation theo operationId cho NEEDS_CONTEXT; không hydrate conversation
+  cross-process trong gói này.
+  (3) stateDir như trên, daemon sở hữu, giữ evidence — retention/GC ghi nợ kỹ thuật
+  sau Phase 3, không tự GC trong gói này.
+  (4) Hai mã lỗi mới: `DUAL_ISOLATED_DISCUSSION_FACTORY_REQUIRED` = precondition error
+  trước `phase.started` (đúng D1); `DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID` =
+  terminal security error.
+  (5) Helper test `test/helpers/dual-discussion-stub.js` do 2b sở hữu (bản
+  execution-aware), 2c tái dùng; live acceptance isolated phải chứng minh cwd/env
+  bằng process audit thật, không chỉ metadata.
+- Điều kiện phụ chốt thêm từ findings: mô hình guard 3 chốt (Seed Guard Wrapper ở
+  runner + Prespawn Guard Callback ở adapter bắt cả nudge nội bộ + Relay Facade);
+  child host tự unregister khi close, `closeAll` lũy đẳng không throw vì child đã
+  đóng; authority của child bind exact leaseId/operationId qua closure authorize của
+  isolated-authority; capability probe dùng trustedExecutionContext đã đối chiếu
+  ledger (`task.workspace.prepared`) + `fs.realpathSync.native`; chữ ký shared
+  `sessionResolver` GIỮ NGUYÊN (isolated chỉ qua factory); mọi so sánh root qua
+  realpath native. Codex sửa bản thiết kế theo 5 điều kiện tối thiểu của review →
+  Muse duyệt → mới viết brief triển khai.
+- **DUYỆT TRIỂN KHAI (Muse, 24/10/2026):** bản thiết kế đã sửa đủ 8 điểm theo review
+  (413 dòng; Muse kiểm điểm các mục then chốt: đặc tả spawnImpl/env/signal, guard 3
+  chốt, trustedExecutionContext, unregister/closeAll lũy đẳng, authority exact, 2 mã
+  lỗi, mục 8 ĐÃ CHỐT). Triển khai tách 2 gói con: **2b-i** = nền hooks (live invokers +
+  capability-preflight + daemon-ports context — additive, giữ nguyên hành vi shared);
+  **2b-ii** = child factory + wiring isolated + guard 3 chốt + helper test và di trú
+  suite isolated.
