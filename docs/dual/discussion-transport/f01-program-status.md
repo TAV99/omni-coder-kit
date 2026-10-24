@@ -232,6 +232,21 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   (DUAL_DISCUSSION_REQUIRED, không chạy worker, không phase.failed/artifact scout);
   fail duy nhất là E10 (trust-e2e, timeout waitUntil 10s) — đối chứng fail cả ở HEAD,
   lỗi có sẵn, không phải hồi quy. Đã commit phần này (không push).
+- **2d — ĐẠT (24/10/2026, Muse kiểm chứng):** Codex retire mode OLD trong
+  `test/dual-phase2-benchmark.js` (fail `BENCHMARK_OLD_RETIRED` trước mọi provider I/O,
+  kể cả default pair và worker trực tiếp; NEW giữ nguyên) + test mới
+  `test/dual-phase2-benchmark-retirement.test.js` (10 test offline, spy chặn filesystem/
+  child process/imports). Tài liệu theo khảo sát §5: README tách transport theo phase +
+  flag semantics + link runbook; integration-design và seam-survey gắn trạng thái Phase 3
+  (không sửa lịch sử); protocol/report Phase 2 thêm chú thích retirement (giữ nguyên số đo);
+  runbook discussion mới `f01-discussion-recovery-runbook.md` (evidence/inspection/reconcile
+  + giới hạn viết rõ: chưa có workflow restart → reclaim owner → tiếp tục terminal phase);
+  safe-recovery chỉ thêm pointer, không sửa ngữ nghĩa validator; daemon-server chỉ sửa
+  comment. Cổng của Muse ở shell cấp cao nhất: OLD check exit 1 sau 0.28s;
+  diagnostics + retirement **11/11**; discussion gate **317 test — 312 pass, 0 fail,
+  5 skip** (14 fail trong chạy sandbox của Codex đều là EPERM git subprocess, về shell
+  cấp cao nhất đều pass — đúng quy tắc top-level là chuẩn). Đã commit phần này
+  (không push; runbook bị gitignore `docs/` nên add bằng `git add -f`).
 - **2b-ii — ĐẠT (24/10/2026, Muse kiểm chứng):** child factory `createIsolatedDiscussion`
   trong host-resolver (executionKey cấu trúc theo thiết kế, stateDir namespace
   `isolated/<key>`, registry/reader riêng, close lũy đẳng + tự unregister);

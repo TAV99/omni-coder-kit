@@ -1,5 +1,16 @@
 # Thiết kế tích hợp F01 — Discussion Transport vào luồng Dual chính
 
+> **Snapshot thiết kế lịch sử ngày 2026-10-23. Trạng thái Phase 3 (24/10/2026):**
+> `scout`/`review` chỉ dùng discussion; flag off, thiếu discussion/resolver hoặc cấu hình
+> không hợp lệ đều fail-closed, không quay về cold process. `implement` vẫn dùng process.
+> Engine không có phase `plan`; các đề xuất `plan`/rollback/fallback bên dưới là lịch sử.
+> Library vẫn chỉ bật khi `enabled === true`; daemon default-on là lựa chọn của host.
+> Điều kiện “≥ 1 chu kỳ phát hành” đã được chủ repo override bằng bằng chứng Phase 2,
+> theo [program status — Phase 3](f01-program-status.md#phase-3--gỡ-đường-đối-thoại-cũ-khởi-động-24102026-theo-lệnh-chủ-repo),
+> không có tuyên bố đã trải qua chu kỳ phát hành thật.
+> Vận hành hiện hành: [discussion recovery runbook](f01-discussion-recovery-runbook.md).
+> Giữ nguyên thiết kế và các quyết định tại thời điểm snapshot bên dưới.
+
 Ngày: 2026-10-23. Trạng thái: **BẢN THIẾT KẾ CHỜ CHỦ REPO DUYỆT** — chưa triển khai.
 Cơ sở bằng chứng: `live-experiment-2026-10-23.md` (G1/G2/Q05 đều PASS WITH CAVEATS).
 Quyết định kiến trúc đã chốt bởi chủ repo (23/10/2026): **thay thế theo lớp, theo phase** —

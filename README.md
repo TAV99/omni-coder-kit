@@ -141,6 +141,14 @@ Sau đó, trong Codex chỉ cần gọi `$om-think` (hoặc `>om-think`). Khi in
 
 Codex phải trust project để project hooks được chạy. Config được sinh dùng `[features] hooks = true`, `.codex/hooks.json` và MCP stdio bằng Node/package path tuyệt đối của máy hiện tại; không phụ thuộc global `omni`, PowerShell hay Bash.
 
+Phase 3 tách transport theo phase: `scout`/`review` dùng discussion read-only;
+`implement` dùng process dưới lease và scope guards. Engine không có worker phase `plan`.
+Daemon mặc định bật discussion, gồm executable `bin/omni-daemon.js` đã nối host.
+`OMNI_DUAL_DISCUSSION_ENABLED=0` (hoặc giá trị off/invalid) khiến scout/review fail-closed,
+không chọn đường lạnh. Library chỉ bật khi `enabled === true`. Standalone CLI không có
+host/resolver mặc định: bật flag riêng lẻ vẫn không đủ chạy scout/review và sẽ fail-closed;
+caller tích hợp phải cung cấp discussion resolver hợp lệ.
+
 #### Isolated worker workflow (đang phát triển trên nhánh v3.1.2)
 
 Contract dùng chung cho mọi native workflow nằm ở `.omni/workflows/dual-controller.md` sau init. Task low-risk có thể chọn `execution_mode: "isolated"` và `depends_on: []`: AGY làm trong snapshot riêng, Codex QC/integrate kết quả đã được chốt hash. Nhiều isolated tasks được xếp theo dependency/scope; adapter hiện dispatch tuần tự, chưa tuyên bố parallel throughput.
@@ -152,6 +160,12 @@ Contract dùng chung cho mọi native workflow nằm ở `.omni/workflows/dual-c
 Shared plans cũ giữ behavior tương thích. Private snapshot không copy `node_modules` hoặc authority credentials. Project npm single-package có package-lock có thể khai báo `dependency_mode: "npm-ci"` để controller cài riêng, tắt lifecycle scripts và giữ fingerprint; package/lock phải nằm ngoài write scope. Workspace, shrinkwrap và build cần lifecycle/native setup chưa thuộc mode này. Đường isolated đã có deterministic tests nhưng chưa được live-qualified cho mọi project/platform; không dùng mô tả này như release qualification.
 
 #### 2. Lifecycle và recovery
+
+Lỗi hội thoại/unknown: theo [discussion recovery runbook](docs/dual/discussion-transport/f01-discussion-recovery-runbook.md)
+để tìm meta, failure evidence và journal. Relay reconcile chỉ xử lý turn hội thoại;
+không tự xóa terminal phase failure hoặc thay authority recovery. `pending_questions`,
+task correction và QC tiếp tục dùng authority workflow mô tả ở trên. Chưa có workflow
+restart → reclaim owner → tiếp tục terminal phase được xác minh.
 
 ```bash
 omni dual daemon start     # Khởi động daemon

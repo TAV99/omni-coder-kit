@@ -2,7 +2,27 @@
 
 Khảo sát ngày 2026-10-23. Gói này chỉ thêm bridge và test, chưa nối route vào engine.
 
-## Call chain hiện tại
+> **Trạng thái Phase 3 — 24/10/2026:** Phần khảo sát dưới đây là snapshot ngày
+> 2026-10-23, không phải wiring hiện hành. Không tái sử dụng line anchors cũ như hiện trạng.
+> Xem [khảo sát retirement](f01-phase3-retirement-survey.md) và
+> [discussion recovery runbook](f01-discussion-recovery-runbook.md).
+> Scout/review hiện discussion-only; off/missing resolver fail-closed; implement giữ process.
+> Engine không có phase `plan`; opt-in/fallback và mapping `plan` bên dưới là đề xuất lịch sử.
+
+## Wiring hiện hành của isolated (Phase 3)
+
+Daemon cấp `discussion` từ `createDaemonDiscussionHost`/`daemonDiscussionOptions` tới
+`createOrchestratorAdapter`. Adapter chuyển option qua `runIsolatedTask`
+(`lib/dual/isolated-authority.js`) vào `lib/dual/isolated-runner.js`.
+Runner gọi `discussion.createIsolatedDiscussion` (child factory của
+`lib/dual/discussion/host-resolver.js`) với private `workerRoot`, baseline, attempt,
+session/task/revision, lease/operation và guards. Child cung cấp `sessionResolver`
+cho orchestrator private, seed/adapters trong private workspace, không dùng resolver của
+source workspace. Runner bọc resolver và relay receive/dispatch/reconcile/inspect bằng
+guards trước/sau; child kiểm identity/authority và quản lý close/quiescence.
+Thiếu factory khi enabled sẽ fail-closed. Đây là mô tả source wiring, không chứng nhận live.
+
+## Call chain tại snapshot 2026-10-23
 
 - CLI: `lib/commands/dual.js:281` (`getOrchestrator`) → `:402` (`orch.runPhase`).
 - MCP/daemon: `lib/dual/mcp-server.mjs:819` (`client.beginSession`), `:894`
@@ -14,6 +34,8 @@ Khảo sát ngày 2026-10-23. Gói này chỉ thêm bridge và test, chưa nối
   `lib/dual/isolated-authority.js:167` (`runIsolatedTask`) →
   `lib/dual/isolated-runner.js:134` tạo orchestrator, `:159`–`:160` chạy preflight/scout,
   `:194` chạy phần còn lại bằng `orchestrator.run`.
+  **Chú thích Phase 3:** isolated nay đi qua host-resolver + child factory như mục hiện hành
+  phía trên; các line anchors snapshot này không định vị wiring mới.
 - `lib/dual/orchestrator.js:1699` (`run`) chọn phase → `:998` (`runPhase`).
   Scout dựng input/schema tại `:1212`–`:1218`, gọi `executeAgyWithRetry` tại `:1220`;
   implement gọi tại `:1482`; review dựng input/schema tại `:1635`–`:1643`, gọi tại `:1645`.

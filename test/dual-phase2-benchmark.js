@@ -67,7 +67,13 @@ function tokenFields(stdout, source) {
     return records;
 }
 
+function rejectRetiredMode(mode) {
+    if (mode !== 'OLD') return;
+    throw Object.assign(new Error('Mode OLD was retired in Phase 3; to reproduce OLD, checkout a historical revision in a separate workspace with a version label. There is no hidden cold option in the Phase 3 product.'), { code: 'BENCHMARK_OLD_RETIRED' });
+}
+
 async function worker(config) {
+    rejectRetiredMode(config.mode);
     // Imports/provider initialization stay entirely behind the live gate.
     const { createDualOrchestrator } = require('../lib/dual/orchestrator');
     const { ContextSchema, ReviewSchema, SpecSchema, EvidenceSchema, toDraft7Schema } = require('../lib/dual/contracts');
@@ -208,7 +214,7 @@ async function worker(config) {
                 return session;
             } };
         }
-        // OLD intentionally has neither a discussion option nor a processRunner override.
+        // Historical OLD omitted discussion/processRunner overrides; Phase 3 rejects it before I/O.
         const orch = createDualOrchestrator(options);
         orch.newTask(taskId);
         const request = 'Read all fixture source files, README.md and test/smoke.test.js. Explain APIs, assumptions and risks. '
@@ -487,8 +493,16 @@ function summarize(runs) {
 }
 
 async function main() {
+    const args = process.argv.slice(2);
+    const modesArgs = args.filter(arg => arg.startsWith('--modes='));
+    for (const arg of modesArgs) {
+        for (const mode of arg.slice('--modes='.length).split(/[,/]/)) rejectRetiredMode(mode.trim());
+    }
+    // The historical default is an OLD/NEW pair. Reject it before reserving output
+    // or spawning a worker; NEW remains available only when explicitly selected.
+    if (process.env.OMNI_DUAL_LIVE === '1' && args[0] !== '--benchmark-worker' && modesArgs.length === 0) rejectRetiredMode('OLD');
     if (process.env.OMNI_DUAL_LIVE !== '1') {
-        console.log('Chạy benchmark live: OMNI_DUAL_LIVE=1 node test/dual-phase2-benchmark.js <output-json-path>');
+        console.log('Chạy benchmark live: OMNI_DUAL_LIVE=1 node test/dual-phase2-benchmark.js <output-json-path> --modes=NEW');
         return;
     }
     if (process.argv[2] === '--benchmark-worker') {
@@ -499,7 +513,6 @@ async function main() {
         });
         return;
     }
-    const args = process.argv.slice(2);
     const modesArg = args.find(arg => arg.startsWith('--modes='));
     const modesFilter = modesArg?.slice('--modes='.length);
     if (modesArg && !['NEW', 'OLD'].includes(modesFilter)) throw failure('INVALID_MODES_FILTER');
@@ -542,4 +555,4 @@ async function main() {
     }
 }
 
-main().catch(error => { console.error(`Benchmark stopped: ${codeOf(error)}`); process.exitCode = 1; });
+main().catch(error => { console.error(`Benchmark stopped: ${codeOf(error)}${error.code === 'BENCHMARK_OLD_RETIRED' ? ': ' + error.message : ''}`); process.exitCode = 1; });

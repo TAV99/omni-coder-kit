@@ -1,5 +1,7 @@
 # Dual Async Validator Safe Recovery & Diagnostic Runbook
 
+Hội thoại discussion/unknown có [runbook riêng](dual/discussion-transport/f01-discussion-recovery-runbook.md); các bước validator bên dưới không áp dụng cho unknown discussion.
+
 ## 1. Purpose & Principles
 
 This runbook documents the safe diagnostic and recovery procedures for dual asynchronous validator runs (quality and acceptance-correction).

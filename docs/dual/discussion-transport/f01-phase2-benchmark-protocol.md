@@ -1,5 +1,17 @@
 # F01 Phase 2 — Protocol benchmark cố định trước đo
 
+> **Chú thích retirement Phase 3 — 24/10/2026:** Nội dung, protocol và số đo Phase 2
+> bên dưới được giữ nguyên như bằng chứng lịch sử. OLD đã retire và không chạy trên revision
+> hiện tại, kể cả default pair OLD/NEW; harness từ chối trước provider I/O. Muốn tái lập OLD,
+> checkout revision lịch sử trong workspace riêng có nhãn version. Sản phẩm Phase 3 không
+> có hidden cold option cho scout/review. Không dùng OLD fail-closed để kết luận NEW nhanh hơn.
+> Quyết định Phase 2 “daemon default-on ở default factory, CLI opt-in” không mô tả behavior
+> Phase 3: scout/review discussion-only, off/missing resolver → fail-closed; implement giữ process.
+> Default factory khác executable `bin/omni-daemon.js`; executable đã được nối host ở Gói 2a.
+> Library vẫn yêu cầu `enabled === true`, không tự đổi default theo daemon.
+> Xem [khảo sát retirement](f01-phase3-retirement-survey.md) và
+> [runbook hiện hành](f01-discussion-recovery-runbook.md).
+
 Protocol: `f01-phase2-v1`. Tài liệu được viết trước khi có measurement của harness này. Không thay đổi rubric, mẫu hay ngưỡng sau khi thấy kết quả. Mục tiêu là quyết định lật mặc định discussion ở đường daemon bằng bằng chứng theo Q05 của [requirements.md](requirements.md); không suy diễn từ offline tests.
 
 ## Fixture và task
