@@ -263,6 +263,20 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   cấp cao nhất đều pass). P2-02 (orphan `.execution.json` khi crash sớm) giữ làm nợ kỹ
   thuật retention/GC sau Phase 3, không sửa production trong vòng này. Đã commit phần này
   (không push; review doc bị gitignore `docs/` nên add bằng `git add -f`).
+- **Đính chính fix round (24/10/2026, Muse kiểm chứng — thay thế phần F1 ở mục trên):**
+  F1 như Codex làm (stub đọc input theo task attempt) LÀ SAI và đã bị revert: cổng rộng
+  cho thấy 2 test handoff-rejection đổ ENOENT `raw/scout.2.input.md`, và đo bằng debug
+  chứng minh nguyên nhân — orchestrator đặt tên file theo PER-PHASE attempt
+  (`prepareInputArtifacts` viết `raw/scout.1.input.md` cho cả lần chạy attempt-2, vì run
+  mới có phase attempt = 1), trong khi turn của stub mang TASK attempt (= 2). Hai khái
+  niệm attempt này khác nhau; hardcode `.1.` của stub cũ là ĐÚNG với mọi lần dispatch
+  discussion của run mới (discussion fail là non-retryable nên không có dispatch lần 2
+  trong cùng run). Kết luận: P1-02 của AGY là false positive dưới dạng đã nêu; stub giữ
+  `.1.` kèm comment giải thích, test hồi quy mới sửa thành "task attempt = 2 vẫn đọc
+  input phase-1". F2 (proxy fs tổng quát) giữ nguyên, không hồi quy. Cổng sau đính chính:
+  stub + 2 handoff + observer **44/45** (chỉ còn observer-preflight case-collision, đã
+  xác nhận fail sẵn ở baseline c6dbd96 và không thuộc diff Phase 3); discussion glob
+  **323 pass / 0 fail / 5 skip**. Đã commit phần đính chính này (không push).
 - **2b-ii — ĐẠT (24/10/2026, Muse kiểm chứng):** child factory `createIsolatedDiscussion`
   trong host-resolver (executionKey cấu trúc theo thiết kế, stateDir namespace
   `isolated/<key>`, registry/reader riêng, close lũy đẳng + tự unregister);

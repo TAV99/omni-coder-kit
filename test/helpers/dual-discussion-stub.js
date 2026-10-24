@@ -143,8 +143,15 @@ function withDiscussion(options) {
     const { processRunner, agyPrefixArgs = [] } = options;
     const discussion = options.discussion ?? createDiscussionStub({
         authorityStore: options.authorityStore,
-        async turn({ workerRoot, phase, taskId, attempt = 1, env, spawnImpl }) {
-            const input = `.omni/codex-gemini/runs/${taskId}/raw/${phase}.${attempt}.input.md`;
+        async turn({ workerRoot, phase, taskId, env, spawnImpl }) {
+            // NOTE: filenames use the orchestrator's PER-PHASE attempt, not the
+            // task attempt carried by the discussion context. A fresh task run
+            // always dispatches its first discussion phase with phase attempt 1
+            // (prepareInputArtifacts writes raw/<phase>.1.input.md), even when the
+            // task itself is on attempt 2+ after a correction. Interpolating the
+            // task attempt here reads a file the orchestrator never wrote (ENOENT)
+            // and broke two handoff-rejection tests; do not "fix" this to .${attempt}.
+            const input = `.omni/codex-gemini/runs/${taskId}/raw/${phase}.1.input.md`;
             const prompt = `Execute the ${phase} phase. Read ${input}`;
             const invocation = { cwd: workerRoot, transport: 'discussion',
                 args: [`-p=${prompt}${agyPrefixArgs[0] ? '' : `\n${fs.readFileSync(path.join(workerRoot, input), 'utf8')}`}`] };

@@ -12,7 +12,7 @@ async function dispatch(t, options = {}, attempt) {
     t.after(() => fs.rmSync(workerRoot, { recursive: true, force: true }));
     const raw = path.join(workerRoot, '.omni/codex-gemini/runs/task/raw');
     fs.mkdirSync(raw, { recursive: true });
-    fs.writeFileSync(path.join(raw, `scout.${attempt ?? 1}.input.md`), 'attempt input');
+    fs.writeFileSync(path.join(raw, 'scout.1.input.md'), 'attempt input');
     const config = options.setup?.(workerRoot) ?? {};
     const { discussion } = withDiscussion({ ...options, ...config });
     const child = await discussion.createIsolatedDiscussion({ workerRoot,
@@ -28,9 +28,9 @@ async function dispatch(t, options = {}, attempt) {
 }
 
 for (const attempt of [undefined, 2]) {
-    test(`turn reads input for attempt ${attempt ?? 'default 1'}`, async (t) => {
+    test(`turn reads the phase-1 input${attempt === 2 ? ' even when the task attempt is 2' : ''}`, async (t) => {
         const payload = await dispatch(t, { processRunner: async ({ args }) => {
-            assert.match(args[0], new RegExp(`scout\\.${attempt ?? 1}\\.input\\.md`));
+            assert.match(args[0], /scout\.1\.input\.md/);
             assert.ok(args[0].endsWith('\nattempt input'));
             return { stdout: JSON.stringify({ structured_output: { ok: true } }) };
         } }, attempt);
