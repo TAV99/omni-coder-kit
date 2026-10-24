@@ -263,6 +263,42 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   cấp cao nhất đều pass). P2-02 (orphan `.execution.json` khi crash sớm) giữ làm nợ kỹ
   thuật retention/GC sau Phase 3, không sửa production trong vòng này. Đã commit phần này
   (không push; review doc bị gitignore `docs/` nên add bằng `git add -f`).
+- **Nghiệm thu Phase 3 — ĐẠT CÓ GIỚI HẠN GHI RÕ (24/10/2026, Muse kiểm chứng):**
+  Cổng rộng cuối: **1432 test — 1422 pass / 1 fail / 9 skip**; fail duy nhất là
+  observer-preflight case-collision, đã xác nhận fail sẵn ở baseline cuối Phase 2
+  (`4125c1b`) và không thuộc diff Phase 3. Live acceptance
+  `test/dual-discussion-live-acceptance.test.js` với `OMNI_DUAL_LIVE=1`: **PASS**
+  (2 scout thật qua discussion host tới orchestrator, 181s; lần chạy đầu vấp
+  `spawn agy ENOENT` chỉ vì shell thiếu PATH tới `~/.local/bin/agy`).
+  Daemon qua executable thật `bin/omni-daemon.js` với `OMNI_DUAL_DISCUSSION_ENABLED`
+  UNSET: session + capability preflight thật đều PASSED tại main root, isolated
+  discussion được tạo đủ 2 conversation (manifest/identity đúng) — chứng minh
+  default-on discussion ở executable. GIỚI HẠN (không thuộc phạm vi Phase 3, có từ
+  Phase 1): task isolated live chưa đi tới handoff qua executable thật vì relay kiểm
+  chứng capability trong worker root, mà snapshot worker loại trừ file control-plane
+  theo thiết kế (`CANONICAL_CONTROL_PLANE_EXCLUDES` gồm `.codex`, `.omni/manifest.json`)
+  nên worker không bao giờ có `.codex/config.toml` + hooks.json mà preflight đòi hỏi
+  (lượt 2: `CAPABILITY_BLOCKED` ở scout; lượt 3/4: đưa config vào context_files thì
+  preparation từ chối `DUAL_TASK_CONTEXT_UNAVAILABLE` đúng luật snapshot). Sửa triệt để
+  cần quyết định thiết kế (verify theo session evidence trong worker, hoặc nới lỏng
+  snapshot, hoặc preflight worker theo main root) — KHÔNG tự ý đổi trong Phase 3 vì
+  chạm ranh giới fail-closed/bảo mật; ghi làm việc tiếp theo sau Phase 3. Nợ kỹ thuật
+  còn lại: retention/GC stateDir discussion (P2-02), observer-preflight có sẵn.
+  Đã commit phần nghiệm thu (không push).
+- **Đính chính E10 trust-e2e trong nghiệm thu (24/10/2026, Muse kiểm chứng):**
+  Cổng rộng sau fix round còn 2 fail; observer-preflight đã xác nhận fail sẵn ở baseline
+  cuối Phase 2 (`4125c1b`, worktree đối chứng). E10 thì ngược lại: pass ở `4125c1b` nhưng
+  fail ở mọi commit Phase 3 từ Gói 1 (bisect qua 5677b48, 47cc046, 64ea7f9, 62087e8,
+  15ba88e) — phân loại "fail có sẵn" ở Gói 2c-ii là sai vì HEAD đối chứng lúc đó đã gãy.
+  Nguyên nhân thật: E10 chờ `>= 2 task.process.started`, nhưng từ Phase 3 scout/review
+  chạy qua discussion transport nên không spawn process — chỉ còn implement spawn 1
+  process, điều kiện chờ không bao giờ thỏa (task vẫn đi tới handoff bình thường, fencing
+  không hề hỏng). Đây là test chưa di trú theo transport mới, không phải hồi quy
+  production. Sửa: điều kiện chờ đổi thành "implement child đang active trong lúc delay"
+  (bỏ yêu cầu mutation trong lúc chờ — mutation chỉ xuất hiện khi delay hết, và vẫn được
+  assert ở phần sau của test). Kết quả: E10 pass, toàn suite trust-e2e **32/32**; cổng
+  rộng **1432 test — 1422 pass / 1 fail (observer có sẵn) / 9 skip**. Đã commit cùng
+  mục nghiệm thu (không push).
 - **Đính chính fix round (24/10/2026, Muse kiểm chứng — thay thế phần F1 ở mục trên):**
   F1 như Codex làm (stub đọc input theo task attempt) LÀ SAI và đã bị revert: cổng rộng
   cho thấy 2 test handoff-rejection đổ ENOENT `raw/scout.2.input.md`, và đo bằng debug

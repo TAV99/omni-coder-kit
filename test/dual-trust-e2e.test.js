@@ -761,8 +761,20 @@ test('E10: expired lease with unresolved operation stays fenced at the daemon re
         () => fs.existsSync(path.join(context.authorityDir, 'operations.ndjson'))
             && fs.readFileSync(path.join(context.authorityDir, 'operations.ndjson'), 'utf8').includes('"type":"started"')
             && fs.existsSync(path.join(workerRootFor(context), '.omni', 'codex-gemini', 'runs', 'TASK-1', 'raw', 'implement.1.input.md'))
-            && fs.readFileSync(path.join(workerRootFor(context), 'index.html'), 'utf8').includes('Trusted offline change')
-            && context.authorityStore.readEvents().filter((event) => event.type === 'task.process.started').length >= 2,
+            && (() => {
+                // NOTE (Phase 3): scout/review now run over discussion transport and
+                // spawn no OS child process, so the old ">= 2 process.started" trip
+                // can never fire — only implement spawns a child. Catch the delayed
+                // implement child while it is still active instead; the 'Trusted
+                // offline change' mutation lands only when its delay elapses, so it
+                // must NOT be part of this wait (it is asserted after the fence).
+                const processEvents = context.authorityStore.readEvents();
+                const exited = new Set(processEvents
+                    .filter((event) => event.type === 'task.process.exited' && event.task_id === 'TASK-1')
+                    .map((event) => event.process_id));
+                return processEvents.some((event) => event.type === 'task.process.started'
+                    && event.task_id === 'TASK-1' && !exited.has(event.process_id));
+            })(),
         10_000,
     );
     const processEvents = context.authorityStore.readEvents();
