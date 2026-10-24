@@ -144,3 +144,21 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
 - Cổng của Muse (shell cấp cao nhất): 6 file gate **130/130 pass**; toàn bộ suite
   discussion **276 pass / 0 fail / 5 skip** (281 tests). Số liệu sandbox lồng nhau của
   Codex (EPERM) không dùng làm kết luận, như kỷ luật các phase trước.
+
+### Gói 2a — ĐẠT (24/10/2026, Muse kiểm chứng độc lập)
+- `daemon-server.js` export `createDaemonDiscussionHost` (tách nguyên văn khối dựng
+  host khỏi `startDaemonServer`, giữ từng chi tiết wiring: adapters live mặc định,
+  stateDir `.omni/runs/dual-discussion`, daemon getters, khôi phục hash envelope) +
+  export `discussionEnabledFromEnv`. Đường default factory dùng chính helper này.
+- `bin/omni-daemon.js`: `createExecutableOrchestrator` (export, test được) dựng host
+  qua helper khi env on/unset và truyền `discussion` vào adapter (giữ `agyProjectId`);
+  `closeAll` nối đúng vòng đời executable (khi startDaemonServer lỗi + finally sau khi
+  daemon dừng). Env off/invalid → không host, không discussion (fail-closed tại seam).
+  → P0 "executable chưa từng có discussion" ĐÃ BỊT ở tầng wiring; bằng chứng chạy live
+  qua executable thuộc vòng nghiệm thu cuối Phase 3.
+- Test mới `test/dual-daemon-host-wiring.test.js`. Cổng của Muse: focused **43/43**;
+  suite discussion **276 pass / 0 fail / 5 skip** (giữ nguyên).
+- Suite `dual-daemon-orchestrator`: **20 pass / 33 fail** — đối chứng worktree tại HEAD
+  (trước Gói 2a) cho ĐÚNG 20/33 với tập tên case fail trùng khít → 33 fail là nợ di trú
+  của chính Gói 1 (suite còn đặt env '0' ở tầm module, scout nay fail-closed), thuộc
+  phạm vi Gói 2c (fixture discussion stub), KHÔNG phải hồi quy của 2a.

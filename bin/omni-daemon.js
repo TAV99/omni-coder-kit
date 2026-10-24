@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { startDaemonServer } = require('../lib/dual/daemon-server');
+const { startDaemonServer, createDaemonDiscussionHost, discussionEnabledFromEnv } = require('../lib/dual/daemon-server');
 const { createAuthorityStore } = require('../lib/dual/authority-store');
 const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
 const { resolveRegisteredAgyProjectId } = require('../lib/dual/agy-project');
@@ -32,6 +32,18 @@ function createDaemonServerOptions({ workspaceRoot, authorityStore, orchestrator
         trustedQualityRunner: createTrustedQualityRunner(),
         trustedUiAdapter: createTrustedUiAdapter(),
     };
+}
+
+function createExecutableOrchestrator({ workspaceRoot, authorityStore, agyProjectId, env = process.env }) {
+    const discussionHost = discussionEnabledFromEnv(env)
+        ? createDaemonDiscussionHost({ authorityStore, workspaceRoot }) : null;
+    const orchestrator = createOrchestratorAdapter({
+        workspaceRoot,
+        authorityStore,
+        ...(agyProjectId ? { agyProjectId } : {}),
+        ...(discussionHost ? { discussion: { enabled: true, sessionResolver: discussionHost.sessionResolver } } : {}),
+    });
+    return { orchestrator, discussionHost };
 }
 
 async function runDaemon(argv = process.argv.slice(2)) {
@@ -62,7 +74,7 @@ async function runDaemon(argv = process.argv.slice(2)) {
     const authorityDir = path.join(canonicalWorkspace, '.omni', 'runs', 'dual-authority');
     const authorityStore = createAuthorityStore(authorityDir);
     const agyProjectId = resolveRegisteredAgyProjectId(canonicalWorkspace);
-    const orchestratorAdapter = createOrchestratorAdapter({
+    const { orchestrator, discussionHost } = createExecutableOrchestrator({
         workspaceRoot: canonicalWorkspace,
         authorityStore,
         ...(agyProjectId ? { agyProjectId } : {}),
@@ -73,9 +85,10 @@ async function runDaemon(argv = process.argv.slice(2)) {
         daemon = await startDaemonServer(createDaemonServerOptions({
             workspaceRoot: canonicalWorkspace,
             authorityStore,
-            orchestrator: orchestratorAdapter,
+            orchestrator,
         }));
     } catch (err) {
+        if (discussionHost) await discussionHost.closeAll();
         process.stderr.write(`omni-daemon fatal error [${err.code || 'ERR'}]: ${err.message}\n`);
         process.exitCode = 1;
         return;
@@ -99,6 +112,7 @@ async function runDaemon(argv = process.argv.slice(2)) {
     } finally {
         process.removeListener('SIGINT', handleShutdown);
         process.removeListener('SIGTERM', handleShutdown);
+        if (discussionHost) await discussionHost.closeAll();
     }
 }
 
@@ -111,6 +125,7 @@ if (require.main === module) {
 
 module.exports = {
     createDaemonServerOptions,
+    createExecutableOrchestrator,
     runDaemon,
     parseArguments,
 };
