@@ -100,16 +100,57 @@ async function fixture(t, { enabled, missingResolver = false, disabledSession = 
 }
 
 for (const enabled of [undefined, false, 'true', 1]) {
-    test(`discussion enabled=${String(enabled)} keeps fake AGY scout path`, async (t) => {
-        const f = await fixture(t, { enabled });
-        const result = await f.orch.runPhase('scout', f.taskId);
-        assert.equal(result.state, 'SCOUT_VALID');
-        assert.deepEqual(f.read('context.json'), f.payloads.scout);
-        assert.equal(f.agyCalls.length, 1);
+    test(`discussion enabled=${String(enabled)} requires discussion without recording scout events`, async (t) => {
+        const f = await fixture(t, { enabled, snapshot: true });
+        const eventsBefore = fs.readFileSync(path.join(f.runDir, 'events.ndjson'), 'utf8');
+        await assert.rejects(f.orch.runPhase('scout', f.taskId), { code: 'DUAL_DISCUSSION_REQUIRED' });
+        assert.equal(fs.readFileSync(path.join(f.runDir, 'events.ndjson'), 'utf8'), eventsBefore);
+        for (const suffix of ['failure.json', 'input.md', 'schema.json']) {
+            assert.equal(fs.existsSync(path.join(f.runDir, `raw/scout.1.${suffix}`)), false);
+        }
+        assert.equal(f.agyCalls.length, 0);
         assert.equal(f.bridgeCalls.length, 0);
         assert.equal(f.contexts.length, 0);
     });
 }
+
+test('missing discussion does not poison a task retried with valid discussion', async (t) => {
+    const f = await fixture(t, { snapshot: true });
+    const eventsBefore = fs.readFileSync(path.join(f.runDir, 'events.ndjson'), 'utf8');
+    await assert.rejects(f.orch.runPhase('scout', f.taskId), { code: 'DUAL_DISCUSSION_REQUIRED' });
+    assert.equal(fs.readFileSync(path.join(f.runDir, 'events.ndjson'), 'utf8'), eventsBefore);
+    assert.equal(fs.existsSync(path.join(f.runDir, 'raw/scout.1.failure.json')), false);
+    assert.equal(f.agyCalls.length, 0);
+    assert.equal(f.orch.status(f.taskId).nextAction, 'scout');
+
+    const configured = createDualOrchestrator({ cwd: f.repoRoot, backend: 'snapshot', initialSnapshot: f.initialSnapshot,
+        authoritativeCapabilityEvidence: { version: '1.1.19', model: 'gemini-3.7-flash-high' },
+        discussion: { enabled: true, sessionResolver: async () => f.session },
+        processRunner: async () => { assert.fail('Scout must not invoke the cold worker'); } });
+    assert.equal((await configured.runPhase('scout', f.taskId)).state, 'SCOUT_VALID');
+    assert.deepEqual(f.read('context.json'), f.payloads.scout);
+    assert.equal(f.read('raw/scout.1.meta.json').attempt, 1);
+    assert.equal(f.bridgeCalls.length, 1);
+});
+
+test('review without discussion records no phase events and can run after configuration', async (t) => {
+    const f = await fixture(t, { enabled: true, snapshot: true });
+    await f.orch.runPhase('scout', f.taskId);
+    await f.route();
+    await f.orch.runPhase('implement', f.taskId);
+    await f.orch.runPhase('scope', f.taskId);
+    const eventsBefore = fs.readFileSync(path.join(f.runDir, 'events.ndjson'), 'utf8');
+    const unconfigured = createDualOrchestrator({ cwd: f.repoRoot, backend: 'snapshot', initialSnapshot: f.initialSnapshot,
+        authoritativeCapabilityEvidence: { version: '1.1.19', model: 'gemini-3.7-flash-high' },
+        processRunner: async () => { assert.fail('Review must not invoke the cold worker'); } });
+    await assert.rejects(unconfigured.runPhase('review', f.taskId), { code: 'DUAL_DISCUSSION_REQUIRED' });
+    assert.equal(fs.readFileSync(path.join(f.runDir, 'events.ndjson'), 'utf8'), eventsBefore);
+    for (const suffix of ['failure.json', 'input.md', 'schema.json']) {
+        assert.equal(fs.existsSync(path.join(f.runDir, `raw/review.1.${suffix}`)), false);
+    }
+    assert.equal((await f.orch.runPhase('review', f.taskId)).state, 'CODEX_QC');
+    assert.equal(f.read('raw/review.1.meta.json').attempt, 1);
+});
 
 test('opt-in scout preserves payload, public return shape, raw observation and binding direction', async (t) => {
     const f = await fixture(t, { enabled: true });
@@ -185,6 +226,29 @@ test('unknown outcome propagates bridge details after exactly one call without r
     assert.equal(f.agyCalls.length, 0);
 });
 
+for (const phase of ['scout', 'review']) {
+    test(`discussion ${phase} terminal failure cannot dispatch again or fall back cold`, async (t) => {
+        const f = await fixture(t, { enabled: true, snapshot: true });
+        if (phase === 'review') {
+            await f.orch.runPhase('scout', f.taskId);
+            await f.route();
+            await f.orch.runPhase('implement', f.taskId);
+            await f.orch.runPhase('scope', f.taskId);
+        }
+        const callsBefore = f.bridgeCalls.length;
+        const coldBefore = f.agyCalls.length;
+        f.session.relay.dispatch = async (id) => {
+            f.bridgeCalls.push(id);
+            throw Object.assign(new Error('outcome unavailable'), { code: 'OUTCOME_UNKNOWN' });
+        };
+        await assert.rejects(f.orch.runPhase(phase, f.taskId), { code: 'OUTCOME_UNKNOWN' });
+        await assert.rejects(f.orch.runPhase(phase, f.taskId), { code: 'OUTCOME_UNKNOWN' });
+        assert.equal(f.bridgeCalls.length, callsBefore + 1);
+        assert.equal(f.agyCalls.length, coldBefore);
+        assert.equal(f.read(`raw/${phase}.1.failure.json`).retryable, false);
+    });
+}
+
 test('invalid discussion payload exhausts one correction and saves bounded failure evidence', async (t) => {
     const f = await fixture(t, { enabled: true, invalid: true });
     await assert.rejects(f.orch.runPhase('scout', f.taskId), (err) =>
@@ -232,20 +296,24 @@ test('CLI discussion env is strict and preserves an injected resolver', async (t
     for (const [value, enabled] of cases) {
         if (value === undefined) delete process.env.OMNI_DUAL_DISCUSSION_ENABLED;
         else process.env.OMNI_DUAL_DISCUSSION_ENABLED = value;
-        const f = await fixture(t);
+        const f = await fixture(t, { snapshot: true });
         const calls = [];
-        const orch = getOrchestrator({ cwd: f.repoRoot,
+        let processCalls = 0;
+        const eventsBefore = fs.readFileSync(path.join(f.runDir, 'events.ndjson'), 'utf8');
+        const orch = getOrchestrator({ cwd: f.repoRoot, backend: 'snapshot', initialSnapshot: f.initialSnapshot,
             authoritativeCapabilityEvidence: { version: '1.1.19', model: 'gemini-3.7-flash-high' },
             discussion: { sessionResolver: async (context) => { calls.push(context); return { enabled: false }; } },
-            processRunner: async () => ({ exitCode: 0, stdout: JSON.stringify({ structured_output: f.payloads.scout }), stderr: '' }),
+            processRunner: async () => { processCalls++; assert.fail('Scout must not invoke the cold worker'); },
         });
         if (enabled) {
             await assert.rejects(orch.runPhase('scout', f.taskId), { code: 'DUAL_DISCUSSION_SESSION_DISABLED' });
             assert.equal(calls.length, 1);
         } else {
-            assert.equal((await orch.runPhase('scout', f.taskId)).state, 'SCOUT_VALID');
+            await assert.rejects(orch.runPhase('scout', f.taskId), { code: 'DUAL_DISCUSSION_REQUIRED' });
+            assert.equal(fs.readFileSync(path.join(f.runDir, 'events.ndjson'), 'utf8'), eventsBefore);
             assert.equal(calls.length, 0);
         }
+        assert.equal(processCalls, 0);
     }
 });
 
@@ -381,17 +449,18 @@ test('one orchestrator resolves distinct contexts for two tasks in the same work
     assert.ok(f.contexts.every((c) => !('sessionId' in c) && !('planRevision' in c)));
 });
 
-test('discussion review preserves the cold-start input bytes', async (t) => {
+test('discussion review keeps diff contents out of saved input bytes', async (t) => {
     const inputs = [];
-    for (const enabled of [false, true]) {
-        const f = await fixture(t, { enabled, snapshot: true });
+    for (const changed of [false, true]) {
+        const f = await fixture(t, { enabled: true, snapshot: true });
         await f.orch.runPhase('scout', f.taskId);
         await f.route();
         await f.orch.runPhase('implement', f.taskId);
+        if (changed) fs.writeFileSync(path.join(f.repoRoot, 'index.html'), '<body>Changed</body>\n');
         await f.orch.runPhase('scope', f.taskId);
         await f.orch.runPhase('review', f.taskId);
         inputs.push(fs.readFileSync(path.join(f.runDir, 'raw/review.1.input.md')));
-        assert.equal(f.agyCalls.length, enabled ? 1 : 3);
+        assert.equal(f.agyCalls.length, 1);
     }
     assert.deepEqual(inputs[0], inputs[1]);
 });

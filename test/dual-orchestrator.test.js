@@ -10,6 +10,7 @@ const { spawnSync } = require('node:child_process');
 
 const { createDualOrchestrator } = require('../lib/dual/orchestrator');
 const { ContextSchema, EvidenceSchema, ReviewSchema } = require('../lib/dual/contracts');
+const { buildBindings } = require('../lib/dual/discussion/session');
 
 function initGitRepo(dir) {
     spawnSync('git', ['init', '-b', 'main'], { cwd: dir, shell: false, windowsHide: true });
@@ -42,6 +43,81 @@ ${handlerCode}
     return scriptPath;
 }
 
+const defaultScoutPayload = (taskId, baseCommit) => ({
+    schema_version: 1,
+    task_id: taskId,
+    expected_base_commit: baseCommit,
+    summary: 'Scout analysis complete',
+    relevant_files: [{ path: 'index.html', description: 'Main entry file' }],
+    exact_symbols: [{ name: 'body', file: 'index.html', verified: true, kind: 'element' }],
+    validation_commands: ['node --version'],
+    constraints: ['Keep it lightweight'],
+    risks: [],
+    open_questions: [],
+    research_trace: [
+        { question: 'Where is the entry?', source: 'index.html', source_type: 'REPOSITORY', conclusion: 'index.html owns the behavior.' },
+        { question: 'How is it checked?', source: 'node --version', source_type: 'TEST_OUTPUT', conclusion: 'The validation command is available.' },
+    ],
+    alternatives_considered: [
+        { option: 'Edit index.html', tradeoff: 'Minimal scope.' },
+        { option: 'Add a module', tradeoff: 'Unnecessary complexity.' },
+    ],
+    failure_modes: ['The body element may be malformed.'],
+});
+
+const defaultReviewPayload = (taskId, baseCommit) => ({
+    schema_version: 1,
+    task_id: taskId,
+    expected_base_commit: baseCommit,
+    recommendation: 'APPROVE',
+    risk_level: 'LOW',
+    findings: [{ file: 'index.html', line: 1, description: 'Clean implementation', severity: 'INFO' }],
+    review_checks: ['spec correlated', 'evidence correlated', 'regression challenged'],
+    challenge_summary: 'The strongest concern was unintended markup drift; the surgical diff resolves it.',
+});
+
+function discussionStub({ repoRoot, head, reviewMutateFile, onDispatch = () => {} }) {
+    return { enabled: true, sessionResolver: async ({ taskId, snapshotSha256 }) => {
+        const messages = [];
+        return { enabled: true,
+            bindings: buildBindings({ sessionId: 'orchestrator-test', taskId, planRevision: 1,
+                snapshotSha256: snapshotSha256 || 'a'.repeat(64),
+                codexConversationId: 'codex-test', agyConversationId: 'agy-test' }),
+            relay: {
+                async inspect() { return { messages, unknown: null }; },
+                async receive(message) { messages.push(message); },
+                async dispatch(messageId) {
+                    const phase = messages.at(-1).body.includes('# Review') ? 'review' : 'scout';
+                    onDispatch(phase);
+                    if (phase === 'review' && reviewMutateFile) {
+                        fs.writeFileSync(path.join(repoRoot, reviewMutateFile), 'mutated by review worker\n');
+                    }
+                    const payload = phase === 'review'
+                        ? defaultReviewPayload(taskId, head) : defaultScoutPayload(taskId, head);
+                    if (snapshotSha256) {
+                        delete payload.expected_base_commit;
+                        payload.expected_baseline = { kind: 'snapshot', id: snapshotSha256 };
+                    }
+                    messages.push({ message_id: `response-${messageId}`, body: JSON.stringify(payload) });
+                    return { response_message_id: `response-${messageId}`, invocation_id: 'test-invocation' };
+                },
+            } };
+    } };
+}
+
+async function prepareImplement(orch, repoRoot, taskId, head) {
+    const specPath = path.join(repoRoot, '.omni/codex-gemini/runs', taskId, 'spec.json');
+    if (!fs.existsSync(specPath)) {
+        fs.writeFileSync(specPath, JSON.stringify({ schema_version: 1, task_id: taskId,
+            expected_base_commit: head, goal: 'Exercise cold implement retries', allowed_files: ['index.html'],
+            deny_patterns: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
+            risk_flags: [], permission_authority: 'dual-init-dangerous-auto-v1' }));
+    }
+    await orch.runPhase('scout', taskId);
+    await orch.runPhase('spec', taskId);
+    await orch.runPhase('route', taskId);
+}
+
 function standardFakeAgyScript(dir, {
     modelList = ['gemini-3.7-flash-high', 'gemini-2.0-flash'],
     scoutPayload = null,
@@ -51,28 +127,6 @@ function standardFakeAgyScript(dir, {
     reviewMutateFile = null,
     crashOnPhase = null,
 } = {}) {
-    const defaultScoutPayload = (taskId, baseCommit) => ({
-        schema_version: 1,
-        task_id: taskId,
-        expected_base_commit: baseCommit,
-        summary: 'Scout analysis complete',
-        relevant_files: [{ path: 'index.html', description: 'Main entry file' }],
-        exact_symbols: [{ name: 'body', file: 'index.html', verified: true, kind: 'element' }],
-        validation_commands: ['node --version'],
-        constraints: ['Keep it lightweight'],
-        risks: [],
-        open_questions: [],
-        research_trace: [
-            { question: 'Where is the entry?', source: 'index.html', source_type: 'REPOSITORY', conclusion: 'index.html owns the behavior.' },
-            { question: 'How is it checked?', source: 'node --version', source_type: 'TEST_OUTPUT', conclusion: 'The validation command is available.' },
-        ],
-        alternatives_considered: [
-            { option: 'Edit index.html', tradeoff: 'Minimal scope.' },
-            { option: 'Add a module', tradeoff: 'Unnecessary complexity.' },
-        ],
-        failure_modes: ['The body element may be malformed.'],
-    });
-
     const defaultImplementPayload = (taskId, baseCommit) => ({
         schema_version: 1,
         task_id: taskId,
@@ -82,17 +136,6 @@ function standardFakeAgyScript(dir, {
         command_outputs: [{ command: 'node --version', exit_code: 0, output: 'v20.0.0' }],
         unverified_items: [],
         self_review: { checks: ['scope inspected', 'edge case challenged', 'validation passed'], remaining_risks: [] },
-    });
-
-    const defaultReviewPayload = (taskId, baseCommit) => ({
-        schema_version: 1,
-        task_id: taskId,
-        expected_base_commit: baseCommit,
-        recommendation: 'APPROVE',
-        risk_level: 'LOW',
-        findings: [{ file: 'index.html', line: 1, description: 'Clean implementation', severity: 'INFO' }],
-        review_checks: ['spec correlated', 'evidence correlated', 'regression challenged'],
-        challenge_summary: 'The strongest concern was unintended markup drift; the surgical diff resolves it.',
     });
 
     return createFakeAgyScript(dir, `
@@ -245,6 +288,7 @@ test('T5 empty deny patterns preserve an explicit scope guard in the final worke
     const validScript = standardFakeAgyScript(scratchDir);
     const orch = createDualOrchestrator({
         cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head }),
         agyCommand: process.execPath,
         agyPrefixArgs: [validScript],
     });
@@ -282,6 +326,7 @@ test('T5 exhausted technical retries preserve evidence and stop without resettin
     let workerCalls = 0;
     const orch = createDualOrchestrator({
         cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head }),
         authoritativeCapabilityEvidence: { version: 'agy version 1.1.20-test', model: 'gemini-3.7-flash-high' },
         processRunner: async () => {
             workerCalls += 1;
@@ -299,22 +344,23 @@ test('T5 exhausted technical retries preserve evidence and stop without resettin
 
     orch.newTask('T5-RETRY-STOP');
     await orch.runPhase('preflight', 'T5-RETRY-STOP');
+    await prepareImplement(orch, repoRoot, 'T5-RETRY-STOP', head);
     await assert.rejects(
-        () => orch.runPhase('scout', 'T5-RETRY-STOP'),
+        () => orch.runPhase('implement', 'T5-RETRY-STOP'),
         (error) => error.code === 'DUAL_AGY_EMPTY_OUTPUT',
     );
     assert.equal(workerCalls, 3);
     const status = orch.status('T5-RETRY-STOP');
-    assert.equal(status.state, 'PREFLIGHT_SAFE');
+    assert.equal(status.state, 'ROUTED');
     assert.equal(status.nextAction, 'blocked');
-    assert.equal(status.attempts.scout, 3);
+    assert.equal(status.attempts.implement, 3);
 
     const runDir = path.join(repoRoot, '.omni', 'codex-gemini', 'runs', 'T5-RETRY-STOP');
-    assert.ok(fs.existsSync(path.join(runDir, 'raw', 'scout.1.stdout.json')));
-    assert.ok(fs.existsSync(path.join(runDir, 'raw', 'scout.3.meta.json')));
+    assert.ok(fs.existsSync(path.join(runDir, 'raw', 'implement.1.stdout.json')));
+    assert.ok(fs.existsSync(path.join(runDir, 'raw', 'implement.3.meta.json')));
     const events = fs.readFileSync(path.join(runDir, 'events.ndjson'), 'utf8')
         .trim().split('\n').map((line) => JSON.parse(line));
-    const failures = events.filter((event) => event.type === 'phase.failed' && event.phase === 'scout');
+    const failures = events.filter((event) => event.type === 'phase.failed' && event.phase === 'implement');
     assert.equal(failures.length, 3);
     assert.equal(failures.at(-1).retryable, false);
     assert.equal(events.some((event) => event.type === 'transaction.reset'), false);
@@ -510,6 +556,7 @@ test('complete Gemini path reaches CODEX_QC with all transaction artifacts', asy
     const validScript = standardFakeAgyScript(scratchDir);
     const orch = createDualOrchestrator({
         cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head }),
         agyCommand: process.execPath,
         agyPrefixArgs: [validScript],
     });
@@ -565,6 +612,12 @@ test('complete Gemini path reaches CODEX_QC with all transaction artifacts', asy
     assert.equal(routeJson.owner, 'gemini');
     assert.equal(routeJson.model, 'gemini-3.7-flash-high');
     assert.equal(routeJson.token_budget, null);
+
+    for (const phase of ['scout', 'review']) {
+        const meta = JSON.parse(fs.readFileSync(path.join(runDir, 'raw', `${phase}.1.meta.json`), 'utf8'));
+        assert.equal(meta.transport, 'discussion');
+        assert.deepEqual(meta.redacted_argv, []);
+    }
 
     // Check status
     const status = orch.status('TASK-FULL');
@@ -640,6 +693,7 @@ test('technical retry rechecks registered context before another worker call', a
     let workerCalls = 0;
     const orch = createDualOrchestrator({
         cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head }),
         authoritativeCapabilityEvidence: { version: '1.1.20-test', model: 'gemini-3.7-flash-high' },
         processRunner: async () => {
             workerCalls++;
@@ -658,34 +712,41 @@ test('technical retry rechecks registered context before another worker call', a
         risk_flags: [], permission_authority: 'dual-init-dangerous-auto-v1',
     }));
     await orch.runPhase('preflight', 'CONTEXT-RETRY');
-    await assert.rejects(() => orch.runPhase('scout', 'CONTEXT-RETRY'), (error) => error.code === 'DUAL_CONTEXT_SOURCE_INVALID');
+    await prepareImplement(orch, repoRoot, 'CONTEXT-RETRY', head);
+    await assert.rejects(() => orch.runPhase('implement', 'CONTEXT-RETRY'), (error) => error.code === 'DUAL_CONTEXT_SOURCE_INVALID');
     assert.equal(workerCalls, 1);
 });
 
-test('technical retry cannot downgrade a registered task to specless legacy scout', async (t) => {
+test('technical retry cannot downgrade a registered task to specless legacy execution', async (t) => {
     const { repoRoot, head } = makeRepoFixture(t);
     const runDir = path.join(repoRoot, '.omni', 'codex-gemini', 'runs', 'SPEC-RETRY');
     let workerCalls = 0;
     const orch = createDualOrchestrator({
         cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head }),
         authoritativeCapabilityEvidence: { version: '1.1.20-test', model: 'gemini-3.7-flash-high' },
         processRunner: async () => {
             workerCalls++;
-            const specPath = path.join(runDir, 'spec.json');
-            if (fs.existsSync(specPath)) fs.unlinkSync(specPath);
+            if (workerCalls === 1) {
+                fs.writeFileSync(path.join(runDir, 'controller-context.json'), JSON.stringify({
+                    clarification: 'Updated registered task context',
+                }));
+            }
             return { exitCode: 0, stdout: 'invalid-json', stderr: '', timedOut: false,
                 startedAt: new Date(), endedAt: new Date(), durationMs: 1 };
         },
     });
     orch.newTask('SPEC-RETRY');
+    fs.writeFileSync(path.join(repoRoot, '.omni', 'source.md'), 'read-only source');
     fs.writeFileSync(path.join(runDir, 'spec.json'), JSON.stringify({
         schema_version: 1, task_id: 'SPEC-RETRY', expected_base_commit: head,
-        goal: 'Keep registered task context', allowed_files: ['index.html'],
+        goal: 'Keep registered task context', allowed_files: ['index.html'], context_files: ['.omni/source.md'],
         deny_patterns: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }],
         risk_flags: [], permission_authority: 'dual-init-dangerous-auto-v1',
     }));
     await orch.runPhase('preflight', 'SPEC-RETRY');
-    await assert.rejects(() => orch.runPhase('scout', 'SPEC-RETRY'), (error) => error.code === 'DUAL_SPEC_CORRELATION');
+    await prepareImplement(orch, repoRoot, 'SPEC-RETRY', head);
+    await assert.rejects(() => orch.runPhase('implement', 'SPEC-RETRY'), (error) => error.code === 'DUAL_SPEC_CORRELATION');
     assert.equal(workerCalls, 1);
 });
 
@@ -697,22 +758,10 @@ test('retries empty and malformed AGY output up to a third quality-first attempt
         schema_version: 1,
         task_id: 'TASK-RETRY-3',
         expected_base_commit: head,
-        summary: 'Recovered after technical output failures',
-        relevant_files: [{ path: 'index.html', description: 'Entry point' }],
-        exact_symbols: [{ name: 'body', file: 'index.html', verified: true }],
-        validation_commands: ['node --version'],
-        constraints: [],
-        risks: [],
-        open_questions: [],
-        research_trace: [
-            { question: 'Where is the entry?', source: 'index.html', source_type: 'REPOSITORY', conclusion: 'index.html owns it.' },
-            { question: 'How is it validated?', source: 'node --version', source_type: 'TEST_OUTPUT', conclusion: 'The command is available.' },
-        ],
-        alternatives_considered: [
-            { option: 'Inspect the entry directly', tradeoff: 'Small bounded scope.' },
-            { option: 'Search the full tree', tradeoff: 'Broader but unnecessary.' },
-        ],
-        failure_modes: ['The output envelope may be malformed.'],
+        status: 'SUCCESS', modified_files: [],
+        command_outputs: [{ command: 'node --version', exit_code: 0, output: 'v22' }],
+        unverified_items: [],
+        self_review: { checks: ['scope inspected', 'edge case challenged', 'validation checked'], remaining_risks: [] },
     };
     const processRunner = async (invocation) => {
         invocations.push(invocation);
@@ -734,6 +783,7 @@ test('retries empty and malformed AGY output up to a third quality-first attempt
     };
     const orch = createDualOrchestrator({
         cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head }),
         processRunner,
         authoritativeCapabilityEvidence: {
             version: 'agy version 1.1.20',
@@ -743,11 +793,12 @@ test('retries empty and malformed AGY output up to a third quality-first attempt
 
     orch.newTask('TASK-RETRY-3');
     await orch.runPhase('preflight', 'TASK-RETRY-3');
-    const result = await orch.runPhase('scout', 'TASK-RETRY-3');
+    await prepareImplement(orch, repoRoot, 'TASK-RETRY-3', head);
+    const result = await orch.runPhase('implement', 'TASK-RETRY-3');
 
-    assert.equal(result.state, 'SCOUT_VALID');
+    assert.equal(result.state, 'IMPLEMENT_VALID');
     assert.equal(phaseAttempt, 3);
-    assert.equal(orch.status('TASK-RETRY-3').attempts.scout, 3);
+    assert.equal(orch.status('TASK-RETRY-3').attempts.implement, 3);
     assert.doesNotMatch(invocations[0].args.at(-1), /Retry correction:/);
     assert.match(invocations[1].args.at(-1), /DUAL_AGY_EMPTY_OUTPUT/);
     assert.match(invocations[2].args.at(-1), /DUAL_AGY_OUTPUT_MALFORMED/);
@@ -759,6 +810,7 @@ test('risky spec and 11-file spec route to CODEX_OWNED without implement/review 
     const validScript1 = standardFakeAgyScript(fixture1.scratchDir);
     const orch1 = createDualOrchestrator({
         cwd: fixture1.repoRoot,
+        discussion: discussionStub({ repoRoot: fixture1.repoRoot, head: fixture1.head }),
         agyCommand: process.execPath,
         agyPrefixArgs: [validScript1],
     });
@@ -790,6 +842,7 @@ test('risky spec and 11-file spec route to CODEX_OWNED without implement/review 
     const validScript2 = standardFakeAgyScript(fixture2.scratchDir);
     const orch2 = createDualOrchestrator({
         cwd: fixture2.repoRoot,
+        discussion: discussionStub({ repoRoot: fixture2.repoRoot, head: fixture2.head }),
         agyCommand: process.execPath,
         agyPrefixArgs: [validScript2],
     });
@@ -822,6 +875,7 @@ test('stale HEAD blocks implement phase', async (t) => {
     const validScript = standardFakeAgyScript(scratchDir);
     const orch = createDualOrchestrator({
         cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head }),
         agyCommand: process.execPath,
         agyPrefixArgs: [validScript],
     });
@@ -864,6 +918,7 @@ test('scope violation blocks and preserves diff when worker edits outside allowe
     });
     const orch = createDualOrchestrator({
         cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head }),
         agyCommand: process.execPath,
         agyPrefixArgs: [outOfScopeScript],
     });
@@ -900,13 +955,12 @@ test('scope violation blocks and preserves diff when worker edits outside allowe
 
 test('review mutation blocks and preserves raw review evidence', async (t) => {
     const { repoRoot, head, scratchDir } = makeRepoFixture(t);
-    const reviewMutateScript = standardFakeAgyScript(scratchDir, {
-        reviewMutateFile: 'index.html',
-    });
+    const validScript = standardFakeAgyScript(scratchDir);
     const orch = createDualOrchestrator({
         cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head, reviewMutateFile: 'index.html' }),
         agyCommand: process.execPath,
-        agyPrefixArgs: [reviewMutateScript],
+        agyPrefixArgs: [validScript],
     });
 
     orch.newTask('TASK-REV-MUT');
@@ -941,62 +995,21 @@ test('review mutation blocks and preserves raw review evidence', async (t) => {
     assert.ok(fs.existsSync(path.join(runDir, 'raw', 'review.1.meta.json')));
 });
 
-test('resume after successful Scout does not increment fake-Agy Scout call count', async (t) => {
+test('resume after successful Scout does not increment discussion Scout call count', async (t) => {
     const { repoRoot, head, scratchDir } = makeRepoFixture(t);
     const counterFile = path.join(scratchDir, 'scout-counter.txt');
     fs.writeFileSync(counterFile, '0', 'utf8');
 
-    const countingScript = createFakeAgyScript(scratchDir, `
-const fs = require('node:fs');
-const path = require('node:path');
-
-const args = process.argv.slice(2);
-if (args.includes('--version')) {
-    process.stdout.write('agy version 1.1.19\\n');
-    process.exit(0);
-}
-if (args[0] === 'models') {
-    process.stdout.write(JSON.stringify(['gemini-3.7-flash-high']) + '\\n');
-    process.exit(0);
-}
-
-const promptArg = args.find(a => a.startsWith('-p='));
-if (promptArg && promptArg.includes('scout')) {
-    const cFile = ${JSON.stringify(counterFile)};
-    const count = parseInt(fs.readFileSync(cFile, 'utf8') || '0', 10);
-    fs.writeFileSync(cFile, String(count + 1), 'utf8');
-
-    const payload = {
-        schema_version: 1,
-        task_id: 'TASK-RESUME',
-        expected_base_commit: ${JSON.stringify(head)},
-        summary: 'Scout analysis',
-        relevant_files: [{ path: 'index.html', description: 'desc' }],
-        exact_symbols: [{ name: 's', file: 'index.html', verified: true }],
-        validation_commands: ['node --version'],
-        constraints: [],
-        risks: [],
-        open_questions: [],
-        research_trace: [
-            { question: 'Where is the entry?', source: 'index.html', source_type: 'REPOSITORY', conclusion: 'index.html is the entry.' },
-            { question: 'How is it checked?', source: 'node --version', source_type: 'TEST_OUTPUT', conclusion: 'Validation is available.' },
-        ],
-        alternatives_considered: [
-            { option: 'Recover semantic output', tradeoff: 'Preserves completed work.' },
-            { option: 'Rerun scout', tradeoff: 'Costs another model call.' },
-        ],
-        failure_modes: ['Raw output may be incomplete.'],
-    };
-    process.stdout.write(JSON.stringify({ status: 'success', structured_output: payload }) + '\\n');
-    process.exit(0);
-}
-process.exit(0);
-`);
+    const validScript = standardFakeAgyScript(scratchDir);
 
     const orch = createDualOrchestrator({
         cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head, onDispatch: () => {
+            const count = Number(fs.readFileSync(counterFile, 'utf8'));
+            fs.writeFileSync(counterFile, String(count + 1));
+        } }),
         agyCommand: process.execPath,
-        agyPrefixArgs: [countingScript],
+        agyPrefixArgs: [validScript],
     });
 
     orch.newTask('TASK-RESUME');
@@ -1078,6 +1091,7 @@ test('crash recovery after review raw output writes final Codex QC handoff and v
     const validScript = standardFakeAgyScript(scratchDir);
     const orch = createDualOrchestrator({
         cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head }),
         agyCommand: process.execPath,
         agyPrefixArgs: [validScript],
     });
@@ -1214,6 +1228,7 @@ test('snapshot orchestrator detects and blocks unauthorized modification of .omn
 
     const orch = createDualOrchestrator({
         cwd: snapRoot,
+        discussion: discussionStub({ repoRoot: snapRoot }),
         backend: 'snapshot',
         initialSnapshot,
         agyCommand: process.execPath,
