@@ -406,6 +406,8 @@ test('isolated QC enforces pre-integration review evidence before integrating ta
 
     const task = {
         task_id: 'TASK-1',
+        model: 'gemini-3.7-flash-high',
+        effort: 'high',
         goal: 'Return two',
         allowed_files: ['index.js'],
         context_files: ['spec.md'],
@@ -436,7 +438,7 @@ test('isolated QC enforces pre-integration review evidence before integrating ta
     });
     store.append({
         schema_version: 2, type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
-        allowed_files: task.allowed_files, model: 'gemini-3.7-flash-high', reason: 'Private task',
+        allowed_files: task.allowed_files, model: task.model, effort: task.effort, reason: 'Private task',
     });
 
     const fakeWorker = async (invocation) => {

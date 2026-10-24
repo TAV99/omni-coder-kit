@@ -15,6 +15,7 @@ const { createDiscussionSession, buildBindings } = require('../lib/dual/discussi
 const snapshot = { text: 'Read-only discussion context', sha256: sha256Utf8('Read-only discussion context') };
 const bindingOptions = {
     sessionId: 'host-session', taskId: 'task-1', planRevision: 1,
+    models: { agy: 'gemini-3.8-flash-high' }, efforts: { agy: 'high' },
     snapshotSha256: snapshot.sha256,
     codexConversationId: 'seed-codex', agyConversationId: 'seed-agy',
 };
@@ -64,6 +65,7 @@ async function sessionFixture(t, overrides = {}) {
     const calls = [];
     session = await createDiscussionSession({
         enabled: true, stateDir, sessionId: 'host-session', taskId: 'task-1',
+        models: bindingOptions.models, efforts: bindingOptions.efforts,
         planRevision: 1, snapshot,
         codex: { seedOptions: { cwd: '/fake/codex' } },
         agy: { seedOptions: { cwd: '/fake/agy' } },
@@ -94,7 +96,7 @@ test('seeded sessions register validated bindings with matching refs and release
     assert.equal(session.enabled, true);
     assert.deepEqual(calls, [
         { provider: 'codex', options: { cwd: '/fake/codex' } },
-        { provider: 'agy', options: { cwd: '/fake/agy' } },
+        { provider: 'agy', options: { cwd: '/fake/agy', model: 'gemini-3.8-flash-high', effort: 'high', workerModel: 'gemini-3.8-flash-high', workerEffort: 'high' } },
     ]);
     assert.deepEqual(session.conversationIds, { codex: 'seed-codex', agy: 'seed-agy' });
     assert.deepEqual(session.bindings, buildBindings(bindingOptions));
@@ -335,4 +337,40 @@ test('session reconciles unknown outcomes through host recovery evidence', async
     assert.equal(turn.reconciled, true);
     assert.equal(turn.reconciled_outcome, 'failed');
     assert.equal((await session.relay.inspect()).blocked, false);
+});
+
+test('AGY configuration is required before either provider seeds', async (t) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'discussion-no-profile-'));
+    t.after(() => fs.rm(root, { recursive: true, force: true }));
+    const saved = [process.env.OMNI_DUAL_WORKER_MODEL, process.env.OMNI_DUAL_WORKER_EFFORT];
+    delete process.env.OMNI_DUAL_WORKER_MODEL;
+    delete process.env.OMNI_DUAL_WORKER_EFFORT;
+    try {
+        for (const profile of [{}, { models: { agy: 'pinned' } }, { efforts: { agy: 'low' } }]) {
+            await assert.rejects(createDiscussionSession({
+                enabled: true, ...bindingOptions, models: {}, efforts: {}, ...profile,
+                snapshot, stateDir: root, workspaceRoot: root, hostPorts: createHostPorts(),
+                seeds: { codex() { assert.fail('missing AGY profile seeded codex'); }, agy() { assert.fail('missing AGY profile seeded AGY'); } },
+            }), (error) => error.code === 'DUAL_WORKER_CONFIGURATION_MISSING'
+                && /task\.(model|effort)/.test(error.message)
+                && /\.omni\/manifest\.json/.test(error.message)
+                && /OMNI_DUAL_WORKER_(MODEL|EFFORT)/.test(error.message));
+        }
+    } finally {
+        for (const [key, value] of [['OMNI_DUAL_WORKER_MODEL', saved[0]], ['OMNI_DUAL_WORKER_EFFORT', saved[1]]]) {
+            if (value === undefined) delete process.env[key]; else process.env[key] = value;
+        }
+    }
+});
+
+test('manifest AGY profile is passed to seed and bindings', async (t) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'discussion-manifest-profile-'));
+    t.after(() => fs.rm(root, { recursive: true, force: true }));
+    await fs.mkdir(path.join(root, '.omni'));
+    await fs.writeFile(path.join(root, '.omni', 'manifest.json'), JSON.stringify({ workerModel: 'manifest-pinned', workerEffort: 'low' }));
+    const { session, calls } = await sessionFixture(t, { models: {}, efforts: {}, workspaceRoot: root });
+    assert.equal(session.bindings[1].model, 'manifest-pinned');
+    assert.equal(session.bindings[1].effort, 'low');
+    assert.equal(calls[1].options.model, 'manifest-pinned');
+    assert.equal(calls[1].options.effort, 'low');
 });

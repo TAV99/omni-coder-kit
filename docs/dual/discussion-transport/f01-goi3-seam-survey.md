@@ -109,9 +109,10 @@ Sequence lấy `inspect().messages.length + 1` như harness (`test/dual-discussi
   được truyền vào `createDualOrchestrator`.
 - `lib/dual/orchestrator.js:478`–`:498`: options command/prefix/processRunner/env/timeout,
   `options.env || process.env`, worker model/effort resolver.
-- `lib/dual/agy-model.js:21`–`:53`, `:56`–`:88`: options →
-  `OMNI_DUAL_WORKER_MODEL`/`OMNI_DUAL_WORKER_EFFORT` → `.omni/manifest.json`
-  (`workerModel`/`workerEffort`, bounded JSON read) → defaults.
+- `lib/dual/agy-model.js`: task/options → `.omni/manifest.json`
+  (`workerModel`/`workerEffort`, bounded JSON read) → env
+  (`OMNI_DUAL_WORKER_MODEL`/`OMNI_DUAL_WORKER_EFFORT`) → fail-closed khi thiếu.
+  Task `model`/`effort` ưu tiên trước manifest; không có default model/effort AGY.
 - `dual.discussion.enabled` mới là đề xuất trong F01 integration design, chưa được engine
   đọc. `session.js:36` chỉ bật khi `options.enabled === true`; default disabled.
   Gói 3b nên resolve flag một lần ở host rồi inject, giữ kiểu boolean nghiêm ngặt.

@@ -81,6 +81,7 @@ async function fixture(t, overrides = {}) {
     const calls = [];
     const host = createDiscussionHost({
         enabled: true, stateDir,
+        models: { agy: 'gemini-3.8-flash-high' }, efforts: { agy: 'high' },
         daemon: { sessionId, getPlanRevision: () => revision,
             readLeaseEvents: async () => events(), workspaceRoot: process.cwd() },
         seeds: Object.fromEntries(['codex', 'agy'].map((provider) => [provider, async (options) => {
@@ -359,7 +360,7 @@ async function isolatedFixture(t, overrides = {}) {
             trustedExecutionContext: { workerRoot: captured.workerRoot,
                 spawnImpl: () => assert.fail('offline child spawned'), env: { GIT_CEILING_DIRECTORIES: path.dirname(captured.workerRoot) } } }),
     });
-    const execution = { workerRoot, sessionId, taskId: context.taskId, planRevision: 1,
+    const execution = { workerModel: 'gemini-3.8-flash-high', workerEffort: 'high', workerRoot, sessionId, taskId: context.taskId, planRevision: 1,
         attempt: 1, leaseId, operationId: 'child-operation-1', workerBaselineId: 'b'.repeat(64),
         workerContractSha256: 'c'.repeat(64), reference: { workerRoot,
             bindingSha256: 'd'.repeat(64), workerContractSha256: 'c'.repeat(64) },
@@ -622,4 +623,17 @@ test('isolated marker records the creating process while seeding before publishi
     const marker = JSON.parse(await fs.readFile(markerPath, 'utf8'));
     assert.deepEqual(marker, { ...observed[0], status: 'complete' });
     assert.ok(await fs.stat(markerPath.replace('.execution.json', '.manifest.json')));
+});
+
+test('isolated session preserves task profile for seeds and bindings outside controller root', async (t) => {
+    const state = await isolatedFixture(t);
+    const child = await state.host.createIsolatedDiscussion({ ...state.execution,
+        workerModel: 'task-specific-model', workerEffort: 'low' });
+    const session = await child.sessionResolver(state.request);
+    assert.equal(session.bindings[1].model, 'task-specific-model');
+    assert.equal(session.bindings[1].effort, 'low');
+    assert.equal(state.calls[1].model, 'task-specific-model');
+    assert.equal(state.calls[1].effort, 'low');
+    assert.equal(state.calls[1].cwd, state.execution.workerRoot);
+    await child.close();
 });

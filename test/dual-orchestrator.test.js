@@ -26,6 +26,8 @@ function initGitRepo(dir) {
 function makeRepoFixture(t) {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dual-orch-'));
     const head = initGitRepo(repoRoot);
+    fs.mkdirSync(path.join(repoRoot, '.omni'), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, '.omni', 'manifest.json'), JSON.stringify({ workerModel: 'gemini-3.7-flash-high', workerEffort: 'high' }));
     const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-dual-scratch-'));
     t.after(() => {
         fs.rmSync(repoRoot, { recursive: true, force: true });
@@ -80,7 +82,8 @@ function discussionStub({ repoRoot, head, reviewMutateFile, onDispatch = () => {
     return { enabled: true, sessionResolver: async ({ taskId, snapshotSha256 }) => {
         const messages = [];
         return { enabled: true,
-            bindings: buildBindings({ sessionId: 'orchestrator-test', taskId, planRevision: 1,
+            bindings: buildBindings({ models: { agy: 'gemini-3.7-flash-high' }, efforts: { agy: 'high' },
+                sessionId: 'orchestrator-test', taskId, planRevision: 1,
                 snapshotSha256: snapshotSha256 || 'a'.repeat(64),
                 codexConversationId: 'codex-test', agyConversationId: 'agy-test' }),
             relay: {
@@ -1173,6 +1176,7 @@ test('snapshot orchestrator assertBaseWorkspace blocks Scout if workspace was mo
     const validScript = standardFakeAgyScript(scratchDir);
     const orch = createDualOrchestrator({
         cwd: snapRoot,
+        workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
         backend: 'snapshot',
         initialSnapshot,
         agyCommand: process.execPath,
@@ -1228,6 +1232,7 @@ test('snapshot orchestrator detects and blocks unauthorized modification of .omn
 
     const orch = createDualOrchestrator({
         cwd: snapRoot,
+        workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
         discussion: discussionStub({ repoRoot: snapRoot }),
         backend: 'snapshot',
         initialSnapshot,

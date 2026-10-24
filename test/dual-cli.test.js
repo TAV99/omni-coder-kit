@@ -34,7 +34,12 @@ function makeRepoFixture(t) {
 
 function runCli(args, options = {}) {
     const cwd = options.cwd || process.cwd();
-    const env = { ...process.env, ...(options.env || {}) };
+    const env = {
+        ...process.env,
+        OMNI_DUAL_WORKER_MODEL: 'gemini-3.7-flash-high',
+        OMNI_DUAL_WORKER_EFFORT: 'high',
+        ...(options.env || {}),
+    };
     const res = spawnSync(process.execPath, [BIN, ...args], {
         cwd,
         env,

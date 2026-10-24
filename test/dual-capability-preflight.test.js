@@ -174,28 +174,29 @@ test('P0-G1 / P0-G2: Capability Preflight Bounded Primitive & Exact Models', asy
     });
 
     await t.test('7. exact JSON and text model parsing plus substring/preview/prose rejection', () => {
+        const parseModels = (output) => parseAgyModelsOutput(output, 'gemini-3.7-flash-high');
         // Valid JSON array of strings
-        assert.equal(parseAgyModelsOutput(JSON.stringify(['gemini-3.7-flash-high', 'gemini-2.0-flash'])), true);
+        assert.equal(parseModels(JSON.stringify(['gemini-3.7-flash-high', 'gemini-2.0-flash'])), true);
         // Valid JSON array of objects
-        assert.equal(parseAgyModelsOutput(JSON.stringify([{ id: 'gemini-3.7-flash-high' }])), true);
-        assert.equal(parseAgyModelsOutput(JSON.stringify([{ name: 'gemini-3.7-flash-high' }])), true);
-        assert.equal(parseAgyModelsOutput(JSON.stringify([{ model: 'gemini-3.7-flash-high' }])), true);
+        assert.equal(parseModels(JSON.stringify([{ id: 'gemini-3.7-flash-high' }])), true);
+        assert.equal(parseModels(JSON.stringify([{ name: 'gemini-3.7-flash-high' }])), true);
+        assert.equal(parseModels(JSON.stringify([{ model: 'gemini-3.7-flash-high' }])), true);
         // Valid JSON container
-        assert.equal(parseAgyModelsOutput(JSON.stringify({ models: [{ id: 'gemini-3.7-flash-high' }] })), true);
+        assert.equal(parseModels(JSON.stringify({ models: [{ id: 'gemini-3.7-flash-high' }] })), true);
 
         // Valid tab/whitespace table
         const validTable = 'Model\tInput price\tOutput price\ngemini-3.7-flash-high\t$0.00\t$0.00\ngemini-2.0-flash\t$0.00\t$0.00\n';
-        assert.equal(parseAgyModelsOutput(validTable), true);
+        assert.equal(parseModels(validTable), true);
 
         // Strict rejection of preview, prefix, suffix, and prose
-        assert.equal(parseAgyModelsOutput(JSON.stringify(['gemini-3.7-flash-high-preview'])), false);
-        assert.equal(parseAgyModelsOutput(JSON.stringify([{ id: 'gemini-3.7-flash-high-preview' }])), false);
-        assert.equal(parseAgyModelsOutput('Model\npreview-gemini-3.7-flash-high\n'), false);
-        assert.equal(parseAgyModelsOutput('Model\ngemini-3.7-flash-high-preview\t$0.00\n'), false);
-        assert.equal(parseAgyModelsOutput('The model gemini-3.7-flash-high is available for use.'), false);
-        assert.equal(parseAgyModelsOutput(''), false);
-        assert.equal(parseAgyModelsOutput(null), false);
-        assert.equal(parseAgyModelsOutput('{ invalid json }'), false);
+        assert.equal(parseModels(JSON.stringify(['gemini-3.7-flash-high-preview'])), false);
+        assert.equal(parseModels(JSON.stringify([{ id: 'gemini-3.7-flash-high-preview' }])), false);
+        assert.equal(parseModels('Model\npreview-gemini-3.7-flash-high\n'), false);
+        assert.equal(parseModels('Model\ngemini-3.7-flash-high-preview\t$0.00\n'), false);
+        assert.equal(parseModels('The model gemini-3.7-flash-high is available for use.'), false);
+        assert.equal(parseModels(''), false);
+        assert.equal(parseModels(null), false);
+        assert.equal(parseModels('{ invalid json }'), false);
     });
 
     await t.test('8. parseAgyVersionOutput extracts non-empty version and rejects empty/garbage', () => {
@@ -219,7 +220,7 @@ test('P0-G1 / P0-G2: Capability Preflight Bounded Primitive & Exact Models', asy
                     agy_version: '1.1.19',
                     agy_model: 'gemini-3.7-flash-high',
                 },
-            }),
+            }, 'gemini-3.7-flash-high'),
             {
                 valid: true,
                 version: '1.1.19',
@@ -231,7 +232,7 @@ test('P0-G1 / P0-G2: Capability Preflight Bounded Primitive & Exact Models', asy
             status: 'PASSED',
             to_state: 'CAPABILITY_SAFE',
             checks: [{ name: 'agy_cli_and_model', status: 'PASSED' }],
-        });
+        }, 'gemini-3.7-flash-high');
         assert.equal(missingEvidence.valid, false);
         assert.match(missingEvidence.reason, /durable AGY version\/model evidence/i);
 
@@ -243,7 +244,7 @@ test('P0-G1 / P0-G2: Capability Preflight Bounded Primitive & Exact Models', asy
                 agy_version: '1.1.19',
                 agy_model: 'gemini-3.7-flash-high-preview',
             },
-        });
+        }, 'gemini-3.7-flash-high');
         assert.equal(previewModel.valid, false);
     });
 
@@ -257,6 +258,7 @@ test('P0-G1 / P0-G2: Capability Preflight Bounded Primitive & Exact Models', asy
 
             // Test injected success
             const resInjected = await runCapabilityPreflight(tmpDir, {
+                workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
                 authorityStore,
                 agyVersion: '1.1.19',
                 agyModels: ['gemini-3.7-flash-high'],
@@ -268,6 +270,7 @@ test('P0-G1 / P0-G2: Capability Preflight Bounded Primitive & Exact Models', asy
 
             // Test injected rejection of preview model
             const resInjectedBad = await runCapabilityPreflight(tmpDir, {
+                workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
                 authorityStore,
                 agyVersion: '1.1.19',
                 agyModels: ['gemini-3.7-flash-high-preview'],
@@ -276,6 +279,7 @@ test('P0-G1 / P0-G2: Capability Preflight Bounded Primitive & Exact Models', asy
             assert.equal(resInjectedBad.to_state, 'BLOCKED');
 
             const malformedVersion = await runCapabilityPreflight(tmpDir, {
+                workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
                 authorityStore,
                 agyVersion: 'definitely-not-a-version',
                 agyModels: ['gemini-3.7-flash-high'],
@@ -283,6 +287,7 @@ test('P0-G1 / P0-G2: Capability Preflight Bounded Primitive & Exact Models', asy
             assert.equal(malformedVersion.status, 'BLOCKED');
 
             const missingDurableEvidence = await runCapabilityPreflight(tmpDir, {
+                workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
                 authorityStore,
                 checkAgy: async () => ({ name: 'agy_cli_and_model', status: 'PASSED' }),
             });
@@ -319,7 +324,7 @@ test('execution hooks: preflight forwards env, spawnImpl, cwd, signal and guard 
     const probes = [];
     let guarded = 0;
     const result = await runCapabilityPreflight(process.cwd(), {
-        cwd: '/worker', env, signal: controller.signal, workerModel: 'hook-model',
+        cwd: '/worker', env, signal: controller.signal, workerModel: 'hook-model', workerEffort: 'high',
         checkLedger: () => ({ name: 'authority_ledger_integrity', status: 'PASSED' }),
         checkBaseline: () => ({ name: 'baseline_backend', status: 'PASSED' }),
         checkConfig: () => ({ name: 'project_configuration', status: 'PASSED' }),
@@ -392,6 +397,7 @@ test('execution hooks: guard rejection propagates unchanged and pre-abort preven
         spawnImpl, prespawnGuard: async () => { throw denied; },
     }), (error) => error === denied);
     await assert.rejects(runCapabilityPreflight(process.cwd(), {
+        workerModel: 'guard-model', workerEffort: 'high',
         spawnImpl, prespawnGuard: () => { throw denied; },
     }), (error) => error === denied);
     const controller = new AbortController();
@@ -411,7 +417,7 @@ test('configRoot reads only project config while probes and other checks stay at
     fs.writeFileSync(path.join(root, '.codex/hooks.json'), '{"hooks":{}}');
     const probes = [];
     const options = {
-        workerModel: 'config-root-model',
+        workerModel: 'config-root-model', workerEffort: 'high',
         checkLedger(actualRoot) {
             assert.equal(actualRoot, workerRoot);
             return { name: 'authority_ledger_integrity', status: 'PASSED' };
@@ -442,4 +448,62 @@ test('configRoot reads only project config while probes and other checks stay at
     for (const name of ['project_configuration', 'mcp_and_hook_setup']) {
         assert.equal(defaultResult.checks.find((check) => check.name === name).status, 'BLOCKED');
     }
+});
+
+
+test('missing AGY configuration blocks before probes or custom checks with all configuration paths', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preflight-missing-config-'));
+    const savedModel = process.env.OMNI_DUAL_WORKER_MODEL;
+    const savedEffort = process.env.OMNI_DUAL_WORKER_EFFORT;
+    delete process.env.OMNI_DUAL_WORKER_MODEL;
+    delete process.env.OMNI_DUAL_WORKER_EFFORT;
+    try {
+        for (const options of [{}, { workerModel: 'pinned-model' }, { workerEffort: 'medium' }]) {
+            const result = await runCapabilityPreflight(root, {
+                ...options,
+                customChecks() { assert.fail('missing configuration must not use custom checks'); },
+                spawnImpl() { assert.fail('missing configuration must not spawn'); },
+            });
+            assert.equal(result.status, 'BLOCKED');
+            assert.equal(result.checks[0].status, 'BLOCKED');
+            const reason = result.checks[0].reason;
+            for (const missing of ['model', 'effort'].filter((key) => !options[key === 'model' ? 'workerModel' : 'workerEffort'])) {
+                assert.match(reason, new RegExp(`task\\.${missing}`));
+                assert.match(reason, new RegExp(`worker${missing[0].toUpperCase()}${missing.slice(1)}`));
+                assert.ok(reason.includes(`OMNI_DUAL_WORKER_${missing.toUpperCase()}`));
+            }
+            assert.match(reason, /\.omni\/manifest\.json/);
+        }
+        assert.equal(parseAgyModelsOutput(['gemini-3.7-flash-high']), false);
+        const result = validateCapabilityResult({
+            status: 'PASSED', to_state: 'CAPABILITY_SAFE',
+            checks: [{ name: 'agy_cli_and_model', status: 'PASSED' }],
+            details: { agy_version: '1.1.19', agy_model: 'gemini-3.7-flash-high' },
+        });
+        assert.equal(result.valid, false);
+        assert.match(result.reason, /task\.model/);
+    } finally {
+        if (savedModel === undefined) delete process.env.OMNI_DUAL_WORKER_MODEL;
+        else process.env.OMNI_DUAL_WORKER_MODEL = savedModel;
+        if (savedEffort === undefined) delete process.env.OMNI_DUAL_WORKER_EFFORT;
+        else process.env.OMNI_DUAL_WORKER_EFFORT = savedEffort;
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+
+test('codex preflight needs no AGY model or effort and still validates all capability checks', async () => {
+    const passed = (name) => ({ name, status: 'PASSED' });
+    const result = await runCapabilityPreflight(process.cwd(), {
+        provider: 'codex',
+        checkLedger: () => passed('authority_ledger_integrity'),
+        checkBaseline: () => passed('baseline_backend'),
+        checkConfig: () => passed('project_configuration'),
+        checkMcp: () => passed('mcp_and_hook_setup'),
+        checkAgy() { assert.fail('codex does not require AGY'); },
+        spawnImpl() { assert.fail('codex does not probe AGY'); },
+    });
+    assert.equal(result.status, 'PASSED');
+    assert.equal(validateCapabilityResult(result, null, { provider: 'codex' }).valid, true);
+    assert.equal(validateCapabilityResult({ ...result, checks: [{ status: 'BLOCKED' }] }, null, { provider: 'codex' }).valid, false);
 });

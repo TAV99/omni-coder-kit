@@ -145,6 +145,8 @@ describe('buildInitConfig per-IDE config files', () => {
         assert.equal(result.manifest.dualPair, 'codex-agy');
         assert.equal(result.manifest.workerProvider, 'antigravity');
         assert.equal(result.manifest.workerPermissions, 'dangerous-auto');
+        assert.equal(Object.hasOwn(result.manifest, 'workerModel'), false);
+        assert.equal(Object.hasOwn(result.manifest, 'workerEffort'), false);
         assert.equal(result.manifest.dualOrchestrator, 'omni-dual-v1');
         assert.ok(result.files.some(f => f.path === path.join('.codex', 'skills', 'omni-codex-gemini', 'SKILL.md')));
         assert.ok(result.files.some(f => f.path === path.join('.omni', 'codex-gemini', 'ai-flow.ps1')));
@@ -152,6 +154,19 @@ describe('buildInitConfig per-IDE config files', () => {
         assert.equal(result.files.some(f => f.path.includes(path.join('.omni', 'codex-gemini', 'schemas'))), false);
         assert.equal(result.dirs.some(d => d.includes(path.join('.omni', 'codex-gemini', 'prompts'))), false);
         assert.equal(result.dirs.some(d => d.includes(path.join('.omni', 'codex-gemini', 'schemas'))), false);
+    });
+
+    it('dual codex-agy stores only explicitly selected worker model and effort', () => {
+        const configured = buildInitConfig('dual', {
+            ...DEFAULT_OPTS, dualPair: 'codex-agy', workerModel: ' gemini-3.8-flash-high ', workerEffort: ' medium ',
+        });
+        assert.equal(configured.manifest.workerModel, 'gemini-3.8-flash-high');
+        assert.equal(configured.manifest.workerEffort, 'medium');
+        const empty = buildInitConfig('dual', {
+            ...DEFAULT_OPTS, dualPair: 'codex-agy', workerModel: ' ', workerEffort: '',
+        });
+        assert.equal(Object.hasOwn(empty.manifest, 'workerModel'), false);
+        assert.equal(Object.hasOwn(empty.manifest, 'workerEffort'), false);
     });
 
     it('dual auto augments om-think with the Node orchestrator run command only for codex-agy', () => {

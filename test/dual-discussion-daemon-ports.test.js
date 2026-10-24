@@ -21,7 +21,7 @@ const preflightCheckIds = ['authority_ledger_integrity', 'baseline_backend',
 const preflightChecks = () => preflightCheckIds.map((name) => ({ name, status: 'PASSED' }));
 const sessionId = 'daemon-session';
 const leaseId = '20000000-0000-4000-8000-000000000001';
-const bindings = buildBindings({ sessionId, taskId: 'TASK-1', planRevision: 1,
+const bindings = buildBindings({ models: { agy: 'gemini-3.8-flash-high' }, efforts: { agy: 'high' }, sessionId, taskId: 'TASK-1', planRevision: 1,
     snapshotSha256: snapshot.sha256, codexConversationId: 'seed-codex', agyConversationId: 'seed-agy' });
 
 // Full authority envelopes, including the prerequisite session/plan/routing history.
@@ -296,7 +296,7 @@ for (const expired of [false, true]) {
         // Receive first; advance only the lease clock so the message remains valid.
         let authorityNow = now;
         let runs = 0;
-        session = await createDiscussionSession({ enabled: true, stateDir, sessionId, taskId: 'TASK-1',
+        session = await createDiscussionSession({ models: { agy: bindings[1].model }, efforts: { agy: bindings[1].effort }, enabled: true, stateDir, sessionId, taskId: 'TASK-1',
             planRevision: 1, snapshot, clock: () => now,
             seeds: Object.fromEntries(['codex', 'agy'].map((provider) => [provider, async () => ({ conversationId: `seed-${provider}` })])),
             adapters: { codex: fakeAdapter('codex'), agy: fakeAdapter('agy') },

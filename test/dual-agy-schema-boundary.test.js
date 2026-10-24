@@ -22,6 +22,7 @@ test('passes generated schema files through the subprocess root-type gate', asyn
             agyCommand: process.execPath,
             agyPrefixArgs: [fixture], repoRoot: root,
             phase, inputPath, schemaPath, timeoutMs: 10_000,
+            model: 'gemini-3.7-flash-high', effort: 'high',
         });
         assert.equal(invocation.args[invocation.args.indexOf('--json-schema') + 1], schemaPath);
         return runProcess(invocation);

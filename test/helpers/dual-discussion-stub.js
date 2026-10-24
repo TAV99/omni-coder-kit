@@ -37,7 +37,8 @@ function createDiscussionStub(options = {}) {
                 const snapshotSha256 = createHash('sha256').update(JSON.stringify([
                     context.workerRoot, context.workerBaselineId, executionId,
                 ])).digest('hex');
-                record.bindings = buildBindings({ sessionId: context.sessionId, taskId: context.taskId,
+                record.bindings = buildBindings({ models: { agy: context.workerModel ?? 'gemini-3.8-flash-high' },
+                    efforts: { agy: context.workerEffort ?? 'high' }, sessionId: context.sessionId, taskId: context.taskId,
                     planRevision: context.planRevision, snapshotSha256,
                     codexConversationId: codex.conversationId, agyConversationId: agy.conversationId,
                     ...(context.reference ? { execution: { attempt: context.attempt, workspace_binding_sha256: context.reference.bindingSha256 } } : {}) });

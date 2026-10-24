@@ -27,7 +27,7 @@ function makeFixture(t) {
     fs.writeFileSync(inputPath, 'Inspect only the bounded repository scope.\n', 'utf8');
     fs.writeFileSync(schemaPath, '{}\n', 'utf8');
     t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
-    return { repoRoot, inputPath, schemaPath };
+    return { repoRoot, inputPath, schemaPath, model: 'gemini-3.7-flash-high', effort: 'high' };
 }
 
 function fakeInvocation(t, behavior, timeoutMs = 2_000) {
@@ -54,6 +54,8 @@ test('builds a shell-free bounded Agy argv without embedding task content', (t) 
         inputPath,
         schemaPath,
         timeoutMs: 90_000,
+        model: 'gemini-3.7-flash-high',
+        effort: 'high',
     });
 
     assert.equal(invocation.command, process.execPath);
@@ -76,6 +78,29 @@ test('builds a shell-free bounded Agy argv without embedding task content', (t) 
     assert.equal(invocation.timeoutMs, 90_000);
     assert.equal(invocation.args.includes('--disable-slash-commands'), false);
     assert.deepEqual(invocation.redactedArgs, invocation.args);
+});
+
+test('fails closed before spawning when model or effort is missing', (t) => {
+    const fixture = makeFixture(t);
+    for (const missing of [
+        { model: undefined },
+        { effort: undefined },
+        { model: ' ', effort: ' ' },
+        { model: null, effort: null },
+    ]) {
+        assert.throws(
+            () => buildAgyInvocation({ ...fixture, phase: 'scout', timeoutMs: 90_000, ...missing }),
+            (error) => {
+                assert.equal(error.code, 'DUAL_WORKER_CONFIG_MISSING');
+                assert.match(error.message, /task\.model/);
+                assert.match(error.message, /task\.effort/);
+                assert.match(error.message, /\.omni\/manifest\.json/);
+                assert.match(error.message, /OMNI_DUAL_WORKER_MODEL/);
+                assert.match(error.message, /OMNI_DUAL_WORKER_EFFORT/);
+                return true;
+            },
+        );
+    }
 });
 
 test('derives a long quality-first print timeout and adds only a bounded retry hint', (t) => {

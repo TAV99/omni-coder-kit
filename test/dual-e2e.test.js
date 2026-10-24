@@ -186,6 +186,7 @@ process.exit(1);
                 reference: { bindingSha256: 'a'.repeat(64) },
             });
             return { child, orch: createDualOrchestrator({ cwd: repoRoot,
+                workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
                 agyCommand: process.execPath, agyPrefixArgs: [scriptPath], discussion: child }) };
         },
     };
@@ -198,6 +199,8 @@ test('Dual end-to-end: full state path to CODEX_QC with metadata and idempotency
     const { scriptPath, logFile, countersFile, discussion } = fixture;
 
     const env = {
+        OMNI_DUAL_WORKER_MODEL: 'gemini-3.7-flash-high',
+        OMNI_DUAL_WORKER_EFFORT: 'high',
         OMNI_DUAL_AGY_COMMAND: process.execPath,
         OMNI_DUAL_AGY_PREFIX_ARGS: JSON.stringify([scriptPath]),
     };
@@ -412,6 +415,8 @@ test('Dual end-to-end: routed to CODEX_OWNED when spec contains risk flags or to
     const { scriptPath } = fixture;
 
     const env = {
+        OMNI_DUAL_WORKER_MODEL: 'gemini-3.7-flash-high',
+        OMNI_DUAL_WORKER_EFFORT: 'high',
         OMNI_DUAL_AGY_COMMAND: process.execPath,
         OMNI_DUAL_AGY_PREFIX_ARGS: JSON.stringify([scriptPath]),
     };

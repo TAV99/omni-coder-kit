@@ -134,7 +134,7 @@ async function createHarness(t, { spawnSequence, capabilityPreflight, checkConfi
                 reduced_motion_required: true,
             },
         },
-        tasks: [{ task_id: 'TASK-PREFLIGHT-RETRY', title: 'Preflight retry', owner: 'codex', allowed_files: ['lib/a.js'] }],
+        tasks: [{ task_id: 'TASK-PREFLIGHT-RETRY', title: 'Preflight retry', owner: 'agy', model: 'gemini-3.7-flash-high', effort: 'high', allowed_files: ['lib/a.js'], deny_patterns: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] }],
     };
     const eventsPath = path.join(authorityDir, 'events.ndjson');
     return { workspaceRoot, authorityDir, authorityStore, client, sessionId: begun.session_id, payload, eventsPath, spawnSequence };

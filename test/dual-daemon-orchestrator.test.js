@@ -3,7 +3,7 @@
 const { withDiscussion } = require('./helpers/dual-discussion-stub');
 
 function createOrchestratorAdapter(options) {
-    return createOrchestratorAdapterImpl(withDiscussion(options));
+    return createOrchestratorAdapterImpl(withDiscussion({ workerModel: 'gemini-3.7-flash-high', workerEffort: 'high', ...options }));
 }
 
 const { describe, it, test, beforeEach, afterEach } = require('node:test');
@@ -217,6 +217,8 @@ async function startDaemonServer(options = {}) {
         plan_sha256: params.plan_sha256,
     });
     const effectiveOptions = {
+        workerModel: 'gemini-3.7-flash-high',
+        workerEffort: 'high',
         ...options,
         orchestrator: options.orchestrator ?? createOrchestratorAdapter(options),
         planArtifactVerifier: options.planArtifactVerifier || testPlanArtifactVerifier,
@@ -522,6 +524,7 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
 
         it('Preflight blocks if authorityStore is missing', async () => {
             const preflight = await runCapabilityPreflight(tmpDir, {
+                workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
                 authorityStore: null,
             });
             assert.equal(preflight.status, 'BLOCKED');
@@ -532,6 +535,7 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
         it('Preflight blocks if gemini-3.7-flash-high is missing from agy models', async () => {
             const authorityStore = createAuthorityStore(path.join(tmpDir, '.omni', 'runs', 'dual-authority'));
             const preflight = await runCapabilityPreflight(tmpDir, {
+                workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
                 authorityStore,
                 agyVersion: '1.1.19',
                 agyModels: ['gemini-2.0-flash', 'gpt-4o'],
@@ -548,6 +552,7 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
 
             const preflight = await runCapabilityPreflight(tmpDir, {
+                workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
                 authorityStore,
                 agyVersion: '1.1.19',
                 agyModels: ['gemini-3.7-flash-high'],
@@ -690,6 +695,7 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             const daemon = await startDaemonServerImpl({
                 workspaceRoot: tmpDir,
                 authorityStore,
+                workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
                 planArtifactVerifier: async (_workspaceRoot, params) => ({
                     plan_path: params.plan_path,
                     plan_sha256: params.plan_sha256,
@@ -736,6 +742,7 @@ describe('Task 11: Dual AUTO Daemon Orchestrator Integration Suite', () => {
             const daemon = await startDaemonServerImpl({
                 workspaceRoot: tmpDir,
                 authorityStore,
+                workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
                 capabilityPreflight: async () => createPassingCapability(),
             });
             t.after(() => daemon.close());

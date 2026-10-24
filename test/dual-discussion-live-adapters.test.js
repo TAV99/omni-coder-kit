@@ -271,7 +271,7 @@ for (const [provider, create, seed] of [
         const phases = [];
         let calls = 0;
         let guarded = 0;
-        const hooks = { cwd: process.cwd(), env,
+        const hooks = { model: 'fixture', effort: 'medium', cwd: process.cwd(), env,
             prespawnGuard: async (context) => {
                 assert.equal(Object.isFrozen(context), true);
                 assert.equal(context.cwd, process.cwd());
@@ -301,7 +301,7 @@ for (const [provider, create, seed] of [
     test(`${provider}: guard rejection preserves identity with zero spawns for adapter and seed`, async () => {
         const denied = new Error('authority denied');
         let calls = 0;
-        const hooks = { prespawnGuard: async () => { throw denied; }, spawnImpl: () => { calls++; } };
+        const hooks = { model: 'fixture', effort: 'medium', prespawnGuard: async () => { throw denied; }, spawnImpl: () => { calls++; } };
         await assert.rejects(create(hooks).invoke(hookParams(provider)), (err) => err === denied);
         await assert.rejects(seed(hooks), (err) => err === denied);
         assert.equal(calls, 0);
@@ -368,3 +368,33 @@ for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCod
         assert.equal((await adapter.probeRecovery({ conversationId: 'conv-fixture' })).processQuiescent, true);
     });
 }
+
+test('AGY seed fails closed before spawn when either profile field is missing', async (t) => {
+    const { seedAgyConversation } = require('../lib/dual/discussion/live-agy-invoke');
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'agy-seed-no-profile-'));
+    t.after(() => fs.rm(cwd, { recursive: true, force: true }));
+    const saved = [process.env.OMNI_DUAL_WORKER_MODEL, process.env.OMNI_DUAL_WORKER_EFFORT];
+    delete process.env.OMNI_DUAL_WORKER_MODEL;
+    delete process.env.OMNI_DUAL_WORKER_EFFORT;
+    try {
+        for (const profile of [{}, { model: 'pinned' }, { effort: 'low' }]) {
+            await assert.rejects(seedAgyConversation({ cwd, ...profile,
+                spawnImpl() { assert.fail('missing profile spawned'); },
+            }), /task\.(model|effort).*\.omni\/manifest\.json.*OMNI_DUAL_WORKER_/);
+        }
+    } finally {
+        for (const [key, value] of [['OMNI_DUAL_WORKER_MODEL', saved[0]], ['OMNI_DUAL_WORKER_EFFORT', saved[1]]]) {
+            if (value === undefined) delete process.env[key]; else process.env[key] = value;
+        }
+    }
+});
+
+test('AGY invocation pins binding model and effort above adapter settings and passes both CLI flags', async () => {
+    let observed;
+    const adapter = createAgyAdapter({ model: 'adapter-model', effort: 'high',
+        spawnImpl(_command, args) { observed = args; return hookChild(output('agy', JSON.stringify(envelope)).stdout); } });
+    const raw = await adapter.invoke(hookParams('agy'));
+    assert.equal(raw.exitCode, 0);
+    assert.equal(observed[observed.indexOf('--model') + 1], 'fixture');
+    assert.equal(observed[observed.indexOf('--effort') + 1], 'medium');
+});

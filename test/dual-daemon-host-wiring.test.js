@@ -17,7 +17,7 @@ function loadModule(relativePath, mocks, processImpl = process) {
     const localRequire = createRequire(filename);
     const module = { exports: {} };
     const wrapped = vm.runInNewContext('(function(require, module, exports) {\n'
-        + fs.readFileSync(filename, 'utf8').replace(/^#![^\n]*/, '') + '\n})', { process: processImpl }, { filename });
+        + fs.readFileSync(filename, 'utf8').replace(/^#![^\n]*/, '') + '\n})', { process: processImpl, Buffer, setTimeout, clearTimeout, setInterval, clearInterval }, { filename });
     wrapped((name) => Object.hasOwn(mocks, name) ? mocks[name] : localRequire(name), module, module.exports);
     return module.exports;
 }
@@ -40,6 +40,10 @@ function stubAdapter(provider) {
 
 test('shared helper resolves both stub bindings with a real authority store and restores envelopes', async (t) => {
     const root = workspace(t);
+    fs.mkdirSync(path.join(root, '.omni'));
+    fs.writeFileSync(path.join(root, '.omni/manifest.json'), JSON.stringify({
+        workerModel: 'gemini-3.8-flash-high', workerEffort: 'medium',
+    }));
     const authorityStore = createAuthorityStore(path.join(root, 'authority'));
     authorityStore.append({ schema_version: 2, type: 'session.created', state: 'DISCOVERED',
         workspace_id: 'ws-wiring', session_id: 'session-wiring', plan_revision: 1,
@@ -199,7 +203,7 @@ test('isolated factory uses real daemon authority, private process hooks, and se
     store.append({ schema_version: 2, type: 'plan.registered', from_state: 'INTERVIEWING', to_state: 'PLANNED',
         plan_path: 'plan.md', plan_sha256: 'a'.repeat(64), total_tasks: 1, tasks: [task] });
     store.append({ schema_version: 2, type: 'task.routed', task_id: task.task_id, owner: 'agy', authority_state: 'ROUTED',
-        allowed_files: task.allowed_files, model, reason: 'Private discussion test' });
+        allowed_files: task.allowed_files, model, effort: 'high', reason: 'Private discussion test' });
     const audit = [], phases = [];
     let context, savedBindings;
     async function auditProcess(hooks, kind) {
@@ -313,3 +317,126 @@ test('isolated factory uses real daemon authority, private process hooks, and se
     assert.equal(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), 'module.exports = 1;\n');
     await host.closeAll();
 });
+
+// Exercise the real request handler without requiring a loopback socket.
+for (const [owner, model, effort, expectedCode] of [
+    ['agy', null, 'medium', 'DUAL_WORKER_CONFIG_MISSING'],
+    ['agy', 'gemini-3.8-flash-high', null, 'DUAL_WORKER_CONFIG_MISSING'],
+    ['agy', 'gemini-3.8-flash-high', 'medium', 'DUAL_PLAN_REVISION_MISMATCH'],
+    ['codex', null, null, 'DUAL_PLAN_REVISION_MISMATCH'],
+]) {
+    test(`completion gate ${owner} model=${model} effort=${effort}`, async (t) => {
+        const root = workspace(t);
+        const oldModel = process.env.OMNI_DUAL_WORKER_MODEL;
+        const oldEffort = process.env.OMNI_DUAL_WORKER_EFFORT;
+        delete process.env.OMNI_DUAL_WORKER_MODEL;
+        delete process.env.OMNI_DUAL_WORKER_EFFORT;
+        t.after(() => {
+            if (oldModel === undefined) delete process.env.OMNI_DUAL_WORKER_MODEL;
+            else process.env.OMNI_DUAL_WORKER_MODEL = oldModel;
+            if (oldEffort === undefined) delete process.env.OMNI_DUAL_WORKER_EFFORT;
+            else process.env.OMNI_DUAL_WORKER_EFFORT = oldEffort;
+        });
+        let onRequest;
+        const server = new EventEmitter();
+        server.listen = (_port, _host, ready) => ready();
+        server.address = () => ({ port: 12345 });
+        server.close = (done) => done();
+        const { startDaemonServer } = loadModule('../lib/dual/daemon-server', {
+            'node:http': { createServer(handler) { onRequest = handler; return server; } },
+        });
+        const authorityStore = {
+            derive: () => ({ sessionId: 'session-config', planRevision: 1,
+                tasks: { 'TASK-1': { task_id: 'TASK-1', owner, model, effort } } }),
+            readEvents: () => [], readValidatorRecords: () => [],
+        };
+        const daemon = await startDaemonServer({ workspaceRoot: root, authorityStore, orchestrator: {} });
+        t.after(() => daemon.close());
+        const response = await new Promise((resolve) => {
+            const request = new EventEmitter();
+            request.method = 'POST';
+            request.headers = { 'content-type': 'application/json', authorization: `Bearer ${daemon.token}` };
+            const response = { writeHead() {}, end(body) { resolve(JSON.parse(body)); } };
+            onRequest(request, response);
+            request.emit('data', Buffer.from(JSON.stringify({ protocol_version: 1, workspace_id: daemon.workspaceId,
+                method: 'completion.evaluate', params: { session_id: 'session-config', qc_evidence: {
+                    task_id: 'TASK-1', verdict: 'SUCCESS', plan_revision: 2, diff_fingerprint: 'a'.repeat(64),
+                    command_outputs: [{ command: 'node --check index.js', exit_code: 0, duration_ms: 1 }],
+                    findings: [], modified_files: ['index.js'],
+                } } })));
+            request.emit('end');
+        });
+        assert.equal(response.error.code, expectedCode);
+        if (expectedCode === 'DUAL_WORKER_CONFIG_MISSING') {
+            assert.match(response.error.message, /task\.(model|effort)/);
+            assert.match(response.error.message, /\.omni\/manifest\.json/);
+            assert.match(response.error.message, /OMNI_DUAL_WORKER_(MODEL|EFFORT)/);
+        }
+    });
+}
+
+for (const [owner, model, effort, expectedCode] of [
+    ['agy', null, 'medium', 'DUAL_WORKER_CONFIG_MISSING'],
+    ['agy', 'gemini-3.8-flash-high', null, 'DUAL_WORKER_CONFIG_MISSING'],
+    ['agy', 'gemini-3.8-flash-high', 'medium', null],
+    ['codex', null, null, null],
+]) {
+    test(`plan registration ${owner} model=${model} effort=${effort}`, async (t) => {
+        const root = workspace(t);
+        const oldModel = process.env.OMNI_DUAL_WORKER_MODEL;
+        const oldEffort = process.env.OMNI_DUAL_WORKER_EFFORT;
+        delete process.env.OMNI_DUAL_WORKER_MODEL;
+        delete process.env.OMNI_DUAL_WORKER_EFFORT;
+        t.after(() => {
+            if (oldModel === undefined) delete process.env.OMNI_DUAL_WORKER_MODEL;
+            else process.env.OMNI_DUAL_WORKER_MODEL = oldModel;
+            if (oldEffort === undefined) delete process.env.OMNI_DUAL_WORKER_EFFORT;
+            else process.env.OMNI_DUAL_WORKER_EFFORT = oldEffort;
+        });
+        let onRequest;
+        const server = new EventEmitter();
+        server.listen = (_port, _host, ready) => ready();
+        server.address = () => ({ port: 12345 });
+        server.close = (done) => done();
+        const { startDaemonServer } = loadModule('../lib/dual/daemon-server', {
+            'node:http': { createServer(handler) { onRequest = handler; return server; } },
+            './setup-command': { evaluateSetupReadiness: () => ({ ready: true }) },
+        });
+        const events = [];
+        const authorityStore = {
+            derive: () => ({ sessionId: 'session-config', planRevision: 1, sessionState: 'CAPABILITY_SAFE', tasks: {} }),
+            readEvents: () => events, readValidatorRecords: () => [], append: (event) => events.push(event),
+        };
+        const daemon = await startDaemonServer({ workspaceRoot: root, authorityStore, orchestrator: {},
+            planArtifactVerifier: async () => ({}) });
+        t.after(() => daemon.close());
+        const response = await new Promise((resolve) => {
+            const request = new EventEmitter();
+            request.method = 'POST';
+            request.headers = { 'content-type': 'application/json', authorization: `Bearer ${daemon.token}` };
+            onRequest(request, { writeHead() {}, end(body) { resolve(JSON.parse(body)); } });
+            request.emit('data', Buffer.from(JSON.stringify({ protocol_version: 1, workspace_id: daemon.workspaceId,
+                method: 'plan.register', params: { session_id: 'session-config', plan_path: 'plan.md', plan_sha256: 'a'.repeat(64),
+                    acceptance_policy: { protocol_version: 1, checks: [], ui: { required: false,
+                        viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true } },
+                    tasks: [{ task_id: 'TASK-1', title: 'Task', owner, ...(model ? { model } : {}), ...(effort ? { effort } : {}),
+                        allowed_files: ['index.js'], deny_patterns: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] }],
+                } })));
+            request.emit('end');
+        });
+        if (expectedCode) {
+            assert.equal(response.error.code, expectedCode);
+            assert.equal(events.length, 0, 'missing config cannot persist a partial plan');
+        } else {
+            assert.equal(response.error, undefined, JSON.stringify(response));
+            const routed = events.find((event) => event.type === 'task.routed');
+            assert.equal(routed.model, model);
+            assert.equal(routed.effort, effort);
+            if (owner === 'agy') {
+                const registered = events.find((event) => event.type === 'plan.registered').tasks[0];
+                assert.equal(registered.model, model);
+                assert.equal(registered.effort, effort);
+            }
+        }
+    });
+}

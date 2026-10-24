@@ -48,6 +48,7 @@ async function sessionFixture(t, { body = '{"summary":"scouted"}', unknown = fal
         });
     }
     session = await createDiscussionSession({
+        models: { agy: 'gemini-3.8-flash-high' }, efforts: { agy: 'high' },
         enabled: true, stateDir, sessionId: 'phase-session', taskId: 'task-1', planRevision: 1, snapshot,
         seeds: Object.fromEntries(['codex', 'agy'].map((provider) =>
             [provider, async () => ({ conversationId: `seed-${provider}` })])),

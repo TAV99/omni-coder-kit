@@ -168,6 +168,9 @@ function createFixture(t, options = {}) {
     fs.writeFileSync(path.join(root, 'index.html'), '<html><body>Initial</body></html>\n');
     const planDir = path.join(root, '.omni', 'sdlc');
     fs.mkdirSync(planDir, { recursive: true });
+    fs.writeFileSync(path.join(root, '.omni', 'manifest.json'), JSON.stringify({
+        workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
+    }));
     const planBytes = Buffer.from('# Offline trust fixture plan\n');
     const planPath = path.join(planDir, 'trust-plan.md');
     fs.writeFileSync(planPath, planBytes);

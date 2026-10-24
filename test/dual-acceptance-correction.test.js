@@ -166,6 +166,8 @@ test('public daemon path completes isolated QC, correction, and fresh review wit
     const daemon = await startDaemonServer({
         workspaceRoot,
         authorityStore,
+        workerModel: 'gemini-3.7-flash-high',
+        workerEffort: 'high',
         preflightRunner: mockPreflightRunner,
         orchestrator: createOrchestratorAdapter(withDiscussion({
             workspaceRoot, authorityStore, processRunner: publicDaemonWorker(),

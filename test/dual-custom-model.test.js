@@ -7,8 +7,6 @@ const os = require('node:os');
 const path = require('node:path');
 
 const {
-    DEFAULT_WORKER_MODEL,
-    DEFAULT_WORKER_EFFORT,
     resolveConfiguredWorkerModel,
     resolveConfiguredWorkerEffort,
 } = require('../lib/dual/agy-model');
@@ -22,7 +20,7 @@ const { RouteSchema, EventSchema, parseContract } = require('../lib/dual/contrac
 const { createDualOrchestrator } = require('../lib/dual/orchestrator');
 
 test('Dual Custom Worker Model & Effort Support', async (t) => {
-    await t.test('1. resolveConfiguredWorkerModel respects precedence: option > env > manifest > default', async () => {
+    await t.test('1. resolveConfiguredWorkerModel respects precedence: option > manifest > env > null', async () => {
         const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-model-res-'));
         fs.mkdirSync(path.join(tmpDir, '.omni'), { recursive: true });
         fs.writeFileSync(
@@ -32,21 +30,23 @@ test('Dual Custom Worker Model & Effort Support', async (t) => {
         );
 
         // 1a. Default fallback when no manifest and no option
-        assert.equal(resolveConfiguredWorkerModel(null), DEFAULT_WORKER_MODEL);
-        assert.equal(resolveConfiguredWorkerEffort(null), DEFAULT_WORKER_EFFORT);
+        assert.equal(resolveConfiguredWorkerModel(null), null);
+        assert.equal(resolveConfiguredWorkerEffort(null), null);
 
         // 1b. Manifest resolution
         assert.equal(resolveConfiguredWorkerModel(tmpDir), 'gemini-2.5-pro');
         assert.equal(resolveConfiguredWorkerEffort(tmpDir), 'medium');
 
-        // 1c. Environment variable overrides manifest
+        // 1c. Manifest overrides environment; environment is used without manifest
         const oldEnvModel = process.env.OMNI_DUAL_WORKER_MODEL;
         const oldEnvEffort = process.env.OMNI_DUAL_WORKER_EFFORT;
         try {
             process.env.OMNI_DUAL_WORKER_MODEL = 'gemini-exp-1206';
             process.env.OMNI_DUAL_WORKER_EFFORT = 'low';
-            assert.equal(resolveConfiguredWorkerModel(tmpDir), 'gemini-exp-1206');
-            assert.equal(resolveConfiguredWorkerEffort(tmpDir), 'low');
+            assert.equal(resolveConfiguredWorkerModel(tmpDir), 'gemini-2.5-pro');
+            assert.equal(resolveConfiguredWorkerModel(null), 'gemini-exp-1206');
+            assert.equal(resolveConfiguredWorkerEffort(tmpDir), 'medium');
+            assert.equal(resolveConfiguredWorkerEffort(null), 'low');
 
             // 1d. Options override env
             assert.equal(resolveConfiguredWorkerModel(tmpDir, { workerModel: 'gemini-3.8-flash-high' }), 'gemini-3.8-flash-high');
@@ -101,7 +101,7 @@ test('Dual Custom Worker Model & Effort Support', async (t) => {
         assert.equal(validated.model, 'gemini-2.5-pro');
         assert.equal(validated.version, '1.2.3');
 
-        // Without expectedModel, defaults to gemini-3.7-flash-high, so customCap fails
+        // Missing expectedModel must fail closed
         const defaultMismatch = validateCapabilityResult(customCap);
         assert.equal(defaultMismatch.valid, false);
 
@@ -193,6 +193,7 @@ test('Dual Custom Worker Model & Effort Support', async (t) => {
             const passRes = await runCapabilityPreflight(tmpDir, {
                 authorityStore,
                 workerModel: 'gemini-2.5-pro',
+                workerEffort: 'low',
                 agyVersion: 'agy 1.2.3',
                 agyModels: JSON.stringify(['gemini-2.5-pro', 'gemini-3.7-flash-high']),
                 checkBaseline: async () => ({ name: 'baseline_backend', status: 'PASSED' }),
@@ -205,6 +206,7 @@ test('Dual Custom Worker Model & Effort Support', async (t) => {
             const failRes = await runCapabilityPreflight(tmpDir, {
                 authorityStore,
                 workerModel: 'gemini-nonexistent-model',
+                workerEffort: 'low',
                 agyVersion: 'agy 1.2.3',
                 agyModels: JSON.stringify(['gemini-3.7-flash-high']),
                 checkBaseline: async () => ({ name: 'baseline_backend', status: 'PASSED' }),
@@ -281,6 +283,7 @@ test('Dual Custom Worker Model & Effort Support', async (t) => {
             const badOrch = createDualOrchestrator({
                 cwd: tmpDir,
                 workerModel: 'gemini-2.5-pro',
+                workerEffort: 'medium',
                 authoritativeCapabilityEvidence: {
                     version: '1.2.3',
                     model: 'gemini-wrong-model',
@@ -295,4 +298,42 @@ test('Dual Custom Worker Model & Effort Support', async (t) => {
             fs.rmSync(tmpDir, { recursive: true, force: true });
         }
     });
+});
+
+test('unconfigured and blank worker model/effort resolve to null with no environment defaults', (t) => {
+    const oldModel = process.env.OMNI_DUAL_WORKER_MODEL;
+    const oldEffort = process.env.OMNI_DUAL_WORKER_EFFORT;
+    t.after(() => {
+        if (oldModel === undefined) delete process.env.OMNI_DUAL_WORKER_MODEL;
+        else process.env.OMNI_DUAL_WORKER_MODEL = oldModel;
+        if (oldEffort === undefined) delete process.env.OMNI_DUAL_WORKER_EFFORT;
+        else process.env.OMNI_DUAL_WORKER_EFFORT = oldEffort;
+    });
+    delete process.env.OMNI_DUAL_WORKER_MODEL;
+    delete process.env.OMNI_DUAL_WORKER_EFFORT;
+    for (const options of [{}, { model: ' ', effort: ' ' }, { workerModel: null, workerEffort: null }]) {
+        assert.equal(resolveConfiguredWorkerModel(null, options), null);
+        assert.equal(resolveConfiguredWorkerEffort(null, options), null);
+    }
+    process.env.OMNI_DUAL_WORKER_MODEL = ' ';
+    process.env.OMNI_DUAL_WORKER_EFFORT = ' ';
+    assert.equal(resolveConfiguredWorkerModel(null), null);
+    assert.equal(resolveConfiguredWorkerEffort(null), null);
+});
+
+test('standalone AGY preflight rejects missing configuration before any process call', async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-no-worker-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.writeFileSync(path.join(root, 'index.js'), 'module.exports = 1;\n');
+    const initialSnapshot = require('../lib/dual/baseline-snapshot').createSnapshotBaseline({ root }).capture();
+    let calls = 0;
+    const orchestrator = createDualOrchestrator({ cwd: root, backend: 'snapshot', initialSnapshot,
+        processRunner: async () => { calls++; throw new Error('must not spawn'); } });
+    orchestrator.newTask('TASK-NO-CONFIG');
+    await assert.rejects(orchestrator.runPhase('preflight', 'TASK-NO-CONFIG'), (error) => {
+        assert.equal(error.code, 'DUAL_WORKER_CONFIG_MISSING');
+        assert.match(error.message, /task.model.*task.effort.*manifest.json.*OMNI_DUAL_WORKER_MODEL.*OMNI_DUAL_WORKER_EFFORT/);
+        return true;
+    });
+    assert.equal(calls, 0);
 });

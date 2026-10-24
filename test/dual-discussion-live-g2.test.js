@@ -13,7 +13,7 @@ const { createAgyAdapter, seedAgyConversation } = require('../lib/dual/discussio
 const live = { skip: process.env.OMNI_DUAL_LIVE !== '1', timeout: 600000 };
 const cwd = path.resolve(__dirname, '..');
 const codexOptions = { cwd, model: 'gpt-6.1-sol', effort: 'medium', timeoutMs: 110000 };
-const agyOptions = { cwd, model: 'gemini-3.8-flash-high', timeoutMs: 110000 };
+const agyOptions = { effort: 'high', cwd, model: 'gemini-3.8-flash-high', timeoutMs: 110000 };
 const unusedId = '00000000-0000-0000-0000-000000000000';
 
 function setup(stateDir, ids, adapters) {

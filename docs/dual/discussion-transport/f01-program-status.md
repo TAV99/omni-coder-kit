@@ -312,13 +312,23 @@ Phạm vi đã chốt theo thiết kế mục 3 (Phase 3) + khảo sát mã ngu�
   (đường này không emit phase event vào authority log; handoff là tín hiệu kết thúc) —
   driver đã sửa tiêu chí theo evidence thực chất, chạy lại logic verdict trên artifact
   của lượt live này cho PASS 9/9 kiểm tra.
-  Hai mục còn lại CHỐT BẰNG QUYẾT ĐỊNH, không sửa code: (a) default model 3.7 giữ nguyên
-  — chỉ là fallback cuối cùng sau task.model > manifest workerModel > env, mọi đường thật
-  đều pin 3.8 theo mandate; đường fallback chạm model không có sẵn sẽ fail-closed ở
-  preflight thay vì chạy nhầm model; đổi default toàn cục là migration ảnh hưởng
-  preflight/init/daemon nên cần duyệt riêng. (b) Workflow restart → reclaim owner →
-  resume terminal phase: nửa orphan marker đã đóng nhờ D2; nửa tái tạo owner/adapters
-  từ journal sau restart vẫn là tính năng phase tương lai, cần thiết kế và duyệt riêng
+  Quyết định mới 24/10/2026 thay thế việc giữ fallback 3.7: không có default
+  model/effort AGY. Chọn qua task.model/task.effort > manifest workerModel/workerEffort
+  > env OMNI_DUAL_WORKER_MODEL/OMNI_DUAL_WORKER_EFFORT. Thiếu một trong hai thì
+  fail-closed và preflight BLOCKED với hướng dẫn cấu hình. Init không tự ghi default.
+  Kiểm chứng (Muse, shell cấp cao nhất, 24/10/2026): không còn default trong lib
+  (grep 3.7/3.8 và fallback 'high' về 0); thư mục chưa cấu hình resolve null + lỗi
+  nêu đủ 3 cách set; cổng gộp 26 file liên quan 660/660; cổng rộng 2493 test — 2482
+  pass / 0 fail / 11 skip; live acceptance OMNI_DUAL_LIVE=1 PASS (2 scout thật qua
+  discussion host với model/effort pin tường minh). Di trú test 3 vòng: pin model/effort
+  cho harness cũ (kể cả live-acceptance: workerEffort ở orchestrator, context session
+  và key thư mục session giờ mang cả model/effort); harness flow-preflight-retry đổi
+  task sang owner agy + đủ trường task AGY vì bản chất test là probe AGY. Nhiễu môi
+  trường gặp trong lúc kiểm chứng: thư mục /tmp/.git rỗng (chủ root, tạo trong lúc
+  chạy vòng 3) làm test thư mục tạm đổ lỗi baseline — đã xóa, không liên quan code.
+  Workflow restart → reclaim owner → resume terminal phase: nửa orphan marker đã đóng
+  nhờ D2; nửa tái tạo owner/adapters từ journal sau restart vẫn là tính năng phase tương lai,
+  cần thiết kế và duyệt riêng
   (runbook recovery đã cập nhật thu hẹp giới hạn này); hành vi hiện tại fail-closed
   (từ chối thay vì dispatch trùng) là đúng mặc định an toàn.
 - **Đính chính E10 trust-e2e trong nghiệm thu (24/10/2026, Muse kiểm chứng):**

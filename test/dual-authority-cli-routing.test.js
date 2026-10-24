@@ -58,6 +58,7 @@ async function fixture(t, { owner = 'codex', orchestrator, executionMode, extraT
     const store = createAuthorityStore(authorityDir);
     const daemon = await startDaemonServer({
         workspaceRoot: root, authorityStore: store, orchestrator,
+        workerModel: 'gemini-3.7-flash-high', workerEffort: 'high',
         capabilityPreflight: async () => ({
             status: 'PASSED', to_state: 'CAPABILITY_SAFE',
             checks: [{ name: 'agy_cli_and_model', status: 'PASSED' }],

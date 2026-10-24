@@ -21,7 +21,7 @@ test('live Codex/AGY discussion preserves both conversation histories', {
     } = require('../lib/dual/discussion/live-agy-invoke');
     const cwd = path.resolve(__dirname, '..');
     const codexOptions = { cwd, model: 'gpt-6.1-sol', effort: 'medium', timeoutMs: 110000 };
-    const agyOptions = { cwd, model: 'gemini-3.8-flash-high', timeoutMs: 110000 };
+    const agyOptions = { effort: 'high', cwd, model: 'gemini-3.8-flash-high', timeoutMs: 110000 };
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'omni-disc-live-'));
     let relay;
     const started = Date.now();

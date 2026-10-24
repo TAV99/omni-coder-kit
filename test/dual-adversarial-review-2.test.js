@@ -64,6 +64,8 @@ function rmDir(dir) {
 
 function startDaemonServer(options = {}) {
     return startDaemonServerImpl({
+        workerModel: 'gemini-3.7-flash-high',
+        workerEffort: 'high',
         ...options,
         planArtifactVerifier: options.planArtifactVerifier || (async (_workspaceRoot, params) => ({
             plan_path: params.plan_path,

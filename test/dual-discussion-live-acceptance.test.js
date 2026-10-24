@@ -36,7 +36,7 @@ test('F01 WP4b: real discussion host delivers two live AGY scouts to the orchest
     const models = { codex: 'gpt-6.1-sol', agy: 'gemini-3.8-flash-high' };
     const limits = { ttlMs: 900000, timeoutMs: 110000 };
     const codexOptions = { cwd: repoRoot, model: models.codex, effort: 'medium', timeoutMs: limits.timeoutMs };
-    const agyOptions = { cwd: repoRoot, model: models.agy, timeoutMs: limits.timeoutMs };
+    const agyOptions = { effort: 'high', cwd: repoRoot, model: models.agy, timeoutMs: limits.timeoutMs };
     const seeds = { codex: [], agy: [] };
     const contexts = [];
     const sessions = [];
@@ -156,6 +156,7 @@ test('F01 WP4b: real discussion host delivers two live AGY scouts to the orchest
         });
         const orch = createDualOrchestrator({ cwd: repoRoot, backend: 'snapshot', initialSnapshot,
             workerModel: models.agy,
+            workerEffort: 'high',
             authoritativeCapabilityEvidence: { version: '1.2.3', model: models.agy },
             processRunner: async () => { assert.fail('Worker must use discussion, never the cold-start processRunner'); },
             discussion: { enabled: true, sessionResolver: async (context) => {
@@ -209,9 +210,10 @@ test('F01 WP4b: real discussion host delivers two live AGY scouts to the orchest
             const session = sessions[index];
             const context = contexts[index];
             assert.deepEqual(context, { taskId, snapshotSha256: initialSnapshot.identity.id,
-                phase: 'scout', workspaceRoot: repoRoot });
+                phase: 'scout', workspaceRoot: repoRoot,
+                workerModel: models.agy, workerEffort: 'high' });
             const sessionDir = path.join(stateDir,
-                encodeURIComponent(`${taskId}|${context.snapshotSha256}|${daemonState.revision}`));
+                encodeURIComponent(`${taskId}|${context.snapshotSha256}|${daemonState.revision}|${models.agy}|high`));
             const journal = await inspectJournal({ stateDir: sessionDir });
             const received = journal.events.filter(({ event }) => event.type === 'received');
             const responses = journal.events.filter(({ event }) => event.type === 'response');

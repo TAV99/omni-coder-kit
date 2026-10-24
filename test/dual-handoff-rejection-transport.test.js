@@ -45,7 +45,7 @@ async function fixture(t) {
         tasks: [{ task_id: 'TASK-1', title: 'Return three', goal: 'Return three', owner: 'agy', risk: 'low', execution_mode: 'isolated',
             allowed_files: ['index.js'], context_files: ['spec.md'], deny_patterns: [], validation_commands: [command] }] });
     store.append({ schema_version: 2, type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
-        allowed_files: ['index.js'], model: 'gemini-3.8-flash-high', reason: 'Private task' });
+        allowed_files: ['index.js'], model: 'gemini-3.8-flash-high', effort: 'high', reason: 'Private task' });
     const processRunner = async (invocation) => {
         const run = path.join(invocation.cwd, '.omni/codex-gemini/runs/TASK-1');
         const spec = JSON.parse(fs.readFileSync(path.join(run, 'spec.json'), 'utf8'));

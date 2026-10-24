@@ -58,7 +58,7 @@ function fixture(t) {
     fs.writeFileSync(path.join(root, 'index.js'), 'module.exports = 1;\n');
     fs.writeFileSync(path.join(root, 'spec.md'), 'Return the number two.\n');
     return { workspaceRoot: root, sessionId: 'session-1', attempt: 1, planRevision: 1,
-        task: { task_id: 'TASK-1', goal: 'Return two', allowed_files: ['index.js'], context_files: ['spec.md'],
+        task: { task_id: 'TASK-1', model: 'gemini-3.8-flash-high', effort: 'high', goal: 'Return two', allowed_files: ['index.js'], context_files: ['spec.md'],
             deny_patterns: [], validation_commands: [{ program: 'node', args: ['--check', 'index.js'], cwd: '.' }] },
         capability: { version: '1.1.27-test', model: 'gemini-3.8-flash-high' }, authorize: () => true };
 }
@@ -176,6 +176,7 @@ test('prepared reference pins worker model before any phase is started', async (
         reference = ref; throw new Error('interrupted before worker');
     } }), /interrupted before worker/);
     await assert.rejects(() => runIsolatedTask({ ...input, reference,
+        task: { ...input.task, model: 'another-model' },
         capability: { ...input.capability, model: 'another-model' }, worker: fakeWorker([]) }),
     (error) => error.code === 'DUAL_SPEC_CORRELATION');
 });
@@ -234,9 +235,9 @@ function seedAuthority(input, extraTasks = [], options = {}) {
         ...(options.acceptancePolicySha256 ? { acceptance_policy_sha256: options.acceptancePolicySha256 } : {}),
         tasks: [{ ...input.task, title: 'Task one', owner: 'agy', risk: 'low', execution_mode: 'isolated' }, ...extraTasks] });
     store.append({ schema_version: 2, type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
-        allowed_files: input.task.allowed_files, model: input.capability.model, reason: 'Private task' });
+        allowed_files: input.task.allowed_files, model: input.capability.model, effort: 'high', reason: 'Private task' });
     for (const task of extraTasks) store.append({ schema_version: 2, type: 'task.routed', task_id: task.task_id,
-        owner: 'agy', authority_state: 'ROUTED', allowed_files: task.allowed_files, model: input.capability.model, reason: 'Private dependent task' });
+        owner: 'agy', authority_state: 'ROUTED', allowed_files: task.allowed_files, model: input.capability.model, effort: 'high', reason: 'Private dependent task' });
     return { store, dir, snapshot };
 }
 
@@ -303,7 +304,7 @@ test('authority adapter persists isolated binding and handoff and resumes after 
     assert.equal(calls.length, 3);
     fs.writeFileSync(path.join(input.workspaceRoot, handoffPath), handoffBytes);
     reopened.append({ schema_version: 2, type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
-        model: 'unqualified-model', allowed_files: input.task.allowed_files, reason: 'Same revision model drift' });
+        model: 'unqualified-model', effort: 'high', allowed_files: input.task.allowed_files, reason: 'Same revision model drift' });
     await assert.rejects(() => next.runTask(reopened.derive()), (error) => error.code === 'DUAL_ISOLATED_AUTHORITY_STALE');
     assert.throws(() => reopened.append({ schema_version: 2, type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
         plan_revision: 2, model: input.capability.model, allowed_files: input.task.allowed_files, reason: 'Changed revision' }),

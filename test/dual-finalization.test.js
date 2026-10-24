@@ -41,7 +41,7 @@ function fixture(t) {
     return {
         workspaceRoot: root,
         sessionId: 'session-1',
-        task: { task_id: 'TASK-1', title: 'finalize', goal: 'Return two', owner: 'agy', model: 'gemini-test',
+        task: { task_id: 'TASK-1', title: 'finalize', goal: 'Return two', owner: 'agy', model: 'gemini-test', effort: 'high',
             execution_mode: 'isolated', allowed_files: ['index.js'], context_files: ['spec.md'], deny_patterns: [],
             validation_commands: [{ program: 'node', args: ['--check', 'index.js'], cwd: '.' }] },
     };
@@ -64,7 +64,7 @@ function seedAuthority(input, clock) {
         plan_path: 'spec.md', plan_sha256: 'b'.repeat(64), total_tasks: 1,
         tasks: [planTask] });
     store.append({ schema_version: 2, type: 'task.routed', task_id: input.task.task_id, owner: 'agy',
-        authority_state: 'ROUTED', allowed_files: input.task.allowed_files, model: input.task.model, reason: 'test' });
+        authority_state: 'ROUTED', allowed_files: input.task.allowed_files, model: input.task.model, effort: input.task.effort, reason: 'test' });
     return { store, dir };
 }
 

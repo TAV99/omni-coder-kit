@@ -57,7 +57,7 @@ async function fixture(t, { enabled, missingResolver = false, disabledSession = 
     };
     const agyCalls = [], bridgeCalls = [], contexts = [], messages = [];
     const session = { enabled: !disabledSession,
-        bindings: buildBindings({ sessionId: 'session-1', taskId, planRevision: 2,
+        bindings: buildBindings({ models: { agy: 'gemini-3.7-flash-high' }, efforts: { agy: 'high' }, sessionId: 'session-1', taskId, planRevision: 2,
             snapshotSha256: 'a'.repeat(64), codexConversationId: 'codex-1', agyConversationId: 'agy-1' }),
         relay: {
             async inspect() { return { messages, unknown: unknown ? { invocation_id: 'inv-unknown', binding_ref: 'worker-ref' } : null }; },
@@ -71,7 +71,7 @@ async function fixture(t, { enabled, missingResolver = false, disabledSession = 
                 return { response_message_id: `response-${messageId}`, invocation_id: 'inv-1' };
             },
         } };
-    const orch = createDualOrchestrator({ cwd: repoRoot, backend: snapshot ? 'snapshot' : 'git', initialSnapshot,
+    const orch = createDualOrchestrator({ workerModel: 'gemini-3.7-flash-high', workerEffort: 'high', cwd: repoRoot, backend: snapshot ? 'snapshot' : 'git', initialSnapshot,
         authoritativeCapabilityEvidence: { version: '1.1.19', model: 'gemini-3.7-flash-high' },
         discussion: { enabled, ...(!missingResolver ? { sessionResolver: async (context) => {
             contexts.push(context); return session;
@@ -123,7 +123,7 @@ test('missing discussion does not poison a task retried with valid discussion', 
     assert.equal(f.agyCalls.length, 0);
     assert.equal(f.orch.status(f.taskId).nextAction, 'scout');
 
-    const configured = createDualOrchestrator({ cwd: f.repoRoot, backend: 'snapshot', initialSnapshot: f.initialSnapshot,
+    const configured = createDualOrchestrator({ workerModel: 'gemini-3.7-flash-high', workerEffort: 'high', cwd: f.repoRoot, backend: 'snapshot', initialSnapshot: f.initialSnapshot,
         authoritativeCapabilityEvidence: { version: '1.1.19', model: 'gemini-3.7-flash-high' },
         discussion: { enabled: true, sessionResolver: async () => f.session },
         processRunner: async () => { assert.fail('Scout must not invoke the cold worker'); } });
@@ -140,7 +140,7 @@ test('review without discussion records no phase events and can run after config
     await f.orch.runPhase('implement', f.taskId);
     await f.orch.runPhase('scope', f.taskId);
     const eventsBefore = fs.readFileSync(path.join(f.runDir, 'events.ndjson'), 'utf8');
-    const unconfigured = createDualOrchestrator({ cwd: f.repoRoot, backend: 'snapshot', initialSnapshot: f.initialSnapshot,
+    const unconfigured = createDualOrchestrator({ workerModel: 'gemini-3.7-flash-high', workerEffort: 'high', cwd: f.repoRoot, backend: 'snapshot', initialSnapshot: f.initialSnapshot,
         authoritativeCapabilityEvidence: { version: '1.1.19', model: 'gemini-3.7-flash-high' },
         processRunner: async () => { assert.fail('Review must not invoke the cold worker'); } });
     await assert.rejects(unconfigured.runPhase('review', f.taskId), { code: 'DUAL_DISCUSSION_REQUIRED' });
@@ -160,7 +160,7 @@ test('opt-in scout preserves payload, public return shape, raw observation and b
     assert.equal(f.agyCalls.length, 0);
     assert.equal(f.bridgeCalls.length, 1);
     assert.deepEqual(f.contexts[0], { taskId: f.taskId,
-        snapshotSha256: undefined, phase: 'scout', workspaceRoot: f.repoRoot });
+        snapshotSha256: undefined, phase: 'scout', workspaceRoot: f.repoRoot, workerModel: 'gemini-3.7-flash-high', workerEffort: 'high' });
     const question = f.messages[0];
     assert.equal(question.sender_ref, bindingRef(f.session.bindings[0]));
     assert.equal(question.recipient_ref, bindingRef(f.session.bindings[1]));
@@ -300,7 +300,7 @@ test('CLI discussion env is strict and preserves an injected resolver', async (t
         const calls = [];
         let processCalls = 0;
         const eventsBefore = fs.readFileSync(path.join(f.runDir, 'events.ndjson'), 'utf8');
-        const orch = getOrchestrator({ cwd: f.repoRoot, backend: 'snapshot', initialSnapshot: f.initialSnapshot,
+        const orch = getOrchestrator({ workerModel: 'gemini-3.7-flash-high', workerEffort: 'high', cwd: f.repoRoot, backend: 'snapshot', initialSnapshot: f.initialSnapshot,
             authoritativeCapabilityEvidence: { version: '1.1.19', model: 'gemini-3.7-flash-high' },
             discussion: { sessionResolver: async (context) => { calls.push(context); return { enabled: false }; } },
             processRunner: async () => { processCalls++; assert.fail('Scout must not invoke the cold worker'); },
@@ -330,7 +330,7 @@ for (const taskId of ['TASK-ALPHA', 'TASK-BETA']) {
         const f = await fixture(t, { enabled: true, snapshot: true, taskId });
         const result = await f.orch.runPhase('scout', taskId);
         assert.deepEqual(f.contexts, [{ taskId, snapshotSha256: f.initialSnapshot.identity.id,
-            phase: 'scout', workspaceRoot: f.repoRoot }]);
+            phase: 'scout', workspaceRoot: f.repoRoot, workerModel: 'gemini-3.7-flash-high', workerEffort: 'high' }]);
         assert.deepEqual(AttemptMetaSchema.parse(f.read('raw/scout.1.meta.json')), f.read('raw/scout.1.meta.json'));
         assert.deepEqual(result.warnings, []);
     });
@@ -422,7 +422,7 @@ test('authority adapter forwards discussion verbatim to its task orchestrator', 
     const calls = [];
     const discussion = { enabled: true, sessionResolver: async (context) => { calls.push(context); return f.session; } };
     f.session.relay.dispatch = async (id) => { f.bridgeCalls.push(id); throw sentinel; };
-    const adapter = createOrchestratorAdapter({ workspaceRoot: f.repoRoot, discussion,
+    const adapter = createOrchestratorAdapter({ workerModel: 'gemini-3.7-flash-high', workerEffort: 'high', workspaceRoot: f.repoRoot, discussion,
         processRunner: async () => { throw new Error('Cold-start must not run'); },
         authorityStore: { derive: () => derived, acquireLease: () => ({ lease_id: 'lease-1' }), releaseLease() {} },
         operationWriter: {}, setIntervalFn: () => null, clearIntervalFn() {} });
@@ -432,7 +432,7 @@ test('authority adapter forwards discussion verbatim to its task orchestrator', 
     assert.equal(f.bridgeCalls.length, 1);
     assert.equal(f.messages[0].body, expectedScoutPrompt(f.runDir));
     assert.deepEqual(calls, [{ taskId: f.taskId, snapshotSha256: f.initialSnapshot.identity.id,
-        phase: 'scout', workspaceRoot: f.repoRoot }]);
+        phase: 'scout', workspaceRoot: f.repoRoot, workerModel: 'gemini-3.7-flash-high', workerEffort: 'high' }]);
 });
 
 test('one orchestrator resolves distinct contexts for two tasks in the same workspace', async (t) => {
