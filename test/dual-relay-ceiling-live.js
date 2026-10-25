@@ -235,6 +235,9 @@ async function main() {
                 if (question.body.includes('mapping order')) {
                     return `Decision: confirmed, section mapping is table0=electronics, table1=furniture, table2=clothing, table3=books, table4=toys, table5=sports, table6=kitchen, table7=garden, table8=automotive, table9=health. Source file/section: plans/plan.md section order. Question ID: ${question.message_id}. Plan revision: 1.`;
                 }
+                if (question.body.includes('deeply frozen')) {
+                    return `Decision: confirmed, do NOT deep-freeze individual record objects; only freeze the array itself, as plans/plan.md says "frozen array". This is a fixture scaffolding question, not a product decision, and it does not change the chunk/ceiling conclusion under test. Source file/section: plans/plan.md frozen array. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
                 return null;
             };
             report.controllerReplyRounds = [];
