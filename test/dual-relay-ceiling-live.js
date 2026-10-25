@@ -241,7 +241,8 @@ async function main() {
                     return `Decision: confirmed, do NOT deep-freeze individual record objects; only freeze the array itself, as plans/plan.md says "frozen array". This is a fixture scaffolding question, not a product decision, and it does not change the chunk/ceiling conclusion under test. Source file/section: plans/plan.md frozen array. Question ID: ${question.message_id}. Plan revision: 1.`;
                 }
                 if (question.body.includes('default export') || question.body.includes('named records')
-                    || question.body.includes('export should be named')) {
+                    || question.body.includes('export should be named') || question.body.includes('export be named')
+                    || question.body.includes('named export')) {
                     return `Decision: confirmed, the frozen array export is the NAMED export records, via module.exports = { records, byId }; there is no default export and no other exported key. Source file/section: plans/plan.md module export. Question ID: ${question.message_id}. Plan revision: 1.`;
                 }
                 if (question.body.includes('byId') || question.body.includes('Map')
@@ -258,6 +259,14 @@ async function main() {
                 }
                 if (question.body.includes('price')) {
                     return `Decision: confirmed, prices are plain number literals, never strings, non-negative with at most two decimal places, any value the worker chooses; zero is allowed, there is no price range and no currency symbol, field, or code. Source file/section: plans/plan.md prices. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                // P1 fix: the file-name branch must precede the broad 'name'
+                // branch — every "file name(s)" question contains "name", so
+                // in the old order it was unreachable and received the wrong
+                // record-name answer. The broad 'name' branch stays as the
+                // fallback for generic/record-name questions (e.g. uniqueness).
+                if (question.body.includes('file name')) {
+                    return `Decision: confirmed, files are named exactly src/tables/tableN.js for N 0 to 9, and no other file is created or touched. Source file/section: plans/plan.md files. Question ID: ${question.message_id}. Plan revision: 1.`;
                 }
                 if (question.body.includes('name')) {
                     return `Decision: confirmed, names are invented human-readable catalogue product names with no external catalogue to match, unique within a module only, so the same name in two different modules is allowed. Source file/section: plans/plan.md names. Question ID: ${question.message_id}. Plan revision: 1.`;
@@ -286,9 +295,6 @@ async function main() {
                 if (question.body.includes('node --check') || question.body.includes('validation')
                     || question.body.includes('verify')) {
                     return `Decision: confirmed, before finishing run node --check src/tables/tableN.js from the workspace root for each N from 0 to 9, fix any failure before finishing, and verify records.length is 55 in every module. Source file/section: plans/plan.md verification. Question ID: ${question.message_id}. Plan revision: 1.`;
-                }
-                if (question.body.includes('file name')) {
-                    return `Decision: confirmed, files are named exactly src/tables/tableN.js for N 0 to 9, and no other file is created or touched. Source file/section: plans/plan.md files. Question ID: ${question.message_id}. Plan revision: 1.`;
                 }
                 return null;
             };
