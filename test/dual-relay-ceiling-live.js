@@ -235,8 +235,60 @@ async function main() {
                 if (question.body.includes('mapping order')) {
                     return `Decision: confirmed, section mapping is table0=electronics, table1=furniture, table2=clothing, table3=books, table4=toys, table5=sports, table6=kitchen, table7=garden, table8=automotive, table9=health. Source file/section: plans/plan.md section order. Question ID: ${question.message_id}. Plan revision: 1.`;
                 }
-                if (question.body.includes('deeply frozen')) {
+                if (question.body.includes('deeply frozen') || question.body.includes('deep-freeze')
+                    || question.body.includes('deep freeze') || question.body.includes('freeze individual')
+                    || question.body.includes('freeze each record')) {
                     return `Decision: confirmed, do NOT deep-freeze individual record objects; only freeze the array itself, as plans/plan.md says "frozen array". This is a fixture scaffolding question, not a product decision, and it does not change the chunk/ceiling conclusion under test. Source file/section: plans/plan.md frozen array. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('default export') || question.body.includes('named records')
+                    || question.body.includes('export should be named')) {
+                    return `Decision: confirmed, the frozen array export is the NAMED export records, via module.exports = { records, byId }; there is no default export and no other exported key. Source file/section: plans/plan.md module export. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('byId') || question.body.includes('Map')
+                    || question.body.includes('lookup helper')) {
+                    return `Decision: confirmed, byId is exactly function byId(id) { return records.find((record) => record.id === id); }; it returns the record object itself or undefined, never throws for any input, uses no Map, and is a separate named export alongside records, NOT a property on the array. Source file/section: plans/plan.md byId. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('55') || question.body.includes('how many records')
+                    || question.body.includes('record count') || question.body.includes('number of records')) {
+                    return `Decision: confirmed, EXACTLY 55 records per module; any other count is not complete. Source file/section: plans/plan.md record count. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('field') || question.body.includes('record shape')
+                    || question.body.includes('record format')) {
+                    return `Decision: confirmed, each record has exactly three fields in this order and no extra fields: id, name, price, one object literal per line. Source file/section: plans/plan.md record fields. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('price')) {
+                    return `Decision: confirmed, prices are plain number literals, never strings, non-negative with at most two decimal places, any value the worker chooses; zero is allowed, there is no price range and no currency symbol, field, or code. Source file/section: plans/plan.md prices. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('name')) {
+                    return `Decision: confirmed, names are invented human-readable catalogue product names with no external catalogue to match, unique within a module only, so the same name in two different modules is allowed. Source file/section: plans/plan.md names. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('header') || question.body.includes('comment')) {
+                    return `Decision: confirmed, the first line of each file is the section header comment // Section: <section> with the section name in lowercase. Source file/section: plans/plan.md header comment. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('import') || question.body.includes('require')
+                    || question.body.includes('barrel') || question.body.includes('index.js')
+                    || question.body.includes('shared helper') || question.body.includes('helper module')) {
+                    return `Decision: confirmed, no imports, no require calls, no index.js barrel file, no shared helper module, no package.json change, and no file created or touched outside src/tables/. Source file/section: plans/plan.md files. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('sort') || question.body.includes('ascending')
+                    || question.body.includes('record order')) {
+                    return `Decision: confirmed, records are in ascending id order, integers 0 through 54 with no gaps and no repeats. Source file/section: plans/plan.md ids. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('currency')) {
+                    return `Decision: confirmed, prices are bare numbers with no currency symbol, field, or code. Source file/section: plans/plan.md prices. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('strict')) {
+                    return `Decision: confirmed, no use strict directive is required; the header comment stays the first line. Source file/section: plans/plan.md formatting. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('frozen') || question.body.includes('freeze')) {
+                    return `Decision: confirmed, freeze the array only via const records = Object.freeze([...]); never freeze individual records. Source file/section: plans/plan.md frozen array. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('node --check') || question.body.includes('validation')
+                    || question.body.includes('verify')) {
+                    return `Decision: confirmed, before finishing run node --check src/tables/tableN.js from the workspace root for each N from 0 to 9, fix any failure before finishing, and verify records.length is 55 in every module. Source file/section: plans/plan.md verification. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('file name')) {
+                    return `Decision: confirmed, files are named exactly src/tables/tableN.js for N 0 to 9, and no other file is created or touched. Source file/section: plans/plan.md files. Question ID: ${question.message_id}. Plan revision: 1.`;
                 }
                 return null;
             };
