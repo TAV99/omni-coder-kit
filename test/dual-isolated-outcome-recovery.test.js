@@ -117,6 +117,17 @@ for (const killed of [true, false]) {
         const session = await client.beginSession({ workspace_root: workspaceRoot, mode: 'auto' });
         await client.registerPlan(session.session_id, {
             plan_path: '.omni/plan.json', plan_sha256: sha('plan'),
+            // Raw omission remains covered by dual-flow-checkpoints.test.js;
+            // supply the neutral policy at this fixture boundary.
+            acceptance_policy: {
+                protocol_version: 1,
+                checks: [],
+                ui: {
+                    required: false,
+                    viewport_widths: [390, 768, 1024, 1440],
+                    reduced_motion_required: true,
+                },
+            },
             tasks: [{ task_id: 'task-1', title: 'Task 1', goal: 'Update heading', owner: 'agy',
                 execution_mode: 'isolated', allowed_files: ['index.html'], deny_patterns: [],
                 validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] }],
