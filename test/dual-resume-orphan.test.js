@@ -8,11 +8,8 @@
 // NEEDS_LEASE_RECOVERY forever instead of re-dispatching implement in the
 // SAME authority attempt with the SAME binding/baseline/allowed_files.
 //
-// BUG 2 (NOT fixed here; owned by the sibling worker): after the same kill,
-// task.correct is rejected with DUAL_INTEGRITY_CORRUPT because correction
-// requires a recorded lastOutcome and a fully released attempt, neither of
-// which a killed turn ever produces. The test below pins that exact rejection
-// so the BUG 1 fix cannot silently change correction semantics.
+// BUG 2: orphan settlement records a failed outcome so bounded correction is
+// accepted before another execution starts in the same attempt.
 //
 // Safety invariants (must hold on base AND after the fix):
 //   - a lease that has NOT expired still means AGY_IN_PROGRESS: no re-dispatch.
@@ -30,6 +27,7 @@ const { runIsolatedTask: runRealIsolatedTask } = require('../lib/dual/isolated-r
 const { createAuthorityStore } = require('../lib/dual/authority-store');
 const { createOrchestratorAdapter: createRealOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
 const { createOperationLifecycleWriter } = require('../lib/dual/operation-lifecycle-writer');
+const { tryReclaimOrphanedTaskLease } = require('../lib/dual/isolated-authority');
 const { requestTaskCorrection } = require('../lib/dual/task-correction');
 
 const { createDiscussionStub } = require('./helpers/dual-discussion-stub');
@@ -220,6 +218,8 @@ test('BUG 1: resume after a daemon kill re-dispatches the orphaned implement in 
     assert.equal(results[0].status, 'AWAITING_CODEX_QC',
         `resume must re-dispatch the orphaned implement, got ${JSON.stringify(results[0])}`);
     const after = store.derive();
+    assert.equal(after.tasks['TASK-1'].lastOutcome, undefined, 'new execution supersedes worker-lost outcome');
+    assert.ok(after.tasks['TASK-1'].isolatedHandoff, 're-dispatch records a clean handoff');
     assert.equal(after.tasks['TASK-1'].isolatedWorkspace.attempt, 1, 're-dispatch keeps the same authority attempt');
     assert.equal(after.tasks['TASK-1'].isolatedWorkspace.reference.bindingSha256, orphan.reference.bindingSha256,
         're-dispatch keeps the same binding');
@@ -255,15 +255,37 @@ test('safety: resume does NOT re-dispatch while a tracked worker process is stil
     assert.equal(calls.length, 0, 'no worker call while the previous worker process is alive');
 });
 
-test('BUG 2 (pinned, NOT fixed here): task.correct after a daemon kill is rejected for the missing lastOutcome', async (t) => {
-    // Sibling worker owns the BUG 2 fix. This test pins the current rejection
-    // (DUAL_INTEGRITY_CORRUPT: correction requires a failed released attempt)
-    // so the BUG 1 fix cannot silently change correction semantics.
+test('BUG 2: settlement after a daemon kill permits bounded correction', async (t) => {
     const input = fixture(t);
     const { store } = seedAuthority(input);
-    await craftOrphan(t, input, store);
-    assert.throws(() => requestTaskCorrection({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+    const orphan = await craftOrphan(t, input, store);
+    createOperationLifecycleWriter(store).settle({ taskId: 'TASK-1', leaseId: orphan.lease.lease_id,
+        operationId: orphan.operationId, outcome: 'failed', orphan: true });
+    store.append({ schema_version: 2, type: 'task.lease.recovered', task_id: 'TASK-1',
+        lease_id: orphan.lease.lease_id, recovery_kind: 'daemon_reclaimed',
+        confirmed_dead_pids: [orphan.controllerPid], operation_id: orphan.operationId, operation_outcome: 'failed' });
+    const settled = store.derive().tasks['TASK-1'];
+    const corrected = requestTaskCorrection({ workspaceRoot: input.workspaceRoot, authorityStore: store,
         sessionId: input.sessionId, planRevision: 1, taskId: 'TASK-1',
-        requestId: 'correct-after-kill', expectedAttempt: 1, reason: 'Retry after daemon kill.' }),
-    (error) => error.code === 'DUAL_INTEGRITY_CORRUPT');
+        requestId: 'correct-after-kill', expectedAttempt: 1, reason: 'Retry after daemon kill.' });
+    assert.equal(corrected.attempt, 2);
+    assert.match(settled.lastOutcome.summary, /\S/);
+    assert.deepEqual(settled.lastOutcome, { attempt: 1, status: 'FAILED', code: 'DUAL_WORKER_LOST',
+        summary: settled.lastOutcome.summary });
+    assert.equal(store.derive().tasks['TASK-1'].previousAttempts[0].outcome.code, 'DUAL_WORKER_LOST');
+});
+
+test('BUG 2: production reclaim records worker loss and permits correction', async (t) => {
+    const input = fixture(t);
+    const { store } = seedAuthority(input);
+    const orphan = await craftOrphan(t, input, store);
+    const lease = Object.values(store.derive().leases).find((candidate) => candidate.lease_id === orphan.lease.lease_id);
+    assert.equal(lease.status, 'expired');
+    assert.equal(tryReclaimOrphanedTaskLease({ authorityStore: store, taskId: 'TASK-1', lease,
+        operationWriter: createOperationLifecycleWriter(store) }), true);
+    assert.equal(store.derive().tasks['TASK-1'].lastOutcome.code, 'DUAL_WORKER_LOST');
+    const corrected = requestTaskCorrection({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+        sessionId: input.sessionId, planRevision: 1, taskId: 'TASK-1',
+        requestId: 'production-correct-after-kill', expectedAttempt: 1, reason: 'Retry after daemon kill.' });
+    assert.equal(corrected.attempt, 2);
 });
