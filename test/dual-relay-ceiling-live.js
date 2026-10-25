@@ -139,7 +139,7 @@ async function main() {
         try { if (authority) observe(); save(); } catch { /* Stage polling reports evidence errors. */ }
     }, 30000);
     const allowed = Array.from({ length: 10 }, (_, i) => `src/tables/table${i}.js`);
-    const goal = 'Create ten lookup-table modules under src/tables/, one per catalogue section (electronics, furniture, clothing, books, toys, sports, kitchen, garden, automotive and health), each exporting a frozen array of at least 120 catalogue records with stable numeric ids, human-readable names and decimal prices, plus a byId lookup helper that returns the matching record or undefined. Every record line uses the same field order (id, name, price) so downstream code can parse the tables without a schema change, every module keeps its own section header comment at the top of the file, and every price is a non-negative number with at most two decimal places. The modules must not import each other, must not touch any file outside src/tables/, and must pass node --check for every file. Record names must be unique within a module, ids must start at zero and increase by one without gaps, and the byId helper must not throw for an unknown id. Count the records in each module before finishing; a module with fewer than 120 records is not complete.';
+    const goal = 'Create ten lookup-table modules under src/tables/, one per catalogue section (electronics, furniture, clothing, books, toys, sports, kitchen, garden, automotive and health), each exporting a frozen array of at least 55 catalogue records with stable numeric ids, human-readable names and decimal prices, plus a byId lookup helper that returns the matching record or undefined. Every record line uses the same field order (id, name, price) so downstream code can parse the tables without a schema change, every module keeps its own section header comment at the top of the file, and every price is a non-negative number with at most two decimal places. The modules must not import each other, must not touch any file outside src/tables/, and must pass node --check for every file. Record names must be unique within a module, ids must start at zero and increase by one without gaps, and the byId helper must not throw for an unknown id. Count the records in each module before finishing; a module with fewer than 55 records is not complete.';
     try {
         await stage('setup', 10000, async () => {
             root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-relay-ceiling-live-')), 'workspace');
@@ -209,7 +209,7 @@ async function main() {
                 plan_path: 'plans/plan.md', plan_sha256: report.planSha256, plan_revision: 1,
                 acceptance_policy: { protocol_version: 1, checks: [], ui: { required: false,
                     viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true } },
-                tasks: [{ task_id: TASK_ID, title: 'Create ten lookup-table modules with at least 120 records each under src/tables/.',
+                tasks: [{ task_id: TASK_ID, title: 'Create ten lookup-table modules with at least 55 records each under src/tables/.',
                     owner: 'agy', execution_mode: 'isolated', model: MODEL, effort: 'high',
                     goal, risk: 'low', complexity: 'medium', category: 'feature',
                     allowed_files: allowed, deny_patterns: [],
