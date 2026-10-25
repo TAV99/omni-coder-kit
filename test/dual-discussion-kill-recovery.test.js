@@ -267,3 +267,35 @@ test('(c3) seed fail do provider exit thật: exit=1 -> terminal failure', async
         /Cannot continue scout: terminal failure at attempt 1/
     );
 });
+
+test('(c4) non-seed error containing timedOut=true: retryable === false -> terminal failure', async (t) => {
+    let callCount = 0;
+    const f = await fixture(t);
+    f.setSessionResolver(async () => {
+        callCount++;
+        if (callCount === 1) {
+            const err = new Error('Network operation timedOut=true');
+            err.details = { conversationIds: {} };
+            throw err;
+        }
+        return f.createDefaultSession();
+    });
+
+    await assert.rejects(
+        f.orch.runPhase('scout', f.taskId),
+        /Network operation timedOut=true/
+    );
+
+    const events = f.readEvents();
+    const failedEvent = events.find((e) => e.type === 'phase.failed' && e.phase === 'scout' && e.attempt === 1);
+    assert.ok(failedEvent);
+    assert.equal(failedEvent.retryable, false);
+
+    const failureEvidence = f.read('raw/scout.1.failure.json');
+    assert.equal(failureEvidence.retryable, false);
+
+    await assert.rejects(
+        f.orch.runPhase('scout', f.taskId),
+        /Cannot continue scout: terminal failure at attempt 1/
+    );
+});

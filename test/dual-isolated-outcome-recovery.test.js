@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const crypto = require('node:crypto');
-const { createAuthorityStore } = require('../lib/dual/authority-store');
+const { createAuthorityStore, DualAuthorityError } = require('../lib/dual/authority-store');
 const { startDaemonServer } = require('../lib/dual/daemon-server');
 const { createDaemonClient } = require('../lib/dual/daemon-client');
 const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
@@ -221,4 +221,297 @@ test('pure classifier preserves worker-lost settlement, implement-only and termi
     assert.equal(authority.isKillCausedExecutionOutcome(task, [
         { ...interruptedReview, retryable: false },
     ]), false);
+});
+
+async function setupKilledTaskFixture(t) {
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dual-outcome-recovery-'));
+    initGitRepo(workspaceRoot);
+    const authorityStore = createAuthorityStore(path.join(workspaceRoot, '.omni/sessions/recovery'));
+    const base = withDiscussion({ workspaceRoot, authorityStore, processRunner: publicDaemonWorker() });
+    let reviewResolves = 0;
+    const discussion = { ...base.discussion, async createIsolatedDiscussion(context) {
+        const child = await base.discussion.createIsolatedDiscussion(context);
+        return { ...child, async sessionResolver(args) {
+            if (args.phase === 'review' && ++reviewResolves === 1) {
+                throw Object.assign(new Error('Codex seed failed (exit=null, timedOut=true, overflowed=false): killed'),
+                    { details: { conversationIds: {} } });
+            }
+            return child.sessionResolver(args);
+        } };
+    } };
+    const daemon = await startDaemonServer({ workspaceRoot, authorityStore,
+        workerModel: 'gemini-3.7-flash-high', workerEffort: 'high', preflightRunner: mockPreflightRunner,
+        orchestrator: createOrchestratorAdapter({ ...base, discussion }),
+        planArtifactVerifier: async (_root, p) => ({ plan_path: p.plan_path, plan_sha256: p.plan_sha256 }),
+    });
+    t.after(async () => { await daemon.close(); fs.rmSync(workspaceRoot, { recursive: true, force: true }); });
+    const client = createDaemonClient({ workspaceRoot, timeoutMs: 5000 });
+    const session = await client.beginSession({ workspace_root: workspaceRoot, mode: 'auto' });
+    await client.registerPlan(session.session_id, {
+        plan_path: '.omni/plan.json', plan_sha256: sha('plan'),
+        acceptance_policy: {
+            protocol_version: 1,
+            checks: [],
+            ui: { required: false, viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true },
+        },
+        tasks: [{ task_id: 'task-1', title: 'Task 1', goal: 'Update heading', owner: 'agy',
+            execution_mode: 'isolated', allowed_files: ['index.html'], deny_patterns: [],
+            validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] }],
+    });
+    await client.resumeSession(session.session_id);
+    const task = await pollTask(client, session.session_id, item => item?.lastOutcome
+        && !Object.values(authorityStore.derive().leases).some(lease => lease.status === 'active'), 'first outcome missing');
+    const { workerRoot } = readTaskBinding(workspaceRoot, task.isolatedWorkspace.reference);
+    const eventsFile = path.join(workerRoot, '.omni/codex-gemini/runs/task-1/events.ndjson');
+    return { workspaceRoot, task, workerRoot, eventsFile };
+}
+
+test('binding/events resolver fails closed for actual corrupt NDJSON events file (P2.1)', async (t) => {
+    const { workspaceRoot, task, eventsFile } = await setupKilledTaskFixture(t);
+    assert.deepEqual(authority.resolveKillDiscussionRecovery(workspaceRoot, task), {
+        recoveryPhase: 'review',
+        recoveryErrorCode: 'DUAL_DISCUSSION_FAILED',
+    });
+    fs.writeFileSync(eventsFile, '{"type":"phase.started"}\n{"type":"phase.failed", malformed\n');
+    assert.equal(authority.resolveKillDiscussionRecovery(workspaceRoot, task), null);
+});
+
+test('binding/events resolver fails closed when task binding mismatches taskId or attempt (gap)', async (t) => {
+    const { workspaceRoot, task } = await setupKilledTaskFixture(t);
+    assert.deepEqual(authority.resolveKillDiscussionRecovery(workspaceRoot, task), {
+        recoveryPhase: 'review',
+        recoveryErrorCode: 'DUAL_DISCUSSION_FAILED',
+    });
+
+    const mismatchedTaskIdTask = { ...task, task_id: 'task-other' };
+    assert.equal(authority.resolveKillDiscussionRecovery(workspaceRoot, mismatchedTaskIdTask), null);
+
+    const mismatchedAttemptTask = {
+        ...task,
+        isolatedWorkspace: { ...task.isolatedWorkspace, attempt: 2 },
+        lastOutcome: { ...task.lastOutcome, attempt: 2 },
+    };
+    assert.equal(authority.resolveKillDiscussionRecovery(workspaceRoot, mismatchedAttemptTask), null);
+});
+
+test('authority-store rejects task.execution.outcome.recovered with DUAL_INTEGRITY_CORRUPT on active lease or TASK_VERIFIED (P2.3)', (t) => {
+    const sessionDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dual-auth-store-p23-'));
+    t.after(() => fs.rmSync(sessionDir, { recursive: true, force: true }));
+    const store = createAuthorityStore(sessionDir);
+
+    const baseline = { kind: 'git', id: 'a'.repeat(40) };
+    store.append({
+        schema_version: 2,
+        workspace_id: 'ws-1',
+        session_id: 'sess-1',
+        plan_revision: 1,
+        expected_baseline: baseline,
+        type: 'session.created',
+        state: 'DISCOVERED',
+        workspace_root: '.',
+        mode: 'auto',
+    });
+
+    store.append({
+        schema_version: 2,
+        workspace_id: 'ws-1',
+        session_id: 'sess-1',
+        plan_revision: 1,
+        expected_baseline: baseline,
+        type: 'capability.result',
+        from_state: 'DISCOVERED',
+        to_state: 'CAPABILITY_SAFE',
+        status: 'PASSED',
+        checks: [
+            { name: 'authority_ledger_integrity', status: 'PASSED' },
+            { name: 'agy_cli_and_model', status: 'PASSED' },
+        ],
+        details: {
+            agy_version: '1.1.19',
+            agy_model: 'gemini-3.7-flash-high',
+        },
+    });
+
+    store.append({
+        schema_version: 2,
+        workspace_id: 'ws-1',
+        session_id: 'sess-1',
+        plan_revision: 1,
+        expected_baseline: baseline,
+        type: 'plan.registered',
+        from_state: 'INTERVIEWING',
+        to_state: 'PLANNED',
+        plan_path: 'plans/plan.md',
+        plan_sha256: 'b'.repeat(64),
+        total_tasks: 1,
+        tasks: [{
+            task_id: 'task-1',
+            title: 'Task 1',
+            goal: 'Goal 1',
+            owner: 'agy',
+            execution_mode: 'isolated',
+            allowed_files: ['index.html'],
+        }],
+    });
+
+    store.append({
+        schema_version: 2,
+        workspace_id: 'ws-1',
+        session_id: 'sess-1',
+        plan_revision: 1,
+        expected_baseline: baseline,
+        type: 'task.routed',
+        task_id: 'task-1',
+        owner: 'agy',
+        authority_state: 'ROUTED',
+        model: 'gemini-3.7-flash-high',
+        effort: 'high',
+        token_budget: 10000,
+        allowed_files: ['index.html'],
+        reason: 'Routing isolated worker',
+    });
+
+    assert.equal(store.derive().sessionState, 'EXECUTING');
+
+    const lease1 = store.acquireLease('task-1', 'agy');
+    store.append({
+        schema_version: 2,
+        type: 'task.execution.started',
+        task_id: 'task-1',
+        lease_id: lease1.lease_id,
+        controller_pid: process.pid,
+    });
+    store.append({
+        schema_version: 2,
+        type: 'task.execution.outcome',
+        task_id: 'task-1',
+        lease_id: lease1.lease_id,
+        attempt: 1,
+        status: 'FAILED',
+        code: 'DUAL_WORKER_EXECUTION_FAILED',
+        summary: 'Worker execution failed',
+    });
+
+    // Case (a): lease1 is still active at event time
+    assert.throws(
+        () => store.append({
+            schema_version: 2,
+            type: 'task.execution.outcome.recovered',
+            task_id: 'task-1',
+            previous_attempt: 1,
+            previous_status: 'FAILED',
+            previous_code: 'DUAL_WORKER_EXECUTION_FAILED',
+            previous_summary: 'Worker execution failed',
+            recovery_phase: 'review',
+            recovery_error_code: 'DUAL_DISCUSSION_FAILED',
+            recovered_at: new Date().toISOString(),
+        }),
+        (err) => {
+            assert.equal(err.name, 'DualAuthorityError');
+            assert.equal(err.code, 'DUAL_INTEGRITY_CORRUPT');
+            assert.match(err.message, /Outcome recovery requires matching failed isolated task evidence and no active lease/);
+            return true;
+        }
+    );
+
+    // Release lease1 to allow legitimate outcome recovery
+    store.releaseLease(lease1.lease_id, 'recovery_settled');
+    const recoveredEvent = store.append({
+        schema_version: 2,
+        type: 'task.execution.outcome.recovered',
+        task_id: 'task-1',
+        previous_attempt: 1,
+        previous_status: 'FAILED',
+        previous_code: 'DUAL_WORKER_EXECUTION_FAILED',
+        previous_summary: 'Worker execution failed',
+        recovery_phase: 'review',
+        recovery_error_code: 'DUAL_DISCUSSION_FAILED',
+        recovered_at: new Date().toISOString(),
+    });
+    assert.equal(recoveredEvent.type, 'task.execution.outcome.recovered');
+
+    // Transition task through complete pipeline to TASK_VERIFIED
+    const lease2 = store.acquireLease('task-1', 'agy');
+    store.append({
+        schema_version: 2,
+        type: 'task.execution.started',
+        task_id: 'task-1',
+        lease_id: lease2.lease_id,
+        controller_pid: process.pid,
+    });
+    store.append({
+        schema_version: 2,
+        type: 'task.workspace.prepared',
+        task_id: 'task-1',
+        lease_id: lease2.lease_id,
+        attempt: 1,
+        reference: {
+            bindingPath: '.omni/runs/dual-workspaces/task-1/1/binding.json',
+            bindingSha256: 'c'.repeat(64),
+            workerBaselineSha256: 'd'.repeat(64),
+            workerContractSha256: 'e'.repeat(64),
+        },
+    });
+    store.append({
+        schema_version: 2,
+        type: 'task.workspace.handoff',
+        task_id: 'task-1',
+        lease_id: lease2.lease_id,
+        attempt: 1,
+        handoff_path: '.omni/runs/dual-workspaces/task-1/1/worker-handoff.json',
+        handoff_sha256: 'f'.repeat(64),
+        result_sha256: '0'.repeat(64),
+    });
+    store.append({
+        schema_version: 2,
+        type: 'gate.result',
+        gate_id: 'isolated-qc-task-1',
+        task_id: 'task-1',
+        status: 'PASSED',
+        evidence_sha256: '0'.repeat(64),
+        reason: 'QC passed',
+        details: {
+            handoff_sha256: 'f'.repeat(64),
+            result_sha256: '0'.repeat(64),
+            integration_receipt: 'receipt-1',
+            commands: [{ program: 'test', exit_code: 0 }],
+        },
+    });
+    store.append({
+        schema_version: 2,
+        type: 'task.completed',
+        task_id: 'task-1',
+        owner: 'agy',
+        authority_state: 'TASK_VERIFIED',
+        modified_files: ['index.html'],
+        diff_fingerprint: '0'.repeat(64),
+        verdict: 'SUCCESS',
+        verified_by: 'codex',
+    });
+    store.releaseLease(lease2.lease_id, 'verified');
+
+    assert.equal(store.derive().tasks['task-1'].state, 'TASK_VERIFIED');
+    assert.ok(!Object.values(store.derive().leases).some(l => l.status === 'active'));
+
+    // Case (b): task is already TASK_VERIFIED
+    assert.throws(
+        () => store.append({
+            schema_version: 2,
+            type: 'task.execution.outcome.recovered',
+            task_id: 'task-1',
+            previous_attempt: 1,
+            previous_status: 'FAILED',
+            previous_code: 'DUAL_WORKER_EXECUTION_FAILED',
+            previous_summary: 'Worker execution failed',
+            recovery_phase: 'review',
+            recovery_error_code: 'DUAL_DISCUSSION_FAILED',
+            recovered_at: new Date().toISOString(),
+        }),
+        (err) => {
+            assert.equal(err.name, 'DualAuthorityError');
+            assert.equal(err.code, 'DUAL_INTEGRITY_CORRUPT');
+            assert.match(err.message, /Outcome recovery requires matching failed isolated task evidence and no active lease/);
+            return true;
+        }
+    );
 });
