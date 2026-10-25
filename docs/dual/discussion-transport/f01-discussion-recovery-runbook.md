@@ -219,3 +219,56 @@ Tái lập OLD cần checkout revision lịch sử trong workspace riêng có nh
 không có hidden cold option trong sản phẩm. NEW vẫn có live gate và cần `--modes=NEW`;
 không dùng kết quả NEW so với OLD fail-closed để tuyên bố tăng tốc. Protocol/số đo Phase 2
 được giữ tại [protocol](f01-phase2-benchmark-protocol.md) và [report](f01-phase2-benchmark-report.md).
+
+
+## 6. Review theo chunk khi diff vượt 16 KB
+
+Review trước đây ghép toàn bộ diff + task brief + ReviewSchema vào một question,
+nên app khoảng 48 KB fail tất định tại trần envelope 16.384 UTF-8 bytes.
+Reviewer không có tool đọc file: không dùng summary thay cho source.
+
+`lib/dual/review-chunking.js` giữ nguyên question khi body vừa trần (kể cả đúng
+16.384 bytes). Chỉ ở đường chunk lớn, JSON Schema được bỏ whitespace bằng
+parse/stringify (không mất nội dung schema), tránh tiêu phí budget invocations.
+Với diff lớn, budget = trần − UTF-8 bytes của toàn bộ input,
+schema, delimiter và context − 1.024 bytes dự phòng. Đo lại mỗi body hoàn chỉnh.
+Ưu tiên biên file, chỉ cắt ở biên dòng; git header đầu đi cùng hunk đầu.
+Context file lặp nằm ngoài delimiter diff, không thuộc byte-range bao phủ.
+Dòng/header group hoặc overhead không vừa budget → `LIMIT_EXCEEDED`, fail-closed.
+Schema correction chỉ được rút gọn diagnostic bổ sung theo Unicode character;
+input/diff gốc luôn giữ nguyên. Correction overhead không vừa → không gửi tiếp.
+
+Artifacts trong run directory, với attempt N và chunk K:
+
+- `raw/review.N.input.md`, `.schema.json`: giữ nguyên task input/schema cũ.
+- `raw/review.N.diff.txt`: diff gốc; `raw/review.N.chunks.json`: manifest.
+- `raw/review.N.chunk-K.diff.txt`: lát diff nguyên byte.
+- `raw/review.N.chunk-K.input.md`: full question bất biến.
+- `raw/review.N.chunk-K.stdout.json`, `.stderr.txt`, `.meta.json`: kết quả,
+  hash input, message IDs và correction/recovery evidence riêng từng chunk.
+
+Manifest ghi file artifact, range nửa mở `[byte_start, byte_end)`, SHA-256,
+input file/hash và body byte count. Trước khi publish, đọc lại artifacts,
+kiểm tra ranges liên tục và nối chunks khớp đúng diff gốc. Completion event
+ghi manifest hash ở trường riêng `review_manifest_hash` — KHÔNG nằm trong
+`artifact_hashes`, vì `validatePhaseArtifactHashes` bắt `artifact_hashes`
+của phase review khớp đúng `['review.json']`. Recovery cũng kiểm tra bằng
+chứng này;
+stdout của riêng một chunk không thể được nhận là review hoàn chỉnh.
+Run bị gián đoạn trước aggregate trả `DUAL_REVIEW_INCOMPLETE` và ghi terminal
+failure; không tự phát lại các question có outcome chưa được đối soát.
+
+Mọi chunk phải pass ReviewSchema và khớp task/baseline. Chỉ ghi aggregate stdout
+và `review.json` sau khi tất cả thành công. Giữ mọi findings/checks/summary;
+recommendation lấy `REJECT > NEEDS_FIX > APPROVE`, risk lấy
+`CRITICAL > HIGH > MEDIUM > LOW`. Một chunk trả nguyên payload như trước.
+Kết quả tổng hợp tiếp tục pass ReviewSchema và đi qua Codex QC hiện tại.
+
+Không đổi trần envelope/session/invocations/events/journal, scout, control-plane
+hay model/effort. Diff cực lớn vẫn có thể chạm budget session và fail-closed;
+chưa bổ sung session rollover. Test dùng provider giả định tất định, Git thật,
+stdin không dùng đặt `ignore`, không cần sandbox lồng nhau hoặc live credentials:
+
+```sh
+node --test --test-isolation=none test/dual-review-chunking.test.js
+```
