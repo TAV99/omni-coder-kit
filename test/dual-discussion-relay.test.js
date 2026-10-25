@@ -304,7 +304,7 @@ describe('dual discussion functional relay (Task 4: R01, R03, R06-R11, R15-R20)'
         await relay.close();
     });
 
-    it('R15 & R18: rejects concurrent dispatch of different IDs with OWNER_BUSY and enforces 12-invocation ceiling', async () => {
+    it('R15 & R18: rejects concurrent dispatch of different IDs with OWNER_BUSY and enforces 24-invocation ceiling', async () => {
         const nowRef = { value: 1_700_000_000_000 };
         const { options, questionEnvelope } = createFixtures(stateDir, nowRef);
 
@@ -361,15 +361,16 @@ describe('dual discussion functional relay (Task 4: R01, R03, R06-R11, R15-R20)'
         assert.deepEqual(t1Same, t1);
         assert.equal(t1.discussion_result, 'available');
 
-        // Continue up to 12 invocations total
+        // Continue up to 24 invocations total (raised ceiling: 15–18 review
+        // chunks + 1 shared scout turn + retry headroom must fit one relay)
         let nextId = t1.response_message_id;
-        for (let turn = 2; turn <= 12; turn++) {
+        for (let turn = 2; turn <= 24; turn++) {
             const res = await relay.dispatch(nextId);
             assert.equal(res.discussion_result, 'available');
             nextId = res.response_message_id;
         }
 
-        // 13th dispatch exceeds ceiling 12 -> LIMIT_EXCEEDED
+        // 25th dispatch exceeds ceiling 24 -> LIMIT_EXCEEDED (loop protection intact)
         await assert.rejects(
             relay.dispatch(nextId),
             { code: 'LIMIT_EXCEEDED' },
@@ -378,7 +379,7 @@ describe('dual discussion functional relay (Task 4: R01, R03, R06-R11, R15-R20)'
         await relay.close();
     });
 
-    it('P2 receive boundary & maxInvocations dispatch-vs-sequence boundary (maxInvocations: 1 and 12 receive+dispatch turns)', async () => {
+    it('P2 receive boundary & maxInvocations dispatch-vs-sequence boundary (maxInvocations: 1 and 24 receive+dispatch turns)', async () => {
         const dirOne = path.join(tempRoot, 'max-inv-1');
         const nowRef = { value: 1_700_000_000_000 };
         const f1 = createFixtures(dirOne, nowRef);
@@ -412,50 +413,50 @@ describe('dual discussion functional relay (Task 4: R01, R03, R06-R11, R15-R20)'
         );
         await relay1.close();
 
-        const dirTwelve = path.join(tempRoot, 'max-inv-12-pairs');
-        const f12 = createFixtures(dirTwelve, nowRef);
-        const relay12 = await createDiscussionRelay(f12.options);
+        const dirTwentyFour = path.join(tempRoot, 'max-inv-24-pairs');
+        const f24 = createFixtures(dirTwentyFour, nowRef);
+        const relay24 = await createDiscussionRelay(f24.options);
 
-        for (let inv = 1; inv <= 12; inv++) {
+        for (let inv = 1; inv <= 24; inv++) {
             const qSeq = (inv - 1) * 2 + 1;
             const qMsgId = `q-pair-${inv}`;
-            await relay12.receive({
+            await relay24.receive({
                 schema_version: 1,
                 message_id: qMsgId,
-                sender_ref: f12.refA,
-                recipient_ref: f12.refB,
+                sender_ref: f24.refA,
+                recipient_ref: f24.refB,
                 sequence: qSeq,
                 kind: 'question',
                 body: `Question ${inv}`,
                 created_at: nowRef.value,
                 expires_at: nowRef.value + 300_000,
             });
-            const turn = await relay12.dispatch(qMsgId);
+            const turn = await relay24.dispatch(qMsgId);
             assert.equal(turn.provider, 'succeeded');
             assert.equal(turn.discussion_result, 'available');
             assert.ok(turn.response_message_id);
         }
 
-        const view12 = await relay12.inspect();
-        assert.equal(view12.invocation_count, 12);
-        assert.equal(view12.messages.length, 24);
-        assert.equal(view12.messages[23].sequence, 24);
+        const view24 = await relay24.inspect();
+        assert.equal(view24.invocation_count, 24);
+        assert.equal(view24.messages.length, 48);
+        assert.equal(view24.messages[47].sequence, 48);
 
-        await relay12.receive({
+        await relay24.receive({
             schema_version: 1,
-            message_id: 'q-pair-13',
-            sender_ref: f12.refA,
-            recipient_ref: f12.refB,
-            sequence: 25,
+            message_id: 'q-pair-25',
+            sender_ref: f24.refA,
+            recipient_ref: f24.refB,
+            sequence: 49,
             kind: 'question',
-            body: 'Question 13 exceeding maxInvocations on dispatch',
+            body: 'Question 25 exceeding maxInvocations on dispatch',
             created_at: nowRef.value,
             expires_at: nowRef.value + 300_000,
         });
         await assert.rejects(
-            relay12.dispatch('q-pair-13'),
+            relay24.dispatch('q-pair-25'),
             { code: 'LIMIT_EXCEEDED' },
         );
-        await relay12.close();
+        await relay24.close();
     });
 });

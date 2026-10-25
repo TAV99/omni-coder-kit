@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 
 const {
+    CEILINGS,
     DiscussionError,
     resolveLimits,
     validateBinding,
@@ -169,9 +170,17 @@ describe('dual discussion contracts (Task 1: R03-R07, R18, R21)', () => {
         badProto.body = 'ok';
         assert.throws(() => validatePayload(badProto), { code: 'INVALID_INPUT' });
 
-        // Limits ceiling cannot be increased by caller
+        // Limits ceiling cannot be increased by caller (ceiling is now 24, not 12:
+        // this is an intentional, approved behaviour change — see relay-ceiling
+        // commit message. 13 is allowed; 25 still throws LIMIT_EXCEEDED.)
+        assert.equal(CEILINGS.maxInvocations, 24);
+        assert.equal(CEILINGS.maxTurns, 24);
+        assert.equal(resolveLimits({ maxInvocations: 13 }).maxInvocations, 13);
+        assert.equal(resolveLimits({ maxInvocations: 13 }).maxTurns, 13);
+        assert.equal(resolveLimits({ maxTurns: 24 }).maxInvocations, 24);
+        assert.throws(() => resolveLimits({ maxInvocations: 25 }), { code: 'LIMIT_EXCEEDED' });
+        assert.throws(() => resolveLimits({ maxTurns: 25 }), { code: 'LIMIT_EXCEEDED' });
         assert.throws(() => resolveLimits({ maxBodyBytes: 16385 }), { code: 'LIMIT_EXCEEDED' });
-        assert.throws(() => resolveLimits({ maxInvocations: 13 }), { code: 'LIMIT_EXCEEDED' });
         assert.throws(() => resolveLimits({ maxEvents: 257 }), { code: 'LIMIT_EXCEEDED' });
         assert.throws(() => resolveLimits({ maxJournalBytes: 8 * 1024 * 1024 + 1 }), { code: 'LIMIT_EXCEEDED' });
         assert.throws(() => resolveLimits({ ttlMs: 900001 }), { code: 'LIMIT_EXCEEDED' });
