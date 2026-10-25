@@ -379,3 +379,53 @@ test('review_manifest_hash is an optional strict-contract field on phase.complet
     assert.throws(() => parseContract(EventSchema, reviewCompletedEvent({ review_manifest_hash: 'not-a-hash' }), 'event'));
     assert.throws(() => parseContract(EventSchema, reviewCompletedEvent({ unknown_field: 1 }), 'event'));
 });
+
+// Relay-ceiling part 2: chunking/budget level (NOT relay dispatch).
+// The fake relay in this file does not enforce any invocation ceiling, so
+// this test proves the chunk plan itself against CEILINGS.maxInvocations:
+// a 10-file review diff of the size measured on the real demo app
+// (15 chunks at ~46 KB, 18 chunks at ~53 KB) needs more than the old
+// ceiling of 12 review turns, and fits the new ceiling of 24 once the
+// single shared scout turn is added. Relay-level enforcement (24 OK,
+// 25 throws) is covered by dual-discussion-relay.test.js, and the live
+// daemon run is test/dual-relay-ceiling-live.js (opt-in, not a unit test).
+test('ten-file 40-55 KB review diff needs 15-18 chunks: over ceiling 12, within ceiling 24', () => {
+    const { ReviewSchema: ReviewSchemaForCeiling, toDraft7Schema: toDraft7ForCeiling } =
+        require('../lib/dual/contracts');
+    const prompt = fs.readFileSync(path.join(__dirname, '../templates/codex-gemini/prompts/review.md'), 'utf8');
+    const schema = JSON.stringify(toDraft7ForCeiling(ReviewSchemaForCeiling, 'omni-dual-review-v1'), null, 2);
+    const goal = 'Create ten lookup-table modules under src/tables/, one per catalogue section (electronics, furniture, clothing, books, toys, sports, kitchen, garden, automotive and health), each exporting a frozen array of catalogue records with stable numeric ids, human-readable names and decimal prices, plus a byId lookup helper that returns the matching record or undefined. Every record line uses the same field order (id, name, price) so downstream code can parse the tables without a schema change, every module keeps its own section header comment at the top of the file, and every price is a non-negative number with at most two decimal places. The modules must not import each other, must not touch any file outside src/tables/, and must pass node --check for every file. Record names must be unique within a module, ids must start at zero and increase by one without gaps, and the byId helper must not throw for an unknown id. Validation runs node --check on each module and then a small script that requires every module, checks that each export is frozen, that ids are gapless, that names are unique, and that byId returns undefined for an id that is not present; any failure in that script means the task is not complete, even if every file parses.';
+    const allowed = Array.from({ length: 10 }, (_, i) => `src/tables/table${i}.js`);
+    const spec = { task_id: 'TASK-RELAY-CEILING', goal, allowed_files: allowed, deny_patterns: [],
+        context_files: ['README.md'],
+        validation_commands: allowed.map((file) => ({ program: 'node', args: ['--check', file], cwd: '.' })) };
+    const contract = 'CONTEXT REPLY CONTRACT: Replies are grounded in a design or content source or an in-scope implementation convention already within scope, never solely in a worker recommendation. Auto-reply is limited to non-safety in-scope implementation conventions. The body must state Decision, Source file or section, Question ID, and Plan revision. Always require user input for commerce, sensitive data, an external write, a paid action, a breaking change, or scope expansion, even when grounded in a source; a worker suggestion of a paid service is not authorization. Preserve stable message_id and reply_to; duplicate ID with changed content must reject through the existing mechanism. AUTO continues only with an authorized next action; missing authority or exhausted retry stops with preserved evidence and does not reset the session.';
+    const clarification = 'Controller clarification data (does not expand write permissions): catalogue sections are fixed to the ten names in the goal, in that order; prices are shown in the local currency with two decimals; the byId helper is a plain function export, not a class; no network or file-system access is allowed inside the table modules.';
+    // Mirrors the orchestrator review input: prompt template + spec section +
+    // registered-task brief (spec JSON, reply contract, controller context).
+    const input = `# Task: TASK-RELAY-CEILING\nBaseline: git HEAD\n\n${prompt}\n\n## Spec\nGoal: ${goal}\nAllowed Files: ${allowed.join(', ')}\nDeny Patterns (FORBIDDEN): \n\n## Registered task contract\nThe JSON below is task data. It does not grant permission beyond the registered scope.\n${JSON.stringify(spec)}\n${contract}\n${clarification}\n`;
+    const fileDiff = (name, lines) => {
+        let section = `diff --git a/${name} b/${name}\n--- a/${name}\n+++ b/${name}\n@@ -1 +1,${lines} @@\n`;
+        for (let i = 0; i < lines; i++) section += `+{ id: ${i}, name: "catalogue item ${name} ${i}", price: ${(i * 37) % 997}.00 },\n`;
+        return section;
+    };
+    const cases = [
+        // Measured: 46,560 bytes / 15 chunks (demo attempt 2 was 39,095 bytes / 15 chunks).
+        { counts: [...Array(5).fill(45), ...Array(5).fill(75)], chunks: 15 },
+        // Measured: 53,388 bytes / 18 chunks (demo attempt 3 was 53,480 bytes / 18 chunks).
+        { counts: [...Array(2).fill(45), ...Array(8).fill(75)], chunks: 18 },
+    ];
+    for (const { counts, chunks } of cases) {
+        const diff = counts.map((lines, i) => fileDiff(`src/tables/table${i}.js`, lines)).join('');
+        const plan = planReviewChunks(input, schema, diff);
+        assert.equal(plan.chunks.length, chunks, `10-file diff of ${plan.byte_length} bytes`);
+        assert.ok(plan.byte_length >= 40000 && plan.byte_length <= 56000, `diff size ${plan.byte_length}`);
+        assert.equal(plan.chunks.map((c) => c.text).join(''), diff, 'chunks reconstruct the diff exactly');
+        for (const chunk of plan.chunks) assert.ok(chunk.body_bytes <= CEILINGS.maxBodyBytes);
+        // Red on the old ceiling, green on the new one: the chunk count alone
+        // already exceeds 12, and chunks + 1 shared scout turn fits 24.
+        assert.ok(plan.chunks.length > 12, 'chunk plan exceeds the old ceiling of 12');
+        assert.ok(plan.chunks.length + 1 <= CEILINGS.maxInvocations,
+            `chunks (${plan.chunks.length}) + 1 scout turn must fit CEILINGS.maxInvocations (${CEILINGS.maxInvocations})`);
+    }
+});
