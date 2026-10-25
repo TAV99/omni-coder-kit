@@ -260,6 +260,23 @@ async function main() {
                 if (question.body.includes('price')) {
                     return `Decision: confirmed, prices are plain number literals, never strings, non-negative with at most two decimal places, any value the worker chooses; zero is allowed, there is no price range and no currency symbol, field, or code. Source file/section: plans/plan.md prices. Question ID: ${question.message_id}. Plan revision: 1.`;
                 }
+                // Run-60 mappings (coordinator decision, fixture scaffolding
+                // only, no new product/design decision): the directory
+                // question is answered by the pinned plan's file paths
+                // (create src/tables if missing, content unchanged), and the
+                // naming-conventions question routes to the pinned name
+                // decision (no separate convention exists). Both branches
+                // must precede the broad 'name' branch: 'naming' does not
+                // contain the substring 'name', so without its own branch
+                // the naming question fell through to null and failed
+                // closed in run-59; the directory branch sits before the
+                // file/import branches so no broader branch can swallow it.
+                if (question.body.includes('directory')) {
+                    return `Decision: confirmed, create the src/tables directory first if it does not already exist when writing files (mkdir -p src/tables), then write exactly src/tables/tableN.js for N 0 to 9; creating the directory changes no file content, record, or diff size. Source file/section: plans/plan.md files. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
+                if (question.body.includes('naming convention') || question.body.includes('naming')) {
+                    return `Decision: confirmed, there is no separate naming convention beyond the pinned decision: names are invented human-readable catalogue product names with no external catalogue to match, unique within a module only, so the same name in two different modules is allowed. Source file/section: plans/plan.md names. Question ID: ${question.message_id}. Plan revision: 1.`;
+                }
                 // P1 fix: the file-name branch must precede the broad 'name'
                 // branch — every "file name(s)" question contains "name", so
                 // in the old order it was unreachable and received the wrong
