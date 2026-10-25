@@ -29,6 +29,8 @@ const { createOrchestratorAdapter: createRealOrchestratorAdapter } = require('..
 const { createOperationLifecycleWriter } = require('../lib/dual/operation-lifecycle-writer');
 const { tryReclaimOrphanedTaskLease } = require('../lib/dual/isolated-authority');
 const { requestTaskCorrection } = require('../lib/dual/task-correction');
+const { listOperations } = require('../lib/dual/operation-lifecycle');
+const { confirmedDead, confirmedProcessGroupDead } = require('../lib/dual/task-processes');
 
 const { createDiscussionStub } = require('./helpers/dual-discussion-stub');
 
@@ -159,7 +161,14 @@ async function waitFor(condition, timeoutMs, label) {
 // owned by a dead controller pid + an active (never settled) operation +
 // implement phase.started with no outcome. When `leaseTtlMs` elapses the
 // lease reads as expired, which is the orphan resume must recover from.
-async function craftOrphan(t, input, store, { leaseTtlMs = 5000, liveChild = false } = {}) {
+async function craftOrphan(t, input, store, {
+    leaseTtlMs = 5000,
+    liveChild = false,
+    extraProcessPid = null,
+    pendingChild = false,
+    withHandoff = false,
+    withOutcome = false,
+} = {}) {
     const controllerPid = await deadPid();
     const lease = store.acquireLease('TASK-1', 'agy', { ttlMs: leaseTtlMs });
     store.append({ schema_version: 2, type: 'task.execution.started', task_id: 'TASK-1',
@@ -196,6 +205,29 @@ async function craftOrphan(t, input, store, { leaseTtlMs = 5000, liveChild = fal
         store.append({ schema_version: 2, type: 'task.process.started', task_id: 'TASK-1',
             lease_id: lease.lease_id, process_id: processId, pid: trackedChild.pid });
     }
+    if (extraProcessPid) {
+        const processId = crypto.randomUUID();
+        store.append({ schema_version: 2, type: 'task.process.intent', task_id: 'TASK-1',
+            lease_id: lease.lease_id, process_id: processId });
+        store.append({ schema_version: 2, type: 'task.process.started', task_id: 'TASK-1',
+            lease_id: lease.lease_id, process_id: processId, pid: extraProcessPid });
+    }
+    if (pendingChild) {
+        const processId = crypto.randomUUID();
+        store.append({ schema_version: 2, type: 'task.process.intent', task_id: 'TASK-1',
+            lease_id: lease.lease_id, process_id: processId });
+    }
+    if (withHandoff) {
+        store.append({ schema_version: 2, type: 'task.workspace.handoff', task_id: 'TASK-1',
+            lease_id: lease.lease_id, attempt: 1, handoff_path: 'mock/handoff.json',
+            handoff_sha256: crypto.createHash('sha256').update('handoff').digest('hex'),
+            result_sha256: crypto.createHash('sha256').update('result').digest('hex') });
+    }
+    if (withOutcome) {
+        store.append({ schema_version: 2, type: 'task.execution.outcome', task_id: 'TASK-1',
+            lease_id: lease.lease_id, attempt: 1, status: 'FAILED', code: 'DUAL_WORKER_EXECUTION_FAILED',
+            summary: 'Prior failure' });
+    }
     if (leaseTtlMs < 120000) {
         await waitFor(() => {
             const derived = store.derive();
@@ -203,8 +235,12 @@ async function craftOrphan(t, input, store, { leaseTtlMs = 5000, liveChild = fal
         }, 30000, 'orphan lease to expire');
     }
     const derived = store.derive();
-    assert.equal(derived.tasks['TASK-1'].isolatedHandoff, undefined, 'orphan must have no handoff');
-    assert.equal(derived.tasks['TASK-1'].lastOutcome, undefined, 'orphan must have no lastOutcome');
+    if (!withHandoff) {
+        assert.equal(derived.tasks['TASK-1'].isolatedHandoff, undefined, 'orphan must have no handoff');
+    }
+    if (!withOutcome) {
+        assert.equal(derived.tasks['TASK-1'].lastOutcome, undefined, 'orphan must have no lastOutcome');
+    }
     return { lease, operationId, reference, hangCalls, trackedChild, controllerPid };
 }
 
@@ -228,6 +264,15 @@ test('BUG 1: resume after a daemon kill re-dispatches the orphaned implement in 
     assert.deepEqual(after.tasks['TASK-1'].allowed_files, ['index.js'], 're-dispatch keeps allowed_files');
     assert.equal(Object.values(after.leases).some((lease) => lease.lease_id === orphan.lease.lease_id && lease.status !== 'released'),
         false, 'the orphaned lease must be settled, not left unreleased');
+    assert.equal(after.leases[orphan.lease.lease_id]?.status, 'released', 'the orphaned lease status must directly be released');
+    const events = store.readEvents();
+    const recoveredEvent = events.find((e) => e.type === 'task.lease.recovered' && e.lease_id === orphan.lease.lease_id);
+    assert.ok(recoveredEvent, 'must record task.lease.recovered event');
+    assert.equal(recoveredEvent.recovery_kind, 'daemon_reclaimed', 'recovery kind must be daemon_reclaimed');
+    const recoveredIndex = events.indexOf(recoveredEvent);
+    const nextExecution = events.find((e, idx) => idx > recoveredIndex && e.type === 'task.execution.started' && e.task_id === 'TASK-1');
+    assert.ok(nextExecution, 'task.execution.started must follow task.lease.recovered in journal');
+    assert.equal(after.tasks['TASK-1'].executions[nextExecution.lease_id].attempt, 1, 'resumed execution must be attempt 1');
     assert.ok(calls.some((invocation) => invocation.args.some((arg) => arg.startsWith('-p=') && arg.includes('implement phase'))),
         'resume must actually invoke implement again');
 });
@@ -250,8 +295,8 @@ test('safety: resume does NOT re-dispatch while a tracked worker process is stil
     const calls = [];
     const results = await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
         worker: fakeWorker(calls) }).runTask(store.derive());
-    assert.notEqual(results[0].status, 'AWAITING_CODEX_QC',
-        'a live worker process must never be duplicated by a second dispatch');
+    assert.equal(results[0].status, 'NEEDS_LEASE_RECOVERY',
+        'a live worker process must return NEEDS_LEASE_RECOVERY and never be duplicated');
     assert.equal(calls.length, 0, 'no worker call while the previous worker process is alive');
 });
 
@@ -288,4 +333,237 @@ test('BUG 2: production reclaim records worker loss and permits correction', asy
         sessionId: input.sessionId, planRevision: 1, taskId: 'TASK-1',
         requestId: 'production-correct-after-kill', expectedAttempt: 1, reason: 'Retry after daemon kill.' });
     assert.equal(corrected.attempt, 2);
+    assert.equal(store.derive().tasks['TASK-1'].previousAttempts[0].outcome.code, 'DUAL_WORKER_LOST');
+});
+
+test('Regression P1-1: live detached descendant blocks reclaim; reclaim proceeds once group dies', async (t) => {
+    const input = fixture(t);
+    const { store } = seedAuthority(input);
+    const grandchildPidFile = path.join(input.workspaceRoot, 'grandchild.pid');
+
+    const grandchildScript = `
+const fs = require('node:fs');
+fs.writeFileSync(${JSON.stringify(grandchildPidFile)}, String(process.pid) + '\\n');
+setTimeout(() => {}, 60000);
+`;
+    const parentScript = `
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const grandchild = spawn(process.execPath, ['-e', ${JSON.stringify(grandchildScript)}], { stdio: 'ignore' });
+grandchild.unref();
+const pidFile = ${JSON.stringify(grandchildPidFile)};
+const check = () => {
+    if (fs.existsSync(pidFile) && fs.readFileSync(pidFile, 'utf8').trim().length > 0) {
+        process.exit(0);
+    }
+    setTimeout(check, 20);
+};
+check();
+`;
+    const parent = spawn(process.execPath, ['-e', parentScript], {
+        detached: true,
+        stdio: 'ignore',
+    });
+    const parentPid = parent.pid;
+
+    await waitFor(() => fs.existsSync(grandchildPidFile) && fs.readFileSync(grandchildPidFile, 'utf8').trim().length > 0,
+        15000, 'grandchild pid file');
+    const grandchildPid = Number(fs.readFileSync(grandchildPidFile, 'utf8').trim());
+
+    await waitFor(() => confirmedDead(parentPid), 15000, 'parent process to exit');
+
+    t.after(() => {
+        try {
+            if (grandchildPid && !confirmedDead(grandchildPid)) {
+                process.kill(grandchildPid, 'SIGKILL');
+            }
+        } catch {}
+        try {
+            if (parentPid && !confirmedProcessGroupDead(parentPid)) {
+                process.kill(-parentPid, 'SIGKILL');
+            }
+        } catch {}
+    });
+
+    const orphan = await craftOrphan(t, input, store, { extraProcessPid: parentPid });
+
+    // (i) Confirm parent is ESRCH dead but group is alive
+    assert.equal(confirmedDead(parentPid), true, 'parent process must be dead');
+    assert.equal(confirmedProcessGroupDead(parentPid), false, 'process group must still be alive via grandchild');
+
+    // (ii) tryReclaimOrphanedTaskLease directly and via orchestrator resume
+    const leaseBefore = store.derive().leases[orphan.lease.lease_id];
+    const directReclaim = tryReclaimOrphanedTaskLease({
+        authorityStore: store,
+        taskId: 'TASK-1',
+        lease: leaseBefore,
+        operationWriter: createOperationLifecycleWriter(store),
+    });
+    assert.equal(directReclaim, false, 'tryReclaimOrphanedTaskLease must return false while process group is alive');
+
+    const calls = [];
+    const resumeResults = await createOrchestratorAdapter({
+        workspaceRoot: input.workspaceRoot,
+        authorityStore: store,
+        worker: fakeWorker(calls),
+    }).runTask(store.derive());
+    assert.equal(resumeResults[0].status, 'NEEDS_LEASE_RECOVERY', 'resume must answer NEEDS_LEASE_RECOVERY');
+    assert.equal(calls.length, 0, 'no worker calls while process group is alive');
+
+    const derivedWhileBlocked = store.derive();
+    assert.equal(derivedWhileBlocked.tasks['TASK-1'].lastOutcome, undefined, 'no lastOutcome while process group is alive');
+    assert.equal(derivedWhileBlocked.leases[orphan.lease.lease_id].status, 'expired', 'lease must remain expired');
+    assert.equal(derivedWhileBlocked.leases[orphan.lease.lease_id].released_at, null, 'lease must not be released');
+    const events = store.readEvents();
+    assert.equal(events.some((e) => e.type === 'task.lease.recovered'), false, 'no task.lease.recovered event while process group is alive');
+    const ops = listOperations({ authorityStore: store, taskId: 'TASK-1', leaseId: orphan.lease.lease_id });
+    const op = ops.find((o) => o.operation_id === orphan.operationId);
+    assert.ok(op && op.active && !op.settled, 'operation must remain active and unsettled');
+
+    // (iii) kill grandchild, wait for group ESRCH dead, call tryReclaim again
+    process.kill(grandchildPid, 'SIGKILL');
+    await waitFor(() => confirmedProcessGroupDead(parentPid), 15000, 'process group to die after grandchild kill');
+
+    const leaseExpired = store.derive().leases[orphan.lease.lease_id];
+    const secondReclaim = tryReclaimOrphanedTaskLease({
+        authorityStore: store,
+        taskId: 'TASK-1',
+        lease: leaseExpired,
+        operationWriter: createOperationLifecycleWriter(store),
+    });
+    assert.equal(secondReclaim, true, 'tryReclaimOrphanedTaskLease must proceed after process group is dead');
+    assert.equal(store.derive().tasks['TASK-1'].lastOutcome?.code, 'DUAL_WORKER_LOST');
+});
+
+test('reclaim called a second time returns false', async (t) => {
+    const input = fixture(t);
+    const { store } = seedAuthority(input);
+    const orphan = await craftOrphan(t, input, store);
+    const operationWriter = createOperationLifecycleWriter(store);
+    const lease = Object.values(store.derive().leases).find((candidate) => candidate.lease_id === orphan.lease.lease_id);
+    assert.equal(lease.status, 'expired');
+    const firstReclaim = tryReclaimOrphanedTaskLease({ authorityStore: store, taskId: 'TASK-1', lease, operationWriter });
+    assert.equal(firstReclaim, true);
+    assert.equal(store.derive().tasks['TASK-1'].lastOutcome?.code, 'DUAL_WORKER_LOST');
+    assert.equal(store.derive().leases[orphan.lease.lease_id]?.status, 'released');
+
+    // Second call with the newly derived (released) lease
+    const leaseAfter = store.derive().leases[orphan.lease.lease_id];
+    assert.equal(tryReclaimOrphanedTaskLease({ authorityStore: store, taskId: 'TASK-1', lease: leaseAfter, operationWriter }), false);
+
+    // Second call with the original lease object (now blocked by task outcome)
+    assert.equal(tryReclaimOrphanedTaskLease({ authorityStore: store, taskId: 'TASK-1', lease, operationWriter }), false);
+});
+
+test('reclaim refused when a tracked child process is pending', async (t) => {
+    const input = fixture(t);
+    const { store } = seedAuthority(input);
+    const orphan = await craftOrphan(t, input, store, { pendingChild: true });
+    const operationWriter = createOperationLifecycleWriter(store);
+    const lease = store.derive().leases[orphan.lease.lease_id];
+    assert.equal(lease.status, 'expired');
+    const result = tryReclaimOrphanedTaskLease({ authorityStore: store, taskId: 'TASK-1', lease, operationWriter });
+    assert.equal(result, false, 'reclaim must return false when child process intent is pending without started');
+    assert.equal(store.derive().tasks['TASK-1'].lastOutcome, undefined);
+    assert.equal(store.derive().leases[orphan.lease.lease_id]?.status, 'expired');
+});
+
+test('reclaim refused when task already has handoff', async (t) => {
+    const input = fixture(t);
+    const { store } = seedAuthority(input);
+    const orphan = await craftOrphan(t, input, store, { withHandoff: true });
+    const operationWriter = createOperationLifecycleWriter(store);
+    const lease = store.derive().leases[orphan.lease.lease_id];
+    assert.equal(lease.status, 'expired');
+    assert.ok(store.derive().tasks['TASK-1'].isolatedHandoff);
+    const result = tryReclaimOrphanedTaskLease({ authorityStore: store, taskId: 'TASK-1', lease, operationWriter });
+    assert.equal(result, false, 'reclaim must return false when task already has isolated handoff');
+    assert.equal(store.derive().leases[orphan.lease.lease_id]?.status, 'expired');
+});
+
+test('reclaim refused when task already has outcome', async (t) => {
+    const input = fixture(t);
+    const { store } = seedAuthority(input);
+    const orphan = await craftOrphan(t, input, store, { withOutcome: true });
+    const operationWriter = createOperationLifecycleWriter(store);
+    const lease = store.derive().leases[orphan.lease.lease_id];
+    assert.equal(lease.status, 'expired');
+    assert.ok(store.derive().tasks['TASK-1'].lastOutcome);
+    const result = tryReclaimOrphanedTaskLease({ authorityStore: store, taskId: 'TASK-1', lease, operationWriter });
+    assert.equal(result, false, 'reclaim must return false when task already has outcome');
+    assert.equal(store.derive().leases[orphan.lease.lease_id]?.status, 'expired');
+});
+
+test('attempt-2 orphan reclaim succeeds and records DUAL_WORKER_LOST for attempt 2', async (t) => {
+    const input = fixture(t);
+    const { store } = seedAuthority(input);
+    const orphan1 = await craftOrphan(t, input, store);
+    const operationWriter = createOperationLifecycleWriter(store);
+    const lease1 = store.derive().leases[orphan1.lease.lease_id];
+    assert.equal(tryReclaimOrphanedTaskLease({ authorityStore: store, taskId: 'TASK-1', lease: lease1, operationWriter }), true);
+
+    const corrected = requestTaskCorrection({
+        workspaceRoot: input.workspaceRoot,
+        authorityStore: store,
+        sessionId: input.sessionId,
+        planRevision: 1,
+        taskId: 'TASK-1',
+        requestId: 'production-correct-attempt-1',
+        expectedAttempt: 1,
+        reason: 'Retry after daemon kill in attempt 1.',
+    });
+    assert.equal(corrected.attempt, 2);
+
+    // Build attempt 2 orphan state following the craftOrphan journal pattern:
+    const controllerPid2 = await deadPid();
+    const lease2 = store.acquireLease('TASK-1', 'agy', { ttlMs: 1000 });
+    store.append({
+        schema_version: 2,
+        type: 'task.execution.started',
+        task_id: 'TASK-1',
+        lease_id: lease2.lease_id,
+        controller_pid: controllerPid2,
+    });
+    const operationId2 = crypto.randomUUID();
+    operationWriter.begin({ taskId: 'TASK-1', leaseId: lease2.lease_id, operationId: operationId2 });
+    store.append({
+        schema_version: 2,
+        type: 'task.workspace.prepared',
+        task_id: 'TASK-1',
+        lease_id: lease2.lease_id,
+        attempt: 2,
+        reference: {
+            bindingPath: '.omni/binding-attempt-2.json',
+            bindingSha256: crypto.createHash('sha256').update('binding-2').digest('hex'),
+            workerBaselineSha256: crypto.createHash('sha256').update('baseline-2').digest('hex'),
+            workerContractSha256: crypto.createHash('sha256').update('contract-2').digest('hex'),
+        },
+    });
+
+    await waitFor(() => {
+        const derived = store.derive();
+        return derived.leases[lease2.lease_id]?.status === 'expired';
+    }, 10000, 'attempt 2 lease to expire');
+
+    const derivedBeforeReclaim2 = store.derive();
+    assert.equal(derivedBeforeReclaim2.tasks['TASK-1'].isolatedHandoff, undefined);
+    assert.equal(derivedBeforeReclaim2.tasks['TASK-1'].lastOutcome, undefined);
+    assert.equal(derivedBeforeReclaim2.leases[lease2.lease_id]?.status, 'expired');
+
+    const reclaim2 = tryReclaimOrphanedTaskLease({
+        authorityStore: store,
+        taskId: 'TASK-1',
+        lease: derivedBeforeReclaim2.leases[lease2.lease_id],
+        operationWriter,
+    });
+    assert.equal(reclaim2, true, 'reclaim of attempt 2 orphan must succeed');
+
+    const derivedAfter = store.derive();
+    assert.equal(derivedAfter.tasks['TASK-1'].lastOutcome?.code, 'DUAL_WORKER_LOST');
+    assert.equal(derivedAfter.tasks['TASK-1'].lastOutcome?.attempt, 2);
+    assert.equal(derivedAfter.tasks['TASK-1'].lastOutcome?.status, 'FAILED');
+    assert.equal(derivedAfter.leases[lease2.lease_id]?.status, 'released');
+    assert.equal(derivedAfter.tasks['TASK-1'].previousAttempts.length, 1);
+    assert.equal(derivedAfter.tasks['TASK-1'].previousAttempts[0].outcome?.code, 'DUAL_WORKER_LOST');
+    assert.equal(derivedAfter.tasks['TASK-1'].previousAttempts[0].outcome?.attempt, 1);
 });

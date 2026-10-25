@@ -17,9 +17,10 @@
 //   node scripts/dual-resume-orphan-repro.js run [--fixture DIR]
 //   node scripts/dual-resume-orphan-repro.js daemon --fixture DIR --mode hang|complete
 //
-// Exit code contract: 0 iff the BUG 1 section PASSES. The BUG 2 section is
-// reported separately and never affects the exit code, because BUG 2 is
-// owned by the sibling worker and stays RED until its fix lands.
+// Exit code contract: 0 iff the BUG 1 section PASSES. Phase 4 is a negative
+// check: after redispatch succeeds and handoff is recorded without an outcome,
+// task.correct MUST be rejected with DUAL_INTEGRITY_CORRUPT (EXPECTED /
+// REJECTED-AS-EXPECTED); this is reported separately and does not affect the exit code.
 // The script only ever touches its own fresh fixture directory and only
 // SIGKILLs the daemon pid it recorded in that directory (cmdline verified
 // against the fixture path first). It never touches any other session.
@@ -188,7 +189,13 @@ function spawnDaemon(fixture, mode) {
 async function waitDaemonReady(fixture, mode) {
     const discovery = path.join(fixture, '.omni/runtime/dual/daemon.json');
     const pidFile = path.join(fixture, `daemon-${mode}.pid`);
-    await waitFor(() => fs.existsSync(pidFile) && fs.existsSync(discovery), 30000, 'daemon pid + discovery files');
+    await waitFor(() => {
+        if (!fs.existsSync(pidFile) || !fs.existsSync(discovery)) return false;
+        try {
+            const pid = Number(fs.readFileSync(pidFile, 'utf8').trim());
+            return JSON.parse(fs.readFileSync(discovery, 'utf8')).pid === pid && pidAlive(pid);
+        } catch { return false; }
+    }, 30000, 'matching daemon pid + discovery files');
     await sleep(500);
     const pid = Number(fs.readFileSync(pidFile, 'utf8').trim());
     if (!pidAlive(pid)) throw new Error(`Daemon ${mode} pid ${pid} died on startup; see ${path.join(fixture, `daemon-${mode}.log`)}`);
@@ -234,6 +241,14 @@ async function runMainInner(args) {
     const fixture = args.fixture
         ? path.resolve(args.fixture)
         : path.join(os.homedir(), 'workspace/dual-fix-verify', `run-${Date.now()}`);
+    if (args.fixture) {
+        if (fs.existsSync(fixture)) {
+            const stat = fs.statSync(fixture);
+            if (!stat.isDirectory() || fs.readdirSync(fixture).length > 0) {
+                throw new Error(`Refusing to use existing non-empty fixture path: ${fixture}`);
+            }
+        }
+    }
     currentFixture = fixture;
     log(`fixture: ${fixture}`);
     const store = seedFixture(fixture);
@@ -299,7 +314,7 @@ async function runMainInner(args) {
         && taskAfter.isolatedWorkspace?.reference?.workerBaselineSha256 === baselineSha;
     log(`BUG 1 verdict: ${bug1Pass ? 'PASS' : 'FAIL'} (handoff=${Boolean(taskAfter.isolatedHandoff)} implementCalls=${callsAfter.length} attempt=${taskAfter.isolatedWorkspace?.attempt} bindingKept=${taskAfter.isolatedWorkspace?.reference?.bindingSha256 === bindingSha})`);
 
-    // Phase 4: BUG 2 probe (reported only; never affects the exit code).
+    // Phase 4: negative check (correction after redispatch must be rejected; reported only, exit code unchanged).
     let bug2Code = null;
     try {
         const corrected = await client2.correctTask(SESSION_ID, { task_id: TASK_ID, plan_revision: 1,
@@ -308,8 +323,8 @@ async function runMainInner(args) {
     } catch (error) {
         bug2Code = error.code || String(error.message || error);
     }
-    const bug2Present = bug2Code === 'DUAL_INTEGRITY_CORRUPT';
-    log(`BUG 2 probe: task.correct -> ${bug2Code} (${bug2Present ? 'bug reproduced, RED as expected until sibling fix' : 'unexpected outcome'})`);
+    const rejectedAsExpected = bug2Code === 'DUAL_INTEGRITY_CORRUPT';
+    log(`Phase 4 negative check: task.correct -> ${bug2Code} (${rejectedAsExpected ? 'EXPECTED / REJECTED-AS-EXPECTED: correction after redispatch rejected as expected' : 'unexpected outcome'})`);
 
     // Cleanup: stop daemon #2 only (it is this script's own daemon).
     try { await client2.stop(); } catch {}
@@ -317,7 +332,7 @@ async function runMainInner(args) {
     await sleep(1000);
     if (pidAlive(daemonPid2)) log(`WARNING: daemon #2 pid ${daemonPid2} still alive after stop; kill it manually`);
     log(`fixture kept at ${fixture}`);
-    log(`SUMMARY: BUG1=${bug1Pass ? 'PASS' : 'FAIL'} BUG2=${bug2Present ? 'RED (expected, sibling scope)' : bug2Code}`);
+    log(`SUMMARY: BUG1=${bug1Pass ? 'PASS' : 'FAIL'} CORRECTION_AFTER_REDISPATCH=${rejectedAsExpected ? 'EXPECTED (REJECTED-AS-EXPECTED)' : bug2Code}`);
     process.exit(bug1Pass ? 0 : 1);
 }
 
