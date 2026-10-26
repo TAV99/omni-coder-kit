@@ -143,6 +143,7 @@ test('run dispatches an eligible bootstrapped AGY task through the existing daem
         async runTask(derived) {
             calls++;
             assert.deepEqual(Object.keys(derived.tasks), ['TASK-1']);
+            return [{ taskId: 'TASK-1', status: 'AWAITING_CODEX_QC' }];
         },
     } });
     assert.equal(calls, 1, 'bootstrap dispatched once');

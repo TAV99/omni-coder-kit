@@ -487,19 +487,19 @@ test('E11: duplicate task QC and context replies are idempotent; changed content
             body: `Decision: keep the existing local heading convention. Source file/section: index.html body. Question ID: ${question.message_id}. Plan revision: 1.`,
         };
 
-        const beforeReply = context.authorityStore.readEvents().length;
+        const beforeReply = context.authorityStore.readEvents().filter((event) => event.type === 'task.message').length;
         const first = await context.client.replyToTask(context.sessionId, reply);
         assert.equal(first.reused, false);
-        assert.equal(context.authorityStore.readEvents().length, beforeReply + 1);
+        assert.equal(context.authorityStore.readEvents().filter((event) => event.type === 'task.message').length, beforeReply + 1);
         const duplicate = await context.client.replyToTask(context.sessionId, reply);
         assert.equal(duplicate.reused, true);
-        const afterDuplicate = context.authorityStore.readEvents().length;
+        const afterDuplicate = context.authorityStore.readEvents().filter((event) => event.type === 'task.message').length;
         assert.equal(afterDuplicate, beforeReply + 1);
         await assert.rejects(
             () => context.client.replyToTask(context.sessionId, { ...reply, body: `${reply.body} Changed.` }),
             (error) => error?.code === 'DUAL_MESSAGE_CONFLICT',
         );
-        assert.equal(context.authorityStore.readEvents().length, afterDuplicate);
+        assert.equal(context.authorityStore.readEvents().filter((event) => event.type === 'task.message').length, afterDuplicate);
 
         await context.client.resumeSession({ session_id: context.sessionId, task_id: 'TASK-1', plan_revision: 1 });
         await waitForTaskHandoff(context, 'TASK-1');

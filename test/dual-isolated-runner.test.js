@@ -765,7 +765,7 @@ test('correction budget and active-lease checks prevent duplicate or unbounded w
     const { requestTaskCorrection } = require('../lib/dual/task-correction');
     const input = fixture(t), { store } = seedAuthority(input);
     const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
-        worker: async () => { throw new Error('worker stopped'); } });
+        worker: async () => { throw Object.assign(new Error('worker stopped'), { code: 'RESULT_MALFORMED' }); } });
     const base = { workspaceRoot: input.workspaceRoot, authorityStore: store, sessionId: input.sessionId,
         taskId: 'TASK-1', planRevision: 1, reason: 'Retry the failed attempt within its unchanged scope.' };
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -805,7 +805,7 @@ test('correction refuses an attempt with a recorded partial integration', async 
     assert.equal(store.derive().tasks['TASK-1'].isolatedWorkspace.reference.bindingSha256, task.isolatedWorkspace.reference.bindingSha256);
 });
 
-test('preparation failure records an outcome and can be corrected without deleting an unregistered snapshot', async (t) => {
+test('unknown preparation failure parks for classification and preserves the unregistered snapshot', async (t) => {
     const { requestTaskCorrection } = require('../lib/dual/task-correction');
     const input = fixture(t);
     let orphan;
@@ -822,12 +822,13 @@ test('preparation failure records an outcome and can be corrected without deleti
     assert.equal(failed.lastOutcome.attempt, 1);
     assert.equal(failed.isolatedWorkspace, undefined);
     assert.equal(calls.length, 0);
-    assert.equal(requestTaskCorrection({ workspaceRoot: input.workspaceRoot, authorityStore: store, sessionId: input.sessionId,
-        taskId: 'TASK-1', planRevision: 1, expectedAttempt: 1, requestId: 'prepare-fix', reason: 'Retry interrupted preparation in a fresh attempt.' }).attempt, 2);
-    assert.equal((await adapter.runTask(store.derive()))[0].status, 'AWAITING_CODEX_QC');
-    assert.equal(store.derive().tasks['TASK-1'].isolatedWorkspace.attempt, 2);
+    assert.throws(() => requestTaskCorrection({ workspaceRoot: input.workspaceRoot, authorityStore: store, sessionId: input.sessionId,
+        taskId: 'TASK-1', planRevision: 1, expectedAttempt: 1, requestId: 'prepare-fix', reason: 'Retry interrupted preparation in a fresh attempt.' }),
+    { code: 'DUAL_CORRECTION_CLASSIFICATION_REQUIRED' });
+    assert.equal((await adapter.runTask(store.derive()))[0].status, 'FAILED');
+    assert.equal(store.derive().tasks['TASK-1'].lastOutcome.attempt, 1);
     assert.deepEqual(fs.readFileSync(path.join(input.workspaceRoot, orphan.bindingPath)), orphanBytes);
-    assert.equal(store.derive().tasks['TASK-1'].previousAttempts[0].workspace, null);
+    assert.equal(store.derive().tasks['TASK-1'].previousAttempts, undefined);
 });
 
 test('missing context failure is durable before model calls or workspace registration', async (t) => {
@@ -1208,3 +1209,153 @@ for (const field of ['workerBaselineSha256', 'workerContractSha256', 'bindingSha
         assert.equal(calls.length, 0);
     });
 }
+
+// Context recovery regressions use the real authority journal and daemon transport.
+async function contextFixture(t, hooks = {}) {
+    const input = fixture(t), calls = [];
+    const { store, dir } = seedAuthority(input);
+    const worker = fakeWorker(calls, (payload) => payload.open_questions
+        ? { ...payload, open_questions: ['Which value is required?'] } : payload);
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker });
+    await adapter.runTask(store.derive());
+    const question = store.derive().tasks['TASK-1'].messages[0];
+    const daemon = await startDaemonServer({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+        orchestrator: { runTask: async (...args) => { await hooks.beforeRun?.(); return adapter.runTask(...args); } } });
+    t.after(() => daemon.close());
+    const { createDaemonClient } = require('../lib/dual/daemon-client');
+    const client = createDaemonClient({ workspaceRoot: input.workspaceRoot, timeoutMs: 5000 });
+    const reply = { task_id: 'TASK-1', plan_revision: 1, message_id: 'context-reply', reply_to: question.message_id, body: 'Return 2.' };
+    return { input, calls, store, dir, adapter, daemon, client, reply };
+}
+async function waitContext(predicate) {
+    const until = Date.now() + 5000;
+    while (!await predicate() && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.ok(await predicate(), 'context continuation did not settle');
+}
+test('context park persists lineage and manual resume retains attempt while unanswered', async (t) => {
+    const f = await contextFixture(t);
+    const task = createAuthorityStore(f.dir).derive().tasks['TASK-1'];
+    assert.deepEqual(task.waitingContext.question_ids, [f.reply.reply_to]);
+    assert.equal(task.waitingContext.attempt, 1);
+    assert.equal(task.waitingContext.session_id, f.input.sessionId);
+    await f.client.resumeSession(f.input.sessionId);
+    await waitContext(async () => (await f.client.status(f.input.sessionId)).worker_start?.state === 'waiting_context');
+    assert.equal(f.calls.length, 1);
+});
+test('late reply triggers dispatch exactly once and duplicate reply is journal-idempotent', async (t) => {
+    const f = await contextFixture(t);
+    await f.client.replyToTask(f.input.sessionId, f.reply);
+    await f.client.replyToTask(f.input.sessionId, f.reply);
+    await waitContext(() => !!f.store.derive().tasks['TASK-1'].isolatedHandoff);
+    assert.equal(f.calls.length, 3);
+    assert.equal(f.store.readEvents().filter((e) => e.type === 'task.message' && e.message_id === f.reply.message_id).length, 1);
+    assert.equal(f.store.readEvents().filter((e) => e.type === 'task.context.dispatch.claimed').length, 1);
+});
+test('restart reconciles a crash after reply commit before dispatch without repeating implementation', async (t) => {
+    const f = await contextFixture(t);
+    await f.daemon.close();
+    const { postTaskMessage } = require('../lib/dual/task-messages');
+    postTaskMessage({ authorityStore: f.store, sessionId: f.input.sessionId, planRevision: 1,
+        taskId: 'TASK-1', messageId: f.reply.message_id, kind: 'reply', body: f.reply.body, replyTo: f.reply.reply_to });
+    const restarted = await startDaemonServer({ workspaceRoot: f.input.workspaceRoot,
+        authorityStore: createAuthorityStore(f.dir), orchestrator: f.adapter });
+    t.after(() => restarted.close());
+    await waitContext(() => !!f.store.derive().tasks['TASK-1'].isolatedHandoff);
+    assert.equal(f.calls.length, 3);
+    await restarted.close();
+    const again = await startDaemonServer({ workspaceRoot: f.input.workspaceRoot, authorityStore: f.store, orchestrator: f.adapter });
+    t.after(() => again.close());
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(f.calls.length, 3, 'handoff is a QC checkpoint, never another implementation');
+});
+test('reply while worker exits is committed before lease release and wakeup is retained', async (t) => {
+    const input = fixture(t), calls = [];
+    const { store } = seedAuthority(input);
+    const { postTaskMessage } = require('../lib/dual/task-messages');
+    const worker = fakeWorker(calls, (payload) => payload.open_questions ? { ...payload, open_questions: ['Value?'] } : payload);
+    const append = store.append.bind(store);
+    let replied = false;
+    store.append = (event) => {
+        const result = append(event);
+        if (event.type === 'task.questions' && !replied) {
+            replied = true;
+            postTaskMessage({ authorityStore: store, sessionId: input.sessionId, planRevision: 1,
+                taskId: 'TASK-1', messageId: 'exit-reply', kind: 'reply', body: '2', replyTo: event.questions[0].message_id });
+        }
+        return result;
+    };
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker });
+    const daemon = await startDaemonServer({ workspaceRoot: input.workspaceRoot, authorityStore: store, orchestrator: adapter });
+    t.after(() => daemon.close());
+    const { createDaemonClient } = require('../lib/dual/daemon-client');
+    await createDaemonClient({ workspaceRoot: input.workspaceRoot, timeoutMs: 5000 }).resumeSession(input.sessionId);
+    await waitContext(() => !!store.derive().tasks['TASK-1'].isolatedHandoff);
+    assert.equal(calls.length, 3);
+});
+test('answered reply only evaluates readiness; NEEDS_CONTEXT parks again without a dispatch loop', async (t) => {
+    const f = await contextFixture(t);
+    await f.daemon.close();
+    let evaluations = 0;
+    const daemon = await startDaemonServer({ workspaceRoot: f.input.workspaceRoot, authorityStore: f.store,
+        orchestrator: { async runTask() { evaluations++; return [{ taskId: 'TASK-1', status: 'NEEDS_CONTEXT' }]; } } });
+    t.after(() => daemon.close());
+    await f.client.replyToTask(f.input.sessionId, f.reply);
+    await waitContext(() => f.store.derive().tasks['TASK-1'].contextDispatch?.status === 'waiting_context');
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(evaluations, 1);
+    assert.equal(f.calls.length, 1, 'readiness does not authorize implementation or invent context');
+});
+test('restart abandons a dead pre-execution context claim and dispatches once', async (t) => {
+    const f = await contextFixture(t);
+    await f.daemon.close();
+    const { postTaskMessage } = require('../lib/dual/task-messages');
+    postTaskMessage({ authorityStore: f.store, sessionId: f.input.sessionId, planRevision: 1, taskId: 'TASK-1',
+        messageId: f.reply.message_id, kind: 'reply', body: f.reply.body, replyTo: f.reply.reply_to });
+    const executionId = crypto.randomUUID();
+    f.store.append({ schema_version: 2, type: 'task.context.dispatch.claimed', task_id: 'TASK-1', execution_id: executionId,
+        controller_pid: 2147483647, attempt: 1, reply_ids: [f.reply.message_id] });
+    const restarted = await startDaemonServer({ workspaceRoot: f.input.workspaceRoot, authorityStore: f.store, orchestrator: f.adapter });
+    t.after(() => restarted.close());
+    await waitContext(() => !!f.store.derive().tasks['TASK-1'].isolatedHandoff);
+    assert.equal(f.calls.length, 3);
+    assert.ok(f.store.readEvents().some((e) => e.execution_id === executionId && e.status === 'abandoned'));
+});
+test('stale context lineage and simultaneous durable claims are rejected without journal changes', async (t) => {
+    const f = await contextFixture(t);
+    await f.daemon.close();
+    const { postTaskMessage } = require('../lib/dual/task-messages');
+    assert.throws(() => postTaskMessage({ authorityStore: f.store, sessionId: f.input.sessionId, planRevision: 2,
+        taskId: 'TASK-1', messageId: 'stale', kind: 'reply', body: '2', replyTo: f.reply.reply_to }), { code: 'DUAL_MESSAGE_STALE' });
+    postTaskMessage({ authorityStore: f.store, sessionId: f.input.sessionId, planRevision: 1, taskId: 'TASK-1',
+        messageId: f.reply.message_id, kind: 'reply', body: f.reply.body, replyTo: f.reply.reply_to });
+    const claim = { schema_version: 2, type: 'task.context.dispatch.claimed', task_id: 'TASK-1', execution_id: crypto.randomUUID(),
+        controller_pid: process.pid, attempt: 1, reply_ids: [f.reply.message_id] };
+    assert.throws(() => f.store.append({ ...claim, attempt: 2 }));
+    f.store.append(claim);
+    const before = f.store.verifyIntegrity().lastHash;
+    assert.throws(() => f.store.append({ ...claim, execution_id: crypto.randomUUID() }));
+    assert.equal(f.store.verifyIntegrity().lastHash, before);
+});
+test('manual resume cannot turn an insufficient-context evaluation into implementation', async (t) => {
+    const f = await contextFixture(t);
+    await f.daemon.close();
+    let evaluations = 0;
+    const daemon = await startDaemonServer({ workspaceRoot: f.input.workspaceRoot, authorityStore: f.store,
+        orchestrator: { async runTask() { evaluations++; return [{ taskId: 'TASK-1', status: 'NEEDS_CONTEXT' }]; } } });
+    t.after(() => daemon.close());
+    await f.client.replyToTask(f.input.sessionId, f.reply);
+    await waitContext(() => f.store.derive().tasks['TASK-1'].contextDispatch?.status === 'waiting_context');
+    await f.client.resumeSession(f.input.sessionId);
+    await waitContext(async () => (await f.client.status(f.input.sessionId)).worker_start?.state === 'waiting_context');
+    assert.equal(evaluations, 1);
+});
+test('daemon recovery API requires finite config and refuses caller-supplied failure classification', async (t) => {
+    const f = await contextFixture(t);
+    const lineage = { session_id: f.input.sessionId, task_id: 'TASK-1', plan_revision: 1 };
+    await assert.rejects(() => f.client.request('task.recovery.configure', lineage));
+    const configured = await f.client.request('task.recovery.configure', { ...lineage, harness_limit: 1, total_limit: 3 });
+    assert.equal(configured.acknowledged, true);
+    await assert.rejects(() => f.client.request('task.failure.classify', { ...lineage, category: 'harness' }));
+    await assert.rejects(() => f.client.request('task.recovery.grant', { ...lineage, grant_id: 'fake', expected_attempt: 1 }));
+    assert.equal(f.store.derive().tasks['TASK-1'].recoveryPolicy.worker_limit, 2);
+});
