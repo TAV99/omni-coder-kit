@@ -27,3 +27,9 @@ Perform a rigorous, adversarial, read-only review of the changes in git diff aga
 - **Challenge Summary:** Articulate the strongest evidence-based argument against approval and verify how the inspected diff addresses it. If any flaw is unresolved, do NOT recommend APPROVE.
 - **Output:** Produce structured findings matching the required schema. The Node orchestrator owns `review.json`.
 
+
+## Decision coverage
+
+For coverage-enabled plans, independently compare implementation with pinned values, N/A exclusions, delegation constraints and the decision_log sidecar. Cite dimension IDs in findings and review_checks. Missing evidence, unapproved/new decisions or out-of-constraint choices block approval. A delegated choice within constraints that differs only from an unstated preference is advisory (INFO), never a spec violation. Revalidate the current binding for this attempt; previous correction/integration evidence is not authority.
+
+For coverage-enabled output use schema_version 2. Emit `coverage_checks` for every task-bound pinned and not_applicable ID: `{dimension_id, satisfied, description, evidence_refs}` with concrete source/test evidence, including evidence that exclusions remain absent. Emit `constraint_findings` for every textual constraint of each used delegated ID: `{dimension_id, constraint, satisfied, evidence_ref}`. Preserve exact constraint text. False checks/constraints and ERROR coverage findings block QC even if recommendation is APPROVE. Empty arrays do not certify unchecked dimensions. Valid delegated preferences remain INFO advisory only.

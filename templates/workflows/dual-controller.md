@@ -26,6 +26,14 @@ Inspect the current canonical workspace, branch, package and `.omni/manifest.jso
 - **User-decision boundary:** Always require user input before deciding anything involving commerce, sensitive data, an external write, a paid action, a breaking change, or scope expansion, even when grounded in a source. A worker suggestion of a paid service is only a proposal and requires a user decision; it is never authorization.
 - **Reply identity and continuation:** Preserve stable `message_id` and exact `reply_to` across retries. Same ID/content may be acknowledged, but duplicate ID with changed content must reject through the existing mechanism. AUTO may continue only when an authorized next action exists. If authority is missing or an exhausted retry budget is reached, stop with the preserved evidence and must not reset the session.
 
+## Spec-completeness gate
+
+New plans use manifest v2 with exact coverage `{path, sha256, catalog_version}` and task `decision_ids`. Scout the entire graph read-only before approval, including dependent tasks. Use `coverage.inspect` to render the full table (types/extensions, proposals, sources, exclusions and pending IDs), then `coverage.approve` with stable request ID, session/workspace identity, plan revision, candidate digest and explicit per-ID decisions grounded in user authorization. Do not encode coverage approval in `context_reply.body`. Same request/content is idempotent; stale digests and changed content under the same ID reject.
+
+Only PASSED enables writable dispatch, direct implement, retry, correction, Codex work or integration. Revalidate current artifact/plan/baseline binding immediately before each launch and integration; old-attempt evidence cannot authorize a correction. DRAFT, AWAITING_APPROVAL, STALE and INVALID block. A strict v1 plan may run with a visible LEGACY_UNCHECKED warning; malformed v2 never downgrades. Headless without a valid immutable receipt returns non-success `SPEC_COVERAGE_REQUIRED`, report/artifact paths and pending IDs, releasing its lease. Neither AUTO nor `--yes` supplies product approval.
+
+Workers emit a `decision_log` sidecar for delegated IDs with `dimension_id`, `chosen_value`, `rationale`, `evidence_refs`. New/unresolved decisions or out-of-constraint choices require NEEDS_CONTEXT and stale coverage. QC checks pinned values, N/A exclusions and logged delegated choices against constraints. A valid delegated choice differing from an unstated preference is advisory, never a violation. Completion verifies the approved contract, not all unexpressed intent. Safety grants remain independent.
+
 ## Act on observable task state
 
 | State/evidence | Controller action |

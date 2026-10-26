@@ -92,9 +92,11 @@ When validators need installed tools, keep dependency installation as a typed se
 - On ambiguous executable names, security violations, unrepresentable actions, or any failure that remains after the bounded repair, record the exact failing action and error and stop safely for real user input (fail-closed).
 - Do not call `omni_dual_begin` or `omni_dual_register_plan` directly from `$om-think`/`$om-plan`, and never invent `bootstrap-plan-artifacts`. Those low-level MCP operations are owned by the controller.
 
+**Coverage generation:** Expand `templates/spec-coverage/catalog.v1.json` for all classified app types into `.omni/sdlc/spec-coverage.json` before freezing the graph, including core and booking dimensions where applicable. Record classification sources; unknown classification stays unresolved. Preserve sourced values, explicit delegated IDs/constraints and reasoned exclusions; proposals/defaults remain unresolved. Tasks reference project decisions via `decision_ids` and cannot override them. Hash the artifact bytes into the v2 `coverage` binding. New generators emit v2; v1 stays legacy and must never be silently upgraded. Read-only scout of the entire graph precedes one consolidated coverage approval. Recompute and reapprove changed bindings; no execution until PASSED.
+
 **Typed Full Graph — `.omni/sdlc/dual-plan.json`:**
 
-For Codex + AGY, read `.omni/workflows/dual-controller.md` first. The example below is the backward-compatible shared mode. For new isolated worker graphs, add `"execution_mode": "isolated"` and explicit `"depends_on": []` (or predecessor task IDs). Multiple isolated low-risk AGY slices are supported; Codex-only architecture/integration/QC work stays outside that worker graph. Never lower a real risk classification to force delegation.
+For Codex + AGY, read `.omni/workflows/dual-controller.md` first. The example below uses the v2 coverage contract in shared mode; replace the illustrative digest with the artifact SHA-256. For new isolated worker graphs, add `"execution_mode": "isolated"` and explicit `"depends_on": []` (or predecessor task IDs). Multiple isolated low-risk AGY slices are supported; Codex-only architecture/integration/QC work stays outside that worker graph. Never lower a real risk classification to force delegation.
 
 Each task may optionally declare an explicit `"model"` (e.g. `"gemini-3.8-flash-high"`, `"gemini-3.1-pro-high"`, `"claude-sonnet-4-6"`). If omitted, the session-level worker model is used.
 
@@ -103,7 +105,8 @@ Before setup, reject a graph mixing Codex/shared work with more than one AGY tas
 acceptance_policy là bắt buộc; map checks vào requirement thật. Ví dụ frontend dưới đây bật UI gate; project non-UI phải khai báo UI policy phù hợp, không bỏ gate chỉ để bootstrap pass.
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "coverage": { "path": ".omni/sdlc/spec-coverage.json", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "catalog_version": 1 },
   "plan_revision": 1,
   "acceptance_policy": {
     "protocol_version": 1,
@@ -124,6 +127,7 @@ acceptance_policy là bắt buộc; map checks vào requirement thật. Ví dụ
   },
   "tasks": [{
     "task_id": "TASK-1",
+    "decision_ids": ["ui.copy"],
     "title": "Bounded deliverable",
     "owner": "agy",
     "model": "gemini-3.8-flash-high",

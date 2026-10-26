@@ -60,6 +60,126 @@
           }
         }
       }
+    },
+    "schema_version": {
+      "const": 2
+    },
+    "coverage_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimension_id",
+          "severity",
+          "description",
+          "evidence_refs"
+        ],
+        "properties": {
+          "dimension_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "severity": {
+            "enum": [
+              "INFO",
+              "WARNING",
+              "ERROR"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "constraint_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimension_id",
+          "constraint",
+          "satisfied",
+          "evidence_ref"
+        ],
+        "properties": {
+          "dimension_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "constraint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "satisfied": {
+            "type": "boolean"
+          },
+          "evidence_ref": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "coverage_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimension_id",
+          "satisfied",
+          "description",
+          "evidence_refs"
+        ],
+        "properties": {
+          "dimension_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "satisfied": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
     }
+  },
+  "dependencies": {
+    "coverage_findings": [
+      "schema_version"
+    ],
+    "schema_version": [
+      "coverage_findings",
+      "constraint_findings",
+      "coverage_checks"
+    ],
+    "constraint_findings": [
+      "schema_version"
+    ],
+    "coverage_checks": [
+      "schema_version"
+    ]
   }
 }

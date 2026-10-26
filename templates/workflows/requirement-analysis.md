@@ -59,7 +59,7 @@ Display extraction result to user:
 ❓ Còn thiếu: [list empty/ambiguous slots]
 ```
 
-- **Headless / Non-interactive Mode Guard:** If you detect you are running in a headless/automated environment (such as when spawned by `omni run` with stdin disconnected or redirected), you cannot ask questions interactively. In this case, you MUST skip Step 2 entirely: make reasonable default assumptions for all empty/ambiguous slots, record them in a new `## Assumptions` section in the design spec, and generate the complete `.omni/sdlc/design-spec.md` immediately in a single turn so the pipeline does not hang or fail.
+- **Headless / Non-interactive Mode Guard:** If you detect you are running in a headless/automated environment (such as when spawned by `omni run` with stdin disconnected or redirected), you cannot ask questions interactively. In this case, you MUST skip Step 2 entirely: record reasonable proposals for empty/ambiguous slots as `unresolved` in `.omni/sdlc/spec-coverage.json`, link them from the design spec, and return `SPEC_COVERAGE_REQUIRED` when no valid coverage receipt exists. Assumptions/defaults never become pinned or delegated authority. Do not wait for stdin or implicitly delegate via `--yes`.
 
 ### Step 2: Adaptive Questions (only ask what's missing)
 - Each question targets 1 empty or ambiguous slot.
@@ -270,3 +270,7 @@ Display non-blocking next steps:
 - Đọc RUN MODE trong file config (CLAUDE.md/AGENTS.md...).
 - Nếu **AUTO**: ngay sau khi đã đủ thông tin và ghi `.omni/sdlc/design-spec.md`, tự động tiếp tục `>om-skill` → `>om-plan` → `>om-cook` (auto check/fix) — KHÔNG hỏi giữa bước.
 - Nếu **MANUAL**: kết thúc tại đây, gợi ý người dùng gõ `>om-plan` để tiếp.
+
+### Decision coverage authority
+
+Discovery retains its 1/3/5 question budget. Product completeness/content questions map to stable catalog dimension IDs; combine remaining decisions into one plan-wide coverage approval table after read-only scout of every task. Render types, proposals, sources and exclusions from `.omni/sdlc/spec-coverage.json`; Markdown is a view, never authority. Each action is independent. Unanswered rows remain unresolved; explicit user delegation names exact IDs and constraints. Coverage never grants safety, paid-action or external-write authorization.

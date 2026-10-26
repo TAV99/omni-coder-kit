@@ -87,6 +87,50 @@
       "items": {
         "type": "string"
       }
+    },
+    "schema_version": {
+      "const": 2
+    },
+    "coverage_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimension_id",
+          "reason",
+          "evidence_refs"
+        ],
+        "properties": {
+          "dimension_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "proposal": {},
+          "value_schema": {
+            "type": "object"
+          }
+        }
+      }
     }
+  },
+  "dependencies": {
+    "coverage_findings": [
+      "schema_version"
+    ],
+    "schema_version": [
+      "coverage_findings"
+    ]
   }
 }

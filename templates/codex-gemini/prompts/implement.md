@@ -50,3 +50,7 @@ Implement the changes specified in `spec.json` with production-grade engineering
 - Always require user input for commerce, sensitive data, an external write, a paid action, a breaking change, or scope expansion, even when grounded in a source. A worker suggestion of a paid service requires a user decision and grants no authority.
 - Preserve stable `message_id` and exact `reply_to`; duplicate ID with changed content must reject through the existing mechanism. AUTO may continue only with an authorized next action. Missing authority or exhausted retry must stop with preserved evidence and must not reset the session.
 
+
+## Decision coverage
+
+For coverage-enabled plans, the immutable coverage artifact and receipt constrain this implementation. Follow pinned values and N/A exclusions. For each delegated dimension used, emit a decision_log sidecar (decision-log.schema.json) with dimension_id, chosen_value, rationale and evidence_refs. Values must satisfy the dimension value_schema and explicit constraints. Never decide an unresolved/new dimension: return BLOCKED with NEEDS_CONTEXT and its ID. Only write the sidecar through the orchestrator-provided evidence channel; do not modify coverage or receipt. Coverage approval grants no safety or external-write authority.

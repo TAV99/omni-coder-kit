@@ -16,3 +16,7 @@ Investigate the codebase deeply enough to answer the user request and discover e
 - Verify every claimed symbol against source. Treat unverified assumptions as open questions, never as facts.
 - Return output strictly matching the provided JSON schema.
 - Return the payload through structured output only. The Node orchestrator owns all transaction artifact writes.
+
+## Decision coverage
+
+For coverage-enabled plans, inspect every task before any implementation. Map product questions/findings to stable catalog dimension IDs in the coverage report, retaining proposals as unresolved. Report new dimensions and conflicting sources; never self-approve defaults or confuse technical context replies with product authority. The controller writes the authoritative artifact; your output remains read-only.

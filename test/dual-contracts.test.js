@@ -274,7 +274,7 @@ describe('dual contracts', () => {
         assert.equal(jsonSchema.$schema, 'http://json-schema.org/draft-07/schema#');
         assert.equal(jsonSchema.$id, 'omni-dual-evidence-v1');
         assert.ok(Array.isArray(jsonSchema.anyOf), 'Git and snapshot correlations emit a root union');
-        assert.equal(jsonSchema.anyOf.length, 2);
+        assert.equal(jsonSchema.anyOf.length, 4);
         assert.ok(
             jsonSchema.anyOf.every((branch) => branch.additionalProperties === false),
             'every correlation branch must reject undeclared properties',
@@ -310,7 +310,7 @@ describe('dual contracts', () => {
             assert.equal(output.type, 'object');
             assert.equal(output.$id, 'omni-schema-root-test');
             assert.equal(output.$schema, 'http://json-schema.org/draft-07/schema#');
-            assert.equal(output.anyOf.length, 2);
+            assert.equal(output.anyOf.length, expectedBranches.length);
             assert.deepEqual(output.anyOf, expectedBranches);
             assert.ok(output.anyOf.every(branch => branch.additionalProperties === false));
             assert.equal(Object.hasOwn(output, 'additionalProperties'), false);

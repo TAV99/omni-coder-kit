@@ -15,6 +15,8 @@ const { handleDoctor } = require('../lib/commands/doctor');
 const { handleAgentFiles } = require('../lib/commands/agent-files');
 const { handleRun, handleTrace, handleGate, handleStats, handleAccept } = require('../lib/commands/run');
 const {
+    handleDualCoverageInspect,
+    handleDualCoverageApprove,
     handleDualNew,
     handleDualRun,
     handleDualResume,
@@ -151,6 +153,12 @@ program
 const dual = program
     .command('dual')
     .description('Điều phối Codex + Gemini qua agy');
+
+const dualCoverage = dual.command('coverage').description('Inspect và approve decision coverage');
+dualCoverage.command('inspect').action(handleDualCoverageInspect);
+dualCoverage.command('approve')
+    .requiredOption('--submission <file>', 'Explicit per-ID user decisions with candidate digest and provenance')
+    .action(handleDualCoverageApprove);
 
 dual.command('new <task-id>')
     .description('Tạo transaction mới cho task')

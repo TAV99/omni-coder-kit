@@ -1,0 +1,230 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalog_version",
+    "revision",
+    "app_types",
+    "classification_sources",
+    "dimensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "catalog_version": {
+      "const": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "app_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "classification_sources": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "dimensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "state",
+          "sources"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+          },
+          "state": {
+            "enum": [
+              "unresolved",
+              "pinned",
+              "delegated",
+              "not_applicable"
+            ]
+          },
+          "value": {},
+          "proposal": {},
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "ref"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "user",
+                    "approval",
+                    "repository"
+                  ]
+                },
+                "ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "excerpt": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "section": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "conflict": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "constraints": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            }
+          },
+          "shared_decision": {
+            "type": "string"
+          },
+          "value_schema": {
+            "type": "object"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "conflicts": {
+            "type": "array"
+          },
+          "source_conflict": {
+            "type": "boolean"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "pinned"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "value"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "delegated"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "constraints"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "not_applicable"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "reason"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "value"
+              ]
+            },
+            "then": {
+              "properties": {
+                "state": {
+                  "const": "pinned"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "proposal"
+              ]
+            },
+            "then": {
+              "properties": {
+                "state": {
+                  "const": "unresolved"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "constraints"
+              ]
+            },
+            "then": {
+              "properties": {
+                "state": {
+                  "const": "delegated"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

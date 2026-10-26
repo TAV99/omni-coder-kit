@@ -1,0 +1,979 @@
+{
+  "catalog_version": 1,
+  "core": [
+    {
+      "id": "data.entities",
+      "label": "Entities",
+      "answer_guidance": "Name every entity and its purpose; explicitly identify shared entities and relationships.",
+      "examples": [
+        {
+          "entities": [
+            "booking"
+          ]
+        }
+      ],
+      "value_schema": {
+        "type": "object",
+        "properties": {
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "entities"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "data.fields",
+      "label": "Fields",
+      "answer_guidance": "For each entity field specify type, required/optional, identity and any default; examples never supply an approved default.",
+      "examples": [
+        {
+          "fields": [
+            {
+              "entity": "booking",
+              "name": "id",
+              "type": "string",
+              "required": true,
+              "identity": true
+            }
+          ]
+        }
+      ],
+      "value_schema": {
+        "type": "object",
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "entity": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "identity": {
+                  "type": "boolean"
+                },
+                "default": {}
+              },
+              "required": [
+                "entity",
+                "name",
+                "type",
+                "required",
+                "identity"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "fields"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "validation.rules",
+      "label": "Validation",
+      "answer_guidance": "List accepted formats, ranges, cross-field rules and when each rule is enforced.",
+      "examples": [
+        {
+          "rules": [
+            "Name is required"
+          ]
+        }
+      ],
+      "value_schema": {
+        "type": "object",
+        "properties": {
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "rules"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "duplicates.policy",
+      "label": "Duplicate policy",
+      "answer_guidance": "Define duplicate keys, scope, normalization and the behavior when concurrent requests claim the same key.",
+      "examples": [
+        {
+          "key": [
+            "customer",
+            "date"
+          ],
+          "scope": "resource",
+          "normalization": "trim",
+          "race_behavior": "reject atomically"
+        }
+      ],
+      "value_schema": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "scope": {
+            "type": "string",
+            "minLength": 1
+          },
+          "normalization": {
+            "type": "string",
+            "minLength": 1
+          },
+          "race_behavior": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "key",
+          "scope",
+          "normalization",
+          "race_behavior"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "workflow.statuses",
+      "label": "Statuses",
+      "answer_guidance": "Enumerate allowed statuses and initial/terminal statuses.",
+      "examples": [
+        {
+          "statuses": [
+            "active",
+            "cancelled"
+          ]
+        }
+      ],
+      "value_schema": {
+        "type": "object",
+        "properties": {
+          "statuses": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "statuses"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "workflow.transitions",
+      "label": "Transitions",
+      "answer_guidance": "Specify each allowed from/to transition, trigger and any preconditions; do not infer transitions from status names.",
+      "examples": [
+        {
+          "transitions": [
+            {
+              "from": "active",
+              "to": "cancelled",
+              "condition": "customer requests"
+            }
+          ]
+        }
+      ],
+      "value_schema": {
+        "type": "object",
+        "properties": {
+          "transitions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "to": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "condition": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "from",
+                "to",
+                "condition"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "transitions"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "actions.create",
+      "label": "Create",
+      "answer_guidance": "Decide create independently: use {\"enabled\": false} or {\"enabled\": true, \"behavior\": \"...\"}. Other actions never imply this decision.",
+      "examples": [
+        {
+          "enabled": false
+        }
+      ],
+      "value_schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": false
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "behavior": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "enabled",
+              "behavior"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "actions.read",
+      "label": "Read",
+      "answer_guidance": "Decide read independently: use {\"enabled\": false} or {\"enabled\": true, \"behavior\": \"...\"}. Other actions never imply this decision.",
+      "examples": [
+        {
+          "enabled": false
+        }
+      ],
+      "value_schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": false
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "behavior": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "enabled",
+              "behavior"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "actions.edit",
+      "label": "Edit",
+      "answer_guidance": "Decide edit independently: use {\"enabled\": false} or {\"enabled\": true, \"behavior\": \"...\"}. Other actions never imply this decision.",
+      "examples": [
+        {
+          "enabled": false
+        }
+      ],
+      "value_schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": false
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "behavior": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "enabled",
+              "behavior"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "actions.delete",
+      "label": "Delete",
+      "answer_guidance": "Decide delete independently: use {\"enabled\": false} or {\"enabled\": true, \"behavior\": \"...\"}. Other actions never imply this decision.",
+      "examples": [
+        {
+          "enabled": false
+        }
+      ],
+      "value_schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": false
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "behavior": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "enabled",
+              "behavior"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "actions.cancel",
+      "label": "Cancel",
+      "answer_guidance": "Decide cancel independently: use {\"enabled\": false} or {\"enabled\": true, \"behavior\": \"...\"}. Other actions never imply this decision.",
+      "examples": [
+        {
+          "enabled": false
+        }
+      ],
+      "value_schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": false
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "behavior": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "enabled",
+              "behavior"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "actions.date_filter",
+      "label": "Date Filter",
+      "answer_guidance": "Decide date_filter independently: use {\"enabled\": false} or {\"enabled\": true, \"behavior\": \"...\"}. Other actions never imply this decision.",
+      "examples": [
+        {
+          "enabled": false
+        }
+      ],
+      "value_schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": false
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "behavior": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "enabled",
+              "behavior"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "catalog.items",
+      "label": "Catalog items",
+      "answer_guidance": "Provide approved item IDs/names/durations or explicitly delegate them. Keep shared booking.services values consistent.",
+      "examples": [
+        {
+          "items": [
+            {
+              "id": "consult",
+              "name": "Consultation",
+              "duration_minutes": 60
+            }
+          ]
+        }
+      ],
+      "value_schema": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "duration_minutes": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "storage.persistence",
+      "label": "Persistence",
+      "answer_guidance": "Choose backend, data lifetime, reload behavior and whether multiple clients share changes.",
+      "examples": [
+        {
+          "backend": "localStorage",
+          "lifetime": "until cleared",
+          "reload": "preserve",
+          "multi_client": "not synchronized"
+        }
+      ],
+      "value_schema": {
+        "type": "object",
+        "properties": {
+          "backend": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lifetime": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reload": {
+            "type": "string",
+            "minLength": 1
+          },
+          "multi_client": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "backend",
+          "lifetime",
+          "reload",
+          "multi_client"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "errors.messages",
+      "label": "Error messages",
+      "answer_guidance": "Specify user-visible messages for validation, conflicts and persistence errors, including recovery guidance.",
+      "examples": [
+        {
+          "messages": {
+            "duplicate": "Booking already exists"
+          }
+        }
+      ],
+      "value_schema": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "errors.language",
+      "label": "Error language",
+      "answer_guidance": "Choose the language for user-visible errors separately from general UI copy.",
+      "examples": [
+        {
+          "language": "Vietnamese"
+        }
+      ],
+      "value_schema": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "language"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "ui.copy",
+      "label": "UI copy",
+      "answer_guidance": "Approve labels, empty/success states and content source, or delegate with explicit language and naming constraints.",
+      "examples": [
+        {
+          "labels": {
+            "create": "Book"
+          },
+          "empty_state": "No bookings",
+          "success_state": "Booked",
+          "content_source": "user-request:initial"
+        }
+      ],
+      "value_schema": {
+        "type": "object",
+        "properties": {
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "empty_state": {
+            "type": "string",
+            "minLength": 1
+          },
+          "success_state": {
+            "type": "string",
+            "minLength": 1
+          },
+          "content_source": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "labels",
+          "empty_state",
+          "success_state",
+          "content_source"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "extensions": {
+    "booking": [
+      {
+        "id": "booking.hours",
+        "label": "Operating hours",
+        "answer_guidance": "Specify operating days, timezone, each open window and breaks; confirm boundaries rather than deriving hours from examples.",
+        "examples": [
+          {
+            "days": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "timezone": "Asia/Ho_Chi_Minh",
+            "windows": [
+              "08:00-12:00",
+              "13:30-17:30"
+            ],
+            "breaks": [
+              "12:00-13:30"
+            ]
+          }
+        ],
+        "value_schema": {
+          "type": "object",
+          "properties": {
+            "days": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 6
+              }
+            },
+            "timezone": {
+              "type": "string",
+              "minLength": 1
+            },
+            "windows": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "breaks": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "days",
+            "timezone",
+            "windows",
+            "breaks"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "booking.slots",
+        "label": "Slot generation",
+        "answer_guidance": "Choose generated or fixed slots; specify duration_minutes and step_minutes separately, boundary behavior and fixed times when applicable.",
+        "examples": [
+          {
+            "mode": "generated",
+            "duration_minutes": 60,
+            "step_minutes": 30,
+            "boundary": "end within operating window"
+          }
+        ],
+        "value_schema": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": [
+                "fixed",
+                "generated"
+              ]
+            },
+            "duration_minutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "step_minutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "boundary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "times": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "mode",
+            "duration_minutes",
+            "step_minutes",
+            "boundary"
+          ],
+          "additionalProperties": false
+        },
+        "dependencies": [
+          "booking.hours"
+        ]
+      },
+      {
+        "id": "booking.capacity",
+        "label": "Resource capacity",
+        "answer_guidance": "Identify resource and capacity, overlap rules and atomic behavior for simultaneous claims by different customers.",
+        "examples": [
+          {
+            "resource": "staff",
+            "capacity": 1,
+            "overlap": "reject",
+            "concurrent_claims": "atomic first claim wins"
+          }
+        ],
+        "value_schema": {
+          "type": "object",
+          "properties": {
+            "resource": {
+              "type": "string",
+              "minLength": 1
+            },
+            "capacity": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "overlap": {
+              "type": "string",
+              "minLength": 1
+            },
+            "concurrent_claims": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "resource",
+            "capacity",
+            "overlap",
+            "concurrent_claims"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "booking.date_policy",
+        "label": "Date policy",
+        "answer_guidance": "Decide whether past dates are allowed and the booking horizon in days.",
+        "examples": [
+          {
+            "past_dates": "reject",
+            "horizon_days": 30
+          }
+        ],
+        "value_schema": {
+          "type": "object",
+          "properties": {
+            "past_dates": {
+              "enum": [
+                "allow",
+                "reject"
+              ]
+            },
+            "horizon_days": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "past_dates",
+            "horizon_days"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "booking.services",
+        "label": "Service catalog",
+        "answer_guidance": "Approve service IDs, names and durations; proposed names are unresolved until approved. Match any shared catalog.items decision.",
+        "examples": [
+          {
+            "items": [
+              {
+                "id": "consult",
+                "name": "Consultation",
+                "duration_minutes": 60
+              }
+            ]
+          }
+        ],
+        "value_schema": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "duration_minutes": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "additionalProperties": false
+        },
+        "shared_with": "catalog.items"
+      },
+      {
+        "id": "booking.cancel_policy",
+        "label": "Cancellation effects",
+        "answer_guidance": "Specify cancellation cutoff, status effects and whether/when capacity is released.",
+        "examples": [
+          {
+            "status_effect": "cancelled",
+            "capacity_effect": "release",
+            "cutoff": "before slot starts"
+          }
+        ],
+        "value_schema": {
+          "type": "object",
+          "properties": {
+            "status_effect": {
+              "type": "string",
+              "minLength": 1
+            },
+            "capacity_effect": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cutoff": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "status_effect",
+            "capacity_effect",
+            "cutoff"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "backlog_extensions": {
+    "crud": "ownership, visibility, ordering, search, archive, pagination",
+    "commerce": "currency, inventory, payment boundaries, refunds",
+    "content": "facts, assets, CTA and submissions",
+    "api": "request/response, authorization, idempotency, pagination, error codes"
+  }
+}
