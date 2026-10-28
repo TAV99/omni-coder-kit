@@ -297,3 +297,30 @@ test('uses bounded negative-PID signals for POSIX process groups', async () => {
         [-654, 'SIGKILL'],
     ]);
 });
+
+test('aborted process waits for close and removes abort listener before settlement', async () => {
+    const { EventEmitter } = require('node:events');
+    const child = new EventEmitter();
+    child.pid = 9876; child.exitCode = null;
+    child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+    const controller = new AbortController();
+    let killed = 0;
+    const pending = runProcess({ command: 'fake', args: [], cwd: '.', timeoutMs: 10000 }, {
+        signal: controller.signal, spawn: () => child, terminationGraceMs: 0,
+        processKill() { killed++; setImmediate(() => { child.exitCode = 1; child.emit('close', 1); }); },
+    });
+    controller.abort(new Error('STALLED'));
+    const result = await pending;
+    assert.equal(result.exitCode, 1);
+    assert.ok(killed >= 1);
+    const before = killed;
+    controller.abort();
+    assert.equal(killed, before);
+});
+
+test('already aborted process never spawns', async () => {
+    const controller = new AbortController();
+    const error = Object.assign(new Error('STALLED'), { code: 'DUAL_TURN_STALLED' });
+    controller.abort(error);
+    await assert.rejects(runProcess({}, { signal: controller.signal, spawn() { assert.fail('must not spawn'); } }), error);
+});

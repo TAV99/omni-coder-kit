@@ -1411,3 +1411,101 @@ for (const scenario of ['pass', 'exit', 'missing-block', 'false-test', 'evidence
         }
     });
 }
+
+test('turn watchdog aborts a stalled discussion, preserves artifacts and closes execution', async (t) => {
+    const input = fixture(t);
+    let reference, workerSignal, marker, nudges = 0;
+    const discussion = createDiscussionStub({
+        async beforeTurn(context) {
+            workerSignal = context.signal;
+            marker = path.join(context.workerRoot, 'index.js');
+            fs.writeFileSync(marker, 'module.exports = 42;\n');
+            await new Promise((resolve) => context.signal.addEventListener('abort', resolve, { once: true }));
+            context.signal.throwIfAborted();
+        },
+    });
+    await assert.rejects(runRealIsolatedTask({ ...input, discussion,
+        onPrepared(saved) { reference = saved; }, onTurnNudge() { nudges++; },
+        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 30, graceMs: 20, pollMs: 5 },
+    }), (error) => error.code === 'DUAL_TURN_STALLED' && error.status === 'STALLED');
+    assert.equal(workerSignal.aborted, true);
+    assert.equal(nudges, 1);
+    assert.equal(fs.readFileSync(marker, 'utf8'), 'module.exports = 42;\n');
+    const attemptDir = path.dirname(path.join(input.workspaceRoot, reference.bindingPath));
+    const events = fs.readFileSync(path.join(attemptDir, 'turn-progress.ndjson'), 'utf8').trim().split('\n').map(JSON.parse);
+    assert.equal(events.filter((event) => event.type === 'nudge').length, 1);
+    assert.equal(events.filter((event) => event.type === 'STALLED').length, 1);
+    assert.ok(events.some((event) => event.type === 'heartbeat'));
+    assert.equal(JSON.parse(fs.readFileSync(path.join(attemptDir, 'last-activity.json'))).type, 'STALLED');
+    assert.ok(fs.existsSync(path.join(attemptDir, 'worker-contract.json')));
+    assert.equal(discussion.counters.closes.length, 1);
+    assert.equal(discussion.counters.turns.length, 0);
+});
+
+test('hard turn budget stops a progressing worker and preserves its evidence', async (t) => {
+    const input = fixture(t);
+    let reference;
+    const discussion = createDiscussionStub({
+        async beforeTurn(context) {
+            const output = path.join(context.workerRoot, 'index.js');
+            const timer = setInterval(() => fs.appendFileSync(output, '// progress\n'), 5);
+            try {
+                await new Promise((resolve) => context.signal.addEventListener('abort', resolve, { once: true }));
+                context.signal.throwIfAborted();
+            } finally { clearInterval(timer); }
+        },
+    });
+    await assert.rejects(runRealIsolatedTask({ ...input, discussion, onPrepared(saved) { reference = saved; },
+        turnSafety: { softMs: 100, hardMs: 300, heartbeatMs: 10, noProgressMs: 1000, graceMs: 20, pollMs: 5 },
+    }), (error) => error.code === 'DUAL_TURN_STALLED' && error.turn.reason === 'hard_budget');
+    const attemptDir = path.dirname(path.join(input.workspaceRoot, reference.bindingPath));
+    const events = fs.readFileSync(path.join(attemptDir, 'turn-progress.ndjson'), 'utf8').trim().split('\n').map(JSON.parse);
+    assert.equal(events.filter((event) => event.type === 'soft-budget-warning' && event.phase === 'scout').length, 1);
+    assert.equal(events.filter((event) => event.type === 'nudge').length, 0);
+    assert.equal(events.at(-1).type, 'STALLED');
+});
+
+test('authority settles stalled turn, releases lease and never classifies it as kill recovery', async (t) => {
+    const input = fixture(t);
+    const { store } = seedAuthority(input);
+    const discussion = createDiscussionStub({ async beforeTurn(context) {
+        fs.writeFileSync(path.join(context.workerRoot, 'index.js'), '// partial milestone\n');
+        await new Promise((resolve) => context.signal.addEventListener('abort', resolve, { once: true }));
+        context.signal.throwIfAborted();
+    } });
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, discussion,
+        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 30, graceMs: 20, pollMs: 5 } });
+    await assert.rejects(adapter.runTask(store.derive()), { code: 'DUAL_TURN_STALLED' });
+    const derived = store.derive(), task = derived.tasks['TASK-1'];
+    assert.equal(task.lastOutcome.code, 'DUAL_TURN_STALLED');
+    assert.equal(task.lastOutcome.status, 'FAILED');
+    assert.equal(require('../lib/dual/isolated-authority').resolveKillDiscussionRecovery(input.workspaceRoot, task), null);
+    assert.ok(Object.values(derived.leases).every((lease) => lease.status === 'released'));
+    assert.equal(task.isolatedHandoff, undefined);
+    assert.equal(discussion.executions.length, 1);
+    const root = discussion.executions[0].workerRoot;
+    assert.equal(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), '// partial milestone\n');
+});
+
+test('progressing implement emits heartbeats and completes without watchdog intervention', async (t) => {
+    const input = fixture(t), worker = fakeWorker([]);
+    let reference;
+    const handoff = await runIsolatedTask({ ...input, onPrepared(saved) { reference = saved; },
+        turnSafety: { softMs: 1000, hardMs: 2000, heartbeatMs: 10, noProgressMs: 100, graceMs: 100, pollMs: 5 },
+        worker: async (invocation, deps) => {
+            if (invocation.args.some((arg) => arg.includes('implement phase'))) {
+                const file = path.join(invocation.cwd, 'index.js');
+                const timer = setInterval(() => fs.appendFileSync(file, '// progress\n'), 10);
+                try { await new Promise((resolve) => setTimeout(resolve, 150)); }
+                finally { clearInterval(timer); }
+            }
+            return worker(invocation, deps);
+        },
+    });
+    assert.equal(handoff.status, 'AWAITING_CODEX_QC');
+    const attemptDir = path.dirname(path.join(input.workspaceRoot, reference.bindingPath));
+    const events = fs.readFileSync(path.join(attemptDir, 'turn-progress.ndjson'), 'utf8').trim().split('\n').map(JSON.parse);
+    assert.ok(events.some((event) => event.phase === 'implement' && event.type === 'heartbeat'));
+    assert.ok(events.some((event) => event.phase === 'implement' && event.type === 'turn-complete'));
+    assert.equal(events.some((event) => ['STALLED', 'nudge'].includes(event.type)), false);
+});
