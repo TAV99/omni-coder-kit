@@ -10,7 +10,7 @@ const { revisionSourceFingerprint, prepareRevisionWorkspace, reconcileRevisionPr
 const { collectTaskResult } = require('../lib/dual/task-workspace');
 const { runRevisionChecks, revisionRpc } = require('../lib/dual/task-revision');
 const command = source => ({ program: 'node', args: ['-e', source], cwd: '.' });
-function fixture(t, { mutatingCheck = false } = {}) {
+function fixture(t, { mutatingCheck = false, operationLifecycle = false } = {}) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'revision-controller-flow-'));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     fs.writeFileSync(path.join(root, 'app.js'), 'module.exports = 1;\n');
@@ -57,6 +57,31 @@ function fixture(t, { mutatingCheck = false } = {}) {
         expected_sequence: store.verifyIntegrity().lastSequence });
     const scoped = store.forRevision('task', 'revision');
     const candidateLease = scoped.acquireLease('task', 'agy');
+    if (operationLifecycle) {
+        const { createOperationLifecycleWriter } = require('../lib/dual/operation-lifecycle-writer');
+        scoped.append({ type: 'task.execution.started', task_id: 'task', lease_id: candidateLease.lease_id,
+            controller_pid: process.pid });
+        const writer = createOperationLifecycleWriter(scoped);
+        const identity = { taskId: 'task', leaseId: candidateLease.lease_id,
+            operationId: require('node:crypto').randomUUID() };
+        assert.equal(writer.begin(identity).active, true);
+        const commitment = store.readEvents().filter(event => event.type === 'task.operation.ledger.committed').at(-1);
+        assert.equal(commitment.revision_id, 'revision');
+        assert.throws(() => writer.begin(identity), { code: 'DUAL_OPERATION_ACTIVE' });
+        assert.equal(store.readOperationRecords().length, 1);
+        assert.equal(store.derive().tasks.task.active_revision.state, 'EXECUTING');
+        assert.equal(writer.settle({ ...identity, outcome: 'completed' }).settled, true);
+        const records = store.readOperationRecords();
+        const commitments = store.readEvents().filter(event => event.type === 'task.operation.ledger.committed');
+        assert.equal(records.length, 2);
+        assert.equal(commitments.length, records.length);
+        assert.ok(commitments.every(event => event.revision_id === 'revision'));
+        assert.equal(createAuthorityStore(path.join(root, '.omni/runs/dual-authority')).derive()
+            .tasks.task.active_revision.state, 'EXECUTING');
+        assert.throws(() => writer.begin({ ...identity, operationId: require('node:crypto').randomUUID() }),
+            { code: 'DUAL_OPERATION_SETTLED' });
+        assert.equal(store.readOperationRecords().length, 2);
+    }
     const reference = prepareRevisionWorkspace({ workspaceRoot: root, sessionId: 'session', taskId: 'task', revisionId: 'revision',
         attempt: 1, planRevision: 1, allowedFiles: ['app.js'], contractDigest: request.contract_sha256,
         expectedSourceFingerprint: sourceFingerprint });
@@ -273,4 +298,12 @@ test('restart status leaves journal fenced when promoted authority names a diffe
     assert.equal(status.reconciliation.status, 'RECONCILIATION_REQUIRED');
     assert.equal(status.reconciliation.journals[0].phase, 'CHECKED');
     assert.equal(fs.readFileSync(path.join(f.root, 'app.js'), 'utf8'), 'module.exports = 2;\n');
+});
+
+test('scoped operation begin and settle commit durable records with candidate commitment identity', t => {
+    const { store, parentVersion } = fixture(t, { operationLifecycle: true });
+    const task = store.derive().tasks.task;
+    assert.equal(task.state, 'TASK_VERIFIED');
+    assert.deepEqual(task.current_verified_version, parentVersion);
+    assert.ok(task.active_revision.isolatedHandoff);
 });
