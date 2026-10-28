@@ -637,3 +637,27 @@ test('isolated session preserves task profile for seeds and bindings outside con
     assert.equal(state.calls[1].cwd, state.execution.workerRoot);
     await child.close();
 });
+
+test('child authority diagnostics report revocation, binding mismatch and closing without identities', async (t) => {
+    const state = await isolatedFixture(t);
+    const child = await state.host.createIsolatedDiscussion(state.execution);
+    const session = await child.sessionResolver(state.request);
+    const entries = [];
+    const syncFs = require('node:fs');
+    const write = syncFs.writeSync;
+    t.mock.method(syncFs, 'writeSync', (fd, value, ...rest) => {
+        if (fd === 2) { entries.push(JSON.parse(value)); return Buffer.byteLength(value); }
+        return write(fd, value, ...rest);
+    });
+    assert.equal((await child.authorityReader({ bindings: [{ ...session.bindings[0], conversation_id: 'foreign' }] }))
+        .expectedSnapshotSha256, '');
+    assert.equal(entries.at(-1).message, 'bindings_mismatch fail');
+    state.revoke();
+    assert.equal((await child.authorityReader({ bindings: session.bindings })).expectedSnapshotSha256, '');
+    assert.equal(entries.at(-1).message, 'authorize_false fail');
+    await child.close();
+    assert.equal((await child.authorityReader({ bindings: session.bindings })).expectedSnapshotSha256, '');
+    assert.equal(entries.at(-1).message, 'closing fail');
+    assert.ok(entries.every(entry => entry.event === 'discussion.child_authority.condition'
+        && /^[a-z_]+ fail$/.test(entry.message)));
+});
