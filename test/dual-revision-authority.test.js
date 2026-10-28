@@ -177,6 +177,49 @@ test('durable candidate questions, outcomes and leases remain isolated from veri
     assert.equal(store.derive().tasks['task-1'].active_revision.lastOutcome.code, 'RESULT_MALFORMED');
     assert.equal(store.verifyIntegrity().valid, true);
 });
+test('operation lineage resolves candidate execution without contaminating the verified parent', t => {
+    const { store: durableStore, event } = authorityFixture(t);
+    // The legacy fixture verifies an in-place parent; project its mode to isolate
+    // execution lookup while retaining real revision events and durable records.
+    const store = { ...durableStore, derive() {
+        const state = durableStore.derive();
+        state.tasks['task-1'].execution_mode = 'isolated';
+        return state;
+    } };
+    const { inspectOperation, assertOperationAuthorized } = require('../lib/dual/operation-lifecycle');
+    const { createOperationLifecycleWriter } = require('../lib/dual/operation-lifecycle-writer');
+    store.append(event);
+    const started = start(event);
+    delete started.contract; delete started.approval; delete started.request_id; delete started.request_sha256;
+    store.append(started);
+    const scoped = store.forRevision('task-1', event.revision_id);
+    const lease = scoped.acquireLease('task-1', 'agy');
+    const operationId = '18181818-1818-4181-8181-181818181818';
+    const params = { taskId: 'task-1', leaseId: lease.lease_id, operationId };
+    assert.throws(() => inspectOperation({ authorityStore: store, ...params }), { code: 'DUAL_OPERATION_INVALID' });
+    scoped.append({ type: 'task.execution.started', lease_id: lease.lease_id, controller_pid: process.pid });
+    createOperationLifecycleWriter(scoped).begin(params);
+    const parent = store.derive().tasks['task-1'];
+    assert.equal(parent.executions?.[lease.lease_id], undefined);
+    assert.ok(parent.active_revision.executions[lease.lease_id]);
+    assert.deepEqual(inspectOperation({ authorityStore: store, ...params }), { active: true, settled: false, outcome: null });
+    assert.doesNotThrow(() => assertOperationAuthorized({ authorityStore: store, ...params }));
+
+    // Exercise fallback and rejection against projections of the same durable evidence.
+    const projected = (change) => ({
+        derive() { const state = store.derive(); change(state); return state; },
+        readOperationRecords: () => store.readOperationRecords(),
+    });
+    const fallback = projected(state => { state.tasks['task-1'].revisions = []; });
+    assert.doesNotThrow(() => assertOperationAuthorized({ authorityStore: fallback, ...params }));
+    const wrongRevision = projected(state => { state.leases[lease.lease_id].revision_id = 'other-revision'; });
+    for (const check of [inspectOperation, assertOperationAuthorized]) {
+        assert.throws(() => check({ authorityStore: wrongRevision, ...params }), { code: 'DUAL_OPERATION_INVALID' });
+        assert.throws(() => check({ authorityStore: store, ...params,
+            leaseId: '19191919-1919-4191-8191-191919191919' }), { code: 'DUAL_OPERATION_LINEAGE_MISMATCH' });
+    }
+});
+
 test('durable start rejects source drift without consuming budget', t => {
     const { root, fs, path, store, event } = authorityFixture(t); store.append(event);
     fs.writeFileSync(path.join(root, 'a.js'), 'changed');
