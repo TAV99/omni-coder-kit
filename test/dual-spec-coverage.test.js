@@ -120,6 +120,44 @@ describe('coverage approval compare-and-set', () => {
 describe('delegated decision log', () => {
     function fixture() { const a=pinned(); const row=a.dimensions.find(d=>d.id==='booking.slots'); row.state='delegated'; delete row.value; row.constraints=[{type:'object',properties:{duration_minutes:{const:60}}}]; return a; }
     function entry() { return {dimension_id:'booking.slots',chosen_value:{mode:'generated',duration_minutes:60,step_minutes:30,boundary:'end within operating window'},rationale:'User allowed slot layout',evidence_refs:['src/booking.js:10']}; }
+    it('accepts 17 pinned echoes or an empty log with an empty binding', () => {
+        const a = { ...pinned(), app_types: ['core'], dimensions: expandCatalog(['core']).map(d => ({ id: d.id, state: 'pinned', value: d.examples[0], sources: source })) };
+        const echoes = a.dimensions.map(d => ({ dimension_id: d.id, chosen_value: d.value }));
+        assert.equal(echoes.length, 17);
+        for (const entries of [echoes, []]) assert.deepEqual(validateDecisionLog(a, entries, { decision_ids: [] }), { valid: true, errors: [], advisories: [] });
+        // Skipped rows are neither duplicate-checked nor compared against pinned values.
+        assert.equal(validateDecisionLog(a, [...echoes, { ...echoes[0], chosen_value: null }], { decision_ids: [] }).valid, true);
+    });
+    it('still rejects pinned entries when bound or when binding is undefined', () => {
+        const a = pinned(), row = a.dimensions[0];
+        for (const options of [{ decision_ids: [row.id] }, { decision_ids: undefined }]) {
+            const r = validateDecisionLog(a, [{ dimension_id: row.id, chosen_value: row.value }], options);
+            assert.equal(r.valid, false);
+            assert.ok(r.errors.includes(`${row.id}: new/unresolved or non-delegated decision`));
+        }
+    });
+    it('still rejects unknown entries and delegated entries outside an empty binding', () => {
+        for (const dimension_id of ['new.dimension', 'booking.slots']) {
+            const r = validateDecisionLog(fixture(), [{ ...entry(), dimension_id }], { decision_ids: [] });
+            assert.equal(r.valid, false);
+            assert.ok(r.errors.includes(dimension_id === 'booking.slots' ? `${dimension_id}: decision outside task binding` : `${dimension_id}: new/unresolved or non-delegated decision`));
+        }
+    });
+    it('requires bound delegated entries and checks schema, rationale, evidence and constraints', () => {
+        const options = { decision_ids: ['booking.slots'] };
+        assert.ok(validateDecisionLog(fixture(), [], options).errors.includes('booking.slots: missing decision log'));
+        for (const change of [
+            { chosen_value: null }, { rationale: '' }, { evidence_refs: [] },
+            { chosen_value: { ...entry().chosen_value, duration_minutes: 45 } }
+        ]) {
+            const r = validateDecisionLog(fixture(), [{ ...entry(), ...change }], options);
+            assert.equal(r.valid, false, JSON.stringify(change));
+            assert.ok(r.errors.length);
+        }
+        const a = fixture(); a.dimensions.find(d => d.id === 'booking.slots').constraints = ['Keep existing slots'];
+        assert.match(validateDecisionLog(a, [entry()], options).errors.join(';'), /textual constraint requires an explicit review finding/);
+        assert.match(validateDecisionLog(fixture(), [entry(), entry()], options).errors.join(';'), /duplicate decision log/);
+    });
     it('accepts choice within constraints as advisory',()=>{const r=validateDecisionLog(fixture(),[entry()],{decision_ids:['booking.slots']}); assert.equal(r.valid,true,r.errors.join(';')); assert.equal(r.advisories.length,1);});
     it('rejects outside constraints, missing log and new/unapproved decisions',()=>{
         const e=entry(); e.chosen_value.duration_minutes=45; assert.equal(validateDecisionLog(fixture(),[e]).valid,false);
