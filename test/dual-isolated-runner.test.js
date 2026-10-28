@@ -476,6 +476,9 @@ test('isolated authority QC runs registered validators and integrates before tas
     assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 2;\n');
     assert.equal(complete.commands[0].command, 'node --check index.js');
     assert.equal(complete.commands[0].exit_code, 0);
+    assert.equal(Object.hasOwn(complete, 'qcLayers'), false, 'absent fields preserve the legacy return shape');
+    assert.equal(complete.commands.length, 1, 'absent fields run only the registered checker');
+    assert.equal(Object.hasOwn(store.derive().gates['isolated-qc-TASK-1'].details, 'qcLayers'), false);
     const before = store.verifyIntegrity().lastHash;
     assert.equal((await completeIsolatedTask(request)).status, 'TASK_VERIFIED');
     assert.equal(store.verifyIntegrity().lastHash, before);
@@ -1359,3 +1362,52 @@ test('daemon recovery API requires finite config and refuses caller-supplied fai
     await assert.rejects(() => f.client.request('task.recovery.grant', { ...lineage, grant_id: 'fake', expected_attempt: 1 }));
     assert.equal(f.store.derive().tasks['TASK-1'].recoveryPolicy.worker_limit, 2);
 });
+
+for (const scenario of ['pass', 'exit', 'missing-block', 'false-test', 'evidence-missing', 'evidence-unknown', 'path-escape']) {
+    test(`layered isolated QC: ${scenario}`, async (t) => {
+        const { completeIsolatedTask } = require('../lib/dual/isolated-qc');
+        const input = fixture(t);
+        const tests = [{ name: 'cart', passed: scenario !== 'false-test' }];
+        const stdout = scenario === 'missing-block' ? 'no results' :
+            `---QC-BEHAVIOR-RESULTS-BEGIN---\n${JSON.stringify({ tests })}\n---QC-BEHAVIOR-RESULTS-END---`;
+        input.task.behavior_commands = [{ program: 'node', args: ['-e',
+            `console.log(${JSON.stringify(stdout)});process.exit(${scenario === 'exit' ? 1 : 0})`], cwd: '.' }];
+        input.task.qc_evidence = { requirements_path: 'requirements.json', evidence_path: 'mapping.json' };
+        fs.writeFileSync(path.join(input.workspaceRoot, 'requirements.json'), JSON.stringify({ requirements: [{ id: 'R1', text: 'Cart works' }] }));
+        fs.writeFileSync(path.join(input.workspaceRoot, 'mapping.json'), JSON.stringify({ entries:
+            scenario === 'evidence-missing' ? [] : [{ requirement_id: scenario === 'evidence-unknown' ? 'R2' : 'R1', tests: ['cart'] }] }));
+        input.task.context_files.push('requirements.json', 'mapping.json');
+        const { store } = seedAuthority(input);
+        await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+            worker: fakeWorker([]) }).runTask(store.derive());
+        if (scenario === 'path-escape') {
+            // Simulate a legacy/malformed task bypassing the registration schema.
+            const derive = store.derive.bind(store);
+            store.derive = () => {
+                const state = derive();
+                state.tasks['TASK-1'].qc_evidence.requirements_path = '../outside.json';
+                return state;
+            };
+            // The immutable contract binding must reject this before any file read.
+            await assert.rejects(() => completeIsolatedTask({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+                sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 }), { code: 'DUAL_ISOLATED_AUTHORITY_STALE' });
+            return;
+        }
+        const result = await completeIsolatedTask({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+            sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 });
+        assert.equal(result.status, scenario === 'pass' ? 'TASK_VERIFIED' : 'NEEDS_FIX', JSON.stringify(result));
+        assert.equal(result.qcLayers.checker.passed, true);
+        assert.equal(result.qcLayers.passed, scenario === 'pass');
+        if (scenario === 'pass') {
+            const retry = await completeIsolatedTask({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+                sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 });
+            assert.equal(retry.alreadyVerified, true);
+            assert.deepEqual(retry.qcLayers, result.qcLayers);
+        } else {
+            const code = ['exit', 'missing-block', 'false-test'].includes(scenario) ? 'DUAL_QC_BEHAVIOR_FAILED' : 'DUAL_QC_EVIDENCE_FAILED';
+            assert.equal(result.code, code);
+            assert.equal(store.derive().tasks['TASK-1'].lastOutcome.code, code);
+            assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 1;\n');
+        }
+    });
+}
