@@ -440,3 +440,115 @@ for (const [owner, model, effort, expectedCode] of [
         }
     });
 }
+
+function executionGateFixture(t) {
+    const crypto = require('node:crypto');
+    const { canonicalizeEvent } = require('../lib/dual/authority-store');
+    const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
+    const root = fs.realpathSync.native(workspace(t));
+    const sessionId = 'gate-session', taskId = 'TASK-1';
+    const leaseId = '11111111-1111-4111-8111-111111111111';
+    const operationId = '22222222-2222-4222-8222-222222222222';
+    function binding(revisionId) {
+        const dir = `.omni/runs/dual-workspaces/${hash(sessionId).slice(0, 16)}/${hash(taskId).slice(0, 16)}/${revisionId ? `revision-${revisionId}/` : ''}attempt-1`;
+        const workerRoot = path.join(root, dir, 'workspace');
+        fs.mkdirSync(workerRoot, { recursive: true });
+        const baseline = JSON.stringify({ identity: { id: revisionId || 'original' } });
+        const contract = JSON.stringify({ revisionId: revisionId || 'original' });
+        const value = { schema_version: 1, sourceRoot: root, sessionId, taskId, attempt: 1, planRevision: 1,
+            workerPath: `${dir}/workspace`, sourceFiles: [], snapshotSha256: hash(canonicalizeEvent([])),
+            ...(revisionId ? { revisionId, contractDigest: hash(contract) } : {}) };
+        const bytes = JSON.stringify(value);
+        fs.writeFileSync(path.join(root, dir, 'binding.json'), bytes);
+        fs.writeFileSync(path.join(root, dir, 'worker-baseline.json'), baseline);
+        fs.writeFileSync(path.join(root, dir, 'worker-contract.json'), contract);
+        return { reference: { bindingPath: `${dir}/binding.json`, bindingSha256: hash(bytes),
+            workerBaselineSha256: hash(baseline), workerContractSha256: hash(contract) }, workerRoot };
+    }
+    const live = binding(), candidate = binding('revision-1');
+    const task = { execution_mode: 'isolated', owner: 'agy', isolatedWorkspace: { reference: live.reference, attempt: 1 },
+        active_revision: { revision_id: 'revision-1', state: 'EXECUTING' },
+        executions: { [leaseId]: { session_id: sessionId, plan_revision: 1 } } };
+    const events = [{ type: 'task.workspace.prepared', task_id: taskId, attempt: 1, reference: candidate.reference }];
+    const store = { derive: () => ({ sessionId, planRevision: 1, tasks: { [taskId]: task },
+        leases: { [leaseId]: { task_id: taskId, session_id: sessionId, owner: 'agy', status: 'active' } } }),
+        readEvents: () => events, readOperationRecords: () => [{ type: 'started', task_id: taskId,
+            lease_id: leaseId, operation_id: operationId }] };
+    const diagnostics = [];
+    const server = loadModule('../lib/dual/daemon-server', {
+        './discussion/host-resolver': { createDiscussionHost: (options) => options },
+        './daemon-diagnostics': { logDaemonDiagnostic: (event, fields) => diagnostics.push({ event, ...fields }) },
+    });
+    let hooks;
+    const host = server.createDaemonDiscussionHost({ authorityStore: store, workspaceRoot: root,
+        createIsolatedAdapters: async (options) => { hooks = options; return {}; } });
+    const context = { sessionId, taskId, planRevision: 1, attempt: 1, reference: candidate.reference,
+        workerRoot: candidate.workerRoot, workerBaselineId: 'revision-1', workerContractSha256: candidate.reference.workerContractSha256,
+        leaseId, operationId, authorize: () => true, spawnImpl() {}, signal: new AbortController().signal,
+        env: { GIT_CEILING_DIRECTORIES: path.dirname(candidate.workerRoot) }, prespawnGuard() {},
+        workerModel: 'gemini-3.8-flash-high', workerEffort: 'high' };
+    return { host, context, task, events, diagnostics, live, candidate, hooks: () => hooks };
+}
+
+test('revision execution gate accepts candidate and resolves its worker root and evidence', async (t) => {
+    const f = executionGateFixture(t);
+    const result = await f.host.createExecutionOptions(f.context);
+    assert.equal(result.trustedExecutionContext.workerRoot, f.candidate.workerRoot);
+    assert.equal(f.hooks().cwd, f.candidate.workerRoot);
+    assert.notEqual(f.hooks().cwd, f.live.workerRoot);
+    assert.equal(f.diagnostics.length, 0);
+});
+
+for (const scenario of ['non-revision mismatch', 'prepared missing', 'wrong revision', 'revision not executing', 'binding unreadable']) {
+    test(`revision execution gate rejects ${scenario}`, async (t) => {
+        const f = executionGateFixture(t);
+        if (scenario === 'non-revision mismatch') {
+            delete f.task.active_revision;
+            f.context.reference = { ...f.live.reference, bindingSha256: '0'.repeat(64) };
+            f.events[0].reference = f.context.reference;
+        }
+        if (scenario === 'prepared missing') f.events.length = 0;
+        if (scenario === 'wrong revision') f.task.active_revision.revision_id = 'revision-2';
+        if (scenario === 'revision not executing') f.task.active_revision.state = 'PREPARED';
+        if (scenario === 'binding unreadable') fs.unlinkSync(path.join(path.dirname(f.candidate.workerRoot), 'binding.json'));
+        await assert.rejects(f.host.createExecutionOptions(f.context), (error) => {
+            assert.equal(error.code, 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID');
+            assert.equal(error.message, 'Execution does not match the prepared daemon authority');
+            return true;
+        });
+        assert.equal(f.hooks(), undefined);
+        assert.equal(f.diagnostics.length, 1);
+        assert.match(f.diagnostics[0].message, scenario === 'prepared missing' ? /prepared_missing/ : /reference_mismatch/);
+        assert.ok(!JSON.stringify(f.diagnostics).includes(f.context.reference.bindingSha256));
+        assert.ok(!JSON.stringify(f.diagnostics).includes(f.candidate.workerRoot));
+    });
+}
+
+test('non-revision execution gate accepts the prepared live reference', async (t) => {
+    const f = executionGateFixture(t);
+    delete f.task.active_revision;
+    Object.assign(f.context, { reference: f.live.reference, workerRoot: f.live.workerRoot,
+        workerBaselineId: 'original', workerContractSha256: f.live.reference.workerContractSha256,
+        env: { GIT_CEILING_DIRECTORIES: path.dirname(f.live.workerRoot) } });
+    f.events[0].reference = f.live.reference;
+    const result = await f.host.createExecutionOptions(f.context);
+    assert.equal(result.trustedExecutionContext.workerRoot, f.live.workerRoot);
+});
+
+for (const condition of ['session', 'plan_revision', 'execution_mode', 'attempt', 'authorize']) {
+    test(`execution gate diagnoses ${condition} without disclosing authority evidence`, async (t) => {
+        const f = executionGateFixture(t);
+        if (condition === 'session') f.context.sessionId = 'wrong-session';
+        if (condition === 'plan_revision') f.context.planRevision = 2;
+        if (condition === 'execution_mode') f.task.execution_mode = 'shared';
+        if (condition === 'attempt') f.context.attempt = 2;
+        if (condition === 'authorize') f.context.authorize = () => false;
+        await assert.rejects(f.host.createExecutionOptions(f.context),
+            { code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID', message: 'Execution does not match the prepared daemon authority' });
+        assert.equal(f.diagnostics.length, 1);
+        assert.match(f.diagnostics[0].message, new RegExp(`\\b${condition}\\b`));
+        assert.equal(f.diagnostics[0].task_id, f.context.taskId);
+        assert.equal(f.diagnostics[0].revision_id, 'revision-1');
+        assert.equal(f.hooks(), undefined);
+    });
+}
