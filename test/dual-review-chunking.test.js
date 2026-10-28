@@ -9,7 +9,7 @@ const { spawnSync } = require('node:child_process');
 const { createDualOrchestrator } = require('../lib/dual/orchestrator');
 const { buildBindings } = require('../lib/dual/discussion/session');
 
-async function fixture(t, { enabled, missingResolver = false, disabledSession = false, unknown = false, invalid = false, snapshot = false, taskId = 'TASK-DISCUSSION', allowedFiles = ['index.html'] } = {}) {
+async function fixture(t, { enabled, missingResolver = false, disabledSession = false, unknown = false, invalid = false, snapshot = false, taskId = 'TASK-DISCUSSION', allowedFiles = ['index.html'], orchestratorFactory = createDualOrchestrator } = {}) {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-discussion-orch-'));
     t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
     const git = (...args) => {
@@ -63,7 +63,7 @@ async function fixture(t, { enabled, missingResolver = false, disabledSession = 
                 return { response_message_id: `response-${messageId}`, invocation_id: 'inv-1' };
             },
         } };
-    const orch = createDualOrchestrator({ workerModel: 'gemini-3.7-flash-high', workerEffort: 'high', cwd: repoRoot, backend: snapshot ? 'snapshot' : 'git', initialSnapshot,
+    const orch = orchestratorFactory({ workerModel: 'gemini-3.7-flash-high', workerEffort: 'high', cwd: repoRoot, backend: snapshot ? 'snapshot' : 'git', initialSnapshot,
         authoritativeCapabilityEvidence: { version: '1.1.19', model: 'gemini-3.7-flash-high' },
         gitRunner: (args, { cwd, encoding = 'utf8' } = {}) => {
             const result = spawnSync('git', args, { cwd, encoding, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -429,3 +429,90 @@ test('ten-file 40-55 KB review diff needs 15-18 chunks: over ceiling 12, within 
             `chunks (${plan.chunks.length}) + 1 scout turn must fit CEILINGS.maxInvocations (${CEILINGS.maxInvocations})`);
     }
 });
+
+// Load a separate orchestrator with coverage authority stubbed at its boundary;
+// exercise the real persisted review input rather than a copied renderer.
+function coverageOrchestrator(t, current) {
+    const runtime = require('../lib/dual/coverage-runtime');
+    const guard = t.mock.method(runtime, 'assertRuntimeCoverage', () => current.gate);
+    const review = t.mock.method(runtime, 'assertRuntimeReview', () => {});
+    const modulePath = require.resolve('../lib/dual/orchestrator');
+    const cached = require.cache[modulePath];
+    try {
+        delete require.cache[modulePath];
+        return require(modulePath).createDualOrchestrator;
+    } finally {
+        require.cache[modulePath] = cached;
+        guard.mock.restore();
+        review.mock.restore();
+    }
+}
+
+const coverageInstruction = 'Return schema_version: 2. Implementation evidence must include decision_log entries with dimension_id, chosen_value, rationale, evidence_refs; the orchestrator persists the sidecar. Review must include coverage_checks, constraint_findings and coverage_findings. Respect pinned values and N/A exclusions; new/unresolved decisions require NEEDS_CONTEXT.\n';
+const coverageHeader = '\n## Approved spec coverage (immutable task input)\n';
+function candidateGate() {
+    const effective_artifact = { schema_version: 1, catalog_version: 1, revision: 2,
+        dimensions: Array.from({ length: 17 }, (_, i) => ({ id: `dimension.${i}`,
+            state: i === 16 ? 'not_applicable' : 'pinned', value: `Giá trị ${i}`,
+            ...(i === 16 ? { reason: 'Excluded by approved spec' } : {}),
+            sources: [{ kind: 'user', ref: `spec:${i}` }] })) };
+    // Match trial-20 payload lengths, without depending on private run artifacts.
+    effective_artifact.classification_sources = [''];
+    effective_artifact.classification_sources[0] = 's'.repeat(2946 - Buffer.byteLength(JSON.stringify(effective_artifact)));
+    const gate = { state: 'PASSED', effective_artifact, artifact: effective_artifact,
+        receipt: { provenance: 'receipt-only', padding: 'r'.repeat(6000) },
+        plan: { provenance: 'plan-only', padding: 'p'.repeat(1400) } };
+    gate.padding = 'g'.repeat(13644 - Buffer.byteLength(JSON.stringify({ ...gate, padding: '' })));
+    return gate;
+}
+
+for (const kind of ['projected', 'legacy', 'fallback']) {
+    test(`persisted review coverage input: ${kind}`, async (t) => {
+        const current = { gate: { state: 'LEGACY_UNCHECKED' } };
+        const f = await ready(t, '<body>Updated</body>\n', {
+            orchestratorFactory: coverageOrchestrator(t, current) });
+        const gate = candidateGate();
+        if (kind === 'fallback') {
+            delete gate.effective_artifact;
+            delete gate.padding;
+            gate.receipt = { provenance: 'receipt-only' };
+            gate.plan = { provenance: 'plan-only' };
+        }
+        if (kind !== 'legacy') {
+            current.gate = gate;
+            fs.writeFileSync(path.join(f.runDir, 'coverage-input.json'), JSON.stringify({ receipt: gate.receipt }));
+            Object.assign(f.payloads.review, { schema_version: 2, coverage_checks: [],
+                coverage_findings: [], constraint_findings: [] });
+        }
+        await f.orch.runPhase('review', f.taskId);
+        const input = fs.readFileSync(path.join(f.runDir, 'raw/review.1.input.md'), 'utf8');
+        const implementInput = fs.readFileSync(path.join(f.runDir, 'raw/implement.1.input.md'), 'utf8');
+        assert.ok(implementInput.includes('\nCoverage: LEGACY_UNCHECKED (v1 plan).\n'));
+        if (kind === 'legacy') {
+            assert.ok(input.includes('\nCoverage: LEGACY_UNCHECKED (v1 plan).\n'));
+            assert.ok(!input.includes(coverageHeader));
+            return;
+        }
+        const section = input.slice(input.indexOf(coverageHeader), input.indexOf(coverageInstruction) + coverageInstruction.length);
+        const expected = gate.effective_artifact || gate;
+        assert.equal(section, coverageHeader + JSON.stringify(expected) + '\n' + coverageInstruction);
+        if (kind === 'fallback') return;
+        const rendered = JSON.parse(section.split('\n')[2]);
+        assert.deepEqual(rendered, gate.effective_artifact);
+        for (const key of ['receipt', 'artifact', 'plan']) assert.equal(Object.hasOwn(rendered, key), false);
+        for (const dimension of gate.effective_artifact.dimensions) assert.ok(section.includes(JSON.stringify(dimension)));
+        const after = 'x'.repeat(9697 - Buffer.byteLength(section)) + section;
+        const before = after.replace(JSON.stringify(gate.effective_artifact), JSON.stringify(gate));
+        assert.equal(Buffer.byteLength(before), 20395);
+        assert.equal(Buffer.byteLength(after), 9697);
+        const schema = JSON.stringify(require('../lib/dual/contracts').toDraft7Schema(
+            require('../lib/dual/contracts').ReviewSchema, 'omni-dual-review-v1', { schemaVersion: 2, baselineKind: 'git' }), null, 2);
+        const diff = 'New file: app.js\nconst ok = true;\n';
+        assert.throws(() => planReviewChunks(before, schema, diff), { code: 'LIMIT_EXCEEDED' });
+        const planned = planReviewChunks(after, schema, diff);
+        assert.equal(planned.chunks.length, 1);
+        assert.equal(planned.chunks[0].text, diff);
+        assert.throws(() => planReviewChunks(after + 'x'.repeat(8000), schema, diff), { code: 'LIMIT_EXCEEDED' });
+        t.diagnostic(`fixture input bytes: ${Buffer.byteLength(before)} -> ${Buffer.byteLength(after)}; schema bytes: ${Buffer.byteLength(schema)} raw / ${Buffer.byteLength(JSON.stringify(JSON.parse(schema)))} compact; body bytes: ${planned.chunks[0].body_bytes}`);
+    });
+}
