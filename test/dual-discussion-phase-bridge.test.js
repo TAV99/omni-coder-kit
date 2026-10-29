@@ -130,8 +130,12 @@ test('unknown outcome carries message and invocation info without retry', async 
 for (const body of ['not JSON', 'null', '[]', '"text"', 'before ```json\n{}\n``` after']) {
     test(`rejects malformed phase result: ${body}`, async (t) => {
         const { calls, args } = await sessionFixture(t, { body });
-        await assert.rejects(runDiscussionPhase(args), phaseError('RESULT_MALFORMED'));
-        assert.equal(calls.length, 1);
+        await assert.rejects(runDiscussionPhase(args), (err) => {
+            assert.ok(phaseError('RESULT_MALFORMED')(err));
+            assert.equal(err.details.malformedNudges, 2);
+            return true;
+        });
+        assert.equal(calls.length, 3);
     });
 }
 
@@ -213,11 +217,13 @@ for (const secondValid of [true, false]) {
             const outcome = await run;
             assert.equal(outcome.result.summary, 'fixed');
             assert.equal(outcome.discussionCorrection, 'schema-nudge');
+            assert.equal(outcome.malformedNudges, 1);
         } else {
             await assert.rejects(run, (err) => {
                 assert.ok(phaseError('RESULT_MALFORMED')(err));
                 assert.equal(err.details.validationIssues, 'summary must be a string');
                 assert.equal(err.details.rawReplyExcerpt, '{"summary":43}');
+                assert.equal(err.details.malformedNudges, 1);
                 return true;
             });
         }
@@ -279,10 +285,13 @@ test('correction malformed JSON retains previous validation issues', async (t) =
     await assert.rejects(runDiscussionPhase({ ...args, validate: () => ({ ok: false, issues: 'summary must be a string' }) }), (err) => {
         assert.ok(phaseError('RESULT_MALFORMED')(err));
         assert.equal(err.details.rawReplyExcerpt, 'bad JSON');
+        assert.equal(err.details.malformedNudges, 2);
+        assert.equal(err.details.messageId, calls.at(-1).envelope.message_id);
+        assert.equal(err.details.invocationId, calls.at(-1).invocationId);
         assert.equal(err.details.validationIssues, 'summary must be a string');
         return true;
     });
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 3);
 });
 
 
@@ -379,3 +388,67 @@ for (const firstUnknown of [false, true]) {
         assert.deepEqual(view.messages.map((message) => message.kind), ['question', 'reply', 'question']);
     });
 }
+
+test('parse nudge re-emits the same content with fresh question identity', async (t) => {
+    const { calls, args } = await sessionFixture(t, { bodies: ['bad JSON', '{"summary":"fixed"}'] });
+    const outcome = await runDiscussionPhase({ ...args, schemaText: 'SCHEMA: summary string' });
+    assert.equal(outcome.malformedNudges, 1);
+    assert.equal(outcome.result.summary, 'fixed');
+    assert.equal(calls.length, 2);
+    const nudge = calls[1].envelope;
+    assert.notEqual(nudge.message_id, calls[0].envelope.message_id);
+    assert.equal(nudge.kind, 'question');
+    assert.equal(nudge.sender_ref, args.senderRef);
+    assert.equal(nudge.recipient_ref, args.recipientRef);
+    assert.ok(nudge.body.includes('--- PHASE FORMAT CORRECTION ---'));
+    assert.ok(nudge.body.includes('SAME content'));
+    assert.ok(nudge.body.includes('bad JSON'));
+});
+
+for (const bodies of [
+    ['bad JSON', '{"summary":42}', 'bad again'],
+    ['{"summary":42}', 'bad JSON', '{"summary":43}'],
+]) {
+    test('mixed malformed failures obey the total nudge cap: ' + bodies[0], async (t) => {
+        const { calls, args } = await sessionFixture(t, { bodies });
+        await assert.rejects(runDiscussionPhase({ ...args,
+            validate: () => ({ ok: false, issues: 'summary must be a string' }),
+        }), (err) => {
+            assert.ok(phaseError('RESULT_MALFORMED')(err));
+            assert.equal(err.details.malformedNudges, 2);
+            assert.equal(err.details.validationIssues, 'summary must be a string');
+            return true;
+        });
+        assert.equal(calls.length, 3);
+    });
+}
+
+for (const embedded of [false, true]) {
+    test('parse nudge bounds multibyte diagnostics for 12 KiB input, embedded=' + embedded, async (t) => {
+        const { calls, args } = await sessionFixture(t, { bodies: ['坏'.repeat(4000), '{}'] });
+        const schemaText = 'SCHEMA: object';
+        await runDiscussionPhase({ ...args, schemaText,
+            promptBody: 'x'.repeat(12 * 1024) + (embedded ? schemaText : '') });
+        const body = calls[1].envelope.body;
+        assert.ok(body.startsWith(calls[0].envelope.body));
+        assert.ok(Buffer.byteLength(body) <= 16384);
+        assert.equal(body.split(schemaText).length - 1, 1);
+        assert.ok(body.endsWith('Answer with ONLY a JSON object matching the schema above.'));
+    });
+}
+
+test('parse nudge refuses fixed overhead beyond body ceiling', async (t) => {
+    const { calls, args } = await sessionFixture(t, { body: 'bad JSON' });
+    await assert.rejects(runDiscussionPhase({ ...args, snapshotText: '',
+        promptBody: 'x'.repeat(16300) }), phaseError('LIMIT_EXCEEDED'));
+    assert.equal(calls.length, 1);
+});
+
+test('parse nudge for 12 KiB input stays below 16 KiB', async (t) => {
+    const { calls, args } = await sessionFixture(t, { bodies: ['not JSON', '{}'] });
+    await runDiscussionPhase({ ...args, promptBody: 'x'.repeat(12 * 1024) });
+    const body = calls[1].envelope.body;
+    assert.ok(body.startsWith(calls[0].envelope.body));
+    assert.ok(Buffer.byteLength(body) < 16384);
+    assert.ok(body.endsWith('Answer with ONLY a JSON object matching the schema above.'));
+});
