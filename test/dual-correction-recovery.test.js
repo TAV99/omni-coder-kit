@@ -29,6 +29,22 @@ test('malformed worker JSON is worker failure, LIMIT_EXCEEDED alone stays unknow
     assert.deepEqual(classifyFailure(task('LIMIT_EXCEEDED')), { category: 'unknown', phase: 'unclassified' });
 });
 
+test('QC behavior and evidence failures are worker failures in controller QC', () => {
+    for (const code of ['DUAL_QC_BEHAVIOR_FAILED', 'DUAL_QC_EVIDENCE_FAILED']) {
+        assert.deepEqual(classifyFailure(task(code)), { category: 'worker', phase: 'controller_qc' });
+    }
+});
+
+test('QC behavior failure receives a worker correction budget without a policy', () => {
+    assert.deepEqual(authorizeCorrection(task('DUAL_QC_BEHAVIOR_FAILED'), { expectedAttempt: 1 }), { budget_class: 'worker' });
+});
+
+test('unrelated unknown failure stays unclassified and cannot receive a correction without a policy', () => {
+    const t = task('UNRELATED_UNKNOWN_FAILURE');
+    assert.deepEqual(classifyFailure(t), { category: 'unknown', phase: 'unclassified' });
+    assert.throws(() => authorizeCorrection(t, { expectedAttempt: 1 }), { code: 'DUAL_CORRECTION_CLASSIFICATION_REQUIRED' });
+});
+
 test('harness classification requires persisted settled finalization evidence', () => {
     const t = task('DUAL_LEASE_EXPIRED');
     assert.equal(classifyFailure(t).category, 'unknown');
