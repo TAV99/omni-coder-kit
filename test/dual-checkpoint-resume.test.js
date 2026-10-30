@@ -70,7 +70,9 @@ async function stalled(t) {
     await assert.rejects(runIsolatedTask({ ...input, discussion: discussion(worker, true), processRunner: worker,
         checkpointMilestone: { summary: 'milestone 1 complete', next: 'implement milestone 2' },
         onPrepared(value) { reference = value; }, onCheckpoint(value) { checkpoint = value; },
-        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 100, graceMs: 50, pollMs: 5 },
+        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 1000, graceMs: 50, pollMs: 5 },
+        // noProgressMs 1000 (not 100): scout-setup's real latency exceeds 100ms on cold
+        // full-suite runs, and .omni/adapter writes no longer mask it as progress (P2b).
     }), { code: 'DUAL_NO_WRITE_PROGRESS', message: 'NO_WRITE_PROGRESS: review (no_evidence)' });
     assert.ok(checkpoint);
     return { input, reference, checkpoint };

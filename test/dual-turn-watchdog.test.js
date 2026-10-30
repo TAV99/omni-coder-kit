@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createTurnWatchdog, TURN_NUDGE_GRACE_MS, TURN_SOFT_BUDGET_MS, TURN_HARD_BUDGET_MS,
-    TURN_HEARTBEAT_MS, TURN_NO_PROGRESS_MS } = require('../lib/dual/turn-watchdog');
+    TURN_HEARTBEAT_MS, TURN_NO_PROGRESS_MS, TURN_IMPLEMENT_NO_PROGRESS_MS } = require('../lib/dual/turn-watchdog');
 function fixture(overrides = {}) {
     let time = 0;
     return { clock: (at) => { time = at; }, watchdog: createTurnWatchdog({ now: () => time,
@@ -11,6 +11,7 @@ function fixture(overrides = {}) {
 test('production safety thresholds are pinned', () => {
     assert.deepEqual([TURN_SOFT_BUDGET_MS, TURN_HARD_BUDGET_MS, TURN_HEARTBEAT_MS,
         TURN_NO_PROGRESS_MS, TURN_NUDGE_GRACE_MS], [600000, 1800000, 60000, 300000, 120000]);
+    assert.equal(TURN_IMPLEMENT_NO_PROGRESS_MS, 600000);
 });
 test('watchdog default hard budget uses TURN_HARD_BUDGET_MS (30 minutes)', () => {
     assert.equal(TURN_HARD_BUDGET_MS, 30 * 60 * 1000);
@@ -35,6 +36,54 @@ test('zero-evidence fails fast at no-progress threshold without nudge or grace',
     assert.equal(beat.action, 'fail-fast');
     assert.equal(beat.reason, 'no_evidence');
     clock(70); assert.equal(watchdog.check().action, 'fail-fast');
+});
+test('implement turn with zero evidence fails fast at 10 minutes, not 5', () => {
+    let time = 0;
+    const watchdog = createTurnWatchdog({ phase: 'implement', now: () => time });
+    time = 5 * 60 * 1000;
+    assert.equal(watchdog.check().action, 'ok');
+    time = 10 * 60 * 1000 - 1;
+    assert.equal(watchdog.check().action, 'ok');
+    time = 10 * 60 * 1000;
+    const state = watchdog.check();
+    assert.equal(state.action, 'fail-fast');
+    assert.equal(state.reason, 'no_evidence');
+    assert.equal(state.nudgedAt, null);
+});
+test('another phase (or no phase) with zero evidence still fails fast at 5 minutes', () => {
+    for (const phase of ['scout', 'review', undefined, null, 'other']) {
+        let time = 0;
+        const watchdog = createTurnWatchdog({ phase, now: () => time });
+        time = 5 * 60 * 1000 - 1;
+        assert.equal(watchdog.check().action, 'ok');
+        time = 5 * 60 * 1000;
+        const state = watchdog.check();
+        assert.equal(state.action, 'fail-fast');
+        assert.equal(state.reason, 'no_evidence');
+        assert.equal(state.nudgedAt, null);
+    }
+});
+test('explicit noProgressMs wins over implement phase default', () => {
+    let time = 0;
+    const watchdog = createTurnWatchdog({ phase: 'implement', now: () => time, noProgressMs: 50 });
+    time = 49;
+    assert.equal(watchdog.check().action, 'ok');
+    time = 50;
+    const state = watchdog.check();
+    assert.equal(state.action, 'fail-fast');
+    assert.equal(state.reason, 'no_evidence');
+});
+test('implement phase some-evidence path nudges after 10 minutes of silence, then stalls after grace', () => {
+    let time = 0;
+    const watchdog = createTurnWatchdog({ phase: 'implement', now: () => time });
+    time = 1000;
+    watchdog.progress();
+    time = 1000 + 10 * 60 * 1000 - 1;
+    assert.equal(watchdog.check().action, 'ok');
+    time = 1000 + 10 * 60 * 1000;
+    assert.equal(watchdog.check().action, 'nudge');
+    time = 1000 + 10 * 60 * 1000 + TURN_NUDGE_GRACE_MS;
+    assert.equal(watchdog.check().action, 'stall');
 });
 test('some-evidence nudges once, heartbeat does not mask silence, stall after grace', () => {
     const { clock, watchdog } = fixture();

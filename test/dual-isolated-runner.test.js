@@ -976,6 +976,15 @@ test('isolated contract header instructs unverified_items empty array and prompt
     const implementTemplate = fs.readFileSync(path.resolve(__dirname, '../templates/codex-gemini/prompts/implement.md'), 'utf8');
     assert.doesNotMatch(implementTemplate, /tag them in `unverified_items` with `\[EXTERNAL_OPTIONAL\]`/);
     assert.match(implementTemplate, /`unverified_items` in `evidence\.json` MUST BE EXACTLY `\[\]`/);
+    assert.match(implementTemplate, /Skeleton-First & Time-Box \(P1\)|skeleton file \(even if incomplete\)/i);
+    assert.match(implementTemplate, /FORBIDDEN to compose an entire file in reasoning before writing anything/i);
+    assert.match(implementTemplate, /Debug Order & Cause Isolation \(C\)|FIRST re-read your own code/i);
+    assert.match(implementTemplate, /suspect the harness or environment only if the test RUNNER itself errors/i);
+    assert.match(implementTemplate, /Forbidden: environment-debug loops/i);
+    assert.match(implementTemplate, /Handoff to Correction \(D\)|END the turn with honest evidence/i);
+    assert.match(implementTemplate, /Do NOT loop until green; the rest goes to daemon QC NEEDS_FIX/i);
+    assert.match(implementTemplate, /## 🛑 Anti-Stall & Context Boundaries/);
+    assert.match(implementTemplate, /## Context replies and authority boundaries/);
     const reviewTemplate = fs.readFileSync(path.resolve(__dirname, '../templates/codex-gemini/prompts/review.md'), 'utf8');
     assert.doesNotMatch(reviewTemplate, /Unverified items tagged `\[EXTERNAL_OPTIONAL\]`.*do NOT block APPROVE/);
 });
@@ -1468,6 +1477,60 @@ test('turn zero-evidence fail-fast immediately aborts with DUAL_NO_WRITE_PROGRES
     assert.ok(fs.existsSync(path.join(attemptDir, 'worker-contract.json')));
     assert.equal(discussion.counters.closes.length, 1);
     assert.equal(discussion.counters.turns.length, 0);
+});
+
+test('P2a: allowed-file change leads to progress and hadEvidence even without evidence message', async (t) => {
+    const input = fixture(t);
+    let reference, workerSignal, nudges = 0;
+    const discussion = createDiscussionStub({
+        async beforeTurn(context) {
+            workerSignal = context.signal;
+            const marker = path.join(context.workerRoot, 'index.js');
+            fs.writeFileSync(marker, 'module.exports = 42;\n');
+            await new Promise((resolve) => context.signal.addEventListener('abort', resolve, { once: true }));
+            context.signal.throwIfAborted();
+        },
+    });
+    await assert.rejects(runRealIsolatedTask({ ...input, discussion,
+        onPrepared(saved) { reference = saved; }, onTurnNudge() { nudges++; },
+        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 30, graceMs: 20, pollMs: 5 },
+    }), (error) => error.code === 'DUAL_TURN_STALLED' && error.status === 'STALLED');
+    assert.equal(workerSignal.aborted, true);
+    assert.equal(nudges, 1, 'allowed file modification should set hadEvidence, emitting nudge instead of fail-fast');
+    const attemptDir = path.dirname(path.join(input.workspaceRoot, reference.bindingPath));
+    const events = fs.readFileSync(path.join(attemptDir, 'turn-progress.ndjson'), 'utf8').trim().split('\n').map(JSON.parse);
+    const nudgeEvent = events.find((event) => event.type === 'nudge');
+    assert.ok(nudgeEvent, 'nudge event must be recorded');
+    assert.equal(nudgeEvent.hadEvidence, true);
+    assert.equal(events.some((event) => event.type === 'NO_WRITE_PROGRESS'), false);
+});
+
+test('P2b: a change ONLY to .omni paths or adapter/runner-owned artifacts does NOT count as progress', async (t) => {
+    const input = fixture(t);
+    let reference, workerSignal, nudges = 0;
+    const discussion = createDiscussionStub({
+        async beforeTurn(context) {
+            workerSignal = context.signal;
+            const omniRunDir = path.join(context.workerRoot, '.omni', 'codex-gemini', 'runs', input.task.task_id);
+            fs.mkdirSync(omniRunDir, { recursive: true });
+            fs.writeFileSync(path.join(omniRunDir, 'adapter-bookkeeping.txt'), 'bookkeeping only\n');
+            fs.writeFileSync(path.join(context.workerRoot, '.omni', 'runner-artifact.json'), '{}');
+            await new Promise((resolve) => context.signal.addEventListener('abort', resolve, { once: true }));
+            context.signal.throwIfAborted();
+        },
+    });
+    await assert.rejects(runRealIsolatedTask({ ...input, discussion,
+        onPrepared(saved) { reference = saved; }, onTurnNudge() { nudges++; },
+        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 30, graceMs: 20, pollMs: 5 },
+    }), (error) => error.code === 'DUAL_NO_WRITE_PROGRESS' && error.status === 'NO_WRITE_PROGRESS' && error.turn.reason === 'no_evidence');
+    assert.equal(workerSignal.aborted, true);
+    assert.equal(nudges, 0, 'changes only in .omni must not set hadEvidence or cause nudge');
+    const attemptDir = path.dirname(path.join(input.workspaceRoot, reference.bindingPath));
+    const events = fs.readFileSync(path.join(attemptDir, 'turn-progress.ndjson'), 'utf8').trim().split('\n').map(JSON.parse);
+    assert.equal(events.filter((event) => event.type === 'nudge').length, 0);
+    assert.equal(events.filter((event) => event.type === 'NO_WRITE_PROGRESS').length, 1);
+    const failFastEvent = events.find((event) => event.type === 'NO_WRITE_PROGRESS');
+    assert.equal(failFastEvent.hadEvidence, false);
 });
 
 test('hard turn budget stops a progressing worker and preserves its evidence', async (t) => {
