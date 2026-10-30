@@ -10,7 +10,18 @@ function fixture(overrides = {}) {
 }
 test('production safety thresholds are pinned', () => {
     assert.deepEqual([TURN_SOFT_BUDGET_MS, TURN_HARD_BUDGET_MS, TURN_HEARTBEAT_MS,
-        TURN_NO_PROGRESS_MS, TURN_NUDGE_GRACE_MS], [600000, 1200000, 60000, 300000, 120000]);
+        TURN_NO_PROGRESS_MS, TURN_NUDGE_GRACE_MS], [600000, 1800000, 60000, 300000, 120000]);
+});
+test('watchdog default hard budget uses TURN_HARD_BUDGET_MS (30 minutes)', () => {
+    assert.equal(TURN_HARD_BUDGET_MS, 30 * 60 * 1000);
+    let time = 0;
+    const watchdog = createTurnWatchdog({ now: () => time, noProgressMs: 40 * 60 * 1000 });
+    time = 30 * 60 * 1000 - 1;
+    assert.equal(watchdog.check().action, 'ok');
+    time = 30 * 60 * 1000;
+    const state = watchdog.check();
+    assert.equal(state.action, 'stall');
+    assert.equal(state.reason, 'hard_budget');
 });
 test('zero-evidence fails fast at no-progress threshold without nudge or grace', () => {
     const { clock, watchdog } = fixture();

@@ -1393,3 +1393,38 @@ for (const [orphanAttempt, priorProviderFailures] of [[0, 0], [1, 0], [2, 0], [3
         assert.equal(orch.status(taskId).nextAction, 'blocked');
     });
 }
+
+
+test('default implement timeout derives 30m print-timeout via agy-runner', async (t) => {
+    const { repoRoot, head } = makeRepoFixture(t);
+    let capturedInvocation;
+    const orch = createDualOrchestrator({
+        cwd: repoRoot,
+        discussion: discussionStub({ repoRoot, head }),
+        authoritativeCapabilityEvidence: { version: 'agy version 1.1.20-test', model: 'gemini-3.7-flash-high' },
+        processRunner: async (invocation) => {
+            capturedInvocation = invocation;
+            return {
+                exitCode: 0,
+                stdout: '',
+                stderr: 'empty',
+                timedOut: false,
+                startedAt: new Date(),
+                endedAt: new Date(),
+                durationMs: 10,
+            };
+        },
+    });
+
+    orch.newTask('DEFAULT-TIMEOUT-TEST');
+    await orch.runPhase('preflight', 'DEFAULT-TIMEOUT-TEST');
+    await prepareImplement(orch, repoRoot, 'DEFAULT-TIMEOUT-TEST', head);
+    await assert.rejects(
+        () => orch.runPhase('implement', 'DEFAULT-TIMEOUT-TEST'),
+        (error) => error.code === 'DUAL_AGY_EMPTY_OUTPUT',
+    );
+    assert.ok(capturedInvocation);
+    assert.equal(capturedInvocation.timeoutMs, 1_830_000);
+    const timeoutIndex = capturedInvocation.args.indexOf('--print-timeout');
+    assert.equal(capturedInvocation.args[timeoutIndex + 1], '30m');
+});
