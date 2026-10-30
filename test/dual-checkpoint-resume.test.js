@@ -70,8 +70,8 @@ async function stalled(t) {
     await assert.rejects(runIsolatedTask({ ...input, discussion: discussion(worker, true), processRunner: worker,
         checkpointMilestone: { summary: 'milestone 1 complete', next: 'implement milestone 2' },
         onPrepared(value) { reference = value; }, onCheckpoint(value) { checkpoint = value; },
-        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 40, graceMs: 20, pollMs: 5 },
-    }), { code: 'DUAL_TURN_STALLED' });
+        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 100, graceMs: 50, pollMs: 5 },
+    }), { code: 'DUAL_NO_WRITE_PROGRESS', message: 'NO_WRITE_PROGRESS: review (no_evidence)' });
     assert.ok(checkpoint);
     return { input, reference, checkpoint };
 }

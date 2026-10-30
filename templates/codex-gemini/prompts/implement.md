@@ -43,6 +43,11 @@ Implement the changes specified in `spec.json` with production-grade engineering
 - **Safety:** NO COMMIT, NO PUSH, NO DEPLOY, and NO permission escalations.
 - **Evidence Contract:** Return all command outputs and findings via the structured evidence payload. The orchestrator owns `evidence.json`.
 
+## 🛑 Anti-Stall & Context Boundaries
+- **Strict Context Boundaries & No QC Inspection:** Worker reads ONLY `plans/plan.md`, `spec.json` (task contract in run directory), and `README.md` as context. Strictly FORBIDDEN from reading the `scripts/` directory or any checker/QC files — QC is exclusively the controller's responsibility, not for the worker to optimize against.
+- **Immediate File Modification & Active Progress:** Write or edit the first allowed file BEFORE deep analysis of requirements; every reasoning turn MUST be accompanied by an active file operation (write/edit) or an executed validation command.
+- **No Reverse-Engineering of QC:** Strictly FORBIDDEN to reverse-engineer QC scripts to bypass surface checks — implement strictly according to `spec.json`, not according to tests.
+
 ## Context replies and authority boundaries
 - If clarification is needed, ground the question and any later context reply in a design/content source or an in-scope implementation convention already within scope, never solely in a worker recommendation.
 - Auto-reply is limited to non-safety in-scope implementation conventions; it is not a substitute for user authority.

@@ -1442,6 +1442,34 @@ test('turn watchdog aborts a stalled discussion, preserves artifacts and closes 
     assert.equal(discussion.counters.turns.length, 0);
 });
 
+test('turn zero-evidence fail-fast immediately aborts with DUAL_NO_WRITE_PROGRESS and no nudge', async (t) => {
+    const input = fixture(t);
+    let reference, workerSignal, nudges = 0;
+    const discussion = createDiscussionStub({
+        async beforeTurn(context) {
+            workerSignal = context.signal;
+            // Zero-evidence: worker does not modify any files
+            await new Promise((resolve) => context.signal.addEventListener('abort', resolve, { once: true }));
+            context.signal.throwIfAborted();
+        },
+    });
+    await assert.rejects(runRealIsolatedTask({ ...input, discussion,
+        onPrepared(saved) { reference = saved; }, onTurnNudge() { nudges++; },
+        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 30, graceMs: 20, pollMs: 5 },
+    }), (error) => error.code === 'DUAL_NO_WRITE_PROGRESS' && error.status === 'NO_WRITE_PROGRESS' && error.turn.reason === 'no_evidence');
+    assert.equal(workerSignal.aborted, true);
+    assert.equal(nudges, 0);
+    const attemptDir = path.dirname(path.join(input.workspaceRoot, reference.bindingPath));
+    const events = fs.readFileSync(path.join(attemptDir, 'turn-progress.ndjson'), 'utf8').trim().split('\n').map(JSON.parse);
+    assert.equal(events.filter((event) => event.type === 'nudge').length, 0);
+    assert.equal(events.filter((event) => event.type === 'STALLED').length, 0);
+    assert.equal(events.filter((event) => event.type === 'NO_WRITE_PROGRESS').length, 1);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(attemptDir, 'last-activity.json'))).type, 'NO_WRITE_PROGRESS');
+    assert.ok(fs.existsSync(path.join(attemptDir, 'worker-contract.json')));
+    assert.equal(discussion.counters.closes.length, 1);
+    assert.equal(discussion.counters.turns.length, 0);
+});
+
 test('hard turn budget stops a progressing worker and preserves its evidence', async (t) => {
     const input = fixture(t);
     let reference;
