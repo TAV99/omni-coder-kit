@@ -129,7 +129,9 @@ test('no checkpoint retries original workspace, discarding incomplete output', a
         await new Promise(resolve => context.signal.addEventListener('abort', resolve, { once: true }));
         context.signal.throwIfAborted();
     } }), onPrepared(value) { reference = value; },
-    turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 40, graceMs: 20, pollMs: 5 } }), { code: 'DUAL_TURN_STALLED' });
+    // noProgressMs must outlast scout-setup (writes nothing): at 40ms a loaded run
+    // trips the zero-evidence fail-fast (NO_WRITE_PROGRESS) before this turn starts.
+    turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 250, graceMs: 50, pollMs: 5 } }), { code: 'DUAL_TURN_STALLED' });
     const result = await resumeIsolatedTask({ ...input, attempt: 2, sourceReference: reference,
         discussion: discussion(worker), processRunner: async (invocation, deps) => {
             assert.equal(fs.readFileSync(path.join(invocation.cwd, 'index.js'), 'utf8'), 'module.exports = 1;\n');
