@@ -434,8 +434,9 @@ Kèm commit P1a: cập nhật `SQUAD-ARCHITECTURE-PLAN.md` §10-P1 theo điều 
 | V4 | agy: đường cài mặc định trên Windows/Linux; có `agy.exe` không | tài liệu Antigravity CLI qua Context7 (`/google-antigravity/antigravity-cli`) |
 | V5 | agy: thông điệp lỗi khi chưa đăng nhập (để phân loại `unauthenticated`) | thử trên máy đã đăng xuất hoặc tài liệu |
 | V6 | agy: `--mode plan` có thật sự chặn ghi file không (ánh xạ `read-only`) | thử nghiệm có kiểm soát trong thư mục tạm |
+| V7 | Codex: hai tiến trình chạy song song trên cùng `CODEX_HOME` (D18 — một tài khoản giữ hai vai) có tranh nhau làm mới token trong `auth.json`, làm một bên bị đăng xuất không; `history.jsonl`/`sessions/` ghi đồng thời có an toàn không. **Phục vụ P5, không chặn P1a.** | tài liệu/issue Codex CLI qua Context7; chạy 2 lượt `codex exec` song song kéo dài qua thời điểm token hết hạn, sau đó kiểm `codex login status` |
 
-Kết quả kiểm ghi vào phụ lục cuối spec này trước commit P1a.
+Kết quả V1–V6 ghi vào phụ lục cuối spec này trước commit P1a; V7 ghi khi có kết quả, trước P5.
 
 ---
 

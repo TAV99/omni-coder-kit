@@ -70,6 +70,7 @@ NEW → preflight → scout → spec → route ─┬─ gemini → implement �
 | D15 | Mặc định B1–B5 (§5–§7) được duyệt nguyên. |
 | D16 | Tiêu chí nghiệm thu tuyệt đối (§11), không so với 3.1.2. |
 | D17 | File vai/pipeline viết bằng **YAML**. Thêm dependency `yaml` (npm, bản 2.x — 2.9.1 tại 2026-10-31; tra lại tài liệu qua Context7 trước khi code). Parse xong phải validate bằng `zod` như mọi contract khác; chỉ parse dữ liệu thuần (không tag tùy biến, không anchor/alias vượt giới hạn). |
+| D18 | **Một runtime/tài khoản giữ được nhiều vai** (vd. 1 tài khoản Codex làm orchestrator + reviewer với model/effort khác nhau, agy làm worker). Binding khóa theo **role instance**, không có ràng buộc runtime duy nhất. Mỗi vai là một session CLI độc lập, bảng D6 khóa theo tên vai. Quy tắc: (1) không bao giờ resume ngầm (`--last` hoặc tương đương) — luôn resume bằng session ID của vai đó, vì `~/.codex/sessions` là chung; (2) mỗi vai chạy ở root riêng (§5.3) để không kế thừa `.codex/config.toml` (MCP `omni_dual`, hooks) và skill của vai khác; hook bridge bỏ qua payload có `session_id` không thuộc vai nào; (3) vẫn dùng chung `CODEX_HOME` (§5.3); (4) preflight cảnh báo khi ≥ 2 vai dùng chung một tài khoản (chung quota), lỗi rate limit → task chờ (B3); (5) orchestrator và reviewer cùng họ model → chỉ cảnh báo; reviewer cùng họ với worker → cảnh báo mạnh. Chưa kiểm: hai tiến trình cùng làm mới token trong `auth.json` (V7, spec P1 §14). |
 
 ---
 
@@ -237,7 +238,7 @@ Bundle QC gắn với **phase** chứ không gắn với vai: phase `qc` thuộc
 
 - Project root: chỉ skill của orchestrator, đặt đúng thư mục CLI orchestrator đọc.
 - Worker root (isolated-runner): mount bundle của worker; loại khỏi integrate.
-- Cùng một CLI đóng cả hai vai vẫn đúng vì worker chạy ở root riêng.
+- Cùng một CLI đóng cả hai vai vẫn đúng vì worker chạy ở root riêng. Reviewer cũng có root riêng (chỉ đọc + ghi artifact) để cùng CLI làm orchestrator + reviewer không lẫn config/skill (D18).
 - **Không** đổi `CODEX_HOME`/`CLAUDE_CONFIG_DIR` để cô lập (thông tin đăng nhập nằm ở đó).
 
 ---
@@ -347,7 +348,7 @@ Chốt trước khi code; không so với 3.1.2.
   - 0 outcome unknown tồn đọng;
   - 0 lần dispatch trùng;
   - 100% cổng chờ người duyệt chạy đúng (kể cả cổng `human-always` không bị AUTO bỏ qua).
-- Ít nhất 2 tổ hợp binding khác nhau, vd. (codex, agy) và (codex, opencode + deepseek).
+- Ít nhất 2 tổ hợp binding khác nhau, vd. (codex, agy) và (codex, opencode + deepseek). Preset `squad` chạy thêm tổ hợp một runtime giữ hai vai (codex orchestrator + codex reviewer, agy worker — D18).
 - Thời gian chỉ ghi nhận, không đặt ngưỡng ở đợt này.
 
 ---
@@ -375,4 +376,5 @@ Chốt trước khi code; không so với 3.1.2.
 | PTY qua web thành lỗ hổng shell | Loopback + token + Origin từ bản đầu |
 | Nhiều worker song song xung đột file | `allowed_files` không giao nhau; giới hạn đồng thời |
 | Rate limit khi nhiều agent cùng runtime | Giới hạn đồng thời theo runtime; task chờ thay vì đổi model |
+| Một tài khoản giữ nhiều vai: resume nhầm session, lẫn config/hook, chung quota | D18: resume luôn bằng ID, root riêng mỗi vai, hook lọc theo `session_id`, preflight cảnh báo |
 | Di trú gitignore phá file của người dùng | Chỉ sửa trong khối omni sinh ra; ngoài khối thì cảnh báo |
