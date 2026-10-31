@@ -115,7 +115,7 @@ VersionResult = { ok: true, version: string, raw } | { ok: false, code, reason }
 AuthResult    = { state: 'authenticated'|'unauthenticated'|'unknown', method: string|null, evidence: string }
 ModelsResult  = { ok: true, source: 'cli'|'cache'|'none', models: ModelInfo[], note?: string }
               | { ok: false, code, reason }
-ModelInfo     = { id, label, family, efforts: string[] | null }
+ModelInfo     = { id, label, family, efforts: string[] | null, defaultEffort: string | null }
 
 HeadlessTurn = {
   prompt: string,                    // bắt buộc, ≤ 256 KiB; truyền nguyên văn làm 1 phần tử argv
@@ -144,6 +144,7 @@ Invocation = { command, args: string[], cwd, timeoutMs, env?: object, redactedAr
 | `SQUAD_RUNTIME_UNKNOWN` | `get(id)` không có |
 | `SQUAD_RUNTIME_BAD_TURN` | `HeadlessTurn` sai schema (cwd tương đối, timeout ≤ 0, model rỗng, effort ngoài `efforts`…) |
 | `SQUAD_RUNTIME_UNSAFE_PERMISSION` | `full-auto` mà `isolatedRoot !== true` |
+| `SQUAD_RUNTIME_PERMISSION_UNSUPPORTED` | runtime không có cách thực thi profile quyền được yêu cầu (vd. agy `workspace-write` ở headless) |
 | `SQUAD_RUNTIME_CAPABILITY_MISSING` | gọi `buildResume`/`interactiveCommand` trên runtime không hỗ trợ |
 
 Mã lỗi probe (trả trong kết quả, không throw): `SQUAD_RUNTIME_NOT_FOUND`, `SQUAD_RUNTIME_WINDOWS_SHIM`, `SQUAD_RUNTIME_PROBE_TIMEOUT`, `SQUAD_RUNTIME_PROBE_FAILED`, `SQUAD_RUNTIME_PARSE_FAILED`.
@@ -177,8 +178,8 @@ Thứ tự ứng viên (dừng ở ứng viên đầu tiên **tồn tại và l�
 
 | Adapter | extraCandidates |
 |---|---|
-| codex | `~/.local/bin/codex`, `~/bin/codex` (POSIX); `%APPDATA%\npm\codex.cmd` (Windows) |
-| agy | `~/.local/bin/agy`, `~/bin/agy` (POSIX); `%LOCALAPPDATA%\Programs\agy\agy.exe` — **cần kiểm** (§14) |
+| codex | `~/.local/bin/codex`, `~/bin/codex`, `<CODEX_HOME|~/.codex>/packages/standalone/current/bin/codex` (POSIX); `<CODEX_HOME|%USERPROFILE%\.codex>\packages\standalone\current\bin\codex.exe`, `%APPDATA%\npm\codex.cmd` (Windows) — xem Phụ lục V3 |
+| agy | `~/.local/bin/agy`, `~/bin/agy` (POSIX); `%LOCALAPPDATA%\agy\bin\agy.exe` (Windows) — xem Phụ lục V4 |
 
 ---
 
@@ -192,14 +193,14 @@ Mọi probe chạy qua `spawnBoundedProcess(command, [...prefixArgs, ...args], {
 |---|---|---|
 | version | `codex --version` | stdout khớp `/codex-cli\s+(\d+\.\d+\.\d+\S*)/` |
 | authStatus | `codex login status` | exit 0 + stdout chứa `Logged in` → `authenticated`, `method` = phần sau `using ` (vd. `ChatGPT`); exit ≠ 0 + chứa `Not logged in` → `unauthenticated`; còn lại → `unknown` |
-| listModels | đọc `~/.codex/models_cache.json` (≤ 1 MiB) | `models[].slug` → `id`, `display_name` → `label`, chỉ lấy `visibility === 'list'`; `efforts` = `['low','medium','high','xhigh']` (§14). Không có file → `{ ok:true, source:'none', models:[], note:'chạy codex một lần để tạo cache' }` |
+| listModels | đọc `<CODEX_HOME|~/.codex>/models_cache.json` (≤ 1 MiB) | `models[].slug` → `id`, `display_name` → `label`, chỉ lấy `visibility === 'list'`; `efforts` = `supported_reasoning_levels[].effort` **của từng model** (khác nhau theo model, vd. `low…ultra` hoặc `low…xhigh`), `defaultEffort` = `default_reasoning_level`. Không có file → `{ ok:true, source:'none', models:[], note:'chạy codex một lần để tạo cache' }` |
 
 ### 4.2 agy
 
 | Probe | Lệnh | Diễn giải |
 |---|---|---|
 | version | `agy --version` | stdout khớp `/(\d+\.\d+\.\d+\S*)/` (giữ tương thích `parseAgyVersionOutput`) |
-| authStatus | `agy models` | agy **không có** lệnh login/status (đã kiểm `agy --help` 1.4.7). Exit 0 và ≥ 1 model → `authenticated` (`method: 'inferred:models'`); exit ≠ 0 với stderr chứa `auth`/`login`/`sign in` (không phân biệt hoa thường) → `unauthenticated`; còn lại → `unknown` |
+| authStatus | `agy models` | agy **không có** lệnh login/status (đã kiểm `agy --help` 1.4.7). Exit 0 và ≥ 1 model → `authenticated` (`method: 'inferred:models'`; nếu env có `GEMINI_API_KEY` thì `method: 'api-key'`); exit ≠ 0 với stderr khớp `/please sign in\|authentication required\|not signed in/i` → `unauthenticated` (fix: `chạy agy không tham số để đăng nhập`); stderr khớp `/keyring is locked/i` → `unknown` (fix: `mở khóa keyring của hệ điều hành`); còn lại → `unknown`. Xem Phụ lục V5 |
 | listModels | `agy models` | bỏ dòng `Fetching available models...`; mỗi dòng `id<TAB>label`; thử JSON trước (giữ nhánh JSON của `parseAgyModelsOutput`) |
 
 `agy models` gọi mạng — `authStatus` và `listModels` **dùng chung một lần spawn** khi được gọi qua `probeAll` (cache trong ProbeContext theo `runtimeId`).
@@ -215,10 +216,12 @@ Mọi probe chạy qua `spawnBoundedProcess(command, [...prefixArgs, ...args], {
 | profile | codex | agy |
 |---|---|---|
 | `read-only` | `['-s', 'read-only']` | `['--mode', 'plan']` |
-| `workspace-write` | `['-s', 'workspace-write']` | `['--mode', 'accept-edits']` |
+| `workspace-write` | `['-s', 'workspace-write']` | **không hỗ trợ** → throw `SQUAD_RUNTIME_PERMISSION_UNSUPPORTED` |
 | `full-auto` | `['--dangerously-bypass-approvals-and-sandbox']` | `['--mode', 'accept-edits', '--dangerously-skip-permissions']` |
 
-`full-auto` mà `isolatedRoot !== true` → throw `SQUAD_RUNTIME_UNSAFE_PERMISSION` (B4: chỉ trong worker root cô lập). Conformance kiểm `read-only` không bao giờ chứa chuỗi `dangerously`.
+- `full-auto` mà `isolatedRoot !== true` → throw `SQUAD_RUNTIME_UNSAFE_PERMISSION` (B4: chỉ trong worker root cô lập). Conformance kiểm `read-only` không bao giờ chứa chuỗi `dangerously`.
+- **agy `workspace-write`:** ở headless, `--mode accept-edits` vẫn bị agy tự từ chối `write_file`, kể cả khi có `--new-project` (Phụ lục V6). Cách cấp quyền ghi có phạm vi duy nhất là luật `permissions.allow: ["write_file(<root>)"]` trong `~/.gemini/antigravity-cli/settings.json` (file toàn cục của người dùng). P1 **không** tự sửa file đó; worker agy tiếp tục chạy `full-auto` trong worker root cô lập như dual hiện tại. Việc omni có được quản lý luật này (có hỏi ý người dùng) để chốt ở P2 — câu hỏi mở Q4.
+- Thêm mã lỗi `SQUAD_RUNTIME_PERMISSION_UNSUPPORTED` vào bảng §2.3 (runtime không có cách thực thi profile quyền đó).
 
 ### 5.2 `buildHeadless(turn)`
 
@@ -251,7 +254,11 @@ Mọi probe chạy qua `spawnBoundedProcess(command, [...prefixArgs, ...args], {
 
 ### 5.3 `buildResume(sessionRef, turn)`
 
-- codex: `[...prefixArgs, 'exec', 'resume', '--skip-git-repo-check', sessionRef, turn.prompt, '--json', '-m', turn.model, ...effort, ...permissionFlags]` — thứ tự giống `live-codex-invoke.js` hiện tại.
+- codex: `[...prefixArgs, 'exec', 'resume', '--skip-git-repo-check', sessionRef, turn.prompt, '--json', '-m', turn.model, ...effort, ...resumeSandbox]` — thứ tự giống `live-codex-invoke.js` hiện tại. **`exec resume` không có `-C`, `-s`, `--add-dir`** (Phụ lục V2), nên:
+  - quyền: `read-only`/`workspace-write` → `['-c', 'sandbox_mode="<mode>"']`; `full-auto` → `['--dangerously-bypass-approvals-and-sandbox']` (có trên resume);
+  - `addDirs` → `['-c', 'sandbox_workspace_write.writable_roots=[...]']` (mảng TOML, mỗi phần tử là chuỗi JSON-escape);
+  - thư mục làm việc lấy từ `Invocation.cwd` (cwd của tiến trình), không truyền cờ;
+  - `jsonSchemaPath` → `--output-schema` (có trên resume).
 - agy: `buildHeadless(turn)` + `['--conversation', sessionRef]`.
 - `sessionRef` phải khớp `/^[A-Za-z0-9._:-]{1,128}$/`, sai → `SQUAD_RUNTIME_BAD_TURN`.
 
@@ -274,7 +281,7 @@ Chỉ dựng, chưa dùng tới P6:
 | structuredOutput | true (`--output-schema`) | true (`--json-schema`) |
 | transcript | false (P6) | false (P6) |
 | sandbox | true (`-s`) | true (`--sandbox`) |
-| usage | false | false |
+| usage | false | true (JSON có `usage.input_tokens/output_tokens`, Phụ lục V6) |
 | multiModel | false | true (Gemini + Claude + GPT-OSS qua cùng CLI) |
 
 ---
@@ -439,3 +446,22 @@ Kết quả kiểm ghi vào phụ lục cuối spec này trước commit P1a.
 | Q1 | Bản kiến trúc ghi skill agy ở `.agents/skills/`, nhưng memory đã kiểm (2026-06-27) ghi `.agent/skills/` (số ít) | Không ảnh hưởng P1; phải chốt ở P2 trước khi cài `mountSkills` |
 | Q2 | agy có cả `--effort` lẫn model id chứa mức (`…-flash-high`) — cái nào thắng? | P1 truyền cả hai như dual hiện tại; P2 đo và chốt |
 | Q3 | `codex` có thể chạy model nhà khác qua `--oss` / `model_provider` | P1 coi codex `multiModel:false`; mở ở P4 nếu cần |
+| Q4 | agy headless chỉ ghi được với `--dangerously-skip-permissions` hoặc luật `permissions.allow` trong file cấu hình toàn cục | P1 giữ `full-auto` trong worker root cô lập. P2 chốt: omni có được thêm luật `write_file(<worker root>)` (hỏi ý người dùng lúc init) để bỏ cờ nguy hiểm không |
+| Q5 | agy soft-deny: exit 0, `status: SUCCESS` nhưng có `denied_actions` và response rỗng | P3 (`parseOutput`) phải coi `denied_actions` khác rỗng là thất bại có mã riêng, không phải thành công |
+
+---
+
+## Phụ lục — Kết quả kiểm V1–V6 (2026-10-31)
+
+Máy kiểm: macOS (darwin, arm64), `codex-cli 0.147.0` (cài bản standalone), `agy 1.4.7`. Nguồn tài liệu qua Context7: `/openai/codex`, `/websites/antigravity_google_cli`.
+
+| # | Kết quả | Ảnh hưởng tới spec |
+|---|---|---|
+| V1 | `codex login status`: đã đăng nhập → stdout `Logged in using ChatGPT`, exit 0; với `CODEX_HOME` trống → stdout `Not logged in`, exit 1. Mức effort **khác nhau theo model**, đọc được từ `models_cache.json` → `supported_reasoning_levels[].effort` (vd. `gpt-5.6-sol`: low, medium, high, xhigh, max, ultra; `gpt-5.5`: low…xhigh) và `default_reasoning_level`. Giá trị hợp lệ của `sandbox_mode`: `read-only`, `workspace-write`, `danger-full-access` (config schema của Codex). | §4.1: `efforts` lấy theo từng model thay vì danh sách cố định |
+| V2 | `codex exec resume --help`: có `-m`, `-c`, `--json`, `--output-schema`, `--skip-git-repo-check`, `--dangerously-bypass-approvals-and-sandbox`; **không có** `-C`, `-s`, `--add-dir`. TUI gốc `codex` có `-m`, `-c`, `-s`, `-C`, `--add-dir`, `-a`. | §5.3: resume đặt sandbox qua `-c sandbox_mode=…`, cwd qua tiến trình. §5.4 giữ nguyên |
+| V3 | Có hai kiểu cài Codex. **Standalone** (installer chính thức): macOS đã thấy `~/.local/bin/codex` → symlink tới `~/.codex/packages/standalone/current/bin/codex`; Windows (theo `install.ps1`) cài vào `<CODEX_HOME hoặc %USERPROFILE%\.codex>\packages\standalone`. **npm**: shim `codex.js` (chạy bằng node) tự tìm `vendor/<triple>/bin/codex.exe`; trên Windows npm sinh `codex.cmd` trỏ tới `codex.js`. Chưa kiểm được trên máy Windows thật: tên chính xác của thư mục `current` sau khi cài standalone. | §3: thêm ứng viên standalone, tôn trọng `CODEX_HOME`; cơ chế cmd-shim → `node codex.js` phù hợp |
+| V4 | Theo tài liệu cài đặt: macOS/Linux → `~/.local/bin/agy`; Windows → `C:\Users\<user>\AppData\Local\agy\bin` (tức `%LOCALAPPDATA%\agy\bin\agy.exe`). | §3: sửa đường dẫn Windows của agy (bản trước ghi sai `Programs\agy`) |
+| V5 | Chạy `agy models` với `HOME` tạm: stderr `Error: Please sign in to view available models. Launch the CLI without arguments to sign in.`, exit 1. Tài liệu headless: môi trường không có terminal thì báo `authentication required`. Tài liệu troubleshooting có thêm lỗi `failed to retrieve token: secret keyring is locked`. Đăng nhập bằng `GEMINI_API_KEY` (khi `modelProvider: "gemini"`) bỏ qua bước sign-in. | §4.2: regex phân loại `unauthenticated` / `unknown`, thêm `method: 'api-key'` |
+| V6 | Ba lượt `agy -p` thật trong thư mục tạm, model `gemini-3.8-flash-low`, prompt yêu cầu tạo `probe.txt`: (1) `--mode plan` → không tạo file, model trả lời đã lập kế hoạch; (2) `--mode accept-edits` → không tạo file, JSON có `denied_actions: [write_file]`, stderr gợi ý thêm `permissions.allow` hoặc `--dangerously-skip-permissions`; (3) `--mode accept-edits --new-project` → kết quả như (2). Cả ba đều exit 0, `status: SUCCESS`. JSON output có `usage` (token). | §5.1: `read-only` → `--mode plan` đúng; agy `workspace-write` không hỗ trợ ở headless; §5.5 `usage: true`; thêm Q4, Q5 |
+
+Tác dụng phụ của lượt kiểm: lượt (3) đăng ký thêm 1 project tạm vào `~/.gemini/config/projects/` của máy dev (12 → 13 mục). Thư mục tạm đã xóa; mục đăng ký chưa xóa, để người dùng quyết định.
