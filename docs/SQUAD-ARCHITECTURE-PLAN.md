@@ -326,7 +326,7 @@ Bind `127.0.0.1` duy nhất, token ngẫu nhiên mỗi phiên, kiểm Origin —
 | Pha | Nội dung | Điều kiện xong |
 |---|---|---|
 | P1 | Runtime registry: adapter codex + agy; gộp phần **phát hiện/probe** (binary đa OS, version, đăng nhập, model); builder invocation chung; conformance test; `omni squad runtimes`. Spec: [`SPEC-SQUAD-P1-RUNTIME-REGISTRY.md`](SPEC-SQUAD-P1-RUNTIME-REGISTRY.md) | `npm test` xanh; conformance pass cho 2 adapter |
-| P2 | Role definition: orchestrator/worker/reviewer; bundle skill; mount theo vai; `skills:doctor` kiểm chồng chéo; gitignore D10 | Doctor bắt được skill trùng; worker root không chứa skill orchestrator |
+| P2 | Role definition: orchestrator/worker/reviewer; bundle skill; mount theo vai; `skills:doctor` kiểm chồng chéo; gitignore D10. Spec: [`SPEC-SQUAD-P2-ROLES-SKILLS.md`](SPEC-SQUAD-P2-ROLES-SKILLS.md) | Doctor bắt được skill trùng; worker root không chứa skill orchestrator |
 | P3 | Pipeline khai báo + preset `dual`; `owner` → role instance; cổng D8; MCP `squad.next/submit`; chuyển các builder argv cũ (dual + `lib/harness/providers`) sang builder chung của registry; nối probe agy của `capability-preflight` và probe codex của `daemon-ports` vào adapter (chuyển từ P1b, cần adapter nhận `prespawnGuard`, trả mã retry, parse chặt, tùy chọn gồm model ẩn — SPEC-SQUAD-P1 §10) | Preset `dual` chạy trọn vòng qua daemon |
 | P4 | Adapter thứ ba (đề xuất **OpenCode**: vừa chứng minh mở rộng, vừa chứng minh đường model chỉ có API) | Tổ hợp binding thứ hai chạy trọn vòng |
 | P5 | Reviewer + nhiều worker song song + ngân sách/đồng thời theo runtime | Preset `squad` 3 vai chạy trọn vòng |
@@ -350,6 +350,8 @@ Chốt trước khi code; không so với 3.1.2.
   - 100% cổng chờ người duyệt chạy đúng (kể cả cổng `human-always` không bị AUTO bỏ qua).
 - Ít nhất 2 tổ hợp binding khác nhau, vd. (codex, agy) và (codex, opencode + deepseek). Preset `squad` chạy thêm tổ hợp một runtime giữ hai vai (codex orchestrator + codex reviewer, agy worker — D18).
 - Thời gian chỉ ghi nhận, không đặt ngưỡng ở đợt này.
+
+**Thứ tự kiểm đa hệ điều hành (người dùng quyết, 2026-11-01).** Mọi pha P1–P7 được phát triển và nghiệm thu trên **macOS trước**: `npm test` xanh, kể cả khi chạy dưới tải. Khi 3.2.0 hoàn thiện trên macOS, người dùng mang repo sang **Linux và Windows thật** để chạy `npm test`, `omni squad runtimes` và bộ nghiệm thu, rồi phát triển và sửa lỗi riêng của từng hệ điều hành ngay trên máy đó. Trong lúc làm trên macOS: code vẫn phải viết đúng cho cả ba hệ điều hành (D12), và test giả lập `win32` vẫn bắt buộc. Chỉ việc chạy trên máy thật là hoãn lại.
 
 ---
 

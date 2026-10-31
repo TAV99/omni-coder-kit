@@ -424,7 +424,8 @@ Kèm commit P1a: cập nhật `SQUAD-ARCHITECTURE-PLAN.md` §10-P1 theo điều 
 - [ ] `npm test` xanh; test cũ không đổi assertion.
 - [ ] Conformance §11.1 pass cho codex và agy.
 - [ ] `omni squad runtimes` trên máy dev macOS báo cả hai `ready` với version/model thật.
-- [ ] Unit Windows (fixture `win32`) pass; nếu có máy Windows/Linux thật: chạy `omni squad runtimes` và ghi kết quả vào phụ lục spec.
+- [x] Unit Windows (fixture `win32`) pass.
+- [ ] **Hoãn (người dùng quyết, 2026-11-01):** chạy `omni squad runtimes` và `npm test` trên máy Linux và Windows thật. Toàn bộ 3.2.0 hoàn thiện trên macOS trước; sau đó người dùng mang repo sang hai hệ điều hành kia để kiểm, phát triển và sửa lỗi nếu có. Kết quả ghi vào phụ lục spec này.
 - [ ] `lib/squad/**` không require `lib/dual/**`/`lib/harness/**`.
 - [ ] Không thêm dependency.
 
