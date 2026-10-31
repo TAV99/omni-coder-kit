@@ -69,6 +69,7 @@ NEW → preflight → scout → spec → route ─┬─ gemini → implement �
 | D14 | Tên chế độ: **squad**; `dual` = preset, alias. Mã lỗi `DUAL_*`, đường dẫn `dual-authority`, event ledger giữ nguyên ở đợt đầu. |
 | D15 | Mặc định B1–B5 (§5–§7) được duyệt nguyên. |
 | D16 | Tiêu chí nghiệm thu tuyệt đối (§11), không so với 3.1.2. |
+| D17 | File vai/pipeline viết bằng **YAML**. Thêm dependency `yaml` (npm, bản 2.x — 2.9.1 tại 2026-10-31; tra lại tài liệu qua Context7 trước khi code). Parse xong phải validate bằng `zod` như mọi contract khác; chỉ parse dữ liệu thuần (không tag tùy biến, không anchor/alias vượt giới hạn). |
 
 ---
 
@@ -100,7 +101,7 @@ NEW → preflight → scout → spec → route ─┬─ gemini → implement �
 
 ### 3.2 Định nghĩa vai (role definition)
 
-Một file mỗi vai trong `.omni/squad/roles/`. Ví dụ (minh họa trường, định dạng file chốt ở §12-Q1):
+Một file YAML mỗi vai trong `.omni/squad/roles/` (D17). Ví dụ:
 
 ```yaml
 id: design
@@ -323,9 +324,9 @@ Bind `127.0.0.1` duy nhất, token ngẫu nhiên mỗi phiên, kiểm Origin —
 
 | Pha | Nội dung | Điều kiện xong |
 |---|---|---|
-| P1 | Runtime registry: gộp hai lớp provider; adapter codex + agy; conformance test; dò đường dẫn đa OS | `npm test` xanh; conformance pass cho 2 adapter |
+| P1 | Runtime registry: adapter codex + agy; gộp phần **phát hiện/probe** (binary đa OS, version, đăng nhập, model); builder invocation chung; conformance test; `omni squad runtimes`. Spec: [`SPEC-SQUAD-P1-RUNTIME-REGISTRY.md`](SPEC-SQUAD-P1-RUNTIME-REGISTRY.md) | `npm test` xanh; conformance pass cho 2 adapter |
 | P2 | Role definition: orchestrator/worker/reviewer; bundle skill; mount theo vai; `skills:doctor` kiểm chồng chéo; gitignore D10 | Doctor bắt được skill trùng; worker root không chứa skill orchestrator |
-| P3 | Pipeline khai báo + preset `dual`; `owner` → role instance; cổng D8; MCP `squad.next/submit` | Preset `dual` chạy trọn vòng qua daemon |
+| P3 | Pipeline khai báo + preset `dual`; `owner` → role instance; cổng D8; MCP `squad.next/submit`; chuyển các builder argv cũ (dual + `lib/harness/providers`) sang builder chung của registry | Preset `dual` chạy trọn vòng qua daemon |
 | P4 | Adapter thứ ba (đề xuất **OpenCode**: vừa chứng minh mở rộng, vừa chứng minh đường model chỉ có API) | Tổ hợp binding thứ hai chạy trọn vòng |
 | P5 | Reviewer + nhiều worker song song + ngân sách/đồng thời theo runtime | Preset `squad` 3 vai chạy trọn vòng |
 | P6 | `omni ui` chỉ đọc → PTY → inbox/gửi tin theo vai | Ba OS chạy được; kiểm bảo mật loopback/token/Origin |
@@ -355,7 +356,7 @@ Chốt trước khi code; không so với 3.1.2.
 
 | # | Câu hỏi | Ghi chú |
 |---|---|---|
-| Q1 | Định dạng file vai/pipeline: YAML hay JSON? | Repo hiện **không** có dependency YAML (`package.json` chỉ có chalk, commander, prompts, zod, MCP SDK). YAML dễ đọc hơn nhưng thêm dependency; JSON không cần thêm gì. |
+| ~~Q1~~ | ~~Định dạng file vai/pipeline~~ | **Đã chốt 2026-10-31: YAML** (D17). |
 | Q2 | Xác nhận OpenCode là adapter thứ ba | Đề xuất ở P4; Claude Code làm adapter thứ tư. |
 | Q3 | Transcript của agy nằm ở đâu, định dạng gì? | Codex: `~/.codex/sessions/*.jsonl`; Claude Code: `~/.claude/projects/`; agy chưa khảo sát. Ảnh hưởng D13. |
 | Q4 | Cơ chế giao tin inbox cho orchestrator theo từng CLI | MCP tool đọc inbox chạy được mọi CLI có MCP; hook chỉ CLI có hooks. |
