@@ -361,6 +361,12 @@ Handler ở `lib/commands/squad.js`, export qua `lib/commands/index.js` theo n�
 
 ## 10. P1b — nối phần phát hiện/probe cũ vào registry
 
+> **Thu hẹp ngày 2026-11-01 (người dùng duyệt).** Khi đọc kỹ call site, hai trong ba dòng của bảng gốc bên dưới hóa ra không phải "đổi bên trong, giữ kết quả":
+> - Probe agy trong `capability-preflight.js` chạy `prespawnGuard` (cổng authority) trước mỗi spawn, đánh dấu mã lỗi tài nguyên có thể retry (`EAGAIN`/`EMFILE`/`ENFILE`) bằng symbol trên kết quả spawn, và parse version bằng regex chặt hơn adapter. Adapter P1a chưa có các hành vi này.
+> - `defaultCodexProbe` trong `daemon-ports.js` chấp nhận cả model ẩn trong `models_cache.json` (vd. `codex-auto-review`, `visibility: hide`), còn `codex.listModels()` chỉ trả model `visibility: list`.
+>
+> Vì vậy **P1b chỉ gồm:** (1) `binary-paths.js` và hai adapter dùng chung danh sách thư mục cài theo người dùng (`lib/squad/runtimes/install-paths.js`), kết quả legacy giữ nguyên trên mọi nền tảng; (2) `test/squad-legacy-parity.test.js` khóa rằng parser cũ của dual và adapter đọc giống nhau trên output thật của agy 1.4.12, để lần chuyển sau không âm thầm đổi hành vi. **Hai dòng preflight và daemon-ports chuyển sang P3**, khi pipeline thay máy trạng thái của dual; khi đó adapter phải nhận `prespawnGuard`, trả mã retry, có chế độ parse chặt và tùy chọn gồm model ẩn.
+
 Nguyên tắc: hàm cũ giữ tên, chữ ký, kết quả; bên trong gọi registry. Test cũ không đổi assertion.
 
 | File | Thay đổi | Giữ nguyên |
@@ -407,7 +413,7 @@ Không đụng: `agy-runner.js`, `orchestrator.js`, `live-codex-invoke.js`, `liv
 | Commit | Nội dung |
 |---|---|
 | `feat(squad): add runtime registry with codex and agy adapters (P1a)` | §1–§9 + test §11.1, §11.2; di chuyển `spawnBoundedProcess`; command `omni squad runtimes` |
-| `refactor(dual): route binary and capability probes through squad registry (P1b)` | §10 + chạy lại §11.3 |
+| `refactor(dual): share install dirs with squad adapters, lock probe parity (P1b)` | §10 (bản thu hẹp) + chạy lại §11.3 |
 
 Kèm commit P1a: cập nhật `SQUAD-ARCHITECTURE-PLAN.md` §10-P1 theo điều chỉnh ở §0.2 (nếu chưa commit cùng spec).
 
