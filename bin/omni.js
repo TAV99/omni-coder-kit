@@ -38,6 +38,7 @@ const {
     handleDualAcceptanceComplete,
     handleDualBlock,
 } = require('../lib/commands/dual');
+const { handleSquadRuntimes } = require('../lib/commands/squad');
 
 // `omni skills` no-arg = auto-equip + status (one-stop "show me my skills").
 async function handleSkillsDefault(options = {}) {
@@ -285,6 +286,18 @@ dualSetup.command('run')
     .option('--force', 'Ép chạy lại toàn bộ action kể cả khi receipt hợp lệ')
     .option('--json', 'Xuất kết quả dưới dạng JSON object duy nhất ra stdout')
     .action(handleDualSetupRun);
+
+// -- squad -------------------------------------------------------------------
+const squad = program
+    .command('squad')
+    .description('Đội agent theo vai (3.2.0) — runtime registry, vai, pipeline');
+
+squad.command('runtimes')
+    .description('Kiểm tra CLI agent trên máy: version, đăng nhập, danh sách model')
+    .option('--json', 'Xuất RuntimeReport[] dạng JSON')
+    .option('--runtime <id>', 'Chỉ kiểm một runtime (vd. codex, agy)')
+    .option('--timeout <ms>', 'Timeout cho mỗi lần probe (mặc định 15000)')
+    .action(handleSquadRuntimes);
 
 // ---------------------------------------------------------------------------
 // Hidden utility commands (not aliases of the main groups — power-user tools)
