@@ -90,3 +90,20 @@ test('unknown effort and bad session refs are rejected', () => {
     assert.throws(() => codex.buildHeadless({ ...turn, effort: 'turbo' }), { code: 'SQUAD_RUNTIME_BAD_TURN' });
     assert.throws(() => codex.buildResume('bad id', turn), { code: 'SQUAD_RUNTIME_BAD_TURN' });
 });
+
+// SPEC-SQUAD-P2 §6.4 / V9: in an isolated worker root codex must not walk up to
+// the parent repo's .agents/skills, AGENTS.md or .codex/config.toml.
+test('isolated roots add -c project_root_markers=[] to headless and resume', () => {
+    const isolated = { ...turn, permission: 'full-auto', isolatedRoot: true };
+    for (const inv of [codex.buildHeadless(isolated, { resolved }), codex.buildResume('019a-abc', isolated, { resolved })]) {
+        const at = inv.args.indexOf('project_root_markers=[]');
+        assert.ok(at > 0 && inv.args[at - 1] === '-c');
+    }
+    assert.ok(!codex.buildHeadless(turn, { resolved }).args.includes('project_root_markers=[]'));
+});
+
+test('skill mount surface: workspace and per-user skill dirs', () => {
+    assert.deepEqual(codex.skillDirs('isolated'), ['.agents/skills']);
+    assert.deepEqual(codex.userSkillDirs(probeContext({ platform: 'linux', homedir: '/home/me', env: { CODEX_HOME: '/alt' } })),
+        ['/home/me/.agents/skills', '/alt/skills']);
+});

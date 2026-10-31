@@ -38,7 +38,7 @@ const {
     handleDualAcceptanceComplete,
     handleDualBlock,
 } = require('../lib/commands/dual');
-const { handleSquadRuntimes } = require('../lib/commands/squad');
+const { handleSquadRuntimes, handleSquadSetup, handleSquadSkills } = require('../lib/commands/squad');
 
 // `omni skills` no-arg = auto-equip + status (one-stop "show me my skills").
 async function handleSkillsDefault(options = {}) {
@@ -298,6 +298,20 @@ squad.command('runtimes')
     .option('--runtime <id>', 'Chỉ kiểm một runtime (vd. codex, agy)')
     .option('--timeout <ms>', 'Timeout cho mỗi lần probe (mặc định 15000)')
     .action(handleSquadRuntimes);
+
+squad.command('setup')
+    .description('Tạo file vai, gắn CLI/model/effort cho từng vai, mount bộ skill của orchestrator')
+    .option('--preset <name>', 'dual (orchestrator + 1 worker) | squad (+ nhiều worker, reviewer)', 'dual')
+    .option('--workers <n>', 'Số worker cho preset squad (1–8)')
+    .option('--bind <role=runtime:model[:effort]>', 'Gắn không tương tác, lặp lại được (vd. worker=agy:gemini-3.8-flash-high)',
+        (value, list) => [...list, value], [])
+    .option('-y, --yes', 'Không hỏi: dùng --bind hoặc lựa chọn lần trước, đồng ý chuyển skill không thuộc orchestrator')
+    .option('--keep-skills', 'Không chuyển skill không thuộc orchestrator ra khỏi thư mục skill của project')
+    .action(handleSquadSetup);
+
+squad.command('skills [action]')
+    .description('Bộ skill theo vai: status (mặc định) | sync (mount lại bộ của orchestrator)')
+    .action(handleSquadSkills);
 
 // ---------------------------------------------------------------------------
 // Hidden utility commands (not aliases of the main groups — power-user tools)

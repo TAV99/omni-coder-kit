@@ -194,7 +194,7 @@ bundle(role) = shared_core
 - Mỗi skill: `.omni/skills/<name>/SKILL.md` (+ file phụ). Validate theo `docs/skill-anatomy.md` (tái dùng `validateSkillContent` của `lib/commands/doctor.js`).
 - `skill-store.importFrom(dir)`: chép thư mục skill vào kho nếu tên chưa có; tên trùng nội dung khác → không ghi đè, báo `SQUAD_SKILL_CONFLICT`.
 - `skill-store.hashOf(name)`: sha256 trên danh sách (đường dẫn tương đối, nội dung) đã sắp xếp — dùng cho marker và doctor.
-- Nguồn nạp kho: (a) skill đang có trong thư mục skill của project (`.agents/skills`, `.claude/skills`) khi chạy setup lần đầu; (b) `omni skills add` khi project ở chế độ squad (P2 sửa `saveSkillFile` để ghi vào kho rồi mount lại); (c) skill bundled `templates/bundled-skills` khi offline.
+- Nguồn nạp kho: (a) skill đang có trong thư mục skill của project (`.agents/skills`, `.claude/skills`) khi chạy setup lần đầu; (b) skill mới do `omni skills add` cài (lệnh này cài qua CLI `npx skills`, ghi thẳng vào thư mục skill của project): `omni squad skills sync` nhập chúng vào kho trước khi mount — **thay đổi khi code P2b**, thay cho việc sửa `saveSkillFile`; (c) skill bundled `templates/bundled-skills` khi offline.
 
 ### 6.2 Adapter mount (bổ sung vào runtime P1)
 

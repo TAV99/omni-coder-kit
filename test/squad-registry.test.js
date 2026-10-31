@@ -61,3 +61,9 @@ test('ready needs version, sign-in and models', async () => {
     assert.deepEqual(reports.map((r) => [r.id, r.ready]), [['aa', true], ['bb', false], ['cc', false]]);
     assert.deepEqual(reports[1].problems.map((p) => [p.code, p.fix]), [['SQUAD_RUNTIME_UNAUTHENTICATED', 'log in']]);
 });
+
+test('skillDirs and mountSkills must come together', () => {
+    assert.throws(() => createRegistry({ runtimes: [{ ...fakeRuntime('one'), skillDirs: () => ['.x'] }] }),
+        { code: 'SQUAD_RUNTIME_INVALID_DESCRIPTOR' });
+    assert.doesNotThrow(() => createRegistry({ runtimes: [{ ...fakeRuntime('one'), skillDirs: () => ['.x'], mountSkills: () => ({}) }] }));
+});
