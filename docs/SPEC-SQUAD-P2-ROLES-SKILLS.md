@@ -321,8 +321,8 @@ Ví dụ thật trên máy dev: `~/.claude/skills` hiện có 52 skill → nếu
 | # | Nội dung | Trạng thái |
 |---|---|---|
 | P1-Q1 | Thư mục skill của agy | **Đã chốt:** `.agents/skills` (F1) |
-| Q4 (spec P1) | omni có thêm luật `permissions.allow: write_file(<worker root>)` vào `~/.gemini/antigravity-cli/settings.json` để bỏ `--dangerously-skip-permissions` không | **Mở — cần người dùng chốt.** Đề xuất P2: **không**; giữ `full-auto` trong worker root cô lập như hiện tại, vì luật này nằm ở file toàn cục, ảnh hưởng mọi phiên agy khác của người dùng và phải dọn khi worker root bị xóa |
-| P1-Q2 | agy: `--effort` hay mức trong tên model (`…-flash-high`) thắng | **Mở** — kiểm V10. Trong lúc chờ: setup gợi ý effort trùng hậu tố của tên model và cảnh báo nếu người dùng chọn khác |
+| Q4 (spec P1) | omni có thêm luật `permissions.allow: write_file(<worker root>)` vào `~/.gemini/antigravity-cli/settings.json` để bỏ `--dangerously-skip-permissions` không | **Đã chốt 2026-11-01 (người dùng): không.** omni không ghi vào file cấu hình toàn cục của agy; worker agy giữ `full-auto` trong worker root cô lập. Lý do: luật ở file toàn cục ảnh hưởng mọi phiên agy khác của người dùng và phải dọn khi worker root bị xóa |
+| P1-Q2 | agy: `--effort` hay mức trong tên model (`…-flash-high`) thắng | **Đã chốt bằng V10:** không bên nào "thắng" — lệch nhau là lỗi cứng. Mức trong tên model là nguồn đúng; xem Phụ lục §6.6 |
 | P2-Q1 | Có cho phép worker sửa nội dung skill qua task không | **Đề xuất: không** (§7 bước 4); sửa skill là việc của người dùng/orchestrator ở kho |
 
 ---
@@ -373,7 +373,9 @@ Kết quả ghi vào phụ lục spec này trước commit P2a. Nếu V8 cho th�
 |---|---|
 | `feat(squad): role definitions, skill catalog and safe YAML (P2a)` | §3, §4, §5, template, `yaml` dependency, test §12.1 (yaml/roles/catalog) |
 | `feat(squad): skill store, per-role mount and setup command (P2b)` | §6, §8, §10, doctor §9, adapter `mountSkills`/`skillDirs`, cờ cô lập codex, test tương ứng |
-| `fix(dual): keep project skills out of worker roots (P2c)` | §7 + test §12.2 |
+| `fix(dual): keep project skills out of worker roots (P2c)` | §7, Phụ lục §6.5 (`git init` worker root, bỏ `.git` của worker khỏi lượt quét kết quả) + test §12.2, kèm test: worker root có `.git` riêng; kết quả task không chứa `.git`; lệnh git trong worker không chạm repo cha |
+
+P2a cũng gồm sửa adapter agy theo Phụ lục §6.6 (effort theo hậu tố model) và test golden/conformance tương ứng.
 
 ---
 
@@ -385,3 +387,30 @@ Kết quả ghi vào phụ lục spec này trước commit P2a. Nếu V8 cho th�
 - [ ] Một task dual thật (fixture nhỏ) chạy qua isolated-runner: worker root chỉ có bundle worker; integrate thành công.
 - [ ] Phụ lục V8–V11 đã ghi.
 - [ ] Linux/Windows thật: hoãn (SQUAD-ARCHITECTURE-PLAN §11).
+
+---
+
+## Phụ lục — Kết quả kiểm V8–V11 (2026-11-01)
+
+Máy kiểm: macOS arm64, `codex-cli 0.166.0`, `agy 1.4.12`. Mỗi lượt dùng thư mục tạm (đã realpath) gồm `parent/` (có skill `zebra-parent-probe`) và `parent/child/` (có skill `otter-child-probe`); chạy CLI trong `child`, hỏi model tên skill có chứa "zebra"/"otter". Thư mục tạm đã xóa sau khi kiểm.
+
+| # | Kết quả | Ảnh hưởng |
+|---|---|---|
+| V8 | **agy đi ngược lên tới gốc git gần nhất để tìm skill.** `parent` là git repo → thấy cả `zebra-parent-probe`. Đặt `GIT_CEILING_DIRECTORIES=parent` → **vẫn thấy** (agy không tôn trọng biến này). `parent` không phải git repo → chỉ thấy `otter-child-probe`. `child/.git` là thư mục rỗng → vẫn thấy cả hai. `child` được `git init` → chỉ thấy `otter-child-probe`. Ngoài ra agy liệt kê rất nhiều skill toàn cục/plugin từ `~/.gemini` (khẳng định F6). | Worker root hiện nằm trong repo có `.git` → **worker agy thấy skill ở gốc repo kể cả sau §7**. Theo §6.4 phải dừng và hỏi người dùng. Hướng đã kiểm là chạy được: `git init` worker root (không cần commit). Xem §6.5. |
+| V9 | **codex**: không cờ → thấy cả hai skill; có `-c project_root_markers=[]` → chỉ thấy `otter-child-probe`. Lưu ý khi chạy tay: `codex exec` chờ đọc thêm stdin nếu stdin không đóng (`Reading additional input from stdin...`); adapter P1 và dual đều spawn với stdin `ignore` nên không bị ảnh hưởng. `gpt-5.4-mini` không còn dùng được với tài khoản ChatGPT trên 0.166.0. | §6.4 đúng như thiết kế. |
+| V10 | **agy: `--effort` phụ thuộc model.** Model có hậu tố mức (`gemini-3.8-flash-low`, `…-high`, `gpt-oss-120b-medium`): `--effort` khác hậu tố → `exit 1`, `status: ERROR`, lỗi `--model X conflicts with --effort=Y`; `--effort` trùng hậu tố → chạy. Model Claude qua agy (`claude-sonnet-4-6`): mọi `--effort` → lỗi `--effort is not supported for model`. Tên gốc không có trong danh sách (`gemini-3.8-flash`) + `--effort high` → chạy. Đo `thinking_tokens` cùng câu hỏi: `-low` 0–300, `-high` 850–1080. | **Adapter agy của P1 sai**: khai mọi model có đủ 5 mức effort. P2a sửa (§6.6). Dual cũ luôn truyền `--effort` (`agy-runner`, `live-agy-invoke`) và bắt buộc có effort (`workerConfigurationError`) → với model Claude qua agy, dual hiện **luôn lỗi**; với model có hậu tố, `workerEffort` phải trùng hậu tố. P2 setup ghi `workerEffort` trùng hậu tố; sửa dual cho model không nhận effort chuyển sang P3. |
+| V11 | Tùy chọn của `yaml` 2.9.1 ở §3 khớp tài liệu (`/eemeli/yaml/v2.9.1` docs/03_options.md): `schema`, `strict`, `uniqueKeys`, `stringKeys`, `merge`, `resolveKnownTags`, `prettyErrors`; `toJS({ maxAliasCount })`. | Kiểm hành vi thật bằng test §12.1. |
+
+### 6.5 (bổ sung theo V8) Cô lập worker agy
+
+**Đã chốt 2026-11-01 (người dùng chọn phương án này).** Sau khi chép worker root, chạy `git init -q` trong worker root (dùng `shell:false`, env có `GIT_CEILING_DIRECTORIES` như hiện tại) để worker root là gốc git của chính nó.
+- `.git` của worker root được ghi vào `roleSkillDirs`/danh sách bỏ qua của lượt quét kết quả (§7 bước 3), không bao giờ tính là thay đổi của worker, không bao giờ integrate.
+- Hệ quả phụ: lệnh git chạy trong worker giờ chạy trên một repo trống thay vì báo lỗi "not a git repository". Không commit baseline để tránh nhân đôi dung lượng repo lớn.
+- Codex vẫn giữ `-c project_root_markers=[]` (phòng thủ hai lớp).
+- Phương án thay thế: đặt worker root ra ngoài repo. Thay đổi lớn hơn (integrate, recovery, đường dẫn trong ledger) nên không chọn nếu `git init` đủ.
+
+### 6.6 (bổ sung theo V10) Effort của agy
+
+- `listModels`: model có hậu tố `-(low|medium|high|xhigh|max)` → `efforts = [hậu tố]`, `defaultEffort = hậu tố`; model `claude-*` → `efforts = null`; còn lại → `efforts = null` (không biết chắc → không đề xuất effort).
+- `buildHeadless`/`buildResume`/`interactiveCommand`: model có hậu tố → **không truyền `--effort`**; nếu turn có effort khác hậu tố → `SQUAD_RUNTIME_BAD_TURN`. Model không hậu tố → chỉ truyền `--effort` khi turn có effort.
+- Test golden và conformance của agy cập nhật theo.

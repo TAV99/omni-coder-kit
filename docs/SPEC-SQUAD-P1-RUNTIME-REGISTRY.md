@@ -454,7 +454,7 @@ Kết quả V1–V6 ghi vào phụ lục cuối spec này trước commit P1a; V
 | Q1 | Bản kiến trúc ghi skill agy ở `.agents/skills/`, nhưng memory đã kiểm (2026-06-27) ghi `.agent/skills/` (số ít) | Không ảnh hưởng P1; phải chốt ở P2 trước khi cài `mountSkills` |
 | Q2 | agy có cả `--effort` lẫn model id chứa mức (`…-flash-high`) — cái nào thắng? | P1 truyền cả hai như dual hiện tại; P2 đo và chốt |
 | Q3 | `codex` có thể chạy model nhà khác qua `--oss` / `model_provider` | P1 coi codex `multiModel:false`; mở ở P4 nếu cần |
-| Q4 | agy headless chỉ ghi được với `--dangerously-skip-permissions` hoặc luật `permissions.allow` trong file cấu hình toàn cục | P1 giữ `full-auto` trong worker root cô lập. P2 chốt: omni có được thêm luật `write_file(<worker root>)` (hỏi ý người dùng lúc init) để bỏ cờ nguy hiểm không |
+| Q4 | agy headless chỉ ghi được với `--dangerously-skip-permissions` hoặc luật `permissions.allow` trong file cấu hình toàn cục | **Đã chốt 2026-11-01: không** — omni không ghi luật vào cấu hình toàn cục của agy; giữ `full-auto` trong worker root cô lập (xem SPEC-SQUAD-P2 §11) |
 | Q5 | agy soft-deny: exit 0, `status: SUCCESS` nhưng có `denied_actions` và response rỗng | P3 (`parseOutput`) phải coi `denied_actions` khác rỗng là thất bại có mã riêng, không phải thành công |
 
 ---
