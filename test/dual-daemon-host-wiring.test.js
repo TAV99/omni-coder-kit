@@ -23,7 +23,9 @@ function loadModule(relativePath, mocks, processImpl = process) {
 }
 
 function workspace(t) {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-daemon-wiring-'));
+    // Canonical path: on macOS os.tmpdir() sits behind the /var -> /private/var
+    // symlink, and the discussion host seeds with the canonical workspace root.
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-daemon-wiring-')));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     return root;
 }

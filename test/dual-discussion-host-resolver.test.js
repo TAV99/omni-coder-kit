@@ -18,6 +18,10 @@ const sessionId = 'daemon-session';
 const leaseId = '20000000-0000-4000-8000-000000000001';
 const bindings = [{}, { model: 'gemini-3.8-flash-high' }];
 
+// Canonical temp dirs: on macOS os.tmpdir() sits behind the /var -> /private/var
+// symlink, and the resolver canonicalizes roots and refuses symlinked journal dirs.
+const tempDir = async (prefix) => fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), prefix)));
+
 // Full authority envelopes, including the prerequisite session/plan/routing history.
 function events(released = false) {
     const start = Date.now() - 10_000;
@@ -76,7 +80,7 @@ function fakeAdapter(provider, invoke) {
 
 
 async function fixture(t, overrides = {}) {
-    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'omni-discussion-resolver-'));
+    const stateDir = await tempDir('omni-discussion-resolver-');
     let revision = 1;
     const calls = [];
     const host = createDiscussionHost({
@@ -338,7 +342,7 @@ test('explicit recovery probes override adapter probes', async (t) => {
 });
 
 async function isolatedFixture(t, overrides = {}) {
-    const workerRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'omni-child-worker-'));
+    const workerRoot = await tempDir('omni-child-worker-');
     t.after(() => fs.rm(workerRoot, { recursive: true, force: true }));
     let authorized = true;
     const calls = [];
@@ -434,8 +438,8 @@ test('different isolated roots produce separate identities and a slow stale seed
     const old = await state.host.createIsolatedDiscussion(state.execution);
     const pending = old.sessionResolver(state.request);
     const observed = assert.rejects(pending, { code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID' });
-    await started;
-    const newRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'omni-child-second-'));
+    await Promise.race([started, pending.then(() => assert.fail('resolver settled before the slow seed started'))]);
+    const newRoot = await tempDir('omni-child-second-');
     t.after(() => fs.rm(newRoot, { recursive: true, force: true }));
     const execution = { ...state.execution, workerRoot: newRoot,
         reference: { ...state.execution.reference, workerRoot: newRoot }, operationId: 'child-operation-2' };

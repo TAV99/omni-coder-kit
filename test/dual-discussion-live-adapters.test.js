@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
@@ -169,20 +170,28 @@ for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCod
             };
             const quote = (value) => "'" + value.replace(/'/g, "'\"'\"'") + "'";
             await fs.writeFile(executable, '#!/bin/sh\n'
+                + '[ -n "$OMNI_TEST_WARMUP" ] && exit 0\n'
                 + `printf x >> ${quote(log + '.count')}\n`
                 + `if [ -f ${quote(log)} ]; then\n`
                 + `printf '%s\\0' "$@" > ${quote(log + '.second')}\n`
                 + `printf '%s' ${quote(stdout(second, name === 'nudge failure keeps marker'))}\nelse\n`
                 + `printf '%s\\0' "$@" > ${quote(log)}\n`
-                + (name === 'budget exhausted skips nudge' || name === 'timeout is untouched' ? 'sleep 0.1\n' : '')
+                + (name === 'budget exhausted skips nudge' ? 'sleep 0.1\n' : '')
+                // Record args first, then outlive the budget: a 50 ms budget raced /bin/sh startup.
+                + (name === 'timeout is untouched' ? 'sleep 1\n' : '')
                 + `printf '%s' ${quote(stdout(first))}\n`
                 + (name === 'nonzero exit is untouched' ? 'exit 7\n' : '')
                 + 'fi\n', { mode: 0o700 });
+            if (name === 'timeout is untouched') {
+                // The first exec of a fresh script can take ~250 ms on macOS (new-binary
+                // scan), longer than the timeout budget; warm it up outside the budget.
+                execFileSync(executable, [], { env: { ...process.env, OMNI_TEST_WARMUP: '1' } });
+            }
             const adapter = create({ agyPath: executable, codexPath: executable });
             const raw = await adapter.invoke({ binding: binding(provider), snapshot,
                 envelope: { kind: 'question', body: 'scout' }, invocationId: 'inv-nudge',
                 timeoutMs: name === 'budget exhausted skips nudge' ? 5050
-                    : name === 'timeout is untouched' ? 50 : 15000,
+                    : name === 'timeout is untouched' ? 400 : 15000,
                 maxOutputBytes: name === 'overflow is untouched' ? 32 : undefined });
             const result = adapter.classify(raw, binding(provider), 'inv-nudge');
             const recorded = [(await fs.readFile(log, 'utf8')).split('\0').slice(0, -1)];
