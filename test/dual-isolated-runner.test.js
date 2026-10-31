@@ -1605,3 +1605,37 @@ test('progressing implement emits heartbeats and completes without watchdog inte
     assert.ok(events.some((event) => event.phase === 'implement' && event.type === 'turn-complete'));
     assert.equal(events.some((event) => ['STALLED', 'nudge'].includes(event.type)), false);
 });
+
+// SPEC-SQUAD-P2 §7 / DoD: a full isolated task in a squad project. The worker sees
+// only its own bundle (no orchestrator skills), runs in its own git root, and the
+// mount never shows up in the result, the scope check or integration.
+test('squad project: worker root holds only the worker bundle and the task still integrates', async (t) => {
+    const { writeSkill } = require('./helpers/squad-project');
+    const { writeBinding } = require('../lib/squad/bindings');
+    const input = fixture(t);
+    const root = input.workspaceRoot;
+    spawnSync('git', ['init', '-q'], { cwd: root });
+    const templates = path.join(__dirname, '..', 'templates', 'squad');
+    fs.mkdirSync(path.join(root, '.omni', 'squad', 'roles'), { recursive: true });
+    for (const name of fs.readdirSync(path.join(templates, 'roles'))) {
+        fs.copyFileSync(path.join(templates, 'roles', name), path.join(root, '.omni', 'squad', 'roles', name));
+    }
+    fs.copyFileSync(path.join(templates, 'skills.yaml'), path.join(root, '.omni', 'squad', 'skills.yaml'));
+    writeBinding(root, { schema_version: 1, preset: 'dual', updated_at: '2026-11-01T00:00:00Z', roles: {
+        orchestrator: { runtime: 'codex', model: 'gpt-6.1-sol' },
+        worker: [{ id: 'worker-1', runtime: 'agy', model: 'gemini-3.8-flash-high' }], reviewer: null } });
+    for (const name of ['om-think', 'om-cook']) writeSkill(path.join(root, '.omni', 'skills'), name);
+    writeSkill(path.join(root, '.agents', 'skills'), 'om-think');
+    const calls = [];
+    const handoff = await runIsolatedTask({ ...input, worker: fakeWorker(calls) });
+    assert.equal(handoff.status, 'AWAITING_CODEX_QC');
+    const workerSkills = path.join(handoff.reference.workerRoot, '.agents', 'skills');
+    assert.deepEqual(fs.readdirSync(workerSkills), ['om-cook']);
+    assert.ok(fs.existsSync(path.join(handoff.reference.workerRoot, '.git', 'HEAD')));
+    assert.deepEqual(handoff.result.changes.map((c) => c.path), ['index.js']);
+    const integrated = integrateTaskResult({ workspaceRoot: root, reference: handoff.reference,
+        result: handoff.result, expectedResultSha256: handoff.result.resultSha256, authorize: () => true });
+    assert.equal(integrated.status, 'INTEGRATED');
+    assert.equal(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), 'module.exports = 2;\n');
+    assert.deepEqual(fs.readdirSync(path.join(root, '.agents', 'skills')), ['om-think'], 'project skills untouched');
+});

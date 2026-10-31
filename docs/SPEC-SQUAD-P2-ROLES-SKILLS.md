@@ -233,6 +233,8 @@ Codex và agy dùng chung `.agents/skills`, nên ở **một** root chỉ đư�
 
 Sửa `lib/dual/task-workspace.js` (chỉ phần này của dual được đụng ở P2):
 
+> **Ghi chú khi code P2c (2026-11-01):** (a) trường binding được đặt tên `workerOwnedPaths` (= `skillDirs` của adapter + `.git`), thay cho `roleSkillDirs`; (b) mọi thay đổi ở mục này **chỉ bật khi project có `.omni/squad/`**: project dual cũ giữ nguyên hành vi (vẫn chép `.agents/skills`, không `git init`); (c) cô lập và mount làm ngay trong `prepareTaskWorkspace`, **trước** khi isolated-runner chụp worker baseline, với marker không có dấu thời gian, nên skill mount là một phần của baseline: bước kiểm scope không thấy thay đổi, còn worker sửa skill mount thì vẫn bị bắt. `prepareCheckpointResume` (`lib/dual/checkpoint.js`) gọi lại cùng hàm `isolateWorkerRoot` để worker root của lần resume khớp baseline gốc; (d) bước dọn file tạm và quét checkpoint cũng bỏ qua `workerOwnedPaths`, vì nếu không, bước dọn sẽ xóa các thư mục rỗng mà `.git` cần.
+
 1. Hằng `ROLE_SKILL_DIRS = ['.agents/skills']` (lấy từ hợp của `skillDirs('isolated')` của các adapter đã đăng ký, không viết cứng ở dual).
 2. `excluded(file)` khi **chép** worker root: bỏ qua mọi đường dẫn dưới `ROLE_SKILL_DIRS`. Không sửa `CANONICAL_CONTROL_PLANE_EXCLUDES` (danh sách đó còn dùng cho baseline snapshot — đổi nó làm lệch định danh baseline của session đang chạy).
 3. Binding mới có trường `roleSkillDirs` (ghi lúc prepare). `collectTaskResult` và `scan` của lượt quét kết quả bỏ qua các đường dẫn này (giống cách đang bỏ `runtimePath`).
