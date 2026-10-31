@@ -12,7 +12,8 @@ const { computeEventHash } = require('../lib/dual/authority-store');
 const { createDaemonHostDeps } = require('../lib/dual/discussion/daemon-ports');
 const { buildBindings } = require('../lib/dual/discussion/session');
 function fixture(t) {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'revision-controller-flow-'));
+    // The daemon always hands discussion hosts a canonical root (macOS tmpdir is /var -> /private/var).
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'revision-controller-flow-')));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     fs.writeFileSync(path.join(root, 'app.js'), 'module.exports = 1;\n');
     const store = createAuthorityStore(path.join(root, '.omni/runs/dual-authority'));

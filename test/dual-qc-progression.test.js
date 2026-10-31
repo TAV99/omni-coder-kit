@@ -197,7 +197,8 @@ test('handleDualQc continues acceptance when every isolated task is already veri
 });
 
 test('quality plan preserves typed argv and cwd and deduplicates only exact command identity', (t) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-quality-plan-'));
+    // Setup invocations run from the canonical root (macOS tmpdir is /var -> /private/var).
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-quality-plan-')));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'node --test', verify: 'node verify.js' } }));
     fs.writeFileSync(path.join(root, 'package-lock.json'), '{}');
