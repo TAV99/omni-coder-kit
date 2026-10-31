@@ -18,7 +18,8 @@ function expectedScoutPrompt(runDir) {
 }
 
 async function fixture(t, { enabled, missingResolver = false, disabledSession = false, unknown = false, invalid = false, snapshot = false, taskId = 'TASK-DISCUSSION' } = {}) {
-    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-discussion-orch-'));
+    // The orchestrator canonicalizes its root (macOS tmpdir is /var -> /private/var).
+    const repoRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-discussion-orch-')));
     t.after(() => fs.rmSync(repoRoot, { recursive: true, force: true }));
     const git = (...args) => {
         const result = spawnSync('git', args, { cwd: repoRoot, encoding: 'utf8' });

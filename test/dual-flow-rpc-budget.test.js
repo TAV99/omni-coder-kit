@@ -21,7 +21,7 @@ function createWorkspace(t) {
     fs.mkdirSync(getRuntimeDir(workspaceRoot), { recursive: true });
     fs.writeFileSync(path.join(getRuntimeDir(workspaceRoot), 'daemon.json'), JSON.stringify({
         protocol_version: 1,
-        workspace_id: computeWorkspaceId(workspaceRoot),
+        workspace_id: computeWorkspaceId(fs.realpathSync(workspaceRoot)),
         workspace_root: fs.realpathSync(workspaceRoot),
         pid: process.pid,
         started_at: new Date().toISOString(),

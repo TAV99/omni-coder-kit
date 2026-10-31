@@ -1421,6 +1421,11 @@ for (const scenario of ['pass', 'exit', 'missing-block', 'false-test', 'evidence
     });
 }
 
+// Discussion setup writes nothing, so it must finish inside noProgressMs or the
+// zero-evidence fail-fast fires before the turn under test runs. Cold or loaded
+// runs take >50ms there; keep the budget well clear of that.
+const STALL_TEST_TURN_SAFETY = { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 250, graceMs: 50, pollMs: 5 };
+
 test('turn watchdog aborts a stalled discussion, preserves artifacts and closes execution', async (t) => {
     const input = fixture(t);
     let reference, workerSignal, marker, nudges = 0;
@@ -1435,7 +1440,7 @@ test('turn watchdog aborts a stalled discussion, preserves artifacts and closes 
     });
     await assert.rejects(runRealIsolatedTask({ ...input, discussion,
         onPrepared(saved) { reference = saved; }, onTurnNudge() { nudges++; },
-        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 30, graceMs: 20, pollMs: 5 },
+        turnSafety: STALL_TEST_TURN_SAFETY,
     }), (error) => error.code === 'DUAL_TURN_STALLED' && error.status === 'STALLED');
     assert.equal(workerSignal.aborted, true);
     assert.equal(nudges, 1);
@@ -1464,7 +1469,7 @@ test('turn zero-evidence fail-fast immediately aborts with DUAL_NO_WRITE_PROGRES
     });
     await assert.rejects(runRealIsolatedTask({ ...input, discussion,
         onPrepared(saved) { reference = saved; }, onTurnNudge() { nudges++; },
-        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 30, graceMs: 20, pollMs: 5 },
+        turnSafety: STALL_TEST_TURN_SAFETY,
     }), (error) => error.code === 'DUAL_NO_WRITE_PROGRESS' && error.status === 'NO_WRITE_PROGRESS' && error.turn.reason === 'no_evidence');
     assert.equal(workerSignal.aborted, true);
     assert.equal(nudges, 0);
@@ -1493,7 +1498,7 @@ test('P2a: allowed-file change leads to progress and hadEvidence even without ev
     });
     await assert.rejects(runRealIsolatedTask({ ...input, discussion,
         onPrepared(saved) { reference = saved; }, onTurnNudge() { nudges++; },
-        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 30, graceMs: 20, pollMs: 5 },
+        turnSafety: STALL_TEST_TURN_SAFETY,
     }), (error) => error.code === 'DUAL_TURN_STALLED' && error.status === 'STALLED');
     assert.equal(workerSignal.aborted, true);
     assert.equal(nudges, 1, 'allowed file modification should set hadEvidence, emitting nudge instead of fail-fast');
@@ -1521,7 +1526,7 @@ test('P2b: a change ONLY to .omni paths or adapter/runner-owned artifacts does N
     });
     await assert.rejects(runRealIsolatedTask({ ...input, discussion,
         onPrepared(saved) { reference = saved; }, onTurnNudge() { nudges++; },
-        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 30, graceMs: 20, pollMs: 5 },
+        turnSafety: STALL_TEST_TURN_SAFETY,
     }), (error) => error.code === 'DUAL_NO_WRITE_PROGRESS' && error.status === 'NO_WRITE_PROGRESS' && error.turn.reason === 'no_evidence');
     assert.equal(workerSignal.aborted, true);
     assert.equal(nudges, 0, 'changes only in .omni must not set hadEvidence or cause nudge');
@@ -1565,7 +1570,7 @@ test('authority settles stalled turn, releases lease and never classifies it as 
         context.signal.throwIfAborted();
     } });
     const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, discussion,
-        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 30, graceMs: 20, pollMs: 5 } });
+        turnSafety: STALL_TEST_TURN_SAFETY });
     await assert.rejects(adapter.runTask(store.derive()), { code: 'DUAL_TURN_STALLED' });
     const derived = store.derive(), task = derived.tasks['TASK-1'];
     assert.equal(task.lastOutcome.code, 'DUAL_TURN_STALLED');
