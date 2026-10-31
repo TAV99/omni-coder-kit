@@ -48,12 +48,37 @@ test('probe shares one `agy models` spawn between auth and model listing', async
     assert.equal(spawnImpl.calls.filter((c) => c.args[0] === 'models').length, 1);
 });
 
-test('buildHeadless argv (golden)', () => {
+test('buildHeadless argv (golden): a suffixed model omits --effort', () => {
     const inv = agy.buildHeadless({ ...turn, effort: 'high', jsonSchemaPath: '/work/s.json' }, { resolved });
     assert.equal(inv.command, '/bin/agy');
     assert.deepEqual(inv.args, [
-        '-p', 'look around', '--output-format', 'json', '--model', 'gemini-3.8-flash-high', '--effort', 'high',
+        '-p', 'look around', '--output-format', 'json', '--model', 'gemini-3.8-flash-high',
         '--mode', 'plan', '--add-dir', '/work', '--json-schema', '/work/s.json', '--print-timeout', '90s',
+    ]);
+});
+
+// Live agy 1.4.12 behaviour (SPEC-SQUAD-P2 appendix V10): a mismatched --effort or
+// any --effort on a Claude model makes agy exit 1, so the builder refuses first.
+test('effort follows the model: suffix fixes it, Claude takes none, bare ids pass it', () => {
+    const effortOf = (model, effort) => {
+        const args = agy.buildHeadless({ ...turn, model, effort }).args;
+        return args.includes('--effort') ? args[args.indexOf('--effort') + 1] : null;
+    };
+    assert.equal(effortOf('gemini-3.8-flash-high', undefined), null);
+    assert.equal(effortOf('gpt-oss-120b-medium', 'medium'), null);
+    assert.throws(() => effortOf('gemini-3.8-flash-high', 'low'), { code: 'SQUAD_RUNTIME_BAD_TURN' });
+    assert.equal(effortOf('claude-sonnet-4-6', undefined), null);
+    assert.throws(() => effortOf('claude-sonnet-4-6', 'high'), { code: 'SQUAD_RUNTIME_BAD_TURN' });
+    assert.equal(effortOf('gemini-3.8-flash', 'high'), 'high');
+    assert.throws(() => agy.interactiveCommand({ model: 'gemini-3.8-flash-low', effort: 'high', cwd: '/work' }),
+        { code: 'SQUAD_RUNTIME_BAD_TURN' });
+});
+
+test('listed models report the effort their id fixes', async () => {
+    const r = await agy.listModels(ctxWith(() => ({ stdout: MODELS_TAB })));
+    assert.deepEqual(r.models.map((m) => [m.id, m.efforts, m.defaultEffort]), [
+        ['gemini-3.8-flash-high', ['high'], 'high'],
+        ['claude-sonnet-4-6', null, null],
     ]);
 });
 

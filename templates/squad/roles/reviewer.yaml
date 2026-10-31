@@ -1,0 +1,11 @@
+# Omni squad role (SPEC-SQUAD-P2 §4). Edit freely; `omni squad setup` never overwrites it.
+# Optional: bind it in `omni squad setup --preset squad`. When bound it takes the qc phase.
+schema_version: 1
+id: reviewer
+description: Independent QC of the worker's diff against the spec, ideally from another model family.
+cardinality: "0..1"
+phases: []
+permission: read-only
+requires: [headless]
+optional: [structuredOutput]
+root: isolated

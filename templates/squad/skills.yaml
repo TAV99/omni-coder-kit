@@ -1,0 +1,53 @@
+# Omni squad skill catalog (SPEC-SQUAD-P2 §5). `omni skills:doctor` fails when a
+# skill lands in two roles unless it is listed in shared_core.
+schema_version: 1
+shared_core:
+  - karpathy-guidelines
+  - verification-before-completion
+roles:
+  orchestrator:
+    - om-think
+    - om-spec
+    - om-plan
+    - om-go
+    - om-scan
+    - om-map
+    - om-memo
+    - om-skill
+    - om-doc
+    - om-ship
+    - brainstorming
+    - writing-plans
+    - dispatching-parallel-agents
+    - receiving-code-review
+    - api-and-interface-design
+    - documentation-and-adrs
+    - context-engineering
+    - git-workflow-and-versioning
+    - shipping-and-launch
+    - deprecation-and-migration
+    - ci-cd-and-automation
+    - finishing-a-development-branch
+  worker:
+    - om-cook
+    - om-fix
+    - test-driven-development
+    - systematic-debugging
+    - executing-plans
+    - source-driven-development
+  reviewer: []
+# A phase's skills go to whichever role holds the phase (qc: reviewer if bound, else orchestrator).
+phases:
+  qc:
+    - om-check
+    - om-pass
+    - requesting-code-review
+# Stack-specific skills; `omni squad setup` fills stack.worker from the project's detected tech.
+stack:
+  worker: []
+exclude:
+  - using-superpowers
+  - find-skills
+  - subagent-driven-development
+  - using-git-worktrees
+  - writing-skills

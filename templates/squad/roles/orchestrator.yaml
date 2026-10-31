@@ -1,0 +1,10 @@
+# Omni squad role (SPEC-SQUAD-P2 §4). Edit freely; `omni squad setup` never overwrites it.
+schema_version: 1
+id: orchestrator
+description: Talks with the user, writes the spec and plan, routes work, integrates results. Holds QC when no reviewer is bound.
+cardinality: "1"
+phases: [spec, plan, integrate]
+permission: interactive      # the CLI runs interactively and asks the user for approvals itself
+requires: [interactive, mcp]
+optional: [hooks, transcript]
+root: project

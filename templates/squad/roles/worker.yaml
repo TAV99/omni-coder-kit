@@ -1,0 +1,10 @@
+# Omni squad role (SPEC-SQUAD-P2 §4). Edit freely; `omni squad setup` never overwrites it.
+schema_version: 1
+id: worker
+description: Scouts, implements and corrects one task inside its own isolated worker root.
+cardinality: "1..N"
+phases: [scout, implement, correction]
+permission: full-auto-isolated   # only ever inside an isolated worker root (B4)
+requires: [headless, write]
+optional: [resume, structuredOutput]
+root: isolated
