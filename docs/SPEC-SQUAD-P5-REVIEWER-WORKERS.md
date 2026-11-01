@@ -239,8 +239,8 @@ Kết quả ghi ở Phụ lục A.
 - [x] Tổ hợp D18: codex orchestrator + codex reviewer (model/effort khác) + agy worker chạy trọn vòng (V-live-P5-d18).
 - [x] Hai worker (khác runtime) chạy hai task song song, integrate tuần tự, cả hai `TASK_VERIFIED` (V-live-P5-par-3).
 - [x] Preset `dual` vẫn đạt như V20/V21 (một vòng thật chạy lại sau P5c — V-live-P5-dual).
-- [ ] `npm test` xanh trên macOS + một lượt dưới tải.
-- [ ] Phụ lục V33–V38 đã ghi.
+- [x] `npm test` xanh trên macOS + một lượt dưới tải (3057 test, c85090b; sau đó không đổi `lib/`).
+- [ ] Phụ lục V33–V38 đã ghi — còn **V36** (làm mới token giữa chừng, chưa gặp) và **V37** (dấu hiệu rate limit → `WAITING_RUNTIME`, §4.3 chưa làm).
 
 ---
 
@@ -258,3 +258,4 @@ Kết quả ghi ở Phụ lục A.
 | V-live-P5-fix-2 ✓ | Cùng cấu hình: reviewer codex thật chấm attempt 1 → `NEEDS_FIX` với finding nguyên văn "[ERROR] The guard exempts null and undefined, so those non-array inputs do not throw TypeError(\"Expected array\") as the spec requires…" → omni tự từ chối handoff + mở correction + dispatch lại → attempt 2 → reviewer `APPROVE` (0 finding) → `task.qc` chạy lệnh → cổng integrate người duyệt → `TASK_VERIFIED`; `finalEvidence` xác nhận null/undefined/{} đều ném `TypeError`; 6 phút. Worker là script nên vòng này kiểm vòng lặp reviewer → correction, không kiểm năng lực sửa lỗi của model worker. |
 | V-live-P5-d18 ✓ | Một tài khoản codex giữ hai vai: orchestrator codex `gpt-6.1-sol` high + reviewer codex `gpt-6-luna` low, worker agy `gemini-3.8-flash-high`. Cổng plan → 7 phase → reviewer codex `APPROVE` → `task.qc` → cổng integrate người duyệt → `TASK_VERIFIED`; hai phiên codex không giẫm nhau, không đăng xuất. |
 | V-live-P5-dual ✓ | Hồi quy preset `dual` sau P5a–P5d: orchestrator codex `gpt-6.1-sol` + worker agy `gemini-3.8-flash-high`, không reviewer (QC theo đường cũ) → cổng plan → 7 phase → `task.qc` → cổng integrate người duyệt → `TASK_VERIFIED`. |
+| V35 ✓ | Song song khác runtime và cùng tài khoản: V-live-P5-par-3 (agy + claude worker cùng lúc, codex orchestrator + codex reviewer) và V-live-P5-d18 (hai phiên codex cùng tài khoản) — không giẫm session, không đăng xuất. |
