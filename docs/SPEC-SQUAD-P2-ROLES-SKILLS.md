@@ -15,7 +15,7 @@
 3. **Kho skill chuẩn** `.omni/skills/` là nơi duy nhất lưu nội dung skill; mỗi vai được **mount** (chép) đúng bộ của mình vào thư mục mà CLI của vai đó đọc.
 4. Worker **không còn thấy skill của orchestrator**: sửa chỗ isolated-runner đang chép `.agents/skills` của project vào worker root.
 5. `omni squad setup`: chọn preset, gắn CLI → model → effort cho từng vai bằng registry P1, lưu binding riêng từng người.
-6. `omni skills:doctor` bắt **skill trùng giữa các vai**, skill thiếu, skill lạ trong thư mục mount, và cảnh báo thư mục skill cấp người dùng.
+6. `omni skills doctor` bắt **skill trùng giữa các vai**, skill thiếu, skill lạ trong thư mục mount, và cảnh báo thư mục skill cấp người dùng.
 7. Gitignore D10: `.omni/*` + `!.omni/squad/`, có di trú.
 
 ### 0.2 Ngoài phạm vi P2
@@ -291,7 +291,7 @@ omni squad setup [--preset dual|squad] [--workers N] [--yes]
 
 ---
 
-## 9. `omni skills:doctor` — nhóm kiểm squad
+## 9. `omni skills doctor` — nhóm kiểm squad
 
 Chỉ chạy khi có `.omni/squad/`. Mức lỗi làm `doctor` thoát mã khác 0.
 
@@ -383,11 +383,11 @@ P2a cũng gồm sửa adapter agy theo Phụ lục §6.6 (effort theo hậu tố
 
 ## 15. Điều kiện xong P2 (DoD)
 
-- [ ] `npm test` xanh trên macOS + một lượt dưới tải xanh; test cũ không đổi assertion (trừ test dual mới thêm case).
-- [ ] `omni squad setup --preset dual` trên repo này: tạo 3 file vai + `skills.yaml`, binding codex/agy, mount bundle orchestrator vào `.agents/skills`, chuyển skill không thuộc orchestrator vào `.displaced` (không xóa).
-- [ ] `omni skills:doctor` trên repo này: 0 lỗi squad; cảnh báo `SQUAD_USER_SKILLS_GLOBAL` cho `~/.claude/skills` chỉ khi Claude Code được gán vai.
-- [ ] Một task dual thật (fixture nhỏ) chạy qua isolated-runner: worker root chỉ có bundle worker; integrate thành công.
-- [ ] Phụ lục V8–V11 đã ghi.
+- [x] `npm test` xanh trên macOS + một lượt dưới tải xanh; test cũ không đổi assertion (trừ test dual mới thêm case).
+- [x] `omni squad setup --preset dual` trên repo này (2026-11-01, codex `gpt-6.1-sol`/`high` + agy `gemini-3.8-flash-high`): tạo 3 file vai + `skills.yaml`, binding, kho 52 skill, `stack.worker` 12 skill, orchestrator 27 skill (nhận cả 27), chuyển 25 skill sang `.omni/skills/.displaced/` (không xóa). Phát hiện: 17 thư mục skill trong số đó (43 file) đang được git theo dõi trong repo này nên hiện là "deleted" trong `git status`; `.gitignore` của repo có dòng `.omni/` tự viết nên `.omni/squad/` chưa commit được (setup chỉ cảnh báo).
+- [x] `omni skills doctor` trên repo này: 0 lỗi squad, 1 cảnh báo `SQUAD_USER_SKILLS_GLOBAL`: `~/.agents/skills` có 31 skill mà orchestrator codex đều thấy. Không có cảnh báo cho `~/.claude/skills` vì Claude Code không được gán vai. Ghi chú: lệnh đúng là `omni skills doctor`; tên `skills:doctor` đã bỏ từ trước (`test/cli-simplify.test.js`), gợi ý in ra đã sửa.
+- [x] Một task dual (fixture nhỏ, worker giả lập) chạy qua isolated-runner thật: worker root chỉ có bundle worker; integrate thành công (`test/dual-isolated-runner.test.js`). Chưa chạy với agy thật.
+- [x] Phụ lục V8–V11 đã ghi.
 - [ ] Linux/Windows thật: hoãn (SQUAD-ARCHITECTURE-PLAN §11).
 
 ---

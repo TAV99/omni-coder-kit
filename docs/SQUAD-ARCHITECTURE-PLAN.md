@@ -231,7 +231,7 @@ Bundle QC gắn với **phase** chứ không gắn với vai: phase `qc` thuộc
 
 ### 5.2 Chống chồng chéo
 
-- `omni skills:doctor` báo lỗi khi, sau khi đã gán phase theo pipeline, một skill bị mount vào ≥ 2 vai mà không đánh dấu `shared-core`.
+- `omni skills doctor` báo lỗi khi, sau khi đã gán phase theo pipeline, một skill bị mount vào ≥ 2 vai mà không đánh dấu `shared-core`.
 - `SKILL.md` là định dạng gốc; adapter chuyển sang vị trí CLI đọc (`.claude/skills`, `.agents/skills`…) hoặc chèn vào file chỉ dẫn/prompt nếu CLI không có khái niệm skill.
 
 ### 5.3 Cô lập (D7)
