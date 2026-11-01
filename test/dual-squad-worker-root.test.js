@@ -16,7 +16,7 @@ const { tempDir, writeSkill } = require('./helpers/squad-project');
 
 const TEMPLATES = path.join(__dirname, '..', 'templates', 'squad');
 
-function project(t, { squad = true } = {}) {
+function project(t, { squad = true, workerRuntime = 'agy', workerModel = 'gemini-3.8-flash-high' } = {}) {
     const root = tempDir(t, 'dual-squad-worker-');
     const write = (file, text) => {
         fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
@@ -34,7 +34,7 @@ function project(t, { squad = true } = {}) {
         fs.copyFileSync(path.join(TEMPLATES, 'skills.yaml'), path.join(root, '.omni', 'squad', 'skills.yaml'));
         writeBinding(root, { schema_version: 1, preset: 'dual', updated_at: '2026-11-01T00:00:00Z', roles: {
             orchestrator: { runtime: 'codex', model: 'gpt-6.1-sol' },
-            worker: [{ id: 'worker-1', runtime: 'agy', model: 'gemini-3.8-flash-high' }], reviewer: null } });
+            worker: [{ id: 'worker-1', runtime: workerRuntime, model: workerModel }], reviewer: null } });
         for (const name of ['om-think', 'om-cook', 'karpathy-guidelines']) writeSkill(path.join(root, '.omni', 'skills'), name);
     }
     return { root, options: { workspaceRoot: root, sessionId: 'session-1', taskId: 'TASK-1', attempt: 1, planRevision: 1,
@@ -52,6 +52,16 @@ test('worker root gets only the worker bundle, never the orchestrator skills', (
     const { binding } = readTaskBinding(options.workspaceRoot, ref);
     assert.deepEqual(binding.workerOwnedPaths, ['.agents/skills', '.claude/skills', '.git']);
     assert.ok(!binding.sourceFiles.some((f) => f.path.startsWith('.agents/skills/')));
+});
+
+test('a claude worker gets its bundle in .claude/skills; the project .claude/skills is not copied (SPEC-SQUAD-P4 §4)', (t) => {
+    const { root, options } = project(t, { workerRuntime: 'claude', workerModel: 'sonnet' });
+    writeSkill(path.join(root, '.claude', 'skills'), 'om-think');
+    const ref = prepareTaskWorkspace(options);
+    assert.deepEqual(fs.readdirSync(path.join(ref.workerRoot, '.claude', 'skills')).sort(), ['karpathy-guidelines', 'om-cook']);
+    assert.ok(!fs.existsSync(path.join(ref.workerRoot, '.agents', 'skills')), 'the agy/codex skill dir is not mounted for claude');
+    const { binding } = readTaskBinding(options.workspaceRoot, ref);
+    assert.ok(binding.workerOwnedPaths.includes('.claude/skills'));
 });
 
 test('worker root is its own git root, so tools stop walking up at it', (t) => {

@@ -98,6 +98,7 @@ test('isolated roots exclude every ancestor CLAUDE.md and load no MCP', () => {
         assert.ok(inv.args.includes('--strict-mcp-config'));
         assert.ok(!inv.args.includes('--setting-sources') && !inv.args.includes('--mcp-config'));
         const settings = JSON.parse(inv.args[inv.args.indexOf('--settings') + 1]);
+        assert.equal(settings.disableAllHooks, true, 'hooks copied into the worker root never run (V32)');
         const excludes = settings.claudeMdExcludes;
         for (const dir of [path.dirname(cwd), path.resolve('/proj'), path.parse(cwd).root]) {
             assert.ok(excludes.includes(path.join(dir, 'CLAUDE.md')), dir);

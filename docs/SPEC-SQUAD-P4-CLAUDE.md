@@ -93,7 +93,9 @@ Worker root nằm trong project (`.omni/runs/dual-workspaces/…`) và là git r
 
 Mount skill của worker claude: bundle worker vào `<workerRoot>/.claude/skills` (thêm vào `workerOwnedPaths`, như `.agents/skills` ở P2b). omni không ghi `.claude/settings.json` vào worker root.
 
-Bộ cờ cách ly (V26 + R3 đã chạy thật): `--strict-mcp-config --settings '{"claudeMdExcludes":[…]}'`, danh sách = với mỗi tổ tiên `d` của worker root tới `/`: `d/CLAUDE.md`, `d/CLAUDE.local.md`, `d/.claude/rules/**`.
+Worker root là bản chép project (trừ thư mục skill của các vai), nên `.claude/settings.json` của project — nơi P4c ghi hook orchestrator — có mặt trong worker root: `disableAllHooks: true` tắt mọi hook (V32).
+
+Bộ cờ cách ly (V26, R3, V29, V32 đã chạy thật): `--strict-mcp-config --settings '{"disableAllHooks":true,"claudeMdExcludes":[…]}'`, danh sách = với mỗi tổ tiên `d` của worker root tới `/`: `d/CLAUDE.md`, `d/CLAUDE.local.md`, `d/.claude/rules/**`.
 
 ---
 
@@ -103,10 +105,10 @@ Theo đúng đường codex-làm-worker của P3c-3.
 
 | Chỗ | Thay đổi |
 |---|---|
-| `worker-runtime.js` | `WORKER_RUNTIMES` thêm `claude`; `workerCommandFor('claude')` → `resolveClaudePath()`/`claude`; `buildWorkerInvocation` qua `claude.buildHeadless` (implement: worker root → `full-auto`, shared → `workspace-write`, khác → `read-only`; `--session-id` mới mỗi lượt); `extractWorkerPayload` qua `claude.parseResult`, ánh xạ lỗi về `DUAL_AGY_*`; `workerOutputSchema('claude')` bỏ `toolAction/toolSummary`, **không** strict hóa (C3, kiểm V24) |
+| `worker-runtime.js` | `WORKER_RUNTIMES` thêm `claude`; `workerCommandFor('claude')` → `resolveClaudeCommand()` (resolver squad: ứng viên + PATH, shim win32); `buildWorkerInvocation` qua `claude.buildHeadless` (implement: worker root → `full-auto`, shared → `workspace-write`, khác → `read-only`; không `--session-id`, sessionRef đọc từ output); `extractWorkerPayload` qua `claude.parseResult`, ánh xạ lỗi về `DUAL_AGY_*`; `workerOutputSchema('claude')` bỏ `toolAction/toolSummary`, **không** strict hóa (C3, kiểm V24). Probe: `probeAdapterWorker(runtime)` (thay `probeCodexWorker`), `modelAvailable` dùng chung: alias trong danh sách hoặc tên đủ `claude-…` |
 | Probe worker | `capability-preflight` đã đi qua `defaultRegistry` (P3c-2) → tự có claude; `probeStandaloneCapability` thêm nhánh claude (version + auth thay cho danh sách model) |
-| Discussion | `discussion/live-claude-invoke.js` (seed bằng `--session-id`, lượt sau `--resume`), `worker-slot.js` thêm nhánh claude: `provider: 'agy'`, read-only (`--tools Read,Grep,Glob,Skill`), cách ly §3 |
-| `agy-model.workerConfigurationError` | model claude (`claude-*` hoặc alias) qua runtime claude: effort tùy chọn, hợp lệ theo C4 — tách luật theo runtime thay vì đoán theo tên model (luật `claude-*` hiện tại là của agy) |
+| Discussion | `discussion/live-claude-invoke.js` (seed lấy `session_id` từ output, lượt sau `--resume`; dùng chung bộ chạy tiến trình của live-codex), `worker-slot.js` thêm nhánh claude: `provider: 'agy'`, read-only (`--tools Read,Grep,Glob,Skill`), cách ly §3 |
+| `agy-model.workerConfigurationError(model, effort, runtime)` | runtime claude: cần model, effort tùy chọn và thuộc C4; luật agy (hậu tố effort, `claude-*` không nhận effort) chỉ áp cho agy/codex như cũ. Mọi chỗ gọi truyền runtime đang gắn |
 | Bindings/setup | `engineSupport` nhận worker `claude`; `legacyManifestFields` ghi `workerRuntime: 'claude'` |
 | Mount | `worker-mount` dùng `runtime.skillDirs()` của runtime worker thay cho `.agents/skills` cố định |
 
@@ -201,5 +203,9 @@ Kết quả ghi vào phụ lục spec này trước commit đầu của P4a/P4b/
 | R2 ✓ | `--permission-mode acceptEdits --tools Read,Grep,Glob,Edit,Write`: `edit.txt` được tạo, `bash.txt` không. |
 | R3 ✓ | Không `--setting-sources`, chỉ `--tools Read,Grep,Glob,Skill --strict-mcp-config --settings {claudeMdExcludes: tổ tiên}`: worker-skill **có**, parent-skill không, không dòng MARKER nào từ `CLAUDE.md` cha, hook cha không chạy. |
 
-Còn lại: V28, V30 (trước P4c); V29 `bypassPermissions` thật trong worker root (người dùng chạy, trước P4b live). Fixture: `test/fixtures/squad-cli/claude-*.json` lấy từ các lượt trên.
+| V27b ✓ | `claude -p --resume <id>` trả lại **cùng** `session_id` và nhớ ngữ cảnh → discussion `requireConversationMatch` dùng được như codex. |
+| V29 ✓ | Argv thật của adapter P4a (`full-auto`, `isolatedRoot`, `--json-schema` inline) trong worker root lồng project có `CLAUDE.md`: sửa đúng file, chạy được lệnh (`5`), `structured_output` qua `parseResult`, không đọc `CLAUDE.md` cha, không ghi ra ngoài worker root. |
+| V32 ✓ | `.claude/settings.json` có hook `PreToolUse` **trong cwd**: `--settings '{"disableAllHooks":true}'` → hook không chạy; lượt đối chứng không cờ → hook chạy. |
+
+Còn lại: V28, V30 (trước P4c). Fixture: `test/fixtures/squad-cli/claude-*.json` lấy từ các lượt trên.
 

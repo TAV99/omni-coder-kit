@@ -8,7 +8,7 @@
 // another terminal. The spec gate needs a v2 coverage plan built by Codex and
 // is covered by test/dual-coverage-daemon.test.js instead.
 //
-//   OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex] [--setup-only]
+//   OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--setup-only]
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -22,6 +22,7 @@ const APPROVAL_WAIT_MS = 1_800_000;
 const WORKERS = {
     agy: { bind: 'worker=agy:gemini-3.8-flash-high', model: 'gemini-3.8-flash-high', effort: 'high' },
     codex: { bind: 'worker=codex:gpt-6-luna:low', model: 'gpt-6-luna', effort: 'low' },
+    claude: { bind: 'worker=claude:haiku:low', model: 'haiku', effort: 'low' },
 };
 const ORCHESTRATOR_BIND = 'orchestrator=codex:gpt-6.1-sol:high';
 const OMNI = path.resolve(__dirname, '../bin/omni.js');
@@ -47,13 +48,13 @@ function parseArgs(argv) {
         else throw failure('BAD_ARGS', `Unknown argument ${argv[i]}`);
     }
     check(args.report, 'REPORT_PATH_REQUIRED');
-    check(WORKERS[args.worker], 'BAD_WORKER', 'Use --worker agy or --worker codex');
+    check(WORKERS[args.worker], 'BAD_WORKER', 'Use --worker agy, codex or claude');
     return args;
 }
 
 async function main() {
     if (process.env.OMNI_SQUAD_LIVE !== '1') {
-        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex] [--setup-only]');
+        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--setup-only]');
         return;
     }
     const args = parseArgs(process.argv.slice(2));
@@ -175,7 +176,7 @@ async function main() {
         });
         if (args.setupOnly) { report.ok = true; return; }
         await stage('binaryPreflight', 20_000, async () => {
-            report.binaries = Object.fromEntries(['codex', ...(args.worker === 'agy' ? ['agy'] : [])].map((name) => [name,
+            report.binaries = Object.fromEntries(['codex', ...(args.worker === 'codex' ? [] : [args.worker])].map((name) => [name,
                 execFileSync(name, ['--version'], { encoding: 'utf8', timeout: 10_000 }).trim()]));
         });
         await stage('daemonListened', 20_000, async (limit) => {

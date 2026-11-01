@@ -73,6 +73,7 @@ test('daemon RPC operations request budgets sized for their bounded command work
     const client = createDaemonClient({ workspaceRoot, httpImpl: transport.httpImpl });
     const operations = [
         ['health', 500, () => client.health()],
+        ['session.begin', 15_000, () => client.beginSession({})],
         ['plan.register', 35_000, () => client.registerPlan('session', {})],
         ['quality.execute', 50 * 120_000 + 30_000, () => client.executeQualityCycle('session', 1)],
         ['completion.evaluate', 50 * 120_000 + 60_000, () => client.evaluateCompletion('session', {})],
