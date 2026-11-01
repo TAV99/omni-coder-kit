@@ -55,7 +55,7 @@ NEW → preflight → scout → spec → route ─┬─ gemini → implement �
 |---|---|
 | D1 | Vai do omni định nghĩa bằng **file khai báo**; mỗi vai có bundle skill, quyền, phase, capability yêu cầu. Thêm vai mới (design, QC…) = thêm file định nghĩa + phase trong pipeline. |
 | D2 | Binding 4 tầng: `role → runtime (CLI) → model → effort`, người dùng chọn. |
-| D3 | Model chỉ có API (DeepSeek, OpenRouter, Ollama…) chạy **qua CLI đa model** (vd. OpenCode). Omni không giữ API key. |
+| D3 | Model chỉ có API (DeepSeek, OpenRouter, Ollama…) chạy **qua CLI đa model** (vd. OpenCode). Omni không giữ API key. *(Sau 3.2.0 — D19.)* |
 | D4 | Người dùng làm việc trực tiếp với orchestrator. |
 | D5 | Orchestrator **kéo việc** qua MCP (`squad.next` / `squad.submit`); omni **đẩy việc** headless cho mọi vai còn lại. Bật reviewer thì QC chuyển sang kiểu đẩy. |
 | D6 | Liên lạc hình sao, omni giữ bảng `role → session id` và relay qua authority; agent không gọi nhau trực tiếp. |
@@ -70,7 +70,8 @@ NEW → preflight → scout → spec → route ─┬─ gemini → implement �
 | D15 | Mặc định B1–B5 (§5–§7) được duyệt nguyên. |
 | D16 | Tiêu chí nghiệm thu tuyệt đối (§11), không so với 3.1.2. |
 | D17 | File vai/pipeline viết bằng **YAML**. Thêm dependency `yaml` (npm, bản 2.x — 2.9.1 tại 2026-10-31; tra lại tài liệu qua Context7 trước khi code). Parse xong phải validate bằng `zod` như mọi contract khác; chỉ parse dữ liệu thuần (không tag tùy biến, không anchor/alias vượt giới hạn). |
-| D18 | **Một runtime/tài khoản giữ được nhiều vai** (vd. 1 tài khoản Codex làm orchestrator + reviewer với model/effort khác nhau, agy làm worker). Binding khóa theo **role instance**, không có ràng buộc runtime duy nhất. Mỗi vai là một session CLI độc lập, bảng D6 khóa theo tên vai. Quy tắc: (1) không bao giờ resume ngầm (`--last` hoặc tương đương) — luôn resume bằng session ID của vai đó, vì `~/.codex/sessions` là chung; (2) mỗi vai chạy ở root riêng (§5.3) để không kế thừa `.codex/config.toml` (MCP `omni_dual`, hooks) và skill của vai khác; hook bridge bỏ qua payload có `session_id` không thuộc vai nào; (3) vẫn dùng chung `CODEX_HOME` (§5.3); (4) preflight cảnh báo khi ≥ 2 vai dùng chung một tài khoản (chung quota), lỗi rate limit → task chờ (B3); (5) orchestrator và reviewer cùng họ model → chỉ cảnh báo; reviewer cùng họ với worker → cảnh báo mạnh. Chưa kiểm: hai tiến trình cùng làm mới token trong `auth.json` (V7, spec P1 §14). |
+| D18 | **Một runtime/tài khoản giữ được nhiều vai** (vd. 1 tài khoản Codex làm orchestrator + reviewer với model/effort khác nhau, agy làm worker). Binding khóa theo **role instance**, không có ràng buộc runtime duy nhất. Mỗi vai là một session CLI độc lập, bảng D6 khóa theo tên vai. Quy tắc: (1) không bao giờ resume ngầm (`--last` hoặc tương đương) — luôn resume bằng session ID của vai đó, vì `~/.codex/sessions` là chung; (2) mỗi vai chạy ở root riêng (§5.3) để không kế thừa `.codex/config.toml` (MCP `omni_dual`, hooks) và skill của vai khác; hook bridge bỏ qua payload có `session_id` không thuộc vai nào; (3) vẫn dùng chung `CODEX_HOME` (§5.3); (4) preflight cảnh báo khi ≥ 2 vai dùng chung một tài khoản (chung quota), lỗi rate limit → task chờ (B3); (5) orchestrator và reviewer cùng họ model → chỉ cảnh báo; reviewer cùng họ với worker → cảnh báo mạnh. Đã thấy (V21, 2026-11-01): hai phiên codex cùng tài khoản chạy song song ~9 phút không bị đăng xuất. Chưa kiểm: hai tiến trình cùng làm mới token trong `auth.json` khi token hết hạn giữa chừng (V7, spec P1 §14); với claude, các phiên cùng dùng `~/.claude` — kiểm tương tự ở P4. |
+| D19 | **Ba runtime chính của 3.2.0: codex, agy, claude (Claude Code CLI)** — ba hãng người dùng dùng nhiều nhất (người dùng chốt 2026-11-01). Adapter thứ ba (P4) là **Claude Code**, không phải OpenCode. Theo D18, mỗi tài khoản (Codex, Antigravity, Claude) có thể mở nhiều session CLI và giữ nhiều vai cùng lúc. OpenCode và nhánh model chỉ có API (D3) dời sang sau 3.2.0; registry vẫn giữ cửa mở cho chúng. |
 
 ---
 
@@ -87,11 +88,11 @@ NEW → preflight → scout → spec → route ─┬─ gemini → implement �
 ┌─ BINDING (~/.omni/squad.json + override local, gitignore) ─────┐
 │ orchestrator → codex       / sol-6.1          / high           │
 │ worker-1     → agy         / gemini-3.8-flash / high           │
-│ reviewer     → opencode    / deepseek-…       / high           │
+│ reviewer     → claude      / claude-opus-…    / high           │
 └──────────────────────────────┬─────────────────────────────────┘
                                │
 ┌─ RUNTIME ADAPTER REGISTRY (lib/squad/runtimes/) ───────────────┐
-│ codex · agy · opencode · claude-code · …                       │
+│ codex · agy · claude  (sau 3.2.0: opencode · …)                │
 │ cùng một hợp đồng + bộ conformance test                        │
 └──────────────────────────────┬─────────────────────────────────┘
                                │
@@ -328,7 +329,7 @@ Bind `127.0.0.1` duy nhất, token ngẫu nhiên mỗi phiên, kiểm Origin —
 | P1 | Runtime registry: adapter codex + agy; gộp phần **phát hiện/probe** (binary đa OS, version, đăng nhập, model); builder invocation chung; conformance test; `omni squad runtimes`. Spec: [`SPEC-SQUAD-P1-RUNTIME-REGISTRY.md`](SPEC-SQUAD-P1-RUNTIME-REGISTRY.md) | `npm test` xanh; conformance pass cho 2 adapter |
 | P2 | Role definition: orchestrator/worker/reviewer; bundle skill; mount theo vai; `skills:doctor` kiểm chồng chéo; gitignore D10. Spec: [`SPEC-SQUAD-P2-ROLES-SKILLS.md`](SPEC-SQUAD-P2-ROLES-SKILLS.md) | Doctor bắt được skill trùng; worker root không chứa skill orchestrator |
 | P3 | Pipeline khai báo + preset `dual`; `owner` → role instance; cổng D8; MCP `squad.next/submit`; chuyển các builder argv cũ (dual + `lib/harness/providers`) sang builder chung của registry; nối probe agy của `capability-preflight` và probe codex của `daemon-ports` vào adapter (chuyển từ P1b, cần adapter nhận `prespawnGuard`, trả mã retry, parse chặt, tùy chọn gồm model ẩn — SPEC-SQUAD-P1 §10) | Preset `dual` chạy trọn vòng qua daemon. Spec: [`SPEC-SQUAD-P3-PIPELINE.md`](SPEC-SQUAD-P3-PIPELINE.md) |
-| P4 | Adapter thứ ba (đề xuất **OpenCode**: vừa chứng minh mở rộng, vừa chứng minh đường model chỉ có API) | Tổ hợp binding thứ hai chạy trọn vòng |
+| P4 | Adapter thứ ba **Claude Code** (D19): CLI khác hẳn codex/agy (hook, MCP, permission mode, `.claude/skills`), chứng minh registry không bị đúc khuôn; claude giữ được vai nào cũng được (orchestrator, worker, reviewer) | Tổ hợp binding có claude chạy trọn vòng (vd. worker claude; codex + claude cùng tài khoản riêng) |
 | P5 | Reviewer + nhiều worker song song + ngân sách/đồng thời theo runtime | Preset `squad` 3 vai chạy trọn vòng |
 | P6 | `omni ui` chỉ đọc → PTY → inbox/gửi tin theo vai | Ba OS chạy được; kiểm bảo mật loopback/token/Origin |
 | P7 | Nghiệm thu §11 | Đạt toàn bộ ngưỡng |
@@ -348,7 +349,7 @@ Chốt trước khi code; không so với 3.1.2.
   - 0 outcome unknown tồn đọng;
   - 0 lần dispatch trùng;
   - 100% cổng chờ người duyệt chạy đúng (kể cả cổng `human-always` không bị AUTO bỏ qua).
-- Ít nhất 2 tổ hợp binding khác nhau, vd. (codex, agy) và (codex, opencode + deepseek). Preset `squad` chạy thêm tổ hợp một runtime giữ hai vai (codex orchestrator + codex reviewer, agy worker — D18).
+- Ít nhất 2 tổ hợp binding khác nhau trên ba runtime chính (D19), vd. (codex, agy) và (codex, claude). Preset `squad` chạy thêm tổ hợp một runtime giữ hai vai (codex orchestrator + codex reviewer, agy worker — D18).
 - Thời gian chỉ ghi nhận, không đặt ngưỡng ở đợt này.
 
 **Thứ tự kiểm đa hệ điều hành (người dùng quyết, 2026-11-01).** Mọi pha P1–P7 được phát triển và nghiệm thu trên **macOS trước**: `npm test` xanh, kể cả khi chạy dưới tải. Khi 3.2.0 hoàn thiện trên macOS, người dùng mang repo sang **Linux và Windows thật** để chạy `npm test`, `omni squad runtimes` và bộ nghiệm thu, rồi phát triển và sửa lỗi riêng của từng hệ điều hành ngay trên máy đó. Trong lúc làm trên macOS: code vẫn phải viết đúng cho cả ba hệ điều hành (D12), và test giả lập `win32` vẫn bắt buộc. Chỉ việc chạy trên máy thật là hoãn lại.
@@ -360,7 +361,7 @@ Chốt trước khi code; không so với 3.1.2.
 | # | Câu hỏi | Ghi chú |
 |---|---|---|
 | ~~Q1~~ | ~~Định dạng file vai/pipeline~~ | **Đã chốt 2026-10-31: YAML** (D17). |
-| Q2 | Xác nhận OpenCode là adapter thứ ba | Đề xuất ở P4; Claude Code làm adapter thứ tư. |
+| ~~Q2~~ | ~~Xác nhận OpenCode là adapter thứ ba~~ | **Đã chốt 2026-11-01 (D19): adapter thứ ba là Claude Code**; OpenCode sau 3.2.0. |
 | Q3 | Transcript của agy nằm ở đâu, định dạng gì? | Codex: `~/.codex/sessions/*.jsonl`; Claude Code: `~/.claude/projects/`; agy chưa khảo sát. Ảnh hưởng D13. |
 | Q4 | Cơ chế giao tin inbox cho orchestrator theo từng CLI | MCP tool đọc inbox chạy được mọi CLI có MCP; hook chỉ CLI có hooks. |
 | Q5 | Đổi tên nội bộ `DUAL_*`, `dual-authority` | Ngoài phạm vi 3.2.0; nếu làm phải đọc được cả tên cũ. |
@@ -373,7 +374,7 @@ Chốt trước khi code; không so với 3.1.2.
 | Rủi ro | Giảm thiểu |
 |---|---|
 | Đổi `owner` + pipeline khai báo làm vỡ lõi dual | P3 có preset `dual` làm hồi quy; giữ toàn bộ test dual xanh |
-| Interface adapter bị "đúc khuôn" codex/agy | P4 bắt buộc một CLI khác hẳn (OpenCode) |
+| Interface adapter bị "đúc khuôn" codex/agy | P4 bắt buộc một CLI khác hẳn (Claude Code — D19) |
 | `node-pty` native khó cài trên một số máy | `optionalDependency`; squad chạy không cần UI |
 | PTY qua web thành lỗ hổng shell | Loopback + token + Origin từ bản đầu |
 | Nhiều worker song song xung đột file | `allowed_files` không giao nhau; giới hạn đồng thời |
