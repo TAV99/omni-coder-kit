@@ -114,15 +114,15 @@ Theo đúng đường codex-làm-worker của P3c-3.
 
 ---
 
-## 5. Claude làm orchestrator (P4c — chờ Q-P4-1)
+## 5. Claude làm orchestrator (P4c — đã làm)
 
 | Chỗ | Thay đổi |
 |---|---|
-| `omni init`/`squad setup` | khi orchestrator = claude: ghi `.mcp.json` (server `omni_dual`), `.claude/settings.json` hook `PreToolUse/PostToolUse/SessionStart/UserPromptSubmit/Stop` gọi `omni-hook` (cùng bridge), skill/workflow `dual-controller` vào `.claude/skills` |
-| `hook-bridge` | nhận payload hook của Claude Code (cùng khung `hook_event_name/tool_name/tool_input/session_id`, kiểm V28); tên tool shell của claude là `Bash`; luật chặn `omni squad approve` (P3d) phủ cả claude |
-| Discussion `astra` | chỗ `codex` trong discussion lấy adapter theo runtime orchestrator: claude → `live-claude-invoke` với `provider: 'codex'` |
-| `engineSupport` | orchestrator ∈ {codex, claude} |
-| Interactive | `omni squad start` (hoặc hướng dẫn) mở `claude` với MCP/hook đã ghi |
+| `squad setup` (`lib/squad/claude-orchestrator.js`) | khi orchestrator = claude: gộp (không ghi đè) `.mcp.json` (server `omni_dual`, cùng lệnh như `.codex/config.toml`) và `.claude/settings.json`: `enabledMcpjsonServers` có `omni_dual` (V30: thiếu thì `-p` không nạp server project), hook `SessionStart/UserPromptSubmit/PreToolUse/PostToolUse/Stop` gọi `omni-hook` (matcher tool `^(Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__.*)$`; nhóm hook cũ của omni được thay, hook của người dùng giữ). Có `AGENTS.md` mà chưa có `CLAUDE.md` → tạo `CLAUDE.md` = `@AGENTS.md`; `CLAUDE.md` có sẵn không import → cảnh báo `SQUAD_CLAUDE_MD_NO_AGENTS`, không sửa. Skill orchestrator mount vào `.claude/skills` qua `runtime.skillDirs()`. Manifest ghi `orchestratorRuntime` (+ `orchestratorModel/Effort` khi claude) |
+| `hook-bridge` | payload Claude qua `validateHookInput` không đổi (V28). `Edit/Write/MultiEdit/NotebookEdit` của Claude: đích = `file_path`/`notebook_path` (tuyệt đối trong workspace → tương đối; ngoài → deny); `apply_patch` của codex giữ cách đọc patch. Luật chặn `omni squad approve` (P3d) phủ Bash của claude |
+| Discussion `astra` | `discussion/orchestrator-slot.js`: runtime orchestrator claude → `live-claude-invoke` với `provider: 'codex'`, read-only, `isolatedRoot: true` (tắt hook omni trong lượt thảo luận — V32), model = `orchestratorModel` (mặc định `sonnet`). Daemon: host và lượt isolated dùng slot này; probe live-profile (`daemon-ports`) theo runtime orchestrator; preflight `mcp_and_hook_setup` đọc `.mcp.json` khi orchestrator là claude |
+| `engineSupport` / `checkBinding` | orchestrator ∈ {codex, claude}; `checkBinding` nhận tên đủ `claude-…` ngoài danh sách alias (`modelAvailable`), effort kiểm theo runtime |
+| Interactive | người dùng mở `claude` trong project: MCP/hook đã ghi sẵn (V30b). Lệnh `omni squad start` để sau (P6 cùng `omni ui`) |
 
 ---
 
@@ -210,5 +210,7 @@ Kết quả ghi vào phụ lục spec này trước commit đầu của P4a/P4b/
 | V-live-1 ✗ | Vòng thật codex + worker claude `haiku` low (`test/squad-p3-live.js --worker claude`): cổng plan → scout → NEEDS_CONTEXT (harness trả lời) → implement đúng (`lib/util.js`, test pass) → review qua discussion trả `NEEDS_FIX` vì haiku không mở `evidence.json` ("evidence.json was not supplied") → omni dừng `DUAL_ISOLATED_EVIDENCE_INVALID`, giữ artifact. Lượt tái hiện cùng argv đọc được file → quyền/cách ly đúng; haiku quá yếu cho vai review. Harness đổi sang `sonnet`. |
 | V-live-2 ✓ | Vòng thật codex `gpt-6.1-sol` + worker claude `sonnet` low: cổng plan giữ → người duyệt → 7 phase → QC giữ ở `integrate-TASK-P3-LIVE` → người duyệt → `TASK_VERIFIED`; ledger `human/cli-tty` cả hai cổng; 14 phút. |
 
-Còn lại: V28, V30 (trước P4c). Fixture: `test/fixtures/squad-cli/claude-*.json` lấy từ các lượt trên.
+| V28 ✓ | Hook `.claude/settings.json` thật: payload `SessionStart` (`session_id, cwd, hook_event_name, source, transcript_path`), `UserPromptSubmit` (+`prompt`), `PreToolUse` (+`tool_name, tool_input, tool_use_id, permission_mode`), `PostToolUse` (+`tool_response`), `Stop` (+`stop_hook_active`). `Write` → `{file_path, content}`, `Edit` → `{file_path, old_string, new_string, replace_all}`, MCP → `mcp__<server>__<tool>` (+`mcp_server`). Hook trả `hookSpecificOutput.permissionDecision: deny` → tool không chạy, có trong `permission_denials`. Fixture `claude-hook-payloads.ndjson`. |
+| V30 ✓ | `.mcp.json` của project + `enabledMcpjsonServers` trong `.claude/settings.json` → `claude -p` gọi được tool MCP project (`PONG-V30`). |
+| V30b ✓ | Workspace do `omni squad setup --bind orchestrator=claude:…` dựng: `claude -p` gọi `omni_dual_status` (server trả lỗi thiếu tham số → server sống), hook `SessionStart/UserPromptSubmit` chạy `omni-hook` và bật daemon, `PreToolUse` chặn `omni squad approve plan-r1` với lời nhắn chỉ người dùng được duyệt. | Fixture: `test/fixtures/squad-cli/claude-*.json` lấy từ các lượt trên.
 

@@ -19,18 +19,20 @@ function writeSkill(dir, name, body = '') {
         `---\nname: ${name}\ndescription: Test skill ${name}. Use when testing.\n---\n# ${name}\n${body}`);
 }
 
-// Fake probe reports for codex + agy, shaped like registry.probe output.
-function readyReports({ codexModels = ['gpt-6.1-sol'], agyModels = ['gemini-3.8-flash-high', 'claude-sonnet-4-6'] } = {}) {
+// Fake probe reports for codex + agy (+ claude on request), shaped like registry.probe output.
+function readyReports({ codexModels = ['gpt-6.1-sol'], agyModels = ['gemini-3.8-flash-high', 'claude-sonnet-4-6'], claudeModels = null } = {}) {
     const report = (id, models) => ({
         id, ready: true, detect: { found: true }, version: { ok: true, version: '1.0.0' },
         auth: { state: 'authenticated' },
         models: { ok: true, models: models.map((m) => {
             const suffix = /-(low|medium|high|xhigh|max)$/.exec(m);
             if (id === 'codex') return { id: m, efforts: ['low', 'medium', 'high'], defaultEffort: 'medium' };
+            if (id === 'claude') return { id: m, efforts: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffort: null };
             return { id: m, efforts: suffix ? [suffix[1]] : null, defaultEffort: suffix ? suffix[1] : null };
         }) },
     });
-    return [report('codex', codexModels), report('agy', agyModels)];
+    const claude = claudeModels ? [{ ...report('claude', claudeModels), models: { ...report('claude', claudeModels).models, fullIdPrefix: 'claude-' } }] : [];
+    return [report('codex', codexModels), report('agy', agyModels), ...claude];
 }
 
 // The real registry (real codex/agy descriptors) with probing replaced.

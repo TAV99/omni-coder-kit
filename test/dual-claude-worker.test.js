@@ -147,7 +147,8 @@ test('bindings: the dual engine takes a claude worker and writes workerRuntime c
     const binding = { roles: { orchestrator: { runtime: 'codex', model: 'gpt-6.1-sol' },
         worker: [{ id: 'worker-1', runtime: 'claude', model: 'sonnet', effort: 'high' }], reviewer: null } };
     assert.deepEqual(engineSupport(binding), { supported: true, reasons: [] });
-    assert.deepEqual(legacyManifestFields(binding, []), { workerRuntime: 'claude', workerModel: 'sonnet', workerEffort: 'high' });
+    assert.deepEqual(JSON.parse(JSON.stringify(legacyManifestFields(binding, []))),
+        { workerRuntime: 'claude', workerModel: 'sonnet', workerEffort: 'high', orchestratorRuntime: 'codex' });
 });
 
 function isolatedFixture(t) {

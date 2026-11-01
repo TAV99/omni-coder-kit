@@ -8,7 +8,7 @@
 // another terminal. The spec gate needs a v2 coverage plan built by Codex and
 // is covered by test/dual-coverage-daemon.test.js instead.
 //
-//   OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--setup-only]
+//   OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--setup-only]
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -24,7 +24,8 @@ const WORKERS = {
     codex: { bind: 'worker=codex:gpt-6-luna:low', model: 'gpt-6-luna', effort: 'low' },
     claude: { bind: 'worker=claude:sonnet:low', model: 'sonnet', effort: 'low' },
 };
-const ORCHESTRATOR_BIND = 'orchestrator=codex:gpt-6.1-sol:high';
+// Claude as orchestrator (SPEC-SQUAD-P4 §5) fills the discussion's astra slot and gets .mcp.json + hooks from setup.
+const ORCHESTRATORS = { codex: 'orchestrator=codex:gpt-6.1-sol:high', claude: 'orchestrator=claude:sonnet:low' };
 const OMNI = path.resolve(__dirname, '../bin/omni.js');
 
 const failure = (code, message = code) => Object.assign(new Error(message), { code });
@@ -40,21 +41,23 @@ function stopTree(child) {
 }
 
 function parseArgs(argv) {
-    const args = { report: null, worker: 'agy', setupOnly: false };
+    const args = { report: null, worker: 'agy', orchestrator: 'codex', setupOnly: false };
     for (let i = 0; i < argv.length; i++) {
         if (argv[i] === '--worker') args.worker = argv[++i];
+        else if (argv[i] === '--orchestrator') args.orchestrator = argv[++i];
         else if (argv[i] === '--setup-only') args.setupOnly = true;
         else if (!args.report && !argv[i].startsWith('--')) args.report = argv[i];
         else throw failure('BAD_ARGS', `Unknown argument ${argv[i]}`);
     }
     check(args.report, 'REPORT_PATH_REQUIRED');
     check(WORKERS[args.worker], 'BAD_WORKER', 'Use --worker agy, codex or claude');
+    check(ORCHESTRATORS[args.orchestrator], 'BAD_ORCHESTRATOR', 'Use --orchestrator codex or claude');
     return args;
 }
 
 async function main() {
     if (process.env.OMNI_SQUAD_LIVE !== '1') {
-        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--setup-only]');
+        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--setup-only]');
         return;
     }
     const args = parseArgs(process.argv.slice(2));
@@ -64,7 +67,7 @@ async function main() {
     const started = Date.now();
     const deadline = started + DEADLINE_MS;
     const report = { protocol: 'squad-p3-live-v1', startedAt: new Date(started).toISOString(), ok: false,
-        worker: args.worker, workerModel: worker.model, taskId: TASK_ID, failedStage: null, errorCode: null, stages: {} };
+        orchestrator: args.orchestrator, worker: args.worker, workerModel: worker.model, taskId: TASK_ID, failedStage: null, errorCode: null, stages: {} };
     const save = () => {
         const temp = `${output}.${process.pid}.tmp`;
         fs.writeFileSync(temp, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
@@ -168,15 +171,20 @@ async function main() {
             // The real squad setup: roles, dual pipeline (spec/plan/integrate gates), binding, manifest.
             const home = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-squad-live-home-'));
             const setup = await require('../lib/squad/setup').runSetup({ projectRoot: root, homedir: home, yes: true,
-                binds: [ORCHESTRATOR_BIND, worker.bind] });
+                binds: [ORCHESTRATORS[args.orchestrator], worker.bind] });
             report.setup = { engine: setup.engine, pipeline: setup.pipeline, binding: setup.binding.roles };
             check(setup.engine.supported, 'ENGINE_UNSUPPORTED', JSON.stringify(setup.engine.reasons));
             const manifest = JSON.parse(fs.readFileSync(path.join(root, '.omni/manifest.json'), 'utf8'));
             check(manifest.workerRuntime === args.worker && manifest.workerModel === worker.model, 'MANIFEST_NOT_BOUND', JSON.stringify(manifest));
+            check(manifest.orchestratorRuntime === args.orchestrator, 'MANIFEST_NOT_BOUND', JSON.stringify(manifest));
+            if (args.orchestrator === 'claude') {
+                report.setup.orchestratorConfig = setup.orchestratorConfig;
+                check(require('../lib/squad/claude-orchestrator').hasClaudeOrchestratorMcp(root), 'CLAUDE_MCP_MISSING');
+            }
         });
         if (args.setupOnly) { report.ok = true; return; }
         await stage('binaryPreflight', 20_000, async () => {
-            report.binaries = Object.fromEntries(['codex', ...(args.worker === 'codex' ? [] : [args.worker])].map((name) => [name,
+            report.binaries = Object.fromEntries([...new Set([args.orchestrator, args.worker])].map((name) => [name,
                 execFileSync(name, ['--version'], { encoding: 'utf8', timeout: 10_000 }).trim()]));
         });
         await stage('daemonListened', 20_000, async (limit) => {
