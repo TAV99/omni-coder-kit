@@ -8,7 +8,7 @@
 // another terminal. The spec gate needs a v2 coverage plan built by Codex and
 // is covered by test/dual-coverage-daemon.test.js instead.
 //
-//   OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--setup-only]
+//   OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--reviewer codex|agy|claude] [--setup-only]
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -26,6 +26,8 @@ const WORKERS = {
 };
 // Claude as orchestrator (SPEC-SQUAD-P4 §5) fills the discussion's astra slot and gets .mcp.json + hooks from setup.
 const ORCHESTRATORS = { codex: 'orchestrator=codex:gpt-6.1-sol:high', claude: 'orchestrator=claude:sonnet:low' };
+// An independent reviewer (SPEC-SQUAD-P5 §2) switches setup to preset squad: QC by the reviewer before command QC.
+const REVIEWERS = { claude: 'reviewer=claude:sonnet:low', codex: 'reviewer=codex:gpt-6-luna:low', agy: 'reviewer=agy:gemini-3.8-flash-high' };
 const OMNI = path.resolve(__dirname, '../bin/omni.js');
 
 const failure = (code, message = code) => Object.assign(new Error(message), { code });
@@ -41,10 +43,11 @@ function stopTree(child) {
 }
 
 function parseArgs(argv) {
-    const args = { report: null, worker: 'agy', orchestrator: 'codex', setupOnly: false };
+    const args = { report: null, worker: 'agy', orchestrator: 'codex', reviewer: null, setupOnly: false };
     for (let i = 0; i < argv.length; i++) {
         if (argv[i] === '--worker') args.worker = argv[++i];
         else if (argv[i] === '--orchestrator') args.orchestrator = argv[++i];
+        else if (argv[i] === '--reviewer') args.reviewer = argv[++i];
         else if (argv[i] === '--setup-only') args.setupOnly = true;
         else if (!args.report && !argv[i].startsWith('--')) args.report = argv[i];
         else throw failure('BAD_ARGS', `Unknown argument ${argv[i]}`);
@@ -52,12 +55,13 @@ function parseArgs(argv) {
     check(args.report, 'REPORT_PATH_REQUIRED');
     check(WORKERS[args.worker], 'BAD_WORKER', 'Use --worker agy, codex or claude');
     check(ORCHESTRATORS[args.orchestrator], 'BAD_ORCHESTRATOR', 'Use --orchestrator codex or claude');
+    check(args.reviewer === null || REVIEWERS[args.reviewer], 'BAD_REVIEWER', 'Use --reviewer codex, agy or claude');
     return args;
 }
 
 async function main() {
     if (process.env.OMNI_SQUAD_LIVE !== '1') {
-        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--setup-only]');
+        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--reviewer codex|agy|claude] [--setup-only]');
         return;
     }
     const args = parseArgs(process.argv.slice(2));
@@ -67,7 +71,7 @@ async function main() {
     const started = Date.now();
     const deadline = started + DEADLINE_MS;
     const report = { protocol: 'squad-p3-live-v1', startedAt: new Date(started).toISOString(), ok: false,
-        orchestrator: args.orchestrator, worker: args.worker, workerModel: worker.model, taskId: TASK_ID, failedStage: null, errorCode: null, stages: {} };
+        orchestrator: args.orchestrator, reviewer: args.reviewer, worker: args.worker, workerModel: worker.model, taskId: TASK_ID, failedStage: null, errorCode: null, stages: {} };
     const save = () => {
         const temp = `${output}.${process.pid}.tmp`;
         fs.writeFileSync(temp, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
@@ -171,7 +175,8 @@ async function main() {
             // The real squad setup: roles, dual pipeline (spec/plan/integrate gates), binding, manifest.
             const home = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-squad-live-home-'));
             const setup = await require('../lib/squad/setup').runSetup({ projectRoot: root, homedir: home, yes: true,
-                binds: [ORCHESTRATORS[args.orchestrator], worker.bind] });
+                preset: args.reviewer ? 'squad' : 'dual',
+                binds: [ORCHESTRATORS[args.orchestrator], worker.bind, ...(args.reviewer ? [REVIEWERS[args.reviewer]] : [])] });
             report.setup = { engine: setup.engine, pipeline: setup.pipeline, binding: setup.binding.roles };
             check(setup.engine.supported, 'ENGINE_UNSUPPORTED', JSON.stringify(setup.engine.reasons));
             const manifest = JSON.parse(fs.readFileSync(path.join(root, '.omni/manifest.json'), 'utf8'));
@@ -184,7 +189,7 @@ async function main() {
         });
         if (args.setupOnly) { report.ok = true; return; }
         await stage('binaryPreflight', 20_000, async () => {
-            report.binaries = Object.fromEntries([...new Set([args.orchestrator, args.worker])].map((name) => [name,
+            report.binaries = Object.fromEntries([...new Set([args.orchestrator, args.worker, ...(args.reviewer ? [args.reviewer] : [])])].map((name) => [name,
                 execFileSync(name, ['--version'], { encoding: 'utf8', timeout: 10_000 }).trim()]));
         });
         await stage('daemonListened', 20_000, async (limit) => {
@@ -241,7 +246,18 @@ async function main() {
             report.handoff = task().isolatedHandoff;
         });
         await stage('qcHeldAtIntegrate', 1_800_000, async (limit) => {
-            const held = await client.completeIsolatedTask(report.sessionId, TASK_ID, 1, { timeoutMs: limit });
+            let held = await client.completeIsolatedTask(report.sessionId, TASK_ID, 1, { timeoutMs: limit });
+            // With a reviewer, task.qc answers AWAITING_REVIEW until the pushed review settles.
+            while (held.status === 'AWAITING_REVIEW') {
+                await pause(5_000);
+                held = await client.completeIsolatedTask(report.sessionId, TASK_ID, 1, { timeoutMs: limit });
+            }
+            if (args.reviewer) {
+                report.review = task().qcReview;
+                const verdictFile = path.join(path.dirname(path.join(root, task().isolatedWorkspace.reference.bindingPath)), 'qc-verdict.json');
+                if (fs.existsSync(verdictFile)) report.reviewVerdict = JSON.parse(fs.readFileSync(verdictFile, 'utf8'));
+                check(report.review?.verdict === 'APPROVE', 'REVIEW_NOT_APPROVED', JSON.stringify(report.review));
+            }
             report.qcHeld = held;
             check(held.status === 'AWAITING_HUMAN_APPROVAL', held.status || 'QC_NOT_HELD', JSON.stringify(held).slice(0, 400));
             check(!fs.readFileSync(path.join(root, 'lib/util.js'), 'utf8').includes('Array.isArray'), 'SOURCE_CHANGED_BEFORE_APPROVAL');

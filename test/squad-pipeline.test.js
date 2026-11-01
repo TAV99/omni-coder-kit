@@ -19,11 +19,13 @@ const dual = loadPipeline(path.join(TEMPLATES, 'pipelines', 'dual.yaml'), roles)
 const squad = loadPipeline(path.join(TEMPLATES, 'pipelines', 'squad.yaml'), roles);
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-test('shipped presets: dual runs on today\'s engine, squad validates but waits for P5', () => {
+test('shipped presets: dual and squad (reviewer QC, SPEC-SQUAD-P5) both run on the engine', () => {
     assert.deepEqual(assertEngineSupports(dual), { supported: true, problems: [] });
-    const squadCheck = assertEngineSupports(squad);
-    assert.equal(squadCheck.supported, false);
-    assert.match(squadCheck.problems.join(), /reviewer làm QC chạy được từ P5/);
+    assert.deepEqual(assertEngineSupports(squad), { supported: true, problems: [] });
+    const reviewerScout = plain(squad);
+    delete reviewerScout.source;
+    reviewerScout.phases = reviewerScout.phases.map((p) => (p.id === 'scout' ? { ...p, role: 'reviewer' } : p));
+    assert.match(assertEngineSupports(parsePipeline(reviewerScout, 'p.yaml', roles)).problems.join(), /phase scout phải thuộc vai worker/);
 });
 
 test('gate rules: auto_ok only on human gates; integrate must always wait for the user', () => {
@@ -82,5 +84,5 @@ test('doctor: missing pipeline warns; reviewer pipeline without a reviewer bindi
     fs.copyFileSync(path.join(TEMPLATES, 'pipelines', 'squad.yaml'), path.join(squadDir, 'pipeline.yaml'));
     const found = codes();
     assert.ok(found.includes('error:SQUAD_PIPELINE_BINDING_MISMATCH'));
-    assert.ok(found.includes('warn:SQUAD_PIPELINE_ENGINE_UNSUPPORTED'));
+    assert.ok(!found.includes('warn:SQUAD_PIPELINE_ENGINE_UNSUPPORTED'), 'the engine runs reviewer QC since P5');
 });

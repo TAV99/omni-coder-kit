@@ -1,5 +1,5 @@
 # Omni squad pipeline (SPEC-SQUAD-P3 §2), preset squad: QC by an independent reviewer.
-# Validates today; the engine runs reviewer QC from P5 (omni squad pipeline shows why).
+# The reviewer reviews each worker handoff before command QC (SPEC-SQUAD-P5 §2).
 schema_version: 1
 preset: squad
 phases:

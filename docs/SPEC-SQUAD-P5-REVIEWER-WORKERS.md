@@ -70,14 +70,15 @@ worker handoff (attempt n) ──▶ reviewer QC (đẩy, headless, read-only)
 
 - Chỉ chạy khi pipeline có `qc: { role: reviewer }` **và** binding có reviewer. Không có reviewer → giữ nguyên F1 (preset `dual`).
 - Reviewer chạy **trước** `validation_commands` (Q-P5-2): verdict của reviewer dựa trên evidence của worker; lệnh máy vẫn chạy lại độc lập trong `task.qc` như hôm nay.
-- Findings đi **nguyên văn** từ `qc-verdict` vào handoff rejection (anti-pattern C: không paraphrase).
+- Findings đi **nguyên văn** từ `qc-verdict` vào handoff rejection (anti-pattern C: không paraphrase). Handoff rejection chỉ nhận file trong `allowed_files`: finding chỉ file ngoài phạm vi được gắn vào file phạm vi đầu tiên, đường dẫn gốc giữ trong mô tả `[SEVERITY] (path:line) …`. Giới hạn sửa = min(`max_corrections`, ngân sách correction sẵn có của engine: 3 attempt khi chưa cấu hình recovery policy).
 
 ### 2.2 Reviewer root (D7, D18)
 
 - Thư mục mới cạnh worker root: `.omni/runs/dual-workspaces/<s>/<t>/attempt-n/review/` — bản chép **chỉ đọc** cây kết quả của worker (cùng snapshot handoff), `git init` riêng như worker root (P2b), không chép skill dir của các vai.
 - Mount bundle của reviewer (QC + shared-core) vào `runtime.skillDirs()` của runtime reviewer; marker vai `reviewer`.
 - Cờ cách ly theo runtime: codex `project_root_markers=[]`, claude `disableAllHooks` + `claudeMdExcludes` + `--strict-mcp-config` (P4), agy: git root riêng (V8).
-- Quyền: profile `read-only` (F11). Reviewer **không** chạy lệnh test (đó là việc của `task.qc`); thấy kết quả lệnh qua evidence.
+- Quyền: profile `read-only` (F11). Reviewer **không** chạy lệnh test (đó là việc của `task.qc`); thấy kết quả lệnh qua evidence. Prompt luôn ghi "Do not run shell commands…" (V33: thiếu câu này agy `--mode plan` thử chạy lệnh, bị auto-deny và không trả kết quả).
+- Phạm vi chép: `allowed_files` (bản sau sửa) + `context_files`, tối đa 2 MiB; diff = `raw/review.<n>.diff.txt` mới nhất của phase review của worker, không có thì dựng diff đơn giản từ project ↔ worker root.
 
 ### 2.3 Đầu vào (B2) và đầu ra
 
@@ -98,7 +99,7 @@ worker handoff (attempt n) ──▶ reviewer QC (đẩy, headless, read-only)
 | `qc.review.completed` | `{ task_id, attempt, verdict, verdict_sha256, findings_count }` |
 | `qc.review.failed` | lỗi kỹ thuật (timeout, output hỏng) — thử lại theo luật technical retry hiện có, không tính vào `max_corrections` |
 
-`task.qc` từ chối chạy khi reviewer bound mà attempt hiện tại chưa có `qc.review.completed` với `APPROVE` (`DUAL_REVIEWER_QC_REQUIRED`).
+`task.qc` khi reviewer bound mà attempt hiện tại chưa có `qc.review.completed` với `APPROVE` → trả `status: AWAITING_REVIEW` (đang chờ/đã kích review) hoặc `REVIEW_REJECTED` (handoff đã bị reviewer từ chối), không chạy lệnh QC; người gọi poll lại. (Đổi từ lỗi `DUAL_REVIEWER_QC_REQUIRED` khi code: trạng thái chờ hợp với vòng poll của orchestrator/harness hơn.)
 
 ### 2.5 Phiên reviewer
 
@@ -172,6 +173,8 @@ Lỗi rate limit hoặc hết đăng nhập của một runtime → task của r
 | V37 | Dấu hiệu rate limit của từng CLI (exit code, chuỗi stderr, field JSON) để phân loại `WAITING_RUNTIME` | đọc tài liệu + fixture thật nếu gặp |
 | V38 | Reviewer khác hệ thật sự bắt được lỗi: task cài sẵn một bug nhỏ mà test không bắt | vòng thật |
 
+Kết quả ghi ở Phụ lục A.
+
 ---
 
 ## 8. Câu hỏi mở
@@ -218,3 +221,13 @@ Lỗi rate limit hoặc hết đăng nhập của một runtime → task của r
 - [ ] Preset `dual` vẫn đạt như V20/V21 (một vòng thật chạy lại sau P5c).
 - [ ] `npm test` xanh trên macOS + một lượt dưới tải.
 - [ ] Phụ lục V33–V38 đã ghi.
+
+---
+
+## Phụ lục A — kết quả V-check (2026-11-01)
+
+| # | Kết quả |
+|---|---|
+| V33 ✓ | Review root lồng project (có `CLAUDE.md` cha), file `lib/util.js` cài sẵn bug "`null` không bị từ chối" mà test không bắt; argv thật của adapter (`read-only`, `isolatedRoot`, schema `ReviewSchema`). **claude `sonnet` low** (14 s), **codex `gpt-6-luna` low** (19 s), **agy `gemini-3.8-flash-high`** (53 s): cả ba `NEEDS_FIX`, finding nêu đúng bug `null`, JSON qua zod, không tạo/sửa file, không đọc `CLAUDE.md` cha. Fixture `*-reviewer-verdict.txt`. |
+| V34 ✓/⚠ | agy `--mode plan` làm reviewer: lần đầu thử chạy lệnh shell → auto-deny "a tool required the command permission" → không có output (`SQUAD_RUNTIME_DENIED_ACTIONS`). Thêm câu "Do not run shell commands… only read files" vào prompt → trả `structured_output` đúng. Không thấy file nào được tạo trong review root. |
+
