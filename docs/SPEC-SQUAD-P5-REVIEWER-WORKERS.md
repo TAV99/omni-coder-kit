@@ -240,7 +240,9 @@ Kết quả ghi ở Phụ lục A.
 - [x] Hai worker (khác runtime) chạy hai task song song, integrate tuần tự, cả hai `TASK_VERIFIED` (V-live-P5-par-3).
 - [x] Preset `dual` vẫn đạt như V20/V21 (một vòng thật chạy lại sau P5c — V-live-P5-dual).
 - [x] `npm test` xanh trên macOS + một lượt dưới tải (3057 test, c85090b; sau đó không đổi `lib/`).
-- [ ] Phụ lục V33–V38 đã ghi — còn **V36** (làm mới token giữa chừng, chưa gặp) và **V37** (dấu hiệu rate limit → `WAITING_RUNTIME`, §4.3 chưa làm).
+- [x] Phụ lục V33–V38 đã ghi, trừ **V36** và **V37** — chuyển sang P7 theo quyết định 2026-11-02 (xem dưới).
+
+**P5 đóng 2026-11-02.** Người dùng chốt: `WAITING_RUNTIME` (§4.3), V36 (làm mới token khi hai tiến trình cùng chạy lâu) và V37 (dấu hiệu rate limit thật của từng CLI) **chuyển sang P7** — bộ ~10 task nghiệm thu chạy dài là nơi gặp rate limit/hết hạn token thật để ghi dấu hiệu rồi mới cài phân loại, thay vì đoán từ tài liệu. Cùng chuyển: truy cơ chế abort chéo một lần ở V-live-P5-par-1 (log `worker.task.failed` đã ghi lý do abort/guard nếu gặp lại). Tới lúc đó lỗi rate limit đi theo luật technical retry hiện có.
 
 ---
 

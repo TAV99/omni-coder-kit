@@ -332,7 +332,7 @@ Bind `127.0.0.1` duy nhất, token ngẫu nhiên mỗi phiên, kiểm Origin —
 | P4 | Adapter thứ ba **Claude Code** (D19): CLI khác hẳn codex/agy (hook, MCP, permission mode, `.claude/skills`), chứng minh registry không bị đúc khuôn; claude giữ được vai nào cũng được (orchestrator, worker, reviewer) | Tổ hợp binding có claude chạy trọn vòng (vd. worker claude; codex + claude cùng tài khoản riêng) |
 | P5 | Reviewer + nhiều worker song song + ngân sách/đồng thời theo runtime. Spec: [`SPEC-SQUAD-P5-REVIEWER-WORKERS.md`](SPEC-SQUAD-P5-REVIEWER-WORKERS.md) | Preset `squad` 3 vai chạy trọn vòng |
 | P6 | `omni ui` chỉ đọc → PTY → inbox/gửi tin theo vai | Ba OS chạy được; kiểm bảo mật loopback/token/Origin |
-| P7 | Nghiệm thu §11 | Đạt toàn bộ ngưỡng |
+| P7 | Nghiệm thu §11. Mang từ P5 (2026-11-02): ghi dấu hiệu rate limit thật của từng CLI rồi cài `WAITING_RUNTIME` (V37), quan sát làm mới token khi chạy lâu (V36), truy abort chéo nếu gặp lại | Đạt toàn bộ ngưỡng |
 
 Vai mới sau 3.2.0 (design…) = thêm file vai + phase, không đổi lõi.
 
