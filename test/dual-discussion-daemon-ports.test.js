@@ -172,22 +172,31 @@ test('default Codex probe requires exit zero and checks known models against cac
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'omni-codex-probe-'));
     t.after(() => fs.rm(dir, { recursive: true, force: true }));
     t.mock.method(os, 'homedir', () => dir);
+    // The adapter honours CODEX_HOME; keep a developer's own setting out of the test.
+    const savedCodexHome = process.env.CODEX_HOME;
+    delete process.env.CODEX_HOME;
+    t.after(() => { if (savedCodexHome !== undefined) process.env.CODEX_HOME = savedCodexHome; });
     await fs.mkdir(path.join(dir, '.codex'));
     const cachePath = path.join(dir, '.codex', 'models_cache.json');
     const codexPath = path.join(dir, 'codex');
-    await fs.writeFile(codexPath, '#!/bin/sh\n[ "$1" = "--version" ] && [ "$#" = 1 ]\n', { mode: 0o700 });
+    // Real `codex --version` output; the adapter probe needs a parseable version (SPEC-SQUAD-P3 §4.2).
+    await fs.writeFile(codexPath, '#!/bin/sh\n[ "$1" = "--version" ] && [ "$#" = 1 ] && echo "codex-cli 0.166.0"\n', { mode: 0o700 });
     const verify = (cli = codexPath) => createDaemonHostDeps({ authority: () => state(), now: () => now,
         preflight: { run: async (_root, { workerModel }) => passing(workerModel), codexPath: cli } }).verifyCapability(codexArgs);
     assert.equal((await verify()).liveProfileVerified, true); // Cache absent: version alone suffices.
     await fs.writeFile(cachePath, JSON.stringify({ models: [{ slug: bindings[0].model }] }));
     assert.equal((await verify()).liveProfileVerified, true);
+    await fs.writeFile(cachePath, JSON.stringify({ models: [{ slug: bindings[0].model, visibility: 'hide' }] }));
+    assert.equal((await verify()).liveProfileVerified, true, 'hidden cache models stay acceptable');
     await fs.writeFile(cachePath, JSON.stringify({ models: [{ slug: 'other-model' }] }));
     assert.equal((await verify()).liveProfileVerified, false);
     await fs.writeFile(cachePath, '{malformed');
     assert.equal((await verify()).liveProfileVerified, false);
     await fs.writeFile(cachePath, JSON.stringify({ models: [{ slug: bindings[0].model }] }));
     await fs.writeFile(codexPath, '#!/bin/sh\nexit 1\n');
-    for (const cli of [codexPath, path.join(dir, 'missing-codex')]) {
+    const silent = path.join(dir, 'silent-codex');
+    await fs.writeFile(silent, '#!/bin/sh\nexit 0\n', { mode: 0o700 });
+    for (const cli of [codexPath, path.join(dir, 'missing-codex'), silent]) {
         const evidence = await verify(cli);
         assert.equal(evidence.allowed, true);
         assert.equal(evidence.liveProfileVerified, false);

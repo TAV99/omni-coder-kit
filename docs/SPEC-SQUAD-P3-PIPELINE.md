@@ -183,6 +183,12 @@ P3c chia ba commit: **P3c-1** contract + sửa H7/H8, **P3c-2** nối preflight/
 - **Lệch §4.2:** `agy-runner.buildAgyInvocation` và `live-agy-invoke` **giữ cách dựng argv riêng** (có `--new-project`, `--project`, `-p=`, `--print-timeout` theo phút — khác adapter), chỉ dùng chung luật effort. Argv giữ nguyên byte, trừ việc **bỏ `--effort` khi không cấu hình** (trước đó luôn bắt buộc). Effort khớp hậu tố vẫn được truyền như cũ. Việc gộp hẳn vào `buildHeadless` để sang P3c-3, khi worker không còn chỉ là agy.
 - H8: `live-agy-invoke` đọc `denied_actions` ở cấp ngoài cùng trước, rồi mới tới `usage.denied_actions` (bản cũ).
 
+### 4.3c Cách làm thực tế — P3c-2 (2026-11-01)
+
+- `capability-preflight`: nhánh probe sống gọi `runtime.version/listModels` của **runtime worker** (`options.workerRuntime`, mặc định `agy`) với ctx có `prespawnGuard`, `signal`, `resolved` = `agyCommand` + `agyPrefixArgs`. Giữ regex version chặt (`parseAgyVersionOutput` trên `raw`) và mã retry tài nguyên (`preSpawnResourceFailureCode(failure.raw)`). Tên check `agy_cli_and_model` giữ nguyên tới P3c-3. Test parity mới chạy trên output thật agy 1.4.12: cùng kết luận, cùng argv, guard vẫn ném ra.
+- `daemon-ports.defaultCodexProbe`: dùng `codex.version` + `codex.listModels({ includeHidden })`. Cache vắng → chỉ cần version (như cũ). **Chặt hơn cũ:** `codex --version` phải in `codex-cli X.Y.Z` (cũ chỉ cần exit 0). Adapter đọc `CODEX_HOME` (cũ luôn dùng `~/.codex`).
+- **Hoãn sang P4:** `lib/harness/providers/host-cli` nhánh codex/antigravity. Adapter bắt buộc có model, xuất JSON/JSONL; host-cli chạy không model và stream text cho người dùng → đổi sẽ làm hỏng hiển thị harness. P4 đưa harness lên registry cùng lúc với nhánh claude/gemini/opencode.
+
 ### 4.4 Codex làm worker
 
 - `engineSupport` (P2 bindings) bỏ điều kiện "worker phải là agy": worker ∈ runtime có `headless`, `write`, `parseResult`.
