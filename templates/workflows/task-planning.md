@@ -129,7 +129,7 @@ acceptance_policy là bắt buộc; map checks vào requirement thật. Ví dụ
     "task_id": "TASK-1",
     "decision_ids": ["ui.copy"],
     "title": "Bounded deliverable",
-    "owner": "agy",
+    "owner": "worker",
     "model": "gemini-3.8-flash-high",
     "goal": "Concrete implementation outcome",
     "category": "frontend",
@@ -143,9 +143,10 @@ acceptance_policy là bắt buộc; map checks vào requirement thật. Ví dụ
 }
 ```
 - Every source implementation deliverable in `todo.md` must have exactly one corresponding typed task. Setup/planning actions and final QC/review/verification checkboxes do not enter the graph; the bootstrap controller and completion/quality/UI gates own them.
+- `owner` names a squad role: `"worker"` for slices the worker runs, `"orchestrator"` for work the controller keeps. Legacy values `"agy"`/`"codex"` are still accepted and mean the same slots.
 - All fields shown above are required. A shared-mode graph may contain at most one AGY-owned implementation slice against its immutable baseline. An all-isolated worker graph may contain multiple eligible slices, each with its own snapshot and explicit dependencies. Each AGY task requires 1-10 exact `allowed_files` and at least one typed validation command. Controller setup/architecture/integration/QC stays outside the isolated worker graph.
 - **Quy chuẩn validation_commands cho isolated AGY task:** Chỉ chọn các lệnh kiểm thử mã nguồn không sinh thư mục build ngoài scope (khuyến nghị: `npm run typecheck`, `npm run test`). Các lệnh build toàn cục (`npm run build`, `vite build`, `next build`) sinh artifact (`dist/`, `build/`) không đặt vào task của worker cách ly; chúng thuộc khâu nghiệm thu tích hợp của Controller (Codex) trên workspace chính sau khi tích hợp.
-- **Tối Ưu Hóa Token Cho Codex:** Để chuyển giao tối đa khối lượng code sang AGY, hãy gom toàn bộ các file UI / Components / Tests vào slice thực thi có `owner: "agy"` và `risk: "low"`. Codex chỉ giữ vai trò Kiến Trúc Sư / Phê Duyệt và dùng lệnh `omni dual qc --json` để nghiệm thu nhanh chóng.
+- **Tối Ưu Hóa Token Cho Codex:** Để chuyển giao tối đa khối lượng code sang AGY, hãy gom toàn bộ các file UI / Components / Tests vào slice thực thi có `owner: "worker"` và `risk: "low"`. Codex chỉ giữ vai trò Kiến Trúc Sư / Phê Duyệt và dùng lệnh `omni dual qc --json` để nghiệm thu nhanh chóng.
 - Architecture, security, migrations, ambiguous work, high risk, broad file scopes, and final QC remain Codex-owned.
 
 Sau khi hoàn tất tạo plan và setup:

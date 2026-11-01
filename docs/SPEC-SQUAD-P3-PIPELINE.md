@@ -109,6 +109,17 @@ Engine dual hiện là máy trạng thái cố định (H1). P3 **không** viế
 - `normalizeOwner(value)` ở một chỗ duy nhất (`lib/dual/contracts.js`), dùng ở mọi reader. Không viết lại ledger.
 - Workflow sinh plan (`templates/workflows`, prompt `om-plan` của dual) đổi sang `owner: worker|orchestrator`.
 
+### 3.1b Cách làm thực tế (P3b, 2026-11-01) — lệch so với 3.1
+
+Khảo sát lúc code: token `codex`/`agy`/`gemini` xuất hiện ở ~117 chỗ so sánh trong `lib/dual/` và nằm trong ledger có chuỗi hash. Đổi event mới sang tên vai thì mọi reader phải hiểu hai dạng và replay phải chuẩn hóa, rủi ro cao mà không thêm giá trị. Nên:
+
+- **Token cũ giữ làm mã nội bộ của "chỗ"**: `codex` = chỗ orchestrator, `agy` (plan, ledger) / `gemini` (route) = chỗ worker. Ledger và mọi event giữ nguyên, không cần replay chuẩn hóa.
+- **Đầu vào nhận tên vai**: `PlanOwnerSchema` (plan task, MCP `register_plan`) nhận `orchestrator|worker|codex|agy`; route nhận `orchestrator|worker|codex|gemini|agy`. Quy về mã nội bộ tại `normalizePlanOwner` / `normalizeRouteOwner` (`lib/dual/contracts.js`). Enum đầu vào liệt kê đủ để danh sách tool MCP quảng bá tên vai.
+- **Đầu ra hiện tên vai**: MCP `status` thêm `owner_role`; CLI in `worker (agy)` qua `ownerLabel`. Daemon vẫn chỉ nói mã nội bộ — `status` từ chối tên vai từ daemon (fail closed như cũ).
+- Runtime thật lấp chỗ worker do binding quyết định (P3c), không do token.
+- Workflow `task-planning.md` dạy `owner: "worker"`; plan cũ `"agy"` vẫn hợp lệ, parse ra y hệt.
+- Luật "≤ 10 file", "isolated chỉ cho worker" giữ nguyên code vì đã gắn vào chỗ `agy` = vai worker.
+
 ### 3.2 Bảng ánh xạ state (tên giữ nguyên)
 
 | State | Nghĩa từ P3 |
