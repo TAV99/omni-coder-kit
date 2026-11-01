@@ -99,3 +99,22 @@ test('without squad config the worker root behaves exactly as before', (t) => {
     assert.equal(fs.existsSync(path.join(ref.workerRoot, '.git')), false);
     assert.equal(readTaskBinding(options.workspaceRoot, ref).binding.workerOwnedPaths, undefined);
 });
+
+// Found in the P3 live run: the orchestrator's snapshot scrub pruned the empty
+// objects/ and refs/ dirs of the worker's fresh `git init`, so review-time
+// preflight saw a broken repository and blocked the worker.
+test('snapshot scope scrub leaves the worker-owned git repository intact', (t) => {
+    const { createBaselineOperations } = require('../lib/dual/orchestrator');
+    const { createSnapshotBaseline } = require('../lib/dual/baseline-snapshot');
+    const { execFileSync } = require('node:child_process');
+    const root = tempDir(t, 'dual-squad-scrub-');
+    fs.writeFileSync(path.join(root, 'index.js'), 'module.exports = 1;\n');
+    const initialSnapshot = createSnapshotBaseline({ root }).capture();
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    fs.mkdirSync(path.join(root, '.agents', 'skills', 'empty-skill'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'index.js'), 'module.exports = 2;\n');
+    const ops = createBaselineOperations({ cwd: root, backend: 'snapshot', initialSnapshot, workerOwnedPaths: ['.agents/skills', '.git'] });
+    ops.captureDiffFingerprint({ repoRoot: root, baseline: ops.baseline, excludedPaths: ['.git', '.agents/skills'], allowedFiles: ['index.js'], denyPatterns: [] });
+    for (const dir of ['.git/objects', '.git/refs/heads', '.agents/skills/empty-skill']) assert.ok(fs.existsSync(path.join(root, dir)), dir);
+    assert.equal(execFileSync('git', ['rev-parse', '--git-dir'], { cwd: root, encoding: 'utf8' }).trim(), '.git');
+});
