@@ -105,6 +105,28 @@ async function main() {
         }
         throw failure('STAGE_TIMEOUT', `Timed out waiting for ${label}`);
     }
+    // The harness plays the orchestrator: a scout NEEDS_CONTEXT question gets the
+    // grounded reply Codex would give (dual-controller.md), at most three times.
+    const answered = new Set();
+    async function answerContext() {
+        const waiting = task().waitingContext;
+        const open = waiting.question_ids.filter((id) => !answered.has(id));
+        if (!open.length) return;
+        if (answered.size + open.length > 3) throw failure('ISOLATED_CONTROLLER_REQUIRED', 'Worker keeps asking for context');
+        for (const questionId of open) {
+            const messageId = `reply-${answered.size + 1}`;
+            const ack = await client.replyToTask(report.sessionId, { task_id: TASK_ID, plan_revision: 1, message_id: messageId, reply_to: questionId,
+                body: 'Decision: The task context is complete: README.md, entry.js, lib/util.js and test/smoke.test.js are in scope; no more reconnaissance is needed. '
+                    + 'Change only lib/util.js: add an Array.isArray guard to activeIds that throws TypeError("Expected array") for non-arrays and keep array behavior. '
+                    + `Source file/section: plans/plan.md; Question ID: ${questionId}; Plan revision: 1` });
+            check(ack.acknowledged === true, 'CONTEXT_REPLY_REJECTED', JSON.stringify(ack));
+            answered.add(questionId);
+            report.contextReplies = [...(report.contextReplies || []), { questionId, messageId }];
+            console.error(`[context] answered ${questionId}`);
+        }
+        await client.request('session.resume', { session_id: report.sessionId, task_id: TASK_ID, plan_revision: 1 });
+    }
+
     // The person approves in another terminal; the harness never approves.
     async function waitForApproval(gateId, limit) {
         const command = `cd ${root} && node ${OMNI} squad approve ${gateId}`;
@@ -203,8 +225,10 @@ async function main() {
         });
         await stage('planApproved', APPROVAL_WAIT_MS, (limit) => waitForApproval('plan-r1', limit));
         await stage('isolatedHandoff', 1_200_000, async (limit) => {
-            await poll(() => task()?.isolatedHandoff && !Object.values(authority.derive().leases)
-                .some((lease) => lease.status === 'active'), limit, 'isolated handoff');
+            await poll(async () => {
+                if (task()?.waitingContext) await answerContext();
+                return task()?.isolatedHandoff && !Object.values(authority.derive().leases).some((lease) => lease.status === 'active');
+            }, limit, 'isolated handoff');
             report.handoff = task().isolatedHandoff;
         });
         await stage('qcHeldAtIntegrate', 1_800_000, async (limit) => {
