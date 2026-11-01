@@ -116,6 +116,14 @@ Mỗi attempt một phiên mới (Q-P5-4): reviewer không mang định kiến t
 - `resolveTaskWorker(root, task)` → `{ id, runtime, model, effort }`: task.worker → binding; thiếu → quy tắc giao; task.model/effort vẫn ghi đè model/effort như hôm nay.
 - Mọi chỗ đang gọi `resolveConfiguredWorkerRuntime(root)` trong luồng task (orchestrator, isolated-runner, discussion host, preflight) chuyển sang worker **của task**. Chỗ nội bộ vẫn là `agy`.
 
+### 3.1b Đã làm (P5b)
+
+- `resolveConfiguredWorker{Runtime,Model,Effort}(root, { worker })`: tên worker có binding → runtime/model/effort của worker đó (effort thiếu = `null`, không kế thừa worker-1); task.model/effort vẫn đè; tên không có binding → đường manifest cũ (đăng ký plan đã chặn trước).
+- Đăng ký plan: `worker` chỉ cho task worker và phải có binding (`DUAL_PLAN_INVALID`); model/effort ghim theo worker vào `plan.registered`.
+- **Capability theo worker:** worker của task agy đầu tiên giữ `details.agy_*` như cũ; mỗi worker khác được preflight riêng một lần lúc đăng ký → `details.workers[id] = { runtime, version, model }`; lỗi → `BLOCKED` kèm id worker. `workerCapability(details, task.worker)` thay mọi chỗ đọc `agy_version/agy_model` theo task (runner, authority, adapter).
+- Discussion isolated dùng runtime của worker của task; shared mode giữ worker-1 (§0.2).
+- Sửa lỗi P3b phát hiện khi test: RPC `plan.register` gọi thẳng (không qua schema MCP) coi `owner: "orchestrator"` là worker — `planTaskOwner` nay chuẩn hóa tên vai.
+
 ### 3.2 Ledger
 
 `plan.registered` đã lưu task nguyên văn → thêm `worker` vào task schema (optional). `task.dispatch` ghi `worker_id` (event mới `task.worker.assigned` khi omni tự giao).
