@@ -150,10 +150,44 @@ program
     .description('Ẩn/hiện file agent (AGENTS.md, CLAUDE.md, …) khỏi git qua .gitignore')
     .action(handleAgentFiles);
 
+// Session commands shared by `omni dual` and `omni squad` (SPEC-SQUAD-P3 §6):
+// one definition, same handlers, so both names always behave the same.
+const SESSION_COMMANDS = ['run', 'resume', 'status', 'bootstrap', 'qc'];
+function addSessionCommands(parent) {
+    parent.command('run <task-id>')
+        .description('Chạy tự động các phase hợp lệ cho task')
+        .action(handleDualRun);
+    parent.command('resume <task-id>')
+        .description('Tiếp tục task từ trạng thái hiện tại')
+        .action(handleDualResume);
+    parent.command('status <task-id>')
+        .description('Xem trạng thái, owner và bước tiếp theo của task')
+        .action(handleDualStatus);
+    parent.command('bootstrap')
+        .description('Validate planning/setup, register the full typed task graph once, and resume Dual AUTO')
+        .option('--json', 'Xuất một JSON object cho AUTO workflow')
+        .option('--worker-model <model>', 'Tùy chọn worker model cho AGY (mặc định: gemini-3.7-flash-high)')
+        .action(handleDualBootstrap);
+    parent.command('qc [task-id]')
+        .description('Tự động đo đạc snapshot diff, nộp QC Evidence và hoàn tất 3 chu kỳ Quality Gate')
+        .option('--json', 'Xuất một JSON object cho AUTO workflow')
+        .option('--review-submission <file>', 'Nộp untrusted review submission đã bind với daemon execution trước isolated integration')
+        .option('--review-evidence <file>', 'Alias tương thích của --review-submission; caller-built evidence cũ bị từ chối')
+        .action(handleDualQc);
+}
+
 // -- 7) dual -----------------------------------------------------------------
 const dual = program
     .command('dual')
-    .description('Điều phối Codex + Gemini qua agy');
+    .description('Điều phối Codex + worker (alias của omni squad, preset dual)');
+addSessionCommands(dual);
+// Nudge people toward the new name; stderr only, and only on a terminal, so
+// agent-parsed stdout and --json output never change.
+dual.hook('preAction', (_dual, action) => {
+    if (SESSION_COMMANDS.includes(action.name()) && process.stderr.isTTY && !action.opts().json) {
+        process.stderr.write(`(omni dual ${action.name()} = omni squad ${action.name()}, preset dual)\n`);
+    }
+});
 
 const dualCoverage = dual.command('coverage').description('Inspect và approve decision coverage');
 dualCoverage.command('inspect').action(handleDualCoverageInspect);
@@ -165,34 +199,9 @@ dual.command('new <task-id>')
     .description('Tạo transaction mới cho task')
     .action(handleDualNew);
 
-dual.command('run <task-id>')
-    .description('Chạy tự động các phase hợp lệ cho task')
-    .action(handleDualRun);
-
-dual.command('resume <task-id>')
-    .description('Tiếp tục task từ trạng thái hiện tại')
-    .action(handleDualResume);
-
-dual.command('status <task-id>')
-    .description('Xem trạng thái, owner và bước tiếp theo của task')
-    .action(handleDualStatus);
-
 dual.command('phase <phase> <task-id>')
     .description('Chạy một phase cụ thể (preflight|scout|spec|route|implement|scope|review)')
     .action(handleDualPhase);
-
-dual.command('bootstrap')
-    .description('Validate planning/setup, register the full typed task graph once, and resume Dual AUTO')
-    .option('--json', 'Xuất một JSON object cho AUTO workflow')
-    .option('--worker-model <model>', 'Tùy chọn worker model cho AGY (mặc định: gemini-3.7-flash-high)')
-    .action(handleDualBootstrap);
-
-dual.command('qc [task-id]')
-    .description('Tự động đo đạc snapshot diff, nộp QC Evidence và hoàn tất 3 chu kỳ Quality Gate')
-    .option('--json', 'Xuất một JSON object cho AUTO workflow')
-    .option('--review-submission <file>', 'Nộp untrusted review submission đã bind với daemon execution trước isolated integration')
-    .option('--review-evidence <file>', 'Alias tương thích của --review-submission; caller-built evidence cũ bị từ chối')
-    .action(handleDualQc);
 
 dual.command('reject-handoff')
     .description('Ghi nhận controller rejection cho released isolated handoff, trước integration')
@@ -316,6 +325,8 @@ squad.command('pipeline')
 squad.command('skills [action]')
     .description('Bộ skill theo vai: status (mặc định) | sync (mount lại bộ của orchestrator)')
     .action(handleSquadSkills);
+
+addSessionCommands(squad);
 
 squad.command('approve [gateId]')
     .description('Duyệt cổng spec/plan/integrate (cần terminal, gõ mã xác nhận); không có gateId → liệt kê cổng đang chờ')

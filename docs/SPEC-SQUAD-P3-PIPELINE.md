@@ -273,6 +273,13 @@ Cổng `integrate` **cũng áp dụng** cho dual không squad, vì đây là quy
 - `omni dual …` giữ nguyên, in một dòng gợi ý "alias của omni squad (preset dual)".
 - MCP server giữ tên tool `omni_dual_*` (đổi tên là thay đổi phá vỡ cho config Codex đã sinh); thêm mô tả nhắc tên mới.
 
+### 6.1 Cách làm thực tế — P3e (2026-11-01)
+
+- `bin/omni.js` có `addSessionCommands(parent)` định nghĩa **một lần** `run|resume|status|bootstrap|qc` (cùng handler, cùng option) và gắn vào cả `omni dual` lẫn `omni squad`. `approve|auto|pipeline` đã có ở `omni squad` (P3a/P3d).
+- `omni dual <lệnh phiên>` in gợi ý `(omni dual status = omni squad status, preset dual)` **ra stderr, chỉ khi stderr là TTY và không có `--json`** → stdout/JSON mà agent đọc không đổi.
+- Template workflow và hook vẫn dùng `omni dual …`: hook-bridge allowlist các dòng lệnh này cho agent; đổi tên ở đây là việc riêng nếu cần.
+- MCP giữ tên `omni_dual_*` (config Codex đã sinh không vỡ); mô tả `omni_dual_status` nhắc `omni squad status`.
+
 ---
 
 ## 7. Câu hỏi mở (cần chốt trước khi code phần liên quan)
@@ -325,11 +332,11 @@ Kết quả ghi vào phụ lục spec này trước commit đầu của P3c/P3d.
 
 ## 11. Điều kiện xong P3 (DoD)
 
-- [ ] Preset `dual` chạy trọn vòng **qua daemon thật** với codex + agy thật trên fixture nhỏ: spec → (cổng) → plan → (cổng) → scout/implement/review → QC → **dừng ở cổng integrate** → người dùng duyệt qua TTY → integrate.
-- [ ] Cùng fixture với **worker codex** (binding codex cho cả hai vai, D18): chạy trọn vòng.
-- [ ] Session dual tạo trước P3 resume được.
-- [ ] `npm test` xanh trên macOS + một lượt dưới tải.
-- [ ] Phụ lục V12–V16 đã ghi.
+- [ ] Preset `dual` chạy trọn vòng **qua daemon thật** với codex + agy thật trên fixture nhỏ: spec → (cổng) → plan → (cổng) → scout/implement/review → QC → **dừng ở cổng integrate** → người dùng duyệt qua TTY → integrate. *(Các mảnh đã kiểm riêng: V17–V19 sống, cổng qua daemon trong test, approve thử tay 2026-11-01; chưa chạy một vòng liền bằng CLI thật.)*
+- [ ] Cùng fixture với **worker codex** (binding codex cho cả hai vai, D18): chạy trọn vòng. *(Test e2e isolated với worker codex giả lập + V19 implement thật; chưa chạy vòng liền.)*
+- [x] Session dual tạo trước P3 resume được — ledger chỉ thêm loại event mới, replay event cũ không đổi; toàn bộ test dual cũ xanh.
+- [x] `npm test` xanh trên macOS + một lượt dưới tải (P3a–P3e).
+- [x] Phụ lục V12–V19 đã ghi.
 - [ ] Linux/Windows thật: hoãn (SQUAD-ARCHITECTURE-PLAN §11).
 
 ---
