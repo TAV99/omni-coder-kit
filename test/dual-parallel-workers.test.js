@@ -71,6 +71,15 @@ test('a later task that fits starts while an earlier blocked one waits', async (
     assert.deepEqual(h.log.slice(0, 2), ['start:A', 'start:C'], 'B waits for the agy slot, C does not');
 });
 
+test('a task that throws becomes its own FAILED result; its sibling keeps its result', async () => {
+    const results = await runScheduled([item('A', 'worker-1', 'agy', ['a.js']), item('B', 'worker-2', 'claude', ['b.js'])],
+        { limits: DEFAULT_CONCURRENCY, start: async (it) => {
+            if (it.key === 'B') throw Object.assign(new Error('seed failed'), { code: 'SEED_FAILED' });
+            return { status: 'AWAITING_CODEX_QC' };
+        } });
+    assert.deepEqual(results, [{ status: 'AWAITING_CODEX_QC' }, { taskId: 'B', status: 'FAILED', code: 'SEED_FAILED', summary: 'seed failed' }]);
+});
+
 test('limits come from squad.local.json over the defaults', (t) => {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-limits-')));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -80,7 +89,7 @@ test('limits come from squad.local.json over the defaults', (t) => {
     assert.deepEqual(concurrencyLimits(root), { codex: 2, claude: 2, agy: 3 });
 });
 
-test('two isolated tasks on two agy workers implement at the same time and both hand off', async (t) => {
+async function runPair(t, { failTask } = {}) {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-parallel-')));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     for (const name of ['a', 'b']) fs.writeFileSync(path.join(root, `${name}.js`), 'module.exports = 1;\n');
@@ -115,6 +124,7 @@ test('two isolated tasks on two agy workers implement at the same time and both 
     const models = new Set();
     const processRunner = async (invocation) => {
         const taskId = fs.readdirSync(path.join(invocation.cwd, '.omni/codex-gemini/runs'))[0];
+        if (taskId === failTask) return { exitCode: 0, stdout: JSON.stringify({ status: 'error', error: 'boom' }), stderr: 'boom', timedOut: false, startedAt: new Date(), endedAt: new Date(), durationMs: 1 };
         const spec = JSON.parse(fs.readFileSync(path.join(invocation.cwd, '.omni/codex-gemini/runs', taskId, 'spec.json'), 'utf8'));
         const common = { schema_version: 1, task_id: taskId, expected_baseline: spec.expected_baseline };
         const prompt = invocation.args.find((arg) => arg.startsWith('-p='));
@@ -129,7 +139,7 @@ test('two isolated tasks on two agy workers implement at the same time and both 
             failure_modes: ['wrong return value'] };
         else if (prompt.includes('implement phase')) {
             implementing++; peak = Math.max(peak, implementing);
-            for (let i = 0; i < 100 && peak < 2; i++) await new Promise((resolve) => setTimeout(resolve, 20));
+            for (let i = 0; i < 100 && peak < 2 && !failTask; i++) await new Promise((resolve) => setTimeout(resolve, 20));
             implementing--;
             fs.writeFileSync(path.join(invocation.cwd, spec.allowed_files[0]), 'module.exports = 2;\n');
             payload = { ...common, status: 'SUCCESS', modified_files: spec.allowed_files,
@@ -142,9 +152,48 @@ test('two isolated tasks on two agy workers implement at the same time and both 
     };
     const adapter = createOrchestratorAdapter(withDiscussion({ workspaceRoot: root, authorityStore: store, processRunner }));
     const results = await adapter.runTask(store.derive());
+    return { results, peak, models, tasks: store.derive().tasks, dir };
+}
+
+test('two isolated tasks on two agy workers implement at the same time and both hand off', async (t) => {
+    const { results, peak, models, tasks } = await runPair(t);
     assert.deepEqual(results.map((r) => r.status), ['AWAITING_CODEX_QC', 'AWAITING_CODEX_QC']);
     assert.equal(peak, 2, 'both implement turns overlapped');
     assert.deepEqual([...models].sort(), ['gemini-3.8-flash-high', 'gemini-3.8-flash-low'], 'each task ran on its own worker model');
-    const tasks = store.derive().tasks;
     assert.ok(tasks.A.isolatedHandoff && tasks.B.isolatedHandoff);
 });
+
+test('one parallel task failing does not stop the other', async (t) => {
+    const { results, tasks } = await runPair(t, { failTask: 'B' });
+    assert.equal(results[0].status, 'AWAITING_CODEX_QC', 'task A still hands off');
+    assert.notEqual(results[1].status, 'AWAITING_CODEX_QC');
+    assert.ok(tasks.A.isolatedHandoff);
+    assert.equal(tasks.B.isolatedHandoff, undefined);
+});
+
+// A reader in another process can land between the daemon's operation-record
+// write and its commitment event; derive re-reads instead of calling it corrupt.
+test('a reader racing a half-written operation record re-reads; a truly broken ledger still fails', async (t) => {
+    const { dir } = await runPair(t);
+    const realFs = require('node:fs');
+    const racing = (halfWrites) => {
+        let reads = 0;
+        return { fsImpl: new Proxy(realFs, { get(target, key) {
+            if (key !== 'readFileSync') return target[key];
+            return (file, ...rest) => {
+                const content = target.readFileSync(file, ...rest);
+                if (!String(file).endsWith('operations.ndjson')) return content;
+                reads += 1;
+                return reads <= halfWrites ? `${content}{"partial":` : content;
+            };
+        } }), reads: () => reads };
+    };
+    const transient = racing(1);
+    const derived = createAuthorityStore(dir, { fsImpl: transient.fsImpl }).derive();
+    assert.ok(derived.tasks.A.isolatedHandoff);
+    assert.ok(transient.reads() >= 2, 'the ledger was read again after the half record');
+    const broken = racing(Infinity);
+    assert.throws(() => createAuthorityStore(dir, { fsImpl: broken.fsImpl }).derive(), { code: 'DUAL_OPERATION_CORRUPT' });
+    assert.equal(broken.reads(), 5, 'gives up after the retry budget');
+});
+

@@ -25,14 +25,14 @@ const bindings = buildBindings({ models: { agy: 'gemini-3.8-flash-high' }, effor
     snapshotSha256: snapshot.sha256, codexConversationId: 'seed-codex', agyConversationId: 'seed-agy' });
 
 // Full authority envelopes, including the prerequisite session/plan/routing history.
-function events(released = false) {
+function events(released = false, worker) {
     const payloads = [
         { type: 'session.created', state: 'DISCOVERED', workspace_root: process.cwd(), mode: 'auto' },
         { type: 'capability.result', from_state: 'DISCOVERED', to_state: 'CAPABILITY_SAFE',
             status: 'PASSED', checks: preflightChecks() },
         { type: 'plan.registered', from_state: 'INTERVIEWING', to_state: 'PLANNED',
             plan_path: 'plans/plan.md', plan_sha256: 'd'.repeat(64), total_tasks: 1,
-            tasks: [{ task_id: 'TASK-1', title: 'Discussion', owner: 'agy', allowed_files: ['lib/a.js'] }] },
+            tasks: [{ task_id: 'TASK-1', title: 'Discussion', owner: 'agy', allowed_files: ['lib/a.js'], ...(worker ? { worker } : {}) }] },
         { type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
             model: bindings[1].model, effort: 'high', token_budget: 10000,
             allowed_files: ['lib/a.js'], reason: 'Discussion fixture' },
@@ -71,6 +71,15 @@ function passing(model = bindings[1].model) {
 const capArgs = { binding: bindings[1], bindingRef: bindingRef(bindings[1]),
     snapshotSha256: snapshot.sha256, provider: 'agy', adapterId: 'fake-agy',
     adapterVersion: '1', mode: 'fake', stage: 'dispatch' };
+
+test('capability of a task bound to worker-2 is probed with that worker (SPEC-SQUAD-P5 §3)', async () => {
+    const seen = [];
+    const probe = (leaseEvents) => createDaemonHostDeps({ authority: () => state({ leaseEvents }), now: () => now,
+        preflight: { run: async (_root, options) => { seen.push(options.worker); return passing(); } } }).verifyCapability(capArgs);
+    assert.equal((await probe(events(false, 'worker-2'))).allowed, true);
+    assert.equal((await probe(events())).allowed, true);
+    assert.deepEqual(seen, ['worker-2', undefined]);
+});
 
 test('authority allows a real replayed live lease and matching bindings', async () => {
     const derived = replayAuthorityEvents(events(), { clock: () => new Date(now) });
