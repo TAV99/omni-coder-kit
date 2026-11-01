@@ -66,12 +66,13 @@
 | `authStatus` | `claude auth status` → JSON; `loggedIn: true` → authenticated (method = `authMethod`); `false` → unauthenticated, fix "chạy: claude auth login"; lỗi parse → unknown |
 | `listModels` | `claude -p /model --output-format json --permission-prompts none` (C12), tách danh sách sau `Available:` tới `, or a full model ID` → `source: 'cli'`; lỗi/không khớp → dự phòng tĩnh `fable`, `opus`, `sonnet`, `haiku` (`source: 'static'`). `efforts` = toàn bộ C4 cho mọi model. Tên đủ (`claude-…`) luôn hợp lệ ("or a full model ID") |
 | `permissionFlags` | Giới hạn bằng **danh sách tool** (C14), luôn kèm `--permission-prompts none`: `read-only` → `--tools Read,Grep,Glob,Skill`; `workspace-write` → `--permission-mode acceptEdits --tools Read,Grep,Glob,Skill,Edit,Write` (không Bash); `full-auto` (chỉ isolatedRoot) → `--permission-mode bypassPermissions` (đủ tool). **Không** dùng `--permission-mode plan`: nó ghi file plan vào `~/.claude/plans` và không báo từ chối (V25) |
-| `buildHeadless` | `claude -p <prompt> --output-format json --model <m> [--effort e] <quyền> --add-dir <cwd> [--add-dir …] [--json-schema <nội dung file, inline>] [--session-id <uuid>]` + cờ cách ly §3 khi `isolatedRoot` |
-| `buildResume` | `claude -p <prompt> --resume <sessionRef> …` (cùng cờ, không `--session-id`) |
-| `interactiveCommand` | `claude --model <m> [--effort e] --add-dir <cwd>` |
+| `buildHeadless` | `claude -p <prompt> --output-format json --model <m> [--effort e] <quyền> <cờ cách ly §3 khi isolatedRoot> [--add-dir …] [--json-schema <nội dung file, inline>]`. cwd là thư mục tiến trình (không cần `--add-dir <cwd>`); không đặt `--session-id` — `session_id` đọc từ output (V23), như `thread_id` của codex |
+| `buildResume` | cùng argv `buildHeadless` + `--resume <sessionRef>` |
+| `interactiveCommand` | `claude --model <m> [--effort e]`, cwd = thư mục project (MCP/hook: P4c) |
 | `parseResult` | đọc C2 (field thật: V23): `type: result`, `subtype: success` + `is_error: false` → succeeded; subtype lỗi hoặc `is_error` → failed (`SQUAD_RUNTIME_TURN_FAILED`); `permission_denials` khác rỗng → failed `SQUAD_RUNTIME_DENIED_ACTIONS` (giống Q5 của agy; với `--tools` thường rỗng — C14); payload = `structured_output`, không có thì thử parse `result`; sessionRef = `session_id`; usage = `usage.input_tokens/output_tokens`, thinking = `usage.output_tokens_details.thinking_tokens` |
 | `skillDirs` / `mountSkills` | `.claude/skills` (C10) |
-| `userSkillDirs` | `~/.claude/skills` |
+| `userSkillDirs` | `<CLAUDE_CONFIG_DIR \|\| ~/.claude>/skills` |
+| `userInstructionFiles` (mới, optional trong descriptor) | `<CLAUDE_CONFIG_DIR \|\| ~/.claude>/CLAUDE.md` → doctor cảnh báo `SQUAD_USER_INSTRUCTIONS_GLOBAL` (Q-P4-2) |
 
 `jsonSchemaPath` trong hợp đồng turn giữ nguyên; adapter đọc file và truyền nội dung (C3 — V24: đường dẫn bị từ chối `--json-schema is not valid JSON`). Schema **không** strict hóa: schema evidence thật (có field optional) qua thẳng, `structured_output` khớp zod (V24). Giới hạn kích thước: schema > 64 KiB → `SQUAD_RUNTIME_BAD_TURN` (argv an toàn trên win32).
 

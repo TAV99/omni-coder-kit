@@ -50,7 +50,7 @@ test('worker root gets only the worker bundle, never the orchestrator skills', (
     assert.equal(marker.role, 'worker-1');
     assert.equal(marker.mounted_at, undefined, 'worker markers carry no timestamp');
     const { binding } = readTaskBinding(options.workspaceRoot, ref);
-    assert.deepEqual(binding.workerOwnedPaths, ['.agents/skills', '.git']);
+    assert.deepEqual(binding.workerOwnedPaths, ['.agents/skills', '.claude/skills', '.git']);
     assert.ok(!binding.sourceFiles.some((f) => f.path.startsWith('.agents/skills/')));
 });
 

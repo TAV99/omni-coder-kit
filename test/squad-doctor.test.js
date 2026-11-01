@@ -42,6 +42,18 @@ test('overlap and missing skills are errors; unmanaged and user-level skills are
     assert.match(findings.find((f) => f.code === 'SQUAD_SKILL_OVERLAP').message, /"dup".*orchestrator, worker/);
 });
 
+test('a claude role warns about user-level skills and ~/.claude/CLAUDE.md (Q-P4-2)', (t) => {
+    const root = squadProject(t, 'schema_version: 1\nroles:\n  orchestrator: [plan-x]\n  worker: [code-x]\n');
+    writeBinding(root, { schema_version: 1, preset: 'dual', updated_at: '2026-11-01T00:00:00Z',
+        roles: { orchestrator: { runtime: 'codex', model: 'gpt-6.1-sol' }, worker: [{ id: 'worker-1', runtime: 'claude', model: 'sonnet' }], reviewer: null } });
+    const home = tempDir(t, 'squad-home-');
+    writeSkill(path.join(home, '.claude', 'skills'), 'global-claude');
+    fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), '# mine\n');
+    const findings = runSquadChecks({ projectRoot: root, homedir: home, env: {} });
+    assert.match(findings.find((f) => f.code === 'SQUAD_USER_SKILLS_GLOBAL').message, /\.claude.*claude/s);
+    assert.match(findings.find((f) => f.code === 'SQUAD_USER_INSTRUCTIONS_GLOBAL').message, /CLAUDE\.md.*claude/);
+});
+
 test('broken YAML and broken binding are reported, not thrown', (t) => {
     const root = squadProject(t, 'schema_version: 1\nroles:\n  worker: [a]\n  worker: [b]\n');
     assert.equal(runSquadChecks({ projectRoot: root, homedir: '/nowhere', env: {} })[0].code, 'SQUAD_CONFIG_INVALID');

@@ -63,7 +63,7 @@ test('plan registration stores acceptance policy and hash in authority ledger an
         preflightRunner: mockPreflightRunner,
         planArtifactVerifier: async (_root, p) => ({ plan_path: p.plan_path, plan_sha256: p.plan_sha256 }),
     });
-    const client = createDaemonClient({ workspaceRoot });
+    const client = createDaemonClient({ workspaceRoot, timeoutMs: 10000 });
 
     try {
         const session = await client.beginSession({
@@ -169,7 +169,7 @@ test('session completion blocks when mandatory session acceptance checks are not
         preflightRunner: mockPreflightRunner,
         planArtifactVerifier: async (_root, p) => ({ plan_path: p.plan_path, plan_sha256: p.plan_sha256 }),
     });
-    const client = createDaemonClient({ workspaceRoot });
+    const client = createDaemonClient({ workspaceRoot, timeoutMs: 10000 });
 
     try {
         const session = await client.beginSession({

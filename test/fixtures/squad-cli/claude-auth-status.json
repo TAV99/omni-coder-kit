@@ -1,0 +1,9 @@
+{
+  "loggedIn": true,
+  "authMethod": "claude.ai",
+  "apiProvider": "firstParty",
+  "analyticsDisabled": false,
+  "projectsDirectory": "/home/me/.claude/projects",
+  "configDirectory": "/home/me/.claude",
+  "subscriptionType": "pro"
+}

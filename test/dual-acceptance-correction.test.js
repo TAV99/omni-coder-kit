@@ -251,7 +251,7 @@ test('acceptance correction lifecycle: start, authorization, bounded files, and 
         fs.rmSync(workspaceRoot, { recursive: true, force: true });
     });
 
-    const client = createDaemonClient({ workspaceRoot });
+    const client = createDaemonClient({ workspaceRoot, timeoutMs: 10000 });
 
     const session = await client.beginSession({
         workspace_root: workspaceRoot,
@@ -487,7 +487,7 @@ test('acceptance correction attempt limit: enforces maximum 3 attempts per task'
         fs.rmSync(workspaceRoot, { recursive: true, force: true });
     });
 
-    const client = createDaemonClient({ workspaceRoot });
+    const client = createDaemonClient({ workspaceRoot, timeoutMs: 10000 });
     const session = await client.beginSession({ workspace_root: workspaceRoot, mode: 'auto' });
 
     await client.registerPlan(session.session_id, {
@@ -567,7 +567,7 @@ test('failed acceptance correction blocks session completion and verification un
         fs.rmSync(workspaceRoot, { recursive: true, force: true });
     });
 
-    const client = createDaemonClient({ workspaceRoot });
+    const client = createDaemonClient({ workspaceRoot, timeoutMs: 10000 });
     const session = await client.beginSession({ workspace_root: workspaceRoot, mode: 'auto' });
     const correctionPolicy = acceptancePolicy({
         correctionCommand: { program: 'node', args: ['-e', "process.exit(Number(require('fs').readFileSync('.omni/correction-status', 'utf8')))"], cwd: '.' },

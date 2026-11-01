@@ -44,7 +44,7 @@ test('descriptor violating capability ⇔ method is rejected', () => {
 });
 
 test('eligibleFor filters by declared capabilities', () => {
-    assert.deepEqual(defaultRegistry.eligibleFor(['headless', 'resume']), ['codex', 'agy']);
+    assert.deepEqual(defaultRegistry.eligibleFor(['headless', 'resume']), ['codex', 'agy', 'claude']);
     assert.deepEqual(defaultRegistry.eligibleFor(['multiModel']), ['agy']);
     assert.deepEqual(defaultRegistry.eligibleFor(['transcript']), []);
     assert.throws(() => defaultRegistry.eligibleFor(['teleport']), { code: 'SQUAD_RUNTIME_UNKNOWN' });
