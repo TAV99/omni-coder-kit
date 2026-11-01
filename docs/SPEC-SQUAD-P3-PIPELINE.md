@@ -205,7 +205,7 @@ P3c chia ba commit: **P3c-1** contract + sửa H7/H8, **P3c-2** nối preflight/
 - **Probe:** preflight dùng adapter của runtime worker (cache codex vắng → tin version); orchestrator standalone dùng `probeCodexWorker`. Đọc cache `~/.codex` nằm trong `worker-runtime.js` — orchestrator vẫn không chạm home (guard e2e).
 - **Discussion (scout/review) — `discussion/worker-slot.js`:** chỗ worker dùng `createCodexAdapter({ provider: 'agy', readOnlyResume, isolatedRoot })` và `seedCodexConversation` khi runtime là codex. Conversation riêng với orchestrator (D18). Resume ép `-c sandbox_mode="read-only"`; trong worker root thêm `project_root_markers=[]`. Dùng ở `session.js` và cả hai nhánh (shared/isolated) của `daemon-server`.
 - **Sửa lỗi P3c-1 lộ ra:** binding discussion bắt buộc có effort; model có hậu tố mức hoặc Claude-qua-agy giờ không cấu hình effort → `effectiveWorkerEffort` ghi hậu tố, hoặc dấu `model-default` (không bao giờ thành `--effort`).
-- **Chưa kiểm sống:** V19 (implement full-auto thật của codex) — xem phụ lục.
+- **Kiểm sống:** V17, V18, V19 đều đạt — xem phụ lục.
 
 ---
 
@@ -336,5 +336,5 @@ Máy kiểm: macOS arm64, `codex-cli 0.166.0`, `agy 1.4.12`; model rẻ (`gpt-6-
 |---|---|---|
 | V17 | `codex exec --output-schema` với schema evidence thật của dual | Bị từ chối 400 `invalid_json_schema`: *"'schema.required' is required to include every key in properties. Missing 'toolAction'"*. Sau `workerOutputSchema` (strict) → chạy được, reply qua `EvidenceSchema` (zod) hợp lệ. Output lưu `test/fixtures/squad-cli/codex-exec-evidence-strict.jsonl`. |
 | V18 | Worker codex trong discussion: seed `-s read-only -c project_root_markers=[]` rồi `exec resume ... -c sandbox_mode="read-only" -c project_root_markers=[]` trong git root riêng | Seed trả thread id; resume exit 0, `completion: succeeded`, conversation khớp, payload đúng. |
-| V19 | Implement thật: `full-auto` trong worker root, sửa file + trả evidence | **Chưa chạy** — bộ phân loại quyền của phiên chặn lệnh codex bỏ qua sandbox. Cần người dùng chạy tay (lệnh trong ghi chú bàn giao). Đường này đã có test e2e với process giả. |
+| V19 | Implement thật: `full-auto` trong worker root, sửa file + trả evidence | Người dùng chạy tay (2026-11-01, gpt-6-luna low): exit 0, không timeout, `index.js` đổi thành `module.exports = 2;`, reply qua `extractWorkerPayload` → `status: SUCCESS`, `modified_files: ["index.js"]`. Đạt. |
 
