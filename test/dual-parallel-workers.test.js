@@ -147,20 +147,26 @@ async function runPair(t, { failTask } = {}) {
                 self_review: { checks: ['scope', 'syntax', 'value'], remaining_risks: [] } };
         } else payload = { ...common, recommendation: 'APPROVE', risk_level: 'LOW', findings: [],
             review_checks: ['scope', 'syntax', 'value'], challenge_summary: 'Compared original and changed return.' };
-        return { exitCode: 0, stdout: JSON.stringify({ status: 'success', structured_output: payload }), stderr: '',
+        return { exitCode: 0, stdout: JSON.stringify({ status: 'success', structured_output: payload,
+            usage: { input_tokens: 5, output_tokens: 7, thinking_tokens: 1 } }), stderr: '',
             timedOut: false, startedAt: new Date(), endedAt: new Date(), durationMs: 1 };
     };
     const adapter = createOrchestratorAdapter(withDiscussion({ workspaceRoot: root, authorityStore: store, processRunner }));
     const results = await adapter.runTask(store.derive());
-    return { results, peak, models, tasks: store.derive().tasks, dir };
+    return { results, peak, models, tasks: store.derive().tasks, dir, root };
 }
 
 test('two isolated tasks on two agy workers implement at the same time and both hand off', async (t) => {
-    const { results, peak, models, tasks } = await runPair(t);
+    const { results, peak, models, tasks, root } = await runPair(t);
     assert.deepEqual(results.map((r) => r.status), ['AWAITING_CODEX_QC', 'AWAITING_CODEX_QC']);
     assert.equal(peak, 2, 'both implement turns overlapped');
     assert.deepEqual([...models].sort(), ['gemini-3.8-flash-high', 'gemini-3.8-flash-low'], 'each task ran on its own worker model');
     assert.ok(tasks.A.isolatedHandoff && tasks.B.isolatedHandoff);
+    // P5d: the implement turn records the tokens the worker CLI reported.
+    const { readTaskBinding } = require('../lib/dual/task-workspace');
+    const { workerRoot } = readTaskBinding(root, tasks.A.isolatedWorkspace.reference);
+    const meta = JSON.parse(fs.readFileSync(path.join(workerRoot, '.omni/codex-gemini/runs/A/raw/implement.1.meta.json'), 'utf8'));
+    assert.deepEqual(meta.usage, { input_tokens: 5, output_tokens: 7, thinking_tokens: 1 });
 });
 
 test('one parallel task failing does not stop the other', async (t) => {

@@ -276,3 +276,62 @@ test('real reviewer verdicts from codex, agy and claude parse against ReviewSche
         assert.ok(payload.findings.some((finding) => /null/i.test(finding.description)), runtime);
     }
 });
+
+// P5d (SPEC-SQUAD-P5 §5): role budgets from .omni/squad/roles/<id>.yaml.
+function writeRoleBudgets(root, budgets) {
+    const dir = path.join(root, '.omni', 'squad', 'roles');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const name of fs.readdirSync(path.join(TEMPLATES, 'roles'))) {
+        const id = name.replace(/\.yaml$/, '');
+        const text = fs.readFileSync(path.join(TEMPLATES, 'roles', name), 'utf8');
+        const budget = budgets[id] ? `budget: { ${Object.entries(budgets[id]).map(([k, v]) => `${k}: ${v}`).join(', ')} }\n` : '';
+        fs.writeFileSync(path.join(dir, name), text + budget);
+    }
+}
+
+test('budget: role YAML budget parses, rejects junk, and reaches roleBudget', (t) => {
+    const { roleBudget } = require('../lib/dual/role-budget');
+    const { parseRole } = require('../lib/squad/roles');
+    const base = { schema_version: 1, id: 'reviewer', description: 'x', cardinality: '0..1', phases: [], permission: 'read-only',
+        requires: ['headless'], root: 'isolated' };
+    assert.equal(parseRole({ ...base, budget: { turn_minutes: 10, max_turns: 2 } }, 'r.yaml').budget.max_turns, 2);
+    assert.throws(() => parseRole({ ...base, budget: { turn_minutes: 0 } }, 'r.yaml'));
+    assert.throws(() => parseRole({ ...base, budget: { tokens: 5 } }, 'r.yaml'));
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-budget-')));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    assert.deepEqual(roleBudget(root, 'worker'), {});
+    writeRoleBudgets(root, { worker: { turn_minutes: 12, max_turns: 2 }, reviewer: { max_turns: 1 } });
+    assert.deepEqual(roleBudget(root, 'worker'), { turnMs: 720_000, maxTurns: 2 });
+    assert.deepEqual(roleBudget(root, 'reviewer'), { maxTurns: 1 });
+});
+
+test('budget: reviewer max_turns stops reviews (failed runs count); usage is recorded', async (t) => {
+    const f = await handoff(t);
+    const config = { ...CONFIG, maxTurns: 1 };
+    const broken = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1', config,
+        spawnImpl: fakeSpawn(() => ({ stdout: 'not json' })) });
+    assert.equal(broken.status, 'FAILED');
+    const task = f.store.derive().tasks['TASK-1'];
+    assert.equal(task.qcReviewRuns, 1);
+    const { reviewBudgetExhausted } = require('../lib/dual/reviewer-qc');
+    assert.equal(reviewBudgetExhausted(task, config), true);
+    const again = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1', config,
+        spawnImpl: fakeSpawn(() => assert.fail('no review past the budget')) });
+    assert.equal(again.status, 'BUDGET_EXHAUSTED');
+
+    const g = await handoff(t);
+    await runReviewerQc({ workspaceRoot: g.root, authorityStore: g.store, taskId: 'TASK-1', config: CONFIG,
+        spawnImpl: fakeSpawn(() => ({ stdout: claudeVerdict(g.spec, 'APPROVE') })) });
+    assert.deepEqual(g.store.derive().tasks['TASK-1'].qcReview.usage, { input_tokens: 1, output_tokens: 1, thinking_tokens: null });
+});
+
+test('budget: worker max_turns caps attempts, so a reviewer NEEDS_FIX stops for a decision', async (t) => {
+    const f = await handoff(t);
+    writeRoleBudgets(f.root, { worker: { max_turns: 1 } });
+    const result = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1', config: CONFIG,
+        spawnImpl: fakeSpawn(() => ({ stdout: claudeVerdict(f.spec, 'NEEDS_FIX', [{ file: 'index.js', description: 'Wrong value.', severity: 'ERROR' }]) })) });
+    const settled = settleReviewVerdict({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1',
+        verdict: result.verdict, attempt: result.attempt, config: CONFIG });
+    assert.deepEqual(settled, { status: 'NEEDS_DECISION', reason: 'DUAL_CORRECTION_LIMIT' });
+    assert.equal(f.store.derive().tasks['TASK-1'].correction, undefined);
+});

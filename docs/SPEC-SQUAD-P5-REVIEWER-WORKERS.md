@@ -161,6 +161,12 @@ Lỗi rate limit hoặc hết đăng nhập của một runtime → task của r
 - `max_turns` = số lượt headless tối đa của vai cho **một task** (worker: scout + implement + correction; reviewer: số lần review) — chạm trần → `NEEDS_DECISION`.
 - Token: chỉ ghi nhận (`usage` từ `parseResult`) vào ledger; không chặn ở 3.2.0.
 
+**Đã làm (P5d):**
+- `RoleSchema.budget = { turn_minutes 1..240, max_turns 1..20 }` (strict, tùy chọn); `lib/dual/role-budget.js` đọc từ `.omni/squad/roles/<id>.yaml`; project không có vai squad giữ hạn mức cũ.
+- **worker:** `turn_minutes` → timeout mỗi lượt worker (+30 s biên tiến trình, thay mặc định 30 phút); `max_turns` = số **attempt** tối đa mỗi task, chặn trong `requestTaskCorrection` (`DUAL_CORRECTION_LIMIT`) cho mọi đường correction — reviewer `NEEDS_FIX` khi hết lượt → `NEEDS_DECISION`.
+- **reviewer:** `turn_minutes` → timeout lượt review; `max_turns` = số lượt review mỗi task, tính cả lượt lỗi kỹ thuật (`task.qcReviewRuns` trong replay); hết lượt → không review nữa, `task.qc` trả `REVIEW_BUDGET_EXHAUSTED` cho orchestrator quyết.
+- **usage:** `qc.review.completed.usage` và `raw/<phase>.<n>.meta.json` `usage` (input/output/thinking tokens CLI báo) — chỉ ghi nhận.
+
 ---
 
 ## 6. Engine, pipeline, bề mặt
