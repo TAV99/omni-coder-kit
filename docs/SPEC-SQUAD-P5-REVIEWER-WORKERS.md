@@ -236,7 +236,7 @@ Kết quả ghi ở Phụ lục A.
 
 - [x] Vòng thật preset `squad`: orchestrator codex + worker agy + reviewer claude → cổng plan → worker → reviewer `APPROVE` → QC lệnh → cổng integrate → `TASK_VERIFIED` (V-live-P5-1).
 - [x] Vòng thật có reviewer `NEEDS_FIX` (V38: bug cài sẵn) → correction → `APPROVE` → `TASK_VERIFIED` (V-live-P5-fix-2).
-- [ ] Tổ hợp D18: codex orchestrator + codex reviewer (model/effort khác) + agy worker chạy trọn vòng.
+- [x] Tổ hợp D18: codex orchestrator + codex reviewer (model/effort khác) + agy worker chạy trọn vòng (V-live-P5-d18).
 - [x] Hai worker (khác runtime) chạy hai task song song, integrate tuần tự, cả hai `TASK_VERIFIED` (V-live-P5-par-3).
 - [ ] Preset `dual` vẫn đạt như V20/V21 (một vòng thật chạy lại sau P5c).
 - [ ] `npm test` xanh trên macOS + một lượt dưới tải.
@@ -256,4 +256,4 @@ Kết quả ghi ở Phụ lục A.
 | V-live-P5-par-3 ✓ | Orchestrator codex, worker-1 agy `gemini-3.8-flash-high`, worker-2 claude `sonnet` low, reviewer codex `gpt-6-luna` low: hai lease worker chồng nhau 205 s; reviewer `APPROVE` cả hai; task B integrate trước, task A sau (tuần tự); 3 cổng người duyệt; cả hai `TASK_VERIFIED`; 11 phút. |
 | V-live-P5-fix-1 ✗ | `--worker claude --reviewer codex --planted-bug`: worker là script `test/fixtures/fake-claude-worker.js` (giả claude qua `OMNI_CLAUDE_PATH` trong env của daemon; attempt 1 cài bug "null lọt qua guard" mà smoke test không bắt, attempt 2 thấy `correction_context` thì sửa). Lỗi ở script: `exact_symbols` là chuỗi thay vì `{name,file,verified}` → `RESULT_MALFORMED` ở scout. Sửa script, kiểm cả ba payload scout/review/evidence qua zod. |
 | V-live-P5-fix-2 ✓ | Cùng cấu hình: reviewer codex thật chấm attempt 1 → `NEEDS_FIX` với finding nguyên văn "[ERROR] The guard exempts null and undefined, so those non-array inputs do not throw TypeError(\"Expected array\") as the spec requires…" → omni tự từ chối handoff + mở correction + dispatch lại → attempt 2 → reviewer `APPROVE` (0 finding) → `task.qc` chạy lệnh → cổng integrate người duyệt → `TASK_VERIFIED`; `finalEvidence` xác nhận null/undefined/{} đều ném `TypeError`; 6 phút. Worker là script nên vòng này kiểm vòng lặp reviewer → correction, không kiểm năng lực sửa lỗi của model worker. |
-
+| V-live-P5-d18 ✓ | Một tài khoản codex giữ hai vai: orchestrator codex `gpt-6.1-sol` high + reviewer codex `gpt-6-luna` low, worker agy `gemini-3.8-flash-high`. Cổng plan → 7 phase → reviewer codex `APPROVE` → `task.qc` → cổng integrate người duyệt → `TASK_VERIFIED`; hai phiên codex không giẫm nhau, không đăng xuất. |
