@@ -138,6 +138,8 @@ test('AGY: object responses follow the same repairs and preserve unknown envelop
 for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCodexAdapter]]) {
     for (const [name, first, second, calls] of [
         ['denied actions recovers', 'invalid', JSON.stringify(envelope), 2],
+        // agy 1.4.12 reports denied_actions at the top level (SPEC-SQUAD-P3 H8).
+        ['top-level denied actions recovers', 'invalid', JSON.stringify(envelope), 2],
         ['empty reply recovers', '', JSON.stringify(envelope), 2],
         ['valid reply needs no nudge', JSON.stringify(envelope), '', 1],
         ['repaired reply needs no nudge', JSON.stringify(content), '', 1],
@@ -159,7 +161,10 @@ for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCod
             const failed = name === 'provider failure is untouched';
             const stdout = (response, nudgeFailure = false) => {
                 const raw = output(provider, response);
-                if (name === 'denied actions recovers') {
+                if (name.endsWith('denied actions recovers')) {
+                    if (provider === 'agy' && name.startsWith('top-level')) {
+                        return JSON.stringify({ ...JSON.parse(raw.stdout), denied_actions: [{ action: 'command', display_name: 'RunCommand' }] });
+                    }
                     if (provider === 'agy') return JSON.stringify({ ...JSON.parse(raw.stdout), usage: { denied_actions: ['RunCommand'] } });
                     return raw.stdout + '\n' + JSON.stringify({ type: 'usage', usage: { denied_actions: ['RunCommand'] } });
                 }
@@ -212,7 +217,7 @@ for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCod
                 assert.match(prompt, /previous reply was empty\/invalid/i);
                 assert.match(prompt, /"schema_version":1,"kind":"reply","body"/);
                 assert.match(prompt, /serialized string/i);
-                const denialAware = first === '' || name === 'denied actions recovers';
+                const denialAware = first === '' || name.endsWith('denied actions recovers');
                 assert.equal(result.evidenceRef.includes('+nudge-denied'), denialAware);
                 if (denialAware) {
                     assert.match(prompt, /some tool actions were denied/i);

@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const agy = require('../lib/squad/runtimes/agy');
 const { createRegistry } = require('../lib/squad/runtimes/registry');
 const { probeContext } = require('../lib/squad/runtimes/contract');
@@ -101,4 +103,33 @@ test('resume appends --conversation and keeps the prompt redacted', () => {
     const inv = agy.buildResume('d7ab268b-095d', turn, { resolved });
     assert.deepEqual(inv.args.slice(-2), ['--conversation', 'd7ab268b-095d']);
     assert.ok(!inv.redactedArgs.includes('look around'));
+});
+
+const fixture = (name) => fs.readFileSync(path.join(__dirname, 'fixtures', 'squad-cli', name), 'utf8');
+const answerSchema = { safeParse: (v) => ({ success: typeof v.answer === 'string' && Number.isInteger(v.count) }) };
+
+test('parseResult reads the real agy 1.4.12 envelope: payload, conversation, usage', () => {
+    const r = agy.parseResult({ exitCode: 0, stdout: fixture('agy-json-schema.json') }, { phase: 'scout', expectedSchema: answerSchema });
+    assert.equal(r.completion, 'succeeded');
+    assert.deepEqual(r.payload, { answer: 'ok', count: 3 });
+    assert.equal(r.sessionRef, 'a1adc6ae-af57-40b2-ad0f-72294469ac2a');
+    assert.deepEqual(r.usage, { inputTokens: 17636, outputTokens: 6523, thinkingTokens: 6505 });
+    assert.deepEqual([r.deniedActions, r.errorCode], [[], null]);
+});
+
+test('parseResult fails a SUCCESS turn whose tool calls were denied (top-level denied_actions, Q5)', () => {
+    const r = agy.parseResult({ exitCode: 0, stdout: fixture('agy-json-schema-denied.json') }, {});
+    assert.deepEqual([r.completion, r.errorCode], ['failed', 'SQUAD_RUNTIME_DENIED_ACTIONS']);
+    assert.deepEqual(r.deniedActions, [{ action: 'command', display_name: 'RunCommand' }]);
+    assert.equal(r.sessionRef, 'c0603b5e-43d0-4241-8fbb-f0d6ab9c1a7f', 'still resumable');
+});
+
+test('parseResult: provider error, missing or invalid payload, legacy nested denials', () => {
+    const run = (envelope, opts = {}) => agy.parseResult({ exitCode: 0, stdout: JSON.stringify(envelope) }, opts);
+    assert.equal(run({ status: 'ERROR', conversation_id: 'c1', response: 'quota' }).errorCode, 'SQUAD_RUNTIME_TURN_FAILED');
+    assert.equal(run({ status: 'SUCCESS', response: '' }, { expectedSchema: answerSchema }).errorCode, 'SQUAD_RUNTIME_NO_PAYLOAD');
+    assert.equal(run({ status: 'SUCCESS', response: '{"answer":1}' }, { expectedSchema: answerSchema }).errorCode, 'SQUAD_RUNTIME_PAYLOAD_INVALID');
+    assert.deepEqual(run({ status: 'SUCCESS', response: '{"answer":"x","count":1}\n' }, { expectedSchema: answerSchema }).payload, { answer: 'x', count: 1 });
+    assert.equal(run({ status: 'SUCCESS', usage: { denied_actions: ['RunCommand'] } }).errorCode, 'SQUAD_RUNTIME_DENIED_ACTIONS');
+    assert.equal(run({ response: 'no status' }).completion, 'unknown');
 });

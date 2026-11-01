@@ -84,7 +84,7 @@ test('fails closed before spawning when model or effort is missing', (t) => {
     const fixture = makeFixture(t);
     for (const missing of [
         { model: undefined },
-        { effort: undefined },
+        { model: 'gemini-3.7-pro', effort: undefined },
         { model: ' ', effort: ' ' },
         { model: null, effort: null },
     ]) {
@@ -100,6 +100,20 @@ test('fails closed before spawning when model or effort is missing', (t) => {
                 return true;
             },
         );
+    }
+});
+
+test('effort follows the model: optional for a level suffix, refused by Claude, never conflicting (H7)', (t) => {
+    const fixture = makeFixture(t);
+    const build = (model, effort) => buildAgyInvocation({ ...fixture, phase: 'scout', timeoutMs: 90_000, model, effort });
+    assert.equal(build('gemini-3.8-flash-high', undefined).args.includes('--effort'), false);
+    const matching = build('gemini-3.8-flash-high', 'high').args;
+    assert.equal(matching[matching.indexOf('--effort') + 1], 'high', 'a matching effort keeps the old argv');
+    assert.equal(build('claude-sonnet-4.6', undefined).args.includes('--effort'), false);
+    for (const [model, effort, message] of [['gemini-3.8-flash-high', 'medium', /already fixes effort "high"/],
+        ['claude-sonnet-4.6', 'high', /does not accept --effort/]]) {
+        assert.throws(() => build(model, effort), (error) => error.code === 'DUAL_WORKER_CONFIG_MISSING'
+            && message.test(error.message) && /OMNI_DUAL_WORKER_EFFORT/.test(error.message));
     }
 });
 

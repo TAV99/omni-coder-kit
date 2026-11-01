@@ -20,9 +20,17 @@ function fakeRuntime(id, { calls = [], auth = 'authenticated', models = true, ca
         authStatus: async () => { calls.push('auth'); return { state: auth, method: null, evidence: auth, fix: 'log in' }; },
         listModels: async () => { calls.push('models'); return models ? { ok: true, source: 'cli', models: [] } : { ok: false, code: 'X', reason: 'no' }; },
         buildHeadless: () => ({}),
+        parseResult: () => ({ completion: 'unknown', payload: null, sessionRef: null, deniedActions: [], usage: null, errorCode: 'X' }),
         permissionFlags: () => [],
     };
 }
+
+test('a headless runtime must say how to read its output (SPEC-SQUAD-P3 §4.1)', () => {
+    const { parseResult, ...withoutParser } = fakeRuntime('blind');
+    assert.equal(typeof parseResult, 'function');
+    assert.throws(() => createRegistry({ runtimes: [withoutParser] }), /declares headless but has no parseResult/);
+    assert.doesNotThrow(() => createRegistry({ runtimes: [{ ...withoutParser, capabilities: { ...caps(), headless: false } }] }));
+});
 
 test('duplicate and unknown ids are rejected', () => {
     const registry = createRegistry({ runtimes: [fakeRuntime('one')] });

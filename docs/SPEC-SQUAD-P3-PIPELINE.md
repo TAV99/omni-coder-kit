@@ -173,6 +173,16 @@ parseResult(raw, { phase, expectedSchema }) → {
 - `codex.listModels({ includeHidden })`.
 - Test parity P1b (`squad-legacy-parity`) mở rộng: preflight sau khi nối vẫn cho đúng `checks[]` như trước trên các fixture cũ.
 
+### 4.3b Cách làm thực tế — P3c-1 (2026-11-01)
+
+P3c chia ba commit: **P3c-1** contract + sửa H7/H8, **P3c-2** nối preflight/daemon-ports/host-cli vào adapter, **P3c-3** codex làm worker.
+
+- `parseResult` có ở cả agy và codex (`lib/squad/runtimes/result.js` giữ thứ tự kiểm chung: timeout → exit ≠ 0 → output hỏng → turn lỗi → `denied_actions` → chưa xong → payload thiếu/sai schema). Runtime khai `headless` mà thiếu `parseResult` bị `defineRuntime` từ chối. Test bằng fixture output thật V3/V6.
+- Probe: `prespawnGuard` chạy trước spawn và **ném lỗi ra ngoài** (từ chối là quyết định của caller, không phải probe hỏng); lỗi probe kèm `raw`; codex `listModels` nhận `ctx.includeHidden`.
+- Luật effort agy tách ra `lib/squad/runtimes/agy-effort.js`, dùng chung cho adapter và `agy-model.workerConfigurationError` (H7): model có hậu tố mức → effort không bắt buộc, khác hậu tố thì báo lỗi; model `claude-*` → không bắt buộc, có effort thì báo lỗi; model khác → vẫn bắt buộc như cũ.
+- **Lệch §4.2:** `agy-runner.buildAgyInvocation` và `live-agy-invoke` **giữ cách dựng argv riêng** (có `--new-project`, `--project`, `-p=`, `--print-timeout` theo phút — khác adapter), chỉ dùng chung luật effort. Argv giữ nguyên byte, trừ việc **bỏ `--effort` khi không cấu hình** (trước đó luôn bắt buộc). Effort khớp hậu tố vẫn được truyền như cũ. Việc gộp hẳn vào `buildHeadless` để sang P3c-3, khi worker không còn chỉ là agy.
+- H8: `live-agy-invoke` đọc `denied_actions` ở cấp ngoài cùng trước, rồi mới tới `usage.denied_actions` (bản cũ).
+
 ### 4.4 Codex làm worker
 
 - `engineSupport` (P2 bindings) bỏ điều kiện "worker phải là agy": worker ∈ runtime có `headless`, `write`, `parseResult`.

@@ -24,6 +24,25 @@ for (const runtime of defaultRegistry.list()) {
         if (runtime.capabilities.resume) assert.equal(typeof runtime.buildResume, 'function');
         if (runtime.capabilities.interactive) assert.equal(typeof runtime.interactiveCommand, 'function');
         if (runtime.capabilities.transcript) assert.equal(typeof runtime.readTranscript, 'function');
+        if (runtime.capabilities.headless) assert.equal(typeof runtime.parseResult, 'function');
+    });
+
+    test(`${runtime.id}: parseResult never throws on hostile output`, () => {
+        for (const raw of [{ exitCode: 0, stdout: '' }, { exitCode: 0, stdout: 'not json' }, { exitCode: 0, stdout: '[1,2]' },
+            { exitCode: 0, stdout: '{"type":42}' }, { exitCode: 1, stdout: '{}' }, { timedOut: true, exitCode: null, stdout: '' }]) {
+            const result = runtime.parseResult(raw, {});
+            assert.ok(['succeeded', 'failed', 'unknown'].includes(result.completion));
+            assert.ok(Array.isArray(result.deniedActions));
+            if (result.completion !== 'succeeded') assert.match(result.errorCode, /^SQUAD_RUNTIME_/);
+        }
+    });
+
+    test(`${runtime.id}: a refused prespawnGuard stops the probe before any spawn`, async () => {
+        const spawnImpl = fakeSpawn(() => ({ stdout: '1.0.0' }));
+        const refusal = new Error('lease revoked');
+        await assert.rejects(runtime.version({ platform: 'linux', homedir: '/nowhere', env: {}, resolved, timeoutMs: 1000, spawnImpl,
+            prespawnGuard: () => { throw refusal; } }), (error) => error === refusal);
+        assert.equal(spawnImpl.calls.length, 0);
     });
 
     test(`${runtime.id}: prompt is one argv element, verbatim, and redacted in logs`, () => {
@@ -63,6 +82,7 @@ for (const runtime of defaultRegistry.list()) {
         const ctx = { platform: 'linux', homedir: '/nowhere', env: {}, resolved, timeoutMs: 30, spawnImpl: fakeSpawn(() => ({ hang: true })) };
         const v = await runtime.version(ctx);
         assert.equal(v.code, 'SQUAD_RUNTIME_PROBE_TIMEOUT');
+        assert.equal(v.raw.timedOut, true, 'the spawn result rides along for legacy retry classification');
         const a = await runtime.authStatus({ ...ctx, cache: new Map() });
         assert.ok(['unknown', 'unauthenticated'].includes(a.state));
         const m = await runtime.listModels({ ...ctx, cache: new Map(), fsImpl: { statSync() { throw Object.assign(new Error('x'), { code: 'ENOENT' }); } } });

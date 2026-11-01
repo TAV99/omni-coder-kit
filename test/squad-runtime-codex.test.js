@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const codex = require('../lib/squad/runtimes/codex');
 const { probeContext } = require('../lib/squad/runtimes/contract');
 const { fakeSpawn, fakeFs } = require('./helpers/squad-fakes');
@@ -106,4 +108,35 @@ test('skill mount surface: workspace and per-user skill dirs', () => {
     assert.deepEqual(codex.skillDirs('isolated'), ['.agents/skills']);
     assert.deepEqual(codex.userSkillDirs(probeContext({ platform: 'linux', homedir: '/home/me', env: { CODEX_HOME: '/alt' } })),
         ['/home/me/.agents/skills', '/alt/skills']);
+});
+
+const fixture = (name) => fs.readFileSync(path.join(__dirname, 'fixtures', 'squad-cli', name), 'utf8');
+
+test('parseResult reads real codex exec --json: thread id, schema payload from the last message, usage', () => {
+    const r = codex.parseResult({ exitCode: 0, stdout: fixture('codex-exec-output-schema.jsonl') }, { phase: 'scout',
+        expectedSchema: { safeParse: (v) => ({ success: v.answer === 'ok' && v.count === 3 }) } });
+    assert.deepEqual([r.completion, r.errorCode], ['succeeded', null]);
+    assert.deepEqual(r.payload, { answer: 'ok', count: 3 });
+    assert.equal(r.sessionRef, '01a194aa-dd50-7203-97c7-7d9aec71dce9');
+    assert.deepEqual(r.usage, { inputTokens: 19558, outputTokens: 19, thinkingTokens: 0 });
+    // A prose reply is fine without a schema, and has no payload.
+    const prose = codex.parseResult({ exitCode: 0, stdout: fixture('codex-tty-probe.jsonl') }, {});
+    assert.deepEqual([prose.completion, prose.payload], ['succeeded', null]);
+});
+
+test('parseResult: failed turn, cut-off stream, nonzero exit', () => {
+    const lines = fixture('codex-exec-output-schema.jsonl').trim().split('\n');
+    const run = (stdout, exitCode = 0) => codex.parseResult({ exitCode, stdout }, {});
+    assert.equal(run(lines.slice(0, 3).concat('{"type":"turn.failed","error":{"message":"quota"}}').join('\n')).errorCode, 'SQUAD_RUNTIME_TURN_FAILED');
+    const cut = run(lines.slice(0, 3).join('\n'));
+    assert.deepEqual([cut.completion, cut.sessionRef], ['unknown', '01a194aa-dd50-7203-97c7-7d9aec71dce9']);
+    assert.equal(run(lines.join('\n'), 1).errorCode, 'SQUAD_RUNTIME_EXIT_NONZERO');
+});
+
+test('listModels includeHidden keeps hidden models for the dual daemon probe', async () => {
+    const cache = JSON.stringify({ models: [{ slug: 'gpt-5.5', visibility: 'list' }, { slug: 'codex-auto-review', visibility: 'hide' }] });
+    const ctx = (includeHidden) => probeContext({ platform: 'linux', homedir: '/home/me', env: {}, resolved, includeHidden,
+        fsImpl: fakeFs({ '/home/me/.codex/models_cache.json': cache }) });
+    assert.deepEqual((await codex.listModels(ctx(false))).models.map((m) => m.id), ['gpt-5.5']);
+    assert.deepEqual((await codex.listModels(ctx(true))).models.map((m) => m.id), ['gpt-5.5', 'codex-auto-review']);
 });

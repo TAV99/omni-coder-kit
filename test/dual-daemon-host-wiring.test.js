@@ -44,7 +44,7 @@ test('shared helper resolves both stub bindings with a real authority store and 
     const root = workspace(t);
     fs.mkdirSync(path.join(root, '.omni'));
     fs.writeFileSync(path.join(root, '.omni/manifest.json'), JSON.stringify({
-        workerModel: 'gemini-3.8-flash-high', workerEffort: 'medium',
+        workerModel: 'gemini-3.8-flash-high', workerEffort: 'high',
     }));
     const authorityStore = createAuthorityStore(path.join(root, 'authority'));
     authorityStore.append({ schema_version: 2, type: 'session.created', state: 'DISCOVERED',
@@ -323,8 +323,11 @@ test('isolated factory uses real daemon authority, private process hooks, and se
 // Exercise the real request handler without requiring a loopback socket.
 for (const [owner, model, effort, expectedCode] of [
     ['agy', null, 'medium', 'DUAL_WORKER_CONFIG_MISSING'],
-    ['agy', 'gemini-3.8-flash-high', null, 'DUAL_WORKER_CONFIG_MISSING'],
-    ['agy', 'gemini-3.8-flash-high', 'medium', 'DUAL_PLAN_REVISION_MISMATCH'],
+    // A level suffix fixes the effort: none needed, a different one refused (SPEC-SQUAD-P3 H7).
+    ['agy', 'gemini-3.8-flash-high', null, 'DUAL_PLAN_REVISION_MISMATCH'],
+    ['agy', 'gemini-3.8-flash-high', 'medium', 'DUAL_WORKER_CONFIG_MISSING'],
+    ['agy', 'gemini-3.8-pro', null, 'DUAL_WORKER_CONFIG_MISSING'],
+    ['agy', 'claude-sonnet-4.6', 'high', 'DUAL_WORKER_CONFIG_MISSING'],
     ['codex', null, null, 'DUAL_PLAN_REVISION_MISMATCH'],
 ]) {
     test(`completion gate ${owner} model=${model} effort=${effort}`, async (t) => {
@@ -379,8 +382,9 @@ for (const [owner, model, effort, expectedCode] of [
 
 for (const [owner, model, effort, expectedCode] of [
     ['agy', null, 'medium', 'DUAL_WORKER_CONFIG_MISSING'],
-    ['agy', 'gemini-3.8-flash-high', null, 'DUAL_WORKER_CONFIG_MISSING'],
-    ['agy', 'gemini-3.8-flash-high', 'medium', null],
+    ['agy', 'gemini-3.8-flash-high', null, null],
+    ['agy', 'gemini-3.8-flash-high', 'high', null],
+    ['agy', 'gemini-3.8-flash-high', 'medium', 'DUAL_WORKER_CONFIG_MISSING'],
     ['codex', null, null, null],
 ]) {
     test(`plan registration ${owner} model=${model} effort=${effort}`, async (t) => {
