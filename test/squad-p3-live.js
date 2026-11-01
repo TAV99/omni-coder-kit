@@ -8,7 +8,7 @@
 // another terminal. The spec gate needs a v2 coverage plan built by Codex and
 // is covered by test/dual-coverage-daemon.test.js instead.
 //
-//   OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--reviewer codex|agy|claude] [--second-worker agy|codex|claude] [--setup-only]
+//   OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--reviewer codex|agy|claude] [--second-worker agy|codex|claude] [--planted-bug] [--setup-only]
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -45,12 +45,13 @@ function stopTree(child) {
 }
 
 function parseArgs(argv) {
-    const args = { report: null, worker: 'agy', orchestrator: 'codex', reviewer: null, secondWorker: null, setupOnly: false };
+    const args = { report: null, worker: 'agy', orchestrator: 'codex', reviewer: null, secondWorker: null, plantedBug: false, setupOnly: false };
     for (let i = 0; i < argv.length; i++) {
         if (argv[i] === '--worker') args.worker = argv[++i];
         else if (argv[i] === '--orchestrator') args.orchestrator = argv[++i];
         else if (argv[i] === '--reviewer') args.reviewer = argv[++i];
         else if (argv[i] === '--second-worker') args.secondWorker = argv[++i];
+        else if (argv[i] === '--planted-bug') args.plantedBug = true;
         else if (argv[i] === '--setup-only') args.setupOnly = true;
         else if (!args.report && !argv[i].startsWith('--')) args.report = argv[i];
         else throw failure('BAD_ARGS', `Unknown argument ${argv[i]}`);
@@ -61,12 +62,16 @@ function parseArgs(argv) {
     check(args.reviewer === null || REVIEWERS[args.reviewer], 'BAD_REVIEWER', 'Use --reviewer codex, agy or claude');
     check(args.secondWorker === null || WORKERS[args.secondWorker], 'BAD_WORKER', 'Use --second-worker agy, codex or claude');
     check(args.secondWorker === null || args.reviewer, 'REVIEWER_REQUIRED', '--second-worker uses preset squad, which needs --reviewer');
+    // --planted-bug (SPEC-SQUAD-P5 V38): a scripted claude worker plants a bug the smoke test misses;
+    // the real reviewer must send it back (NEEDS_FIX) and the correction must pass.
+    check(!args.plantedBug || (args.worker === 'claude' && args.reviewer && args.reviewer !== 'claude' && !args.secondWorker),
+        'BAD_PLANTED_BUG', '--planted-bug needs --worker claude and --reviewer codex|agy');
     return args;
 }
 
 async function main() {
     if (process.env.OMNI_SQUAD_LIVE !== '1') {
-        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--reviewer codex|agy|claude] [--second-worker agy|codex|claude] [--setup-only]');
+        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--reviewer codex|agy|claude] [--second-worker agy|codex|claude] [--planted-bug] [--setup-only]');
         return;
     }
     const args = parseArgs(process.argv.slice(2));
@@ -76,7 +81,7 @@ async function main() {
     const started = Date.now();
     const deadline = started + DEADLINE_MS;
     const report = { protocol: 'squad-p3-live-v1', startedAt: new Date(started).toISOString(), ok: false,
-        orchestrator: args.orchestrator, reviewer: args.reviewer, worker: args.worker, workerModel: worker.model, secondWorker: args.secondWorker, taskId: TASK_ID, failedStage: null, errorCode: null, stages: {} };
+        orchestrator: args.orchestrator, reviewer: args.reviewer, worker: args.worker, workerModel: worker.model, secondWorker: args.secondWorker, plantedBug: args.plantedBug, taskId: TASK_ID, failedStage: null, errorCode: null, stages: {} };
     const save = () => {
         const temp = `${output}.${process.pid}.tmp`;
         fs.writeFileSync(temp, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
@@ -108,6 +113,8 @@ async function main() {
     const second = args.secondWorker ? WORKERS[args.secondWorker] : null;
     const taskIds = second ? [TASK_ID, TASK_B] : [TASK_ID];
     const task = (id = TASK_ID) => authority.derive().tasks[id];
+    // With --planted-bug a reviewer NEEDS_FIX outcome is the expected detour, not a failure.
+    const expectedDetour = (outcome) => args.plantedBug && outcome.status === 'NEEDS_FIX' && outcome.code === 'DUAL_CONTROLLER_REVIEW_REJECTED';
     async function poll(predicate, limit, label) {
         const until = Date.now() + limit;
         while (Date.now() < until) {
@@ -116,7 +123,9 @@ async function main() {
             if (await predicate()) return;
             for (const id of authority ? taskIds : []) {
                 const current = task(id);
-                if (current?.lastOutcome) { report.taskDiagnostic = current; throw failure('TASK_OUTCOME', JSON.stringify(current.lastOutcome)); }
+                if (current?.lastOutcome && !expectedDetour(current.lastOutcome)) {
+                    report.taskDiagnostic = current; throw failure('TASK_OUTCOME', JSON.stringify(current.lastOutcome));
+                }
             }
             await pause(500);
         }
@@ -222,6 +231,7 @@ async function main() {
             const log = fs.openSync(report.daemonLog, 'wx', 0o600);
             const env = { ...process.env };
             for (const key of ['OMNI_DUAL_WORKER_MODEL', 'OMNI_DUAL_WORKER_EFFORT', 'OMNI_DUAL_WORKER_RUNTIME', 'OMNI_DUAL_DISCUSSION_ENABLED']) delete env[key];
+            if (args.plantedBug) env.OMNI_CLAUDE_PATH = path.join(__dirname, 'fixtures', 'fake-claude-worker.js');
             try {
                 child = spawn(process.execPath, [path.resolve(__dirname, '../bin/omni-daemon.js'), '--workspace', root],
                     { env, detached: true, stdio: ['ignore', log, log] });
@@ -299,6 +309,23 @@ async function main() {
                 const done = await client.completeIsolatedTask(report.sessionId, extra, 1, { timeoutMs: limit });
                 check(done.status === 'TASK_VERIFIED', done.status || 'QC_NOT_VERIFIED');
                 report.extraTasks = { ...report.extraTasks, [extra]: { review: task(extra).qcReview, qc: done.status } };
+            });
+        }
+        if (args.plantedBug) {
+            await stage('reviewerSendsBack', 3_600_000, async (limit) => {
+                // Attempt 1 is rejected by the reviewer, the daemon re-dispatches, attempt 2 must be approved.
+                await poll(async () => {
+                    if (task()?.waitingContext) await answerContext();
+                    const current = task();
+                    return current?.qcReview?.status === 'completed' && current.qcReview.verdict === 'APPROVE'
+                        && current.qcReview.attempt === current.isolatedHandoff?.attempt;
+                }, limit, 'reviewer approval after correction');
+                report.reviewHistory = authority.readEvents().filter((event) => event.type === 'qc.review.completed')
+                    .map((event) => ({ attempt: event.attempt, verdict: event.verdict, findings: event.findings_count }));
+                report.rejections = authority.readEvents().filter((event) => event.type === 'task.handoff.rejected')
+                    .map((event) => ({ attempt: event.attempt, findings: event.findings.map((finding) => finding.description) }));
+                check(report.reviewHistory[0]?.verdict === 'NEEDS_FIX' && report.reviewHistory.at(-1).verdict === 'APPROVE'
+                    && report.reviewHistory.at(-1).attempt >= 2, 'NO_NEEDS_FIX_LOOP', JSON.stringify(report.reviewHistory));
             });
         }
         await stage('qcHeldAtIntegrate', 1_800_000, async (limit) => {
