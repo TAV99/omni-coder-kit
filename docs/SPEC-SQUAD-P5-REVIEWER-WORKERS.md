@@ -238,7 +238,7 @@ Kết quả ghi ở Phụ lục A.
 - [x] Vòng thật có reviewer `NEEDS_FIX` (V38: bug cài sẵn) → correction → `APPROVE` → `TASK_VERIFIED` (V-live-P5-fix-2).
 - [x] Tổ hợp D18: codex orchestrator + codex reviewer (model/effort khác) + agy worker chạy trọn vòng (V-live-P5-d18).
 - [x] Hai worker (khác runtime) chạy hai task song song, integrate tuần tự, cả hai `TASK_VERIFIED` (V-live-P5-par-3).
-- [ ] Preset `dual` vẫn đạt như V20/V21 (một vòng thật chạy lại sau P5c).
+- [x] Preset `dual` vẫn đạt như V20/V21 (một vòng thật chạy lại sau P5c — V-live-P5-dual).
 - [ ] `npm test` xanh trên macOS + một lượt dưới tải.
 - [ ] Phụ lục V33–V38 đã ghi.
 
@@ -257,3 +257,4 @@ Kết quả ghi ở Phụ lục A.
 | V-live-P5-fix-1 ✗ | `--worker claude --reviewer codex --planted-bug`: worker là script `test/fixtures/fake-claude-worker.js` (giả claude qua `OMNI_CLAUDE_PATH` trong env của daemon; attempt 1 cài bug "null lọt qua guard" mà smoke test không bắt, attempt 2 thấy `correction_context` thì sửa). Lỗi ở script: `exact_symbols` là chuỗi thay vì `{name,file,verified}` → `RESULT_MALFORMED` ở scout. Sửa script, kiểm cả ba payload scout/review/evidence qua zod. |
 | V-live-P5-fix-2 ✓ | Cùng cấu hình: reviewer codex thật chấm attempt 1 → `NEEDS_FIX` với finding nguyên văn "[ERROR] The guard exempts null and undefined, so those non-array inputs do not throw TypeError(\"Expected array\") as the spec requires…" → omni tự từ chối handoff + mở correction + dispatch lại → attempt 2 → reviewer `APPROVE` (0 finding) → `task.qc` chạy lệnh → cổng integrate người duyệt → `TASK_VERIFIED`; `finalEvidence` xác nhận null/undefined/{} đều ném `TypeError`; 6 phút. Worker là script nên vòng này kiểm vòng lặp reviewer → correction, không kiểm năng lực sửa lỗi của model worker. |
 | V-live-P5-d18 ✓ | Một tài khoản codex giữ hai vai: orchestrator codex `gpt-6.1-sol` high + reviewer codex `gpt-6-luna` low, worker agy `gemini-3.8-flash-high`. Cổng plan → 7 phase → reviewer codex `APPROVE` → `task.qc` → cổng integrate người duyệt → `TASK_VERIFIED`; hai phiên codex không giẫm nhau, không đăng xuất. |
+| V-live-P5-dual ✓ | Hồi quy preset `dual` sau P5a–P5d: orchestrator codex `gpt-6.1-sol` + worker agy `gemini-3.8-flash-high`, không reviewer (QC theo đường cũ) → cổng plan → 7 phase → `task.qc` → cổng integrate người duyệt → `TASK_VERIFIED`. |
