@@ -22,7 +22,7 @@ const APPROVAL_WAIT_MS = 1_800_000;
 const WORKERS = {
     agy: { bind: 'worker=agy:gemini-3.8-flash-high', model: 'gemini-3.8-flash-high', effort: 'high' },
     codex: { bind: 'worker=codex:gpt-6-luna:low', model: 'gpt-6-luna', effort: 'low' },
-    claude: { bind: 'worker=claude:haiku:low', model: 'haiku', effort: 'low' },
+    claude: { bind: 'worker=claude:sonnet:low', model: 'sonnet', effort: 'low' },
 };
 const ORCHESTRATOR_BIND = 'orchestrator=codex:gpt-6.1-sol:high';
 const OMNI = path.resolve(__dirname, '../bin/omni.js');

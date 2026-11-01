@@ -178,9 +178,9 @@ Kết quả ghi vào phụ lục spec này trước commit đầu của P4a/P4b/
 
 ## 10. Điều kiện xong P4 (DoD)
 
-- [ ] `omni squad runtimes` thấy claude: version, đăng nhập, model.
-- [ ] Conformance pass cho ba adapter codex, agy, claude.
-- [ ] Vòng chạy thật **orchestrator codex + worker claude** qua daemon: cổng plan → 7 phase → QC → cổng integrate → `TASK_VERIFIED`.
+- [x] `omni squad runtimes` thấy claude: version, đăng nhập, model.
+- [x] Conformance pass cho ba adapter codex, agy, claude.
+- [x] Vòng chạy thật **orchestrator codex + worker claude** qua daemon: cổng plan → 7 phase → QC → cổng integrate → `TASK_VERIFIED` (V-live-2).
 - [ ] (P4c) Vòng chạy thật **orchestrator claude + worker agy hoặc codex**.
 - [ ] Worker claude không đọc `CLAUDE.md`/skill/hook của project (V26 trong vòng chạy thật).
 - [ ] `npm test` xanh trên macOS + một lượt dưới tải.
@@ -206,6 +206,9 @@ Kết quả ghi vào phụ lục spec này trước commit đầu của P4a/P4b/
 | V27b ✓ | `claude -p --resume <id>` trả lại **cùng** `session_id` và nhớ ngữ cảnh → discussion `requireConversationMatch` dùng được như codex. |
 | V29 ✓ | Argv thật của adapter P4a (`full-auto`, `isolatedRoot`, `--json-schema` inline) trong worker root lồng project có `CLAUDE.md`: sửa đúng file, chạy được lệnh (`5`), `structured_output` qua `parseResult`, không đọc `CLAUDE.md` cha, không ghi ra ngoài worker root. |
 | V32 ✓ | `.claude/settings.json` có hook `PreToolUse` **trong cwd**: `--settings '{"disableAllHooks":true}'` → hook không chạy; lượt đối chứng không cờ → hook chạy. |
+
+| V-live-1 ✗ | Vòng thật codex + worker claude `haiku` low (`test/squad-p3-live.js --worker claude`): cổng plan → scout → NEEDS_CONTEXT (harness trả lời) → implement đúng (`lib/util.js`, test pass) → review qua discussion trả `NEEDS_FIX` vì haiku không mở `evidence.json` ("evidence.json was not supplied") → omni dừng `DUAL_ISOLATED_EVIDENCE_INVALID`, giữ artifact. Lượt tái hiện cùng argv đọc được file → quyền/cách ly đúng; haiku quá yếu cho vai review. Harness đổi sang `sonnet`. |
+| V-live-2 ✓ | Vòng thật codex `gpt-6.1-sol` + worker claude `sonnet` low: cổng plan giữ → người duyệt → 7 phase → QC giữ ở `integrate-TASK-P3-LIVE` → người duyệt → `TASK_VERIFIED`; ledger `human/cli-tty` cả hai cổng; 14 phút. |
 
 Còn lại: V28, V30 (trước P4c). Fixture: `test/fixtures/squad-cli/claude-*.json` lấy từ các lượt trên.
 
