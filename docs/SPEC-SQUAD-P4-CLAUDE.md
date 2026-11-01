@@ -63,7 +63,7 @@
 | efforts | `['low','medium','high','xhigh','max']` (C4) |
 | `version` | `claude --version` → regex `^(\d+\.\d+\.\d+\S*)\s+\(Claude Code\)` |
 | `authStatus` | `claude auth status` → JSON; `loggedIn: true` → authenticated (method = `authMethod`); `false` → unauthenticated, fix "chạy: claude auth login"; lỗi parse → unknown |
-| `listModels` | tĩnh: alias `fable`, `opus`, `sonnet`, `haiku` + tên đủ hiện hành (`claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`), `efforts` = toàn bộ C4, `source: 'static'`, kèm ghi chú "claude không có lệnh liệt kê model" |
+| `listModels` | theo V31 (danh sách thật từ claude nếu được); dự phòng tĩnh: alias `fable`, `opus`, `sonnet`, `haiku` + tên đủ hiện hành (`claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`), `efforts` = toàn bộ C4, `source: 'static'`, kèm ghi chú "claude không có lệnh liệt kê model" |
 | `permissionFlags` | `read-only` → `--permission-mode plan --permission-prompts none`; `workspace-write` → `--permission-mode acceptEdits --permission-prompts none` (bash cần hỏi → tự từ chối, V25); `full-auto` (chỉ isolatedRoot) → `--permission-mode bypassPermissions` |
 | `buildHeadless` | `claude -p <prompt> --output-format json --model <m> [--effort e] <quyền> --add-dir <cwd> [--add-dir …] [--json-schema <nội dung file>] [--session-id <uuid>]` + cờ cách ly §3 khi `isolatedRoot` |
 | `buildResume` | `claude -p <prompt> --resume <sessionRef> …` (cùng cờ, không `--session-id`) |
@@ -133,6 +133,7 @@ Theo đúng đường codex-làm-worker của P3c-3.
 | V28 | Payload hook của Claude Code 2.1.316 (`PreToolUse`) và cách deny (`permissionDecision: deny`/exit 2) — khớp `hook-bridge` không | tài liệu + 1 hook thử trong thư mục tạm (chỉ P4c) |
 | V29 | `full-auto` (`bypassPermissions`) trong worker root sửa được file và trả `structured_output` | lượt thật — **người dùng chạy** (bộ phân loại quyền đã chặn lệnh tương tự ở V19) |
 | V30 | Claude làm orchestrator nhận MCP `omni_dual` từ `.mcp.json` + `--strict-mcp-config` không | tài liệu + 1 lượt (chỉ P4c) |
+| V31 | Lấy danh sách model của claude không tương tác: `/model` trong `-p`, hoặc nguồn khác claude dùng cho `/model` (settings `availableModels`, cache trong `~/.claude`) | thử `claude -p "/model" --output-format json` + đọc tài liệu |
 
 Kết quả ghi vào phụ lục spec này trước commit đầu của P4a/P4b/P4c tương ứng.
 
@@ -142,10 +143,10 @@ Kết quả ghi vào phụ lục spec này trước commit đầu của P4a/P4b/
 
 | # | Câu hỏi | Đề xuất |
 |---|---|---|
-| Q-P4-1 | Làm claude-làm-orchestrator (§5) ngay P4 hay để P5 cùng reviewer? | **Ngay P4 (P4c)** — D19 nói claude giữ được mọi vai; nhưng P4a+P4b đã đủ DoD "tổ hợp có claude chạy trọn vòng" |
-| Q-P4-2 | Không chặn được skill/`CLAUDE.md` cấp user khi đăng nhập thuê bao: chấp nhận (doctor cảnh báo) hay yêu cầu `ANTHROPIC_API_KEY` để dùng `--bare`? | **Chấp nhận + cảnh báo** — giống F6 (codex/agy cũng không cách ly được cấp user) |
-| Q-P4-3 | Danh sách model claude tĩnh trong adapter (C12): giữ tay theo bản phát hành, hay cho người dùng gõ tên tự do khi setup? | **Danh sách tĩnh + cho gõ tự do** (cảnh báo khi tên lạ) |
-| Q-P4-4 | Worker claude ở shared mode: `acceptEdits` + Bash bị từ chối (không chạy được test trong lượt implement) — chấp nhận? | **Chấp nhận**; khuyến nghị isolated cho worker claude |
+| Q-P4-1 | Làm claude-làm-orchestrator (§5) ngay P4 hay để P5 cùng reviewer? | **Đã chốt 2026-11-01: ngay P4 (P4c).** |
+| Q-P4-2 | Không chặn được skill/`CLAUDE.md` cấp user khi đăng nhập thuê bao: chấp nhận (doctor cảnh báo) hay yêu cầu `ANTHROPIC_API_KEY` để dùng `--bare`? | **Đã chốt: chấp nhận + doctor cảnh báo** (như F6). |
+| Q-P4-3 | Lấy danh sách model claude thế nào (C12)? | **Người dùng: "claude có `/model`"** → lấy danh sách từ chính claude nếu chạy được không tương tác (V31); nếu không, danh sách tĩnh + cho gõ tên tự do (cảnh báo khi tên lạ). |
+| Q-P4-4 | Worker claude ở shared mode: `acceptEdits` + Bash bị từ chối (không chạy được test trong lượt implement) — chấp nhận? | **Đã chốt: chấp nhận**; khuyến nghị isolated cho worker claude. |
 
 ---
 
