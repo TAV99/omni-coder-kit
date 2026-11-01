@@ -178,12 +178,12 @@ Lỗi rate limit hoặc hết đăng nhập của một runtime → task của r
 
 | # | Câu hỏi | Đề xuất |
 |---|---|---|
-| Q-P5-1 | Reviewer `NEEDS_FIX` → omni **tự** mở correction cho worker (đẩy, D5), hay dừng chờ orchestrator quyết? | **Tự** mở correction với findings nguyên văn, tới `max_corrections`; quá thì leo thang orchestrator → người dùng (B3). Orchestrator vẫn từ chối/ghi đè được qua MCP như hôm nay. |
-| Q-P5-2 | Reviewer chạy trước hay sau `validation_commands`? | **Trước**: lượt LLM rẻ hơn khi bắt lỗi sớm; lệnh máy vẫn chạy lại độc lập trong `task.qc`. |
-| Q-P5-3 | Preset `squad` có giữ phase `review` của worker (tự review qua discussion) không? | **Giữ** (đã có, rẻ, bắt lỗi trước khi tốn lượt reviewer); có thể tắt bằng pipeline. |
-| Q-P5-4 | Phiên reviewer: mới mỗi attempt hay giữ suốt task? | **Mới mỗi attempt** (độc lập, không mang định kiến). |
-| Q-P5-5 | Task không ghi `worker`: giao thế nào? | Worker rảnh đầu tiên theo thứ tự `worker-1..N` mà runtime còn chỗ; ghi `task.worker.assigned`. |
-| Q-P5-6 | Giới hạn đồng thời mặc định theo runtime? | `codex: 2, claude: 2, agy: 1` (agy chưa kiểm song song); sửa được trong `squad.local.json`. |
+| Q-P5-1 | Reviewer `NEEDS_FIX` → omni **tự** mở correction cho worker (đẩy, D5), hay dừng chờ orchestrator quyết? | **Đã chốt 2026-11-01: tự mở correction** với findings nguyên văn, tới `max_corrections`; quá thì leo thang orchestrator → người dùng (B3). Orchestrator vẫn từ chối/ghi đè được qua MCP như hôm nay. |
+| Q-P5-2 | Reviewer chạy trước hay sau `validation_commands`? | **Đã chốt: reviewer trước** — lượt LLM rẻ hơn khi bắt lỗi sớm; lệnh máy vẫn chạy lại độc lập trong `task.qc`. |
+| Q-P5-3 | Preset `squad` có giữ phase `review` của worker (tự review qua discussion) không? | **Đã chốt: giữ** (đã có, rẻ, bắt lỗi trước khi tốn lượt reviewer); có thể tắt bằng pipeline. |
+| Q-P5-4 | Phiên reviewer: mới mỗi attempt hay giữ suốt task? | **Mới mỗi attempt** (độc lập, không mang định kiến). Mặc định đề xuất, người dùng chưa phản đối. |
+| Q-P5-5 | Task không ghi `worker`: giao thế nào? | Worker rảnh đầu tiên theo thứ tự `worker-1..N` mà runtime còn chỗ; ghi `task.worker.assigned`. Mặc định đề xuất, người dùng chưa phản đối. |
+| Q-P5-6 | Giới hạn đồng thời mặc định theo runtime? | **Đã chốt: `codex: 2, claude: 2, agy: 1`** (agy chưa kiểm song song); sửa được trong `squad.local.json`. |
 
 ---
 
