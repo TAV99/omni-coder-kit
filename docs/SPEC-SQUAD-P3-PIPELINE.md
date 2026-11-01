@@ -332,8 +332,8 @@ Kết quả ghi vào phụ lục spec này trước commit đầu của P3c/P3d.
 
 ## 11. Điều kiện xong P3 (DoD)
 
-- [ ] Preset `dual` chạy trọn vòng **qua daemon thật** với codex + agy thật trên fixture nhỏ: spec → (cổng) → plan → (cổng) → scout/implement/review → QC → **dừng ở cổng integrate** → người dùng duyệt qua TTY → integrate. *(Các mảnh đã kiểm riêng: V17–V19 sống, cổng qua daemon trong test, approve thử tay 2026-11-01; chưa chạy một vòng liền bằng CLI thật.)*
-- [ ] Cùng fixture với **worker codex** (binding codex cho cả hai vai, D18): chạy trọn vòng. *(Test e2e isolated với worker codex giả lập + V19 implement thật; chưa chạy vòng liền.)*
+- [x] Preset `dual` chạy trọn vòng **qua daemon thật** với codex + agy thật: plan → (cổng) → scout/spec/route/implement/scope/review → QC → **dừng ở cổng integrate** → người dùng duyệt qua TTY → integrate → `TASK_VERIFIED` (V20, 2026-11-01). Cổng spec không chạy sống (cần plan v2 có coverage do Codex lập) — đã có test qua daemon thật trong `dual-coverage-daemon.test.js`.
+- [x] Cùng fixture với **worker codex** (codex cho cả hai vai, hai phiên riêng — D18): chạy trọn vòng (V21, 2026-11-01).
 - [x] Session dual tạo trước P3 resume được — ledger chỉ thêm loại event mới, replay event cũ không đổi; toàn bộ test dual cũ xanh.
 - [x] `npm test` xanh trên macOS + một lượt dưới tải (P3a–P3e).
 - [x] Phụ lục V12–V19 đã ghi.
@@ -360,4 +360,14 @@ Máy kiểm: macOS arm64, `codex-cli 0.166.0`, `agy 1.4.12`; model rẻ (`gpt-6-
 | V17 | `codex exec --output-schema` với schema evidence thật của dual | Bị từ chối 400 `invalid_json_schema`: *"'schema.required' is required to include every key in properties. Missing 'toolAction'"*. Sau `workerOutputSchema` (strict) → chạy được, reply qua `EvidenceSchema` (zod) hợp lệ. Output lưu `test/fixtures/squad-cli/codex-exec-evidence-strict.jsonl`. |
 | V18 | Worker codex trong discussion: seed `-s read-only -c project_root_markers=[]` rồi `exec resume ... -c sandbox_mode="read-only" -c project_root_markers=[]` trong git root riêng | Seed trả thread id; resume exit 0, `completion: succeeded`, conversation khớp, payload đúng. |
 | V19 | Implement thật: `full-auto` trong worker root, sửa file + trả evidence | Người dùng chạy tay (2026-11-01, gpt-6-luna low): exit 0, không timeout, `index.js` đổi thành `module.exports = 2;`, reply qua `extractWorkerPayload` → `status: SUCCESS`, `modified_files: ["index.js"]`. Đạt. |
+
+## Phụ lục — Vòng chạy thật V20–V21 (2026-11-01, `test/squad-p3-live.js`)
+
+Kịch bản đóng vai orchestrator, điều khiển daemon thật; người dùng duyệt `plan-r1` và `integrate-TASK-P3-LIVE` bằng `omni squad approve` ở terminal khác. Fixture: thêm `Array.isArray` guard vào `activeIds` (`lib/util.js`), `owner: worker`, isolated.
+
+| # | Binding | Kết quả |
+|---|---|---|
+| — | lần chạy đầu (cả hai) | Hỏng ở review: `CAPABILITY_BLOCKED`. Nguyên nhân: scrub snapshot của orchestrator xóa `objects/`, `refs/` rỗng trong `.git` riêng của worker root (P2b) → preflight thấy repo hỏng. Sửa ở `41b2790` + test hồi quy. Worker codex còn hỏi `NEEDS_CONTEXT` sau scout; kịch bản được dạy trả lời như orchestrator (`81cc3f9`). |
+| V20 | orchestrator codex `gpt-6.1-sol` high · worker agy `gemini-3.8-flash-high` (codex-cli 0.166.0, agy 1.4.12) | **OK**, 12 phút (worker 222 s). Cổng plan giữ worker; đủ 7 phase; QC → `AWAITING_HUMAN_APPROVAL`, source chưa đổi; duyệt → `TASK_VERIFIED`, smoke test qua. Ledger: 2 `gate.approved` `human/cli-tty`. |
+| V21 | orchestrator codex `gpt-6.1-sol` high · worker codex `gpt-6-luna` low | **OK**, 9 phút (worker 73 s). Như V20; hai phiên codex riêng (D18); không cần trả lời ngữ cảnh lần này. |
 
