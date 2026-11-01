@@ -1,0 +1,13 @@
+# Omni squad pipeline (SPEC-SQUAD-P3 §2), preset dual: orchestrator + one worker.
+# gate: human        → waits for you; AUTO may skip it only when auto_ok: true
+# gate: human-always → always waits for you (D8), even in AUTO
+schema_version: 1
+preset: dual
+phases:
+  - { id: spec,      role: orchestrator, gate: human, auto_ok: true }
+  - { id: plan,      role: orchestrator, gate: human, auto_ok: true }
+  - { id: scout,     role: worker }
+  - { id: implement, role: worker }
+  - { id: review,    role: worker }
+  - { id: qc,        role: orchestrator, on_needs_fix: implement, max_corrections: 3 }
+  - { id: integrate, role: orchestrator, gate: human-always }

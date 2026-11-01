@@ -27,8 +27,9 @@ const run = (p, extra = {}) => runSetup({ projectRoot: p.root, homedir: p.home, 
 test('non-interactive setup: files, binding, manifest, store, stack, displacement, mount', async (t) => {
     const p = project(t);
     const result = await run(p);
-    assert.deepEqual(result.created.sort(), ['.omni/squad/roles/orchestrator.yaml', '.omni/squad/roles/reviewer.yaml',
+    assert.deepEqual(result.created.sort(), ['.omni/squad/pipeline.yaml', '.omni/squad/roles/orchestrator.yaml', '.omni/squad/roles/reviewer.yaml',
         '.omni/squad/roles/worker.yaml', '.omni/squad/skills.yaml'].map((f) => f.split('/').join(path.sep)).sort());
+    assert.deepEqual(result.pipeline, { preset: 'dual', supported: true, problems: [] });
     assert.equal(JSON.parse(fs.readFileSync(path.join(p.root, '.omni', 'squad.local.json'), 'utf8')).roles.worker[0].runtime, 'agy');
     const manifest = JSON.parse(fs.readFileSync(path.join(p.root, '.omni', 'manifest.json'), 'utf8'));
     assert.deepEqual([manifest.ide, manifest.workerModel, manifest.workerEffort], ['dual', 'gemini-3.8-flash-high', 'high']);

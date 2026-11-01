@@ -38,7 +38,7 @@ const {
     handleDualAcceptanceComplete,
     handleDualBlock,
 } = require('../lib/commands/dual');
-const { handleSquadRuntimes, handleSquadSetup, handleSquadSkills } = require('../lib/commands/squad');
+const { handleSquadRuntimes, handleSquadSetup, handleSquadSkills, handleSquadPipeline } = require('../lib/commands/squad');
 
 // `omni skills` no-arg = auto-equip + status (one-stop "show me my skills").
 async function handleSkillsDefault(options = {}) {
@@ -308,6 +308,10 @@ squad.command('setup')
     .option('-y, --yes', 'Không hỏi: dùng --bind hoặc lựa chọn lần trước, đồng ý chuyển skill không thuộc orchestrator')
     .option('--keep-skills', 'Không chuyển skill không thuộc orchestrator ra khỏi thư mục skill của project')
     .action(handleSquadSetup);
+
+squad.command('pipeline')
+    .description('Xem pipeline đang dùng (phase → vai → cổng duyệt) và engine có chạy được không')
+    .action(handleSquadPipeline);
 
 squad.command('skills [action]')
     .description('Bộ skill theo vai: status (mặc định) | sync (mount lại bộ của orchestrator)')

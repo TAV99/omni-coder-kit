@@ -1,0 +1,12 @@
+# Omni squad pipeline (SPEC-SQUAD-P3 §2), preset squad: QC by an independent reviewer.
+# Validates today; the engine runs reviewer QC from P5 (omni squad pipeline shows why).
+schema_version: 1
+preset: squad
+phases:
+  - { id: spec,      role: orchestrator, gate: human, auto_ok: true }
+  - { id: plan,      role: orchestrator, gate: human, auto_ok: true }
+  - { id: scout,     role: worker }
+  - { id: implement, role: worker }
+  - { id: review,    role: worker }
+  - { id: qc,        role: reviewer, on_needs_fix: implement, max_corrections: 3 }
+  - { id: integrate, role: orchestrator, gate: human-always }
