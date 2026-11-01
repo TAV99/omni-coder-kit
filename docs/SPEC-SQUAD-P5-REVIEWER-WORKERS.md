@@ -214,7 +214,7 @@ Kết quả ghi ở Phụ lục A.
 
 ## 11. Điều kiện xong P5 (DoD)
 
-- [ ] Vòng thật preset `squad`: orchestrator codex + worker agy + reviewer claude → cổng plan → worker → reviewer `APPROVE` → QC lệnh → cổng integrate → `TASK_VERIFIED`.
+- [x] Vòng thật preset `squad`: orchestrator codex + worker agy + reviewer claude → cổng plan → worker → reviewer `APPROVE` → QC lệnh → cổng integrate → `TASK_VERIFIED` (V-live-P5-1).
 - [ ] Vòng thật có reviewer `NEEDS_FIX` (V38: bug cài sẵn) → correction → `APPROVE` → `TASK_VERIFIED`.
 - [ ] Tổ hợp D18: codex orchestrator + codex reviewer (model/effort khác) + agy worker chạy trọn vòng.
 - [ ] Hai worker (khác runtime) chạy hai task song song, integrate tuần tự, cả hai `TASK_VERIFIED`.
@@ -230,4 +230,4 @@ Kết quả ghi ở Phụ lục A.
 |---|---|
 | V33 ✓ | Review root lồng project (có `CLAUDE.md` cha), file `lib/util.js` cài sẵn bug "`null` không bị từ chối" mà test không bắt; argv thật của adapter (`read-only`, `isolatedRoot`, schema `ReviewSchema`). **claude `sonnet` low** (14 s), **codex `gpt-6-luna` low** (19 s), **agy `gemini-3.8-flash-high`** (53 s): cả ba `NEEDS_FIX`, finding nêu đúng bug `null`, JSON qua zod, không tạo/sửa file, không đọc `CLAUDE.md` cha. Fixture `*-reviewer-verdict.txt`. |
 | V34 ✓/⚠ | agy `--mode plan` làm reviewer: lần đầu thử chạy lệnh shell → auto-deny "a tool required the command permission" → không có output (`SQUAD_RUNTIME_DENIED_ACTIONS`). Thêm câu "Do not run shell commands… only read files" vào prompt → trả `structured_output` đúng. Không thấy file nào được tạo trong review root. |
-
+| V-live-P5-1 ✓ | Vòng thật preset `squad`: orchestrator codex `gpt-6.1-sol`, worker agy `gemini-3.8-flash-high`, reviewer claude `sonnet` low. Cổng plan giữ → người duyệt → 7 phase của worker → daemon đẩy review (20 s): `APPROVE`, 5 `review_checks` cụ thể, 1 finding INFO (thiếu test cho nhánh `TypeError`, ngoài phạm vi) → `task.qc` chạy lệnh → giữ ở cổng integrate → người duyệt → `TASK_VERIFIED`; ledger `qc.review.started/completed`, cả hai cổng `human`; 9 phút. |
