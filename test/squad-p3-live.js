@@ -8,7 +8,7 @@
 // another terminal. The spec gate needs a v2 coverage plan built by Codex and
 // is covered by test/dual-coverage-daemon.test.js instead.
 //
-//   OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--reviewer codex|agy|claude] [--setup-only]
+//   OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--reviewer codex|agy|claude] [--second-worker agy|codex|claude] [--setup-only]
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -17,6 +17,8 @@ const { spawn, execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 
 const TASK_ID = 'TASK-P3-LIVE';
+// --second-worker (SPEC-SQUAD-P5 §4): a second task on its own file, bound to worker-2, runs beside the first.
+const TASK_B = 'TASK-P5-B';
 const DEADLINE_MS = 5_400_000; // includes up to 30 minutes waiting for each approval
 const APPROVAL_WAIT_MS = 1_800_000;
 const WORKERS = {
@@ -43,11 +45,12 @@ function stopTree(child) {
 }
 
 function parseArgs(argv) {
-    const args = { report: null, worker: 'agy', orchestrator: 'codex', reviewer: null, setupOnly: false };
+    const args = { report: null, worker: 'agy', orchestrator: 'codex', reviewer: null, secondWorker: null, setupOnly: false };
     for (let i = 0; i < argv.length; i++) {
         if (argv[i] === '--worker') args.worker = argv[++i];
         else if (argv[i] === '--orchestrator') args.orchestrator = argv[++i];
         else if (argv[i] === '--reviewer') args.reviewer = argv[++i];
+        else if (argv[i] === '--second-worker') args.secondWorker = argv[++i];
         else if (argv[i] === '--setup-only') args.setupOnly = true;
         else if (!args.report && !argv[i].startsWith('--')) args.report = argv[i];
         else throw failure('BAD_ARGS', `Unknown argument ${argv[i]}`);
@@ -56,12 +59,14 @@ function parseArgs(argv) {
     check(WORKERS[args.worker], 'BAD_WORKER', 'Use --worker agy, codex or claude');
     check(ORCHESTRATORS[args.orchestrator], 'BAD_ORCHESTRATOR', 'Use --orchestrator codex or claude');
     check(args.reviewer === null || REVIEWERS[args.reviewer], 'BAD_REVIEWER', 'Use --reviewer codex, agy or claude');
+    check(args.secondWorker === null || WORKERS[args.secondWorker], 'BAD_WORKER', 'Use --second-worker agy, codex or claude');
+    check(args.secondWorker === null || args.reviewer, 'REVIEWER_REQUIRED', '--second-worker uses preset squad, which needs --reviewer');
     return args;
 }
 
 async function main() {
     if (process.env.OMNI_SQUAD_LIVE !== '1') {
-        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--reviewer codex|agy|claude] [--setup-only]');
+        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js <report.json> [--worker agy|codex|claude] [--orchestrator codex|claude] [--reviewer codex|agy|claude] [--second-worker agy|codex|claude] [--setup-only]');
         return;
     }
     const args = parseArgs(process.argv.slice(2));
@@ -71,7 +76,7 @@ async function main() {
     const started = Date.now();
     const deadline = started + DEADLINE_MS;
     const report = { protocol: 'squad-p3-live-v1', startedAt: new Date(started).toISOString(), ok: false,
-        orchestrator: args.orchestrator, reviewer: args.reviewer, worker: args.worker, workerModel: worker.model, taskId: TASK_ID, failedStage: null, errorCode: null, stages: {} };
+        orchestrator: args.orchestrator, reviewer: args.reviewer, worker: args.worker, workerModel: worker.model, secondWorker: args.secondWorker, taskId: TASK_ID, failedStage: null, errorCode: null, stages: {} };
     const save = () => {
         const temp = `${output}.${process.pid}.tmp`;
         fs.writeFileSync(temp, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
@@ -100,15 +105,19 @@ async function main() {
             throw error;
         } finally { clearTimeout(timer); save(); }
     }
-    const task = () => authority.derive().tasks[TASK_ID];
+    const second = args.secondWorker ? WORKERS[args.secondWorker] : null;
+    const taskIds = second ? [TASK_ID, TASK_B] : [TASK_ID];
+    const task = (id = TASK_ID) => authority.derive().tasks[id];
     async function poll(predicate, limit, label) {
         const until = Date.now() + limit;
         while (Date.now() < until) {
             if (childError) throw childError;
             if (exitResult) throw failure('DAEMON_EXIT', JSON.stringify(exitResult));
             if (await predicate()) return;
-            const current = authority && task();
-            if (current?.lastOutcome) { report.taskDiagnostic = current; throw failure('TASK_OUTCOME', JSON.stringify(current.lastOutcome)); }
+            for (const id of authority ? taskIds : []) {
+                const current = task(id);
+                if (current?.lastOutcome) { report.taskDiagnostic = current; throw failure('TASK_OUTCOME', JSON.stringify(current.lastOutcome)); }
+            }
             await pause(500);
         }
         throw failure('STAGE_TIMEOUT', `Timed out waiting for ${label}`);
@@ -116,23 +125,26 @@ async function main() {
     // The harness plays the orchestrator: a scout NEEDS_CONTEXT question gets the
     // grounded reply Codex would give (dual-controller.md), at most three times.
     const answered = new Set();
-    async function answerContext() {
-        const waiting = task().waitingContext;
+    async function answerContext(taskId = TASK_ID) {
+        const waiting = task(taskId).waitingContext;
         const open = waiting.question_ids.filter((id) => !answered.has(id));
         if (!open.length) return;
         if (answered.size + open.length > 3) throw failure('ISOLATED_CONTROLLER_REQUIRED', 'Worker keeps asking for context');
         for (const questionId of open) {
             const messageId = `reply-${answered.size + 1}`;
-            const ack = await client.replyToTask(report.sessionId, { task_id: TASK_ID, plan_revision: 1, message_id: messageId, reply_to: questionId,
-                body: 'Decision: The task context is complete: README.md, entry.js, lib/util.js and test/smoke.test.js are in scope; no more reconnaissance is needed. '
-                    + 'Change only lib/util.js: add an Array.isArray guard to activeIds that throws TypeError("Expected array") for non-arrays and keep array behavior. '
-                    + `Source file/section: plans/plan.md; Question ID: ${questionId}; Plan revision: 1` });
+            const body = taskId === TASK_B
+                ? 'Decision: The task context is complete: README.md, lib/count.js and test/count.test.js are in scope; no more reconnaissance is needed. '
+                    + 'Change only lib/count.js: add an Array.isArray guard to countActive that throws TypeError("Expected array") for non-arrays and keep array behavior. '
+                : 'Decision: The task context is complete: README.md, entry.js, lib/util.js and test/smoke.test.js are in scope; no more reconnaissance is needed. '
+                    + 'Change only lib/util.js: add an Array.isArray guard to activeIds that throws TypeError("Expected array") for non-arrays and keep array behavior. ';
+            const ack = await client.replyToTask(report.sessionId, { task_id: taskId, plan_revision: 1, message_id: `${taskId}-${messageId}`, reply_to: questionId,
+                body: `${body}Source file/section: plans/plan.md; Question ID: ${questionId}; Plan revision: 1` });
             check(ack.acknowledged === true, 'CONTEXT_REPLY_REJECTED', JSON.stringify(ack));
             answered.add(questionId);
             report.contextReplies = [...(report.contextReplies || []), { questionId, messageId }];
             console.error(`[context] answered ${questionId}`);
         }
-        await client.request('session.resume', { session_id: report.sessionId, task_id: TASK_ID, plan_revision: 1 });
+        await client.request('session.resume', { session_id: report.sessionId, task_id: taskId, plan_revision: 1 });
     }
 
     // The person approves in another terminal; the harness never approves.
@@ -162,7 +174,12 @@ async function main() {
                 'lib/util.js': "'use strict';\nfunction activeIds(xs) {\n    return xs.filter(x => x.active).map(x => x.id);\n}\nmodule.exports = { activeIds };\n",
                 'test/smoke.test.js': "'use strict';\nconst test = require('node:test');\nconst assert = require('node:assert/strict');\nconst { activeIds } = require('../entry');\ntest('active ids', () => assert.deepEqual(activeIds([{ id: 1, active: true }]), [1]));\n",
                 'README.md': '# Live squad fixture\nactiveIds returns ids of active records. Run node --test test/smoke.test.js.\n',
-                'plans/plan.md': '# Tiny task\nAdd an Array.isArray guard to activeIds in lib/util.js; throw TypeError("Expected array") for non-arrays. Preserve array behavior.\n',
+                'plans/plan.md': '# Tiny task\nAdd an Array.isArray guard to activeIds in lib/util.js; throw TypeError("Expected array") for non-arrays. Preserve array behavior.\n'
+                    + (args.secondWorker ? 'Also add the same guard to countActive in lib/count.js.\n' : ''),
+                ...(args.secondWorker ? {
+                    'lib/count.js': "'use strict';\nfunction countActive(xs) {\n    return xs.filter(x => x.active).length;\n}\nmodule.exports = { countActive };\n",
+                    'test/count.test.js': "'use strict';\nconst test = require('node:test');\nconst assert = require('node:assert/strict');\nconst { countActive } = require('../lib/count');\ntest('count active', () => assert.equal(countActive([{ active: true }, { active: false }]), 1));\n",
+                } : {}),
                 '.codex/config.toml': buildCodexConfig('dual', true, opts),
                 '.codex/hooks.json': buildCodexHooks('dual', true, opts),
                 '.omni/manifest.json': JSON.stringify({ version: '3.2.0', ide: 'dual' }),
@@ -175,8 +192,16 @@ async function main() {
             // The real squad setup: roles, dual pipeline (spec/plan/integrate gates), binding, manifest.
             const home = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-squad-live-home-'));
             const setup = await require('../lib/squad/setup').runSetup({ projectRoot: root, homedir: home, yes: true,
-                preset: args.reviewer ? 'squad' : 'dual',
-                binds: [ORCHESTRATORS[args.orchestrator], worker.bind, ...(args.reviewer ? [REVIEWERS[args.reviewer]] : [])] });
+                preset: args.reviewer || second ? 'squad' : 'dual', workers: second ? 2 : 1,
+                binds: [ORCHESTRATORS[args.orchestrator], worker.bind.replace(/^worker=/, 'worker-1='),
+                    ...(second ? [second.bind.replace(/^worker=/, 'worker-2=')] : []),
+                    ...(args.reviewer ? [REVIEWERS[args.reviewer]] : [])] });
+            // Two workers of the same CLI may run side by side here (default agy is 1).
+            if (second && args.secondWorker === args.worker) {
+                const bindingFile = path.join(root, '.omni', 'squad.local.json');
+                const binding = JSON.parse(fs.readFileSync(bindingFile, 'utf8'));
+                fs.writeFileSync(bindingFile, JSON.stringify({ ...binding, limits: { concurrency: { [args.worker]: 2 } } }, null, 2));
+            }
             report.setup = { engine: setup.engine, pipeline: setup.pipeline, binding: setup.binding.roles };
             check(setup.engine.supported, 'ENGINE_UNSUPPORTED', JSON.stringify(setup.engine.reasons));
             const manifest = JSON.parse(fs.readFileSync(path.join(root, '.omni/manifest.json'), 'utf8'));
@@ -189,7 +214,7 @@ async function main() {
         });
         if (args.setupOnly) { report.ok = true; return; }
         await stage('binaryPreflight', 20_000, async () => {
-            report.binaries = Object.fromEntries([...new Set([args.orchestrator, args.worker, ...(args.reviewer ? [args.reviewer] : [])])].map((name) => [name,
+            report.binaries = Object.fromEntries([...new Set([args.orchestrator, args.worker, ...(args.secondWorker ? [args.secondWorker] : []), ...(args.reviewer ? [args.reviewer] : [])])].map((name) => [name,
                 execFileSync(name, ['--version'], { encoding: 'utf8', timeout: 10_000 }).trim()]));
         });
         await stage('daemonListened', 20_000, async (limit) => {
@@ -225,7 +250,13 @@ async function main() {
                     goal: 'Add Array.isArray guard in activeIds, throw TypeError("Expected array") for non-arrays, preserve array behavior.',
                     risk: 'low', complexity: 'low', category: 'feature', allowed_files: ['lib/util.js'], deny_patterns: [],
                     context_files: ['README.md', 'entry.js', 'lib/util.js', 'test/smoke.test.js'],
-                    validation_commands: [{ program: 'node', args: ['--test', 'test/smoke.test.js'], cwd: '.' }] }],
+                    validation_commands: [{ program: 'node', args: ['--test', 'test/smoke.test.js'], cwd: '.' }] },
+                ...(second ? [{ task_id: TASK_B, title: 'Add Array.isArray guard to countActive', worker: 'worker-2',
+                    owner: 'worker', execution_mode: 'isolated', model: second.model, effort: second.effort,
+                    goal: 'Add Array.isArray guard in countActive, throw TypeError("Expected array") for non-arrays, preserve array behavior.',
+                    risk: 'low', complexity: 'low', category: 'feature', allowed_files: ['lib/count.js'], deny_patterns: [],
+                    context_files: ['README.md', 'lib/count.js', 'test/count.test.js'],
+                    validation_commands: [{ program: 'node', args: ['--test', 'test/count.test.js'], cwd: '.' }] }] : [])],
             }, { timeoutMs: limit });
             check(result.registered === true, 'PLAN_NOT_REGISTERED');
         });
@@ -240,11 +271,36 @@ async function main() {
         await stage('planApproved', APPROVAL_WAIT_MS, (limit) => waitForApproval('plan-r1', limit));
         await stage('isolatedHandoff', 1_200_000, async (limit) => {
             await poll(async () => {
-                if (task()?.waitingContext) await answerContext();
-                return task()?.isolatedHandoff && !Object.values(authority.derive().leases).some((lease) => lease.status === 'active');
+                for (const id of taskIds) if (task(id)?.waitingContext) await answerContext(id);
+                return taskIds.every((id) => task(id)?.isolatedHandoff) && !Object.values(authority.derive().leases).some((lease) => lease.status === 'active');
             }, limit, 'isolated handoff');
             report.handoff = task().isolatedHandoff;
+            if (second) {
+                // Worker leases of the two tasks must overlap in time (SPEC-SQUAD-P5 §4).
+                const leases = Object.values(authority.derive().leases).filter((lease) => lease.owner === 'agy');
+                const span = (id) => { const own = leases.filter((lease) => lease.task_id === id);
+                    return [Math.min(...own.map((l) => Date.parse(l.acquired_at))), Math.max(...own.map((l) => Date.parse(l.released_at || l.expires_at)))]; };
+                const [a, b] = taskIds.map(span);
+                report.parallel = { [TASK_ID]: a.map((t) => new Date(t).toISOString()), [TASK_B]: b.map((t) => new Date(t).toISOString()),
+                    overlapMs: Math.max(0, Math.min(a[1], b[1]) - Math.max(a[0], b[0])) };
+                check(report.parallel.overlapMs > 0, 'NOT_PARALLEL', JSON.stringify(report.parallel));
+            }
         });
+        for (const extra of taskIds.slice(1)) {
+            // Each extra task gets its own reviewer + command QC + integrate gate, one after another.
+            await stage(`qc-${extra}`, 3_600_000, async (limit) => {
+                let held = await client.completeIsolatedTask(report.sessionId, extra, 1, { timeoutMs: limit });
+                while (held.status === 'AWAITING_REVIEW') {
+                    await pause(5_000);
+                    held = await client.completeIsolatedTask(report.sessionId, extra, 1, { timeoutMs: limit });
+                }
+                check(held.status === 'AWAITING_HUMAN_APPROVAL', held.status || 'QC_NOT_HELD', JSON.stringify(held).slice(0, 400));
+                await waitForApproval(`integrate-${extra}`, APPROVAL_WAIT_MS);
+                const done = await client.completeIsolatedTask(report.sessionId, extra, 1, { timeoutMs: limit });
+                check(done.status === 'TASK_VERIFIED', done.status || 'QC_NOT_VERIFIED');
+                report.extraTasks = { ...report.extraTasks, [extra]: { review: task(extra).qcReview, qc: done.status } };
+            });
+        }
         await stage('qcHeldAtIntegrate', 1_800_000, async (limit) => {
             let held = await client.completeIsolatedTask(report.sessionId, TASK_ID, 1, { timeoutMs: limit });
             // With a reviewer, task.qc answers AWAITING_REVIEW until the pushed review settles.
@@ -277,6 +333,13 @@ async function main() {
                 assert.throws(() => activeIds(value), (error) => error instanceof TypeError && error.message === 'Expected array');
             }
             assert.deepEqual(activeIds([{ id: 1, active: true }, { id: 2, active: false }, { id: 3, active: true }]), [1, 3]);
+            if (second) {
+                const { countActive } = require(path.join(root, 'lib/count.js'));
+                for (const value of [null, undefined, {}, 'x', 1]) {
+                    assert.throws(() => countActive(value), (error) => error instanceof TypeError && error.message === 'Expected array');
+                }
+                assert.equal(countActive([{ active: true }, { active: true }, { active: false }]), 2);
+            }
             report.smokeOutput = execFileSync(process.execPath, ['--test', 'test/smoke.test.js'], { cwd: root, encoding: 'utf8', timeout: 20_000 });
             const reference = task().isolatedWorkspace.reference;
             const { workerRoot } = require('../lib/dual/task-workspace').readTaskBinding(root, reference);

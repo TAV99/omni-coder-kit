@@ -143,9 +143,15 @@ Mỗi attempt một phiên mới (Q-P5-4): reviewer không mang định kiến t
 - Lease worker (isolated) chỉ ghi trong worker root → không còn chặn QC của task khác. F5 đổi thành: `task.qc`/integrate chờ khi có lease **integrate** khác đang hoạt động hoặc lease ghi source (shared mode), không chờ lease isolated.
 - Integrate vẫn tuần tự (một lần một task). `integratedConflicts` (hiện có) bắt khi task B đụng file task A vừa integrate → `CONFLICT` → correction.
 
+### 4.2b Đã làm (P5c) — điều chỉnh so với §4.2
+
+- `lib/dual/worker-scheduler.js` `runScheduled`: `runTask` của adapter chạy các task isolated đủ điều kiện qua pool: task bắt đầu khi worker của nó rảnh (1 lượt/worker), runtime còn chỗ (`limits.concurrency` trong `squad.local.json`, mặc định codex 2, claude 2, agy 1 — Q-P5-6) và `allowed_files` không giao task đang chạy (`repoPathsOverlap`); task sau vừa chỗ được chạy trước task trước đang bị chặn; kết quả trả theo thứ tự plan. Plan có task shared → vòng tuần tự cũ.
+- **Giữ F5:** `task.qc`/integrate vẫn chờ khi còn lease worker đang chạy. Lý do (đọc code): quyền ghi của worker isolated (`authorize` trong `isolated-authority`) gắn với `currentBaseline` lúc bắt đầu; integrate task A giữa lượt task B sẽ thu quyền B. Song song chỉ ở phần worker (scout/implement/review); integrate vẫn tuần tự và đi sau các worker đang chạy — các lượt worker dài hơn nhiều so với lượt integrate nên ít tốn thời gian.
+- Handoff nhiều task trên cùng baseline đã được hỗ trợ trước P5 (`integratedConflicts` dựa trên lịch sử integrate).
+
 ### 4.3 Rate limit / đăng nhập
 
-Lỗi rate limit hoặc hết đăng nhập của một runtime → task của runtime đó `WAITING_RUNTIME` (không tốn attempt), task runtime khác chạy tiếp; không tự đổi model (B3). Phân loại lỗi qua `parseResult`/stderr của adapter.
+Lỗi rate limit hoặc hết đăng nhập của một runtime → task của runtime đó `WAITING_RUNTIME` (không tốn attempt), task runtime khác chạy tiếp; không tự đổi model (B3). Phân loại lỗi qua `parseResult`/stderr của adapter. **Chưa làm ở commit P5c:** cần dấu hiệu thật của từng CLI (V37) trước khi phân loại; làm trong commit riêng trước khi đóng DoD P5. Tới lúc đó lỗi rate limit đi theo luật technical retry hiện có.
 
 ---
 
