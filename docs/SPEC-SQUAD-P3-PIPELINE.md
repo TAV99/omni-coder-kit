@@ -249,6 +249,22 @@ UI `omni ui` (P6) sẽ có nút duyệt gọi cùng RPC phía daemon, yêu cầu
 
 Cổng `integrate` **cũng áp dụng** cho dual không squad, vì đây là quyết định an toàn D8 cho mọi người dùng 3.2.0. Thông báo đổi hành vi ghi vào CHANGELOG. Cổng `spec`/`plan` chỉ áp dụng khi có pipeline.
 
+### 5.6 Cách làm thực tế — P3d (2026-11-01)
+
+- **Ledger:** `gate.requested { gate_id, phase, task_id?, digest, summary }`, `gate.approved { gate_id, actor, via, digest }`, `gate.rejected { …, reason }`. Replay giữ `derived.approvals`; quyết định không khớp digest đang chờ → `DUAL_INTEGRITY_CORRUPT` (không ghi được). Hỏi lại cùng digest không thêm event; digest mới mở lại cổng.
+- **`actor/via`:** `human/cli-tty` (người dùng), `auto/pipeline-auto` (AUTO cho cổng `auto_ok`), `test/test-harness` (chỉ seam test trong process — `setTestApprover`, không có cờ/env/RPC nào bật được). Ledger luôn cho biết ai đã duyệt.
+- **Cổng id:** `integrate-<task>`, `spec-r<rev>`, `plan-r<rev>`. Mã xác nhận = 6 hex đầu của `sha256(gate_id:digest)`.
+- **integrate** (`isolated-qc` trước `integrateTaskResultAsync`; `task-revision` trước `promoteRevisionResult`): digest = `result_sha256` / `candidate_sha256`. Chưa duyệt → `AWAITING_HUMAN_APPROVAL` + `gate`; từ chối → `INTEGRATION_REJECTED` + `reason`. Gọi QC lần sau **chạy lại toàn bộ kiểm** rồi mới tích hợp (chấp nhận tốn thêm để không tích hợp từ bằng chứng cũ). Áp dụng mọi project dual (Q-P3-1), AUTO không bỏ.
+- **spec** (`coverage.approve`, H5): có pipeline → lưu submission ở `.omni/runs/dual-gates/spec-<digest>.json`, trả `AWAITING_HUMAN_APPROVAL`; duyệt qua daemon → áp đúng submission đó vào CoverageStore. Không pipeline → như cũ.
+- **plan** (`dispatchWorker`, chỉ khi thật sự sắp dispatch): digest = `plan_sha256`; giữ `worker_start.state = awaiting_approval`; duyệt → daemon dispatch lại.
+- **Chính sách pipeline:** `phaseGatePolicy` — không pipeline: spec/plan không gate; pipeline hỏng → gate (fail closed). **AUTO** = `auto: true` trong `.omni/squad.local.json` (cá nhân), đổi bằng `omni squad auto on|off` (cần TTY).
+- **CLI:** `omni squad approve [gateId] [--reject --reason]` — cần TTY, in tóm tắt + digest đầy đủ, bắt gõ lại mã. Daemon đang chạy → RPC `gate.decide` (daemon là writer duy nhất); daemon vắng/chết (`DUAL_DISCOVERY_MISSING`, `DUAL_CLIENT_CONNECTION_REFUSED`) → ghi thẳng store; daemon chậm/timeout → báo lỗi, không ghi song song.
+- **Không có MCP tool duyệt.** `omni_dual_status` thêm `awaiting_gate`; `omni_dual_completion` cho qua `AWAITING_HUMAN_APPROVAL/INTEGRATION_REJECTED` kèm `gate`. Workflow `dual-controller.md` dặn Codex báo người dùng, không tự chạy.
+- **Hook (V15):** `hook-bridge` chặn `PreToolUse` cho **mọi** tool khi input khớp `omni … squad|dual approve|auto` (chuỗi hoặc mảng argv, mọi cách gọi binary) hoặc `gate.decide`; chạy trước mọi tra cứu daemon nên không rơi vào nhánh fail-open.
+- **Mô hình đe dọa (V16):** chặn agent duyệt nhầm/theo thói quen; không chống agent cố tình mở PTY để gõ mã. Đường mạnh hơn là UI P6 với token phiên.
+- **Test cũ:** 7 file viết trước cổng nạp `test/helpers/auto-approve-gates.js`; hành vi cổng có test riêng (`dual-approval-gates.test.js`, 2 test e2e trong `dual-isolated-runner.test.js`, spec+plan qua daemon trong `dual-coverage-daemon.test.js`).
+- **Chưa làm:** shared mode (worker sửa thẳng workspace chính) không có bước integrate tách riêng nên không có cổng integrate; ghi rõ, chưa đổi.
+
 ---
 
 ## 6. `omni squad` là lệnh chính (P3e)

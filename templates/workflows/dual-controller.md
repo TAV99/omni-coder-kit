@@ -130,6 +130,10 @@ For isolated QC, call `omni_dual_completion` with `isolated_qc: {"task_id":"TASK
 Then run isolated QC without caller-built review evidence. The compatibility CLI option `--review-evidence` remains available as an alias for a review-submission file, but legacy files containing policy/result/evidence hashes are rejected.
 The daemon runs exact registered validators, rechecks private evidence, binds independent review evidence, integrates under Codex authority, and records task completion only with valid integration evidence.
 
+### Human approval gates
+
+Integration waits for the user. When isolated QC passes, `omni_dual_completion` returns `AWAITING_HUMAN_APPROVAL` with a `gate` (`gate_id`, `summary`, `how`); the source is unchanged. Tell the user the summary and ask them to run `how` (`omni squad approve <gate_id>`) in their own terminal, then call isolated QC again: it re-runs the checks and integrates only the exact approved result. `INTEGRATION_REJECTED` carries the user's reason; request a bounded correction. With `.omni/squad/pipeline.yaml`, `coverage.approve` and the first dispatch of a plan also wait at `spec-r<N>` / `plan-r<N>` gates (`omni_dual_status` shows `awaiting_gate`). Never run `omni squad approve`, `omni squad auto` or the `gate.decide` RPC yourself: approving is the user's decision, the command needs a terminal and the hook denies it.
+
 ### Post-integration acceptance correction
 
 When the session is in `ACCEPTANCE` state, prepare a fresh execution through `omni_dual_acceptance_review_prepare` (or `omni dual acceptance prepare <task-id> --plan-revision <n> --json`), then submit findings through `omni_dual_acceptance_review_submit` (or `omni dual acceptance submit <task-id> --plan-revision <n> --review-submission <file>`). The daemon binds and attests the findings to the registered policy, current integrated diff fingerprint and verified task result. A failed required session check creates the durable correction gate.

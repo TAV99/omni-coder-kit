@@ -38,7 +38,7 @@ const {
     handleDualAcceptanceComplete,
     handleDualBlock,
 } = require('../lib/commands/dual');
-const { handleSquadRuntimes, handleSquadSetup, handleSquadSkills, handleSquadPipeline } = require('../lib/commands/squad');
+const { handleSquadRuntimes, handleSquadSetup, handleSquadSkills, handleSquadPipeline, handleSquadApprove, handleSquadAuto } = require('../lib/commands/squad');
 
 // `omni skills` no-arg = auto-equip + status (one-stop "show me my skills").
 async function handleSkillsDefault(options = {}) {
@@ -316,6 +316,16 @@ squad.command('pipeline')
 squad.command('skills [action]')
     .description('Bộ skill theo vai: status (mặc định) | sync (mount lại bộ của orchestrator)')
     .action(handleSquadSkills);
+
+squad.command('approve [gateId]')
+    .description('Duyệt cổng spec/plan/integrate (cần terminal, gõ mã xác nhận); không có gateId → liệt kê cổng đang chờ')
+    .option('--reject', 'Từ chối thay vì duyệt')
+    .option('--reason <text>', 'Lý do từ chối (bắt buộc khi --reject)')
+    .action(handleSquadApprove);
+
+squad.command('auto [state]')
+    .description('AUTO on|off: bỏ qua cổng có auto_ok (spec/plan); cổng integrate luôn chờ người')
+    .action(handleSquadAuto);
 
 // ---------------------------------------------------------------------------
 // Hidden utility commands (not aliases of the main groups — power-user tools)

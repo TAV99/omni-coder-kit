@@ -1,5 +1,7 @@
 'use strict';
 
+require('./helpers/auto-approve-gates');
+
 const { withDiscussion } = require('./helpers/dual-discussion-stub');
 
 function createOrchestratorAdapter(options) {

@@ -1,5 +1,7 @@
 'use strict';
 
+require('./helpers/auto-approve-gates');
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
