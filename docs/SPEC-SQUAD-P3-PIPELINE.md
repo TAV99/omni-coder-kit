@@ -196,6 +196,17 @@ P3c chia ba commit: **P3c-1** contract + sửa H7/H8, **P3c-2** nối preflight/
 - Scout/review của worker codex đi qua discussion transport hiện có (codex adapter discussion đã có `live-codex-invoke`).
 - D18: orchestrator và worker cùng codex → hai session riêng; resume luôn bằng session id của vai; cảnh báo chung quota (đã có ở P2).
 
+### 4.4b Cách làm thực tế — P3c-3 (2026-11-01)
+
+- **Chọn runtime worker:** `resolveConfiguredWorkerRuntime` (`agy-model.js`) — option `workerRuntime` → `.omni/manifest.json workerRuntime` → `OMNI_DUAL_WORKER_RUNTIME` → `agy`. `omni squad setup` ghi `workerRuntime` cùng `workerModel/workerEffort`. `engineSupport` nhận worker `agy | codex`.
+- **Mã chỗ giữ nguyên (P3b):** worker codex vẫn ở chỗ `agy` (task owner, lease, binding discussion `provider: 'agy'`, state `AGY_*`). Không đổi ledger, không đổi hash binding.
+- **Implement (headless) — `lib/dual/worker-runtime.js`:** `buildWorkerInvocation` — agy giữ argv cũ y byte; codex dựng bằng `codex.buildHeadless`: worker root → `full-auto` + `-c project_root_markers=[]`; shared → `-s workspace-write`; phase khác → `read-only`; prompt vẫn chỉ trỏ file input. `extractWorkerPayload` đọc bằng `codex.parseResult`, ánh xạ lỗi về đúng mã `DUAL_AGY_*` để luật retry giữ nguyên. Recovery đọc lại stdout thô theo runtime worker.
+- **Schema strict cho codex (V17):** `--output-schema` của codex chạy strict mode → `workerOutputSchema` bỏ `toolAction/toolSummary` (riêng agy) và qua `strictJsonSchema` (mọi key required, key optional thành `anyOf [.., null]`); reply qua `stripNullOptionals` (chỉ dùng nhánh union khớp `const`) trước zod.
+- **Probe:** preflight dùng adapter của runtime worker (cache codex vắng → tin version); orchestrator standalone dùng `probeCodexWorker`. Đọc cache `~/.codex` nằm trong `worker-runtime.js` — orchestrator vẫn không chạm home (guard e2e).
+- **Discussion (scout/review) — `discussion/worker-slot.js`:** chỗ worker dùng `createCodexAdapter({ provider: 'agy', readOnlyResume, isolatedRoot })` và `seedCodexConversation` khi runtime là codex. Conversation riêng với orchestrator (D18). Resume ép `-c sandbox_mode="read-only"`; trong worker root thêm `project_root_markers=[]`. Dùng ở `session.js` và cả hai nhánh (shared/isolated) của `daemon-server`.
+- **Sửa lỗi P3c-1 lộ ra:** binding discussion bắt buộc có effort; model có hậu tố mức hoặc Claude-qua-agy giờ không cấu hình effort → `effectiveWorkerEffort` ghi hậu tố, hoặc dấu `model-default` (không bao giờ thành `--effort`).
+- **Chưa kiểm sống:** V19 (implement full-auto thật của codex) — xem phụ lục.
+
 ---
 
 ## 5. Cổng duyệt của người dùng (P3d)
@@ -318,3 +329,12 @@ Máy kiểm: macOS arm64, `codex-cli 0.166.0`, `agy 1.4.12`; model rẻ (`gpt-6-
 | V14 | agy bị từ chối quyền (yêu cầu chạy `ls` ở `--mode accept-edits`, không bỏ quyền): exit 0, `status: "SUCCESS"`, `response: ""`, **không có `structured_output`**, **`denied_actions: [{ action: "command", display_name: "RunCommand" }]` ở cấp ngoài cùng**; stderr có gợi ý `permissions.allow`. | Khẳng định H8 và Q5: `denied_actions` khác rỗng → `completion: failed`, `SQUAD_RUNTIME_DENIED_ACTIONS` |
 | V15 | Hook `PreToolUse` của Codex chặn được lệnh: stdout `{"hookSpecificOutput":{"permissionDecision":"deny",…}}` hoặc `{"decision":"block","reason":…}`, hoặc exit 2 kèm lý do ở stderr; input hook có `tool_name`, `tool_input.command`. **Fail-open**: hook lỗi, hết giờ, exit khác 0/2 hoặc JSON hỏng → lệnh vẫn chạy. `lib/dual/hook-bridge.js` đã xử lý `PreToolUse` và nhánh `deny`. | Luật chặn `omni squad approve` đặt ở hook-bridge; matcher phải phủ **mọi** công cụ chạy shell của Codex (Bash/`exec_command`/unified exec), và hook-bridge phải trả `deny` chắc chắn cho mẫu này (không để rơi vào nhánh lỗi → fail-open) |
 | V16 | Ở `codex exec` (headless), lệnh shell **không có TTY** (`STDIN_NOTTY`, `STDOUT_NOTTY`). Nhưng tài liệu Codex cho thấy bộ chạy lệnh hỗ trợ `tty: true` (PTY) — trong phiên tương tác, agent **có thể** mở PTY. | **Điều kiện TTY + mã xác nhận chỉ chặn chạy nhầm, không chặn agent cố ý** (agent trong PTY thấy mã và gõ lại được). Hàng rào chính là hook (V15). Rủi ro còn lại: hook fail-open hoặc project chưa trust hook → ghi rõ trong mô hình đe dọa §5.3; đường duyệt mạnh hơn là UI P6 (token phiên chỉ người dùng có) |
+
+## Phụ lục — Kết quả kiểm V17–V19 (2026-11-01, codex-cli 0.166.0, model gpt-6-luna)
+
+| # | Kiểm | Kết quả |
+|---|---|---|
+| V17 | `codex exec --output-schema` với schema evidence thật của dual | Bị từ chối 400 `invalid_json_schema`: *"'schema.required' is required to include every key in properties. Missing 'toolAction'"*. Sau `workerOutputSchema` (strict) → chạy được, reply qua `EvidenceSchema` (zod) hợp lệ. Output lưu `test/fixtures/squad-cli/codex-exec-evidence-strict.jsonl`. |
+| V18 | Worker codex trong discussion: seed `-s read-only -c project_root_markers=[]` rồi `exec resume ... -c sandbox_mode="read-only" -c project_root_markers=[]` trong git root riêng | Seed trả thread id; resume exit 0, `completion: succeeded`, conversation khớp, payload đúng. |
+| V19 | Implement thật: `full-auto` trong worker root, sửa file + trả evidence | **Chưa chạy** — bộ phân loại quyền của phiên chặn lệnh codex bỏ qua sandbox. Cần người dùng chạy tay (lệnh trong ghi chú bàn giao). Đường này đã có test e2e với process giả. |
+

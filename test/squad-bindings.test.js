@@ -56,12 +56,16 @@ test('D18 warnings: shared account and same-family QC', () => {
 
 test('engine support and legacy manifest fields', () => {
     assert.deepEqual(engineSupport(parseBinding(dual())), { supported: true, reasons: [] });
-    assert.ok(!engineSupport(parseBinding(dual({ id: 'worker-1', runtime: 'codex', model: 'gpt-6.1-sol' }))).supported);
+    // P3c-3: codex can fill the worker slot; orchestrator and worker keep separate sessions (D18).
+    assert.deepEqual(engineSupport(parseBinding(dual({ id: 'worker-1', runtime: 'codex', model: 'gpt-6.1-sol', effort: 'high' }))),
+        { supported: true, reasons: [] });
+    assert.deepEqual(legacyManifestFields(parseBinding(dual({ id: 'worker-1', runtime: 'codex', model: 'gpt-6.1-sol', effort: 'high' })), readyReports()),
+        { workerRuntime: 'codex', workerModel: 'gpt-6.1-sol', workerEffort: 'high' });
     // Since H7 (P3c-1) dual runs agy Claude models without --effort.
     assert.deepEqual(engineSupport(parseBinding(dual({ id: 'worker-1', runtime: 'agy', model: 'claude-sonnet-4-6' }))), { supported: true, reasons: [] });
     assert.deepEqual(legacyManifestFields(parseBinding(dual()), readyReports()),
-        { workerModel: 'gemini-3.8-flash-high', workerEffort: 'high' }, 'effort comes from the model suffix');
+        { workerRuntime: 'agy', workerModel: 'gemini-3.8-flash-high', workerEffort: 'high' }, 'effort comes from the model suffix');
     const claude = legacyManifestFields(parseBinding(dual({ id: 'worker-1', runtime: 'agy', model: 'claude-sonnet-4-6' })), readyReports());
-    assert.deepEqual(JSON.parse(JSON.stringify({ workerModel: 'old', workerEffort: 'high', ...claude })), { workerModel: 'claude-sonnet-4-6' },
+    assert.deepEqual(JSON.parse(JSON.stringify({ workerModel: 'old', workerEffort: 'high', ...claude })), { workerRuntime: 'agy', workerModel: 'claude-sonnet-4-6' },
         'a stale effort is cleared');
 });
