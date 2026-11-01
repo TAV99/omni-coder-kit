@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a194ac-ea67-7882-9554-a5fe611443cb"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll run that command exactly as provided and report the output verbatim."}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -c \"sh -c 'if [ -t 0 ]; then echo STDIN_TTY; else echo STDIN_NOTTY; fi; if [ -t 1 ]; then echo STDOUT_TTY; else echo STDOUT_NOTTY; fi'\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -c \"sh -c 'if [ -t 0 ]; then echo STDIN_TTY; else echo STDIN_NOTTY; fi; if [ -t 1 ]; then echo STDOUT_TTY; else echo STDOUT_NOTTY; fi'\"","aggregated_output":"STDIN_NOTTY\nSTDOUT_NOTTY\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"STDIN_NOTTY\nSTDOUT_NOTTY"}}
+{"type":"turn.completed","usage":{"input_tokens":39468,"cached_input_tokens":27520,"cache_write_input_tokens":0,"output_tokens":114,"reasoning_output_tokens":0}}

@@ -225,10 +225,10 @@ Cổng `integrate` **cũng áp dụng** cho dual không squad, vì đây là quy
 
 | # | Câu hỏi | Đề xuất |
 |---|---|---|
-| Q-P3-1 | Cổng `integrate` áp dụng cả dual không squad (§5.5)? | **Có** — đúng tinh thần D8; ghi CHANGELOG |
-| Q-P3-2 | Mức bảo vệ cổng: TTY + mã xác nhận + hook chặn đủ chưa, hay cần ký bằng khóa riêng của người dùng? | TTY + mã + hook cho 3.2.0; ký khóa để sau |
-| Q-P3-3 | Có làm codex-làm-worker ngay P3 (§4.4) hay để P4 cùng OpenCode? | **Ngay P3** — đó là phép thử đầu tiên rằng worker không còn gắn agy |
-| Q-P3-4 | `omni_dual_coverage_approve` (H5) với project squad: bỏ hẳn hay chỉ "chuẩn bị"? | Chỉ chuẩn bị (§5.3) để Codex vẫn trình được coverage cho người dùng |
+| Q-P3-1 | Cổng `integrate` áp dụng cả dual không squad (§5.5)? | **Đã chốt 2026-11-01: có** — đúng tinh thần D8; ghi CHANGELOG |
+| Q-P3-2 | Mức bảo vệ cổng: TTY + mã xác nhận + hook chặn đủ chưa, hay cần ký bằng khóa riêng của người dùng? | **Đã chốt: TTY + mã + hook cho 3.2.0**; ký khóa để sau |
+| Q-P3-3 | Có làm codex-làm-worker ngay P3 (§4.4) hay để P4 cùng OpenCode? | **Đã chốt: ngay P3** — phép thử đầu tiên rằng worker không còn gắn agy |
+| Q-P3-4 | `omni_dual_coverage_approve` (H5) với project squad: bỏ hẳn hay chỉ "chuẩn bị"? | **Đã chốt: chỉ chuẩn bị** (§5.3) để Codex vẫn trình được coverage cho người dùng |
 
 ---
 
@@ -277,3 +277,17 @@ Kết quả ghi vào phụ lục spec này trước commit đầu của P3c/P3d.
 - [ ] `npm test` xanh trên macOS + một lượt dưới tải.
 - [ ] Phụ lục V12–V16 đã ghi.
 - [ ] Linux/Windows thật: hoãn (SQUAD-ARCHITECTURE-PLAN §11).
+
+---
+
+## Phụ lục — Kết quả kiểm V12–V16 (2026-11-01)
+
+Máy kiểm: macOS arm64, `codex-cli 0.166.0`, `agy 1.4.12`; model rẻ (`gpt-6-luna`/`low`, `gemini-3.8-flash-low`), thư mục tạm đã xóa. Output thật lưu ở `test/fixtures/squad-cli/` để làm fixture cho test `parseResult` của P3c.
+
+| # | Kết quả | Ảnh hưởng |
+|---|---|---|
+| V12 | `codex exec --json --output-schema` → JSONL 4 sự kiện: `thread.started` (`thread_id` = session ref), `turn.started`, `item.completed` với `item.type: "agent_message"` và **payload theo schema nằm trong `item.text` dưới dạng chuỗi JSON**, `turn.completed` có `usage` (`input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens`). Lệnh shell xuất hiện thành `item.type: "command_execution"` với `aggregated_output`. Lưu ý: chạy tay phải đóng stdin (`< /dev/null`), nếu không codex chờ đọc thêm. | `codex.parseResult`: payload = `JSON.parse` của `agent_message.text` cuối cùng; `sessionRef` = `thread_id`; `turn.failed` → failed |
+| V13 | agy `-p --output-format json --json-schema` → JSON một object: `status: "SUCCESS"`, `conversation_id`, `response` (cùng nội dung dạng chuỗi), **`structured_output` (object đã parse)**, `json_schema`, `usage` (`input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens`). | `agy.parseResult`: payload = `structured_output`; không có thì thử parse `response` |
+| V14 | agy bị từ chối quyền (yêu cầu chạy `ls` ở `--mode accept-edits`, không bỏ quyền): exit 0, `status: "SUCCESS"`, `response: ""`, **không có `structured_output`**, **`denied_actions: [{ action: "command", display_name: "RunCommand" }]` ở cấp ngoài cùng**; stderr có gợi ý `permissions.allow`. | Khẳng định H8 và Q5: `denied_actions` khác rỗng → `completion: failed`, `SQUAD_RUNTIME_DENIED_ACTIONS` |
+| V15 | Hook `PreToolUse` của Codex chặn được lệnh: stdout `{"hookSpecificOutput":{"permissionDecision":"deny",…}}` hoặc `{"decision":"block","reason":…}`, hoặc exit 2 kèm lý do ở stderr; input hook có `tool_name`, `tool_input.command`. **Fail-open**: hook lỗi, hết giờ, exit khác 0/2 hoặc JSON hỏng → lệnh vẫn chạy. `lib/dual/hook-bridge.js` đã xử lý `PreToolUse` và nhánh `deny`. | Luật chặn `omni squad approve` đặt ở hook-bridge; matcher phải phủ **mọi** công cụ chạy shell của Codex (Bash/`exec_command`/unified exec), và hook-bridge phải trả `deny` chắc chắn cho mẫu này (không để rơi vào nhánh lỗi → fail-open) |
+| V16 | Ở `codex exec` (headless), lệnh shell **không có TTY** (`STDIN_NOTTY`, `STDOUT_NOTTY`). Nhưng tài liệu Codex cho thấy bộ chạy lệnh hỗ trợ `tty: true` (PTY) — trong phiên tương tác, agent **có thể** mở PTY. | **Điều kiện TTY + mã xác nhận chỉ chặn chạy nhầm, không chặn agent cố ý** (agent trong PTY thấy mã và gõ lại được). Hàng rào chính là hook (V15). Rủi ro còn lại: hook fail-open hoặc project chưa trust hook → ghi rõ trong mô hình đe dọa §5.3; đường duyệt mạnh hơn là UI P6 (token phiên chỉ người dùng có) |
