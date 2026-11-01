@@ -181,10 +181,10 @@ Kết quả ghi vào phụ lục spec này trước commit đầu của P4a/P4b/
 - [x] `omni squad runtimes` thấy claude: version, đăng nhập, model.
 - [x] Conformance pass cho ba adapter codex, agy, claude.
 - [x] Vòng chạy thật **orchestrator codex + worker claude** qua daemon: cổng plan → 7 phase → QC → cổng integrate → `TASK_VERIFIED` (V-live-2).
-- [ ] (P4c) Vòng chạy thật **orchestrator claude + worker agy hoặc codex**.
-- [ ] Worker claude không đọc `CLAUDE.md`/skill/hook của project (V26 trong vòng chạy thật).
-- [ ] `npm test` xanh trên macOS + một lượt dưới tải.
-- [ ] Phụ lục V22–V31 đã ghi.
+- [x] (P4c) Vòng chạy thật **orchestrator claude + worker agy hoặc codex** (V-live-3).
+- [x] Worker claude không đọc `CLAUDE.md`/skill/hook của project (V26, R3, V29, V32 với argv thật của adapter).
+- [x] `npm test` xanh trên macOS + một lượt dưới tải (3031 test).
+- [x] Phụ lục V22–V32 + vòng thật đã ghi.
 
 ---
 
@@ -212,5 +212,6 @@ Kết quả ghi vào phụ lục spec này trước commit đầu của P4a/P4b/
 
 | V28 ✓ | Hook `.claude/settings.json` thật: payload `SessionStart` (`session_id, cwd, hook_event_name, source, transcript_path`), `UserPromptSubmit` (+`prompt`), `PreToolUse` (+`tool_name, tool_input, tool_use_id, permission_mode`), `PostToolUse` (+`tool_response`), `Stop` (+`stop_hook_active`). `Write` → `{file_path, content}`, `Edit` → `{file_path, old_string, new_string, replace_all}`, MCP → `mcp__<server>__<tool>` (+`mcp_server`). Hook trả `hookSpecificOutput.permissionDecision: deny` → tool không chạy, có trong `permission_denials`. Fixture `claude-hook-payloads.ndjson`. |
 | V30 ✓ | `.mcp.json` của project + `enabledMcpjsonServers` trong `.claude/settings.json` → `claude -p` gọi được tool MCP project (`PONG-V30`). |
+| V-live-3 ✓ | Vòng thật **orchestrator claude `sonnet` low + worker agy `gemini-3.8-flash-high`**: setup ghi `.mcp.json` + `.claude/settings.json`, astra seed bằng claude (binding `codex/astra/sonnet`), cổng plan giữ → người duyệt → 7 phase → QC giữ ở integrate → người duyệt → `TASK_VERIFIED`; ledger `human/cli-tty` cả hai cổng; 6 phút. |
 | V30b ✓ | Workspace do `omni squad setup --bind orchestrator=claude:…` dựng: `claude -p` gọi `omni_dual_status` (server trả lỗi thiếu tham số → server sống), hook `SessionStart/UserPromptSubmit` chạy `omni-hook` và bật daemon, `PreToolUse` chặn `omni squad approve plan-r1` với lời nhắn chỉ người dùng được duyệt. | Fixture: `test/fixtures/squad-cli/claude-*.json` lấy từ các lượt trên.
 
