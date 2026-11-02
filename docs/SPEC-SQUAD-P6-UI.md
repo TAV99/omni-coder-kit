@@ -129,6 +129,12 @@ Không parse chữ hiển thị trên terminal (plan §4.3): timeline lấy từ
 - CLI thoát → UI hiện "orchestrator đã thoát (exit N)" + nút chạy lại.
 - `node-pty` thiếu (cài lỗi/không có bản build) → pane chính hiện hướng dẫn cài + lệnh chạy CLI tay trong terminal; phần còn lại của UI vẫn chạy (chế độ chỉ đọc).
 - Resume phiên orchestrator: chạy lại dùng session của vai nếu adapter có `buildResume` tương tác (D18: không resume ngầm `--last`) — V43.
+- *Đã làm ở P6b:*
+  - `omni ui` tự chạy orchestrator khi mở (`--no-start` để chờ nút Start, `--resume` để mở lại phiên trước). `interactiveCommand` nhận `session`: claude `{ newId }` → `--session-id` (omni chọn id), `{ resumeId }` → `--resume`; codex chỉ `{ resumeId }` → `codex resume <id>`, id lấy từ dòng `codex resume <id>` CLI in khi thoát. Id lưu ở `.omni/ui/orchestrator.json` (ngoài `.omni/runs`).
+  - Tab attach đầu tiên được gõ; tab gõ rời đi thì không ai gõ tới khi một tab bấm "Take control". Route: `GET /api/pty/stream` (SSE, `hello` cấp `client_id`, dữ liệu là chuỗi JSON, `Last-Event-ID` = số thứ tự chunk, `reset` khi phần thiếu đã rời bộ đệm), `POST /api/pty/{start,claim,input,resize}` chỉ nhận `application/json` (form thường không gửi được).
+  - PTY host sửa quyền `spawn-helper` (V39) và xóa biến đánh dấu phiên agent cha (V40); trang gửi Enter thành lần ghi riêng (V40).
+  - CSP thêm `style-src 'unsafe-inline'` vì xterm.js chèn `<style>` lúc chạy; `script-src` vẫn chỉ `'self'`.
+  - Tắt `omni ui` (Ctrl-C) gửi SIGHUP cho CLI orchestrator.
 
 ---
 

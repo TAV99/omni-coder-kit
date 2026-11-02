@@ -340,9 +340,11 @@ squad.command('auto [state]')
     .action(handleSquadAuto);
 
 program.command('ui')
-    .description('Trang web local (chỉ đọc) cho project squad: vai, task, cổng duyệt, timeline')
+    .description('Trang web local cho project squad: vai, task, cổng duyệt, timeline, terminal orchestrator')
     .option('--port <n>', 'Cổng lắng nghe trên 127.0.0.1 (mặc định: cổng trống bất kỳ)')
     .option('--no-open', 'Không tự mở trình duyệt')
+    .option('--no-start', 'Không tự chạy CLI orchestrator (bấm Start trong trang)')
+    .option('--resume', 'Chạy lại phiên orchestrator lần trước omni ui đã mở')
     .action(handleUi);
 
 // ---------------------------------------------------------------------------

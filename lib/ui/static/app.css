@@ -32,6 +32,18 @@ ol.list { list-style: decimal inside; }
 .state.ok { color: var(--ok); border-color: var(--ok); }
 .state.warn { color: var(--warn); border-color: var(--warn); }
 .state.bad { color: var(--bad); border-color: var(--bad); }
+.main { min-width: 0; display: flex; flex-direction: column; }
+.console { padding: 14px 16px 0; }
+.console-bar { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.console-bar h2 { margin: 0; }
+.console-bar .actions { margin-left: auto; display: flex; gap: 6px; }
+.console-bar button { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; }
+.console-bar button:hover { border-color: var(--accent); }
+.term { height: 60vh; min-height: 260px; background: #111; border-radius: 6px; padding: 6px; overflow: hidden; }
+.term.readonly { opacity: .8; }
+.term-help { border: 1px dashed var(--line); border-radius: 6px; padding: 12px 14px; }
+.term-help p { margin: 0 0 8px; }
+.term-help code { display: inline-block; user-select: all; }
 .timeline { padding: 14px 16px; min-width: 0; }
 .filters { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; }
 .filters h2 { margin: 0; }

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>omni squad</title>
+<link rel="stylesheet" href="/vendor/xterm.css">
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
@@ -22,6 +23,24 @@
     <section><h2>Running</h2><ul id="leases" class="list"></ul></section>
     <ul id="errors" class="list errors"></ul>
   </aside>
+  <div class="main">
+  <section class="console">
+    <div class="console-bar">
+      <h2>Orchestrator</h2>
+      <span id="pty-status" class="muted"></span>
+      <span class="actions">
+        <button id="pty-start" type="button" hidden>Start</button>
+        <button id="pty-resume" type="button" hidden>Resume last session</button>
+        <button id="pty-claim" type="button" hidden>Take control</button>
+      </span>
+    </div>
+    <div id="term" class="term"></div>
+    <div id="term-help" class="term-help" hidden>
+      <p id="term-help-reason"></p>
+      <p>The rest of this page still works. To run the orchestrator yourself, open a terminal in this project and run:</p>
+      <code id="term-help-command"></code>
+    </div>
+  </section>
   <section class="timeline">
     <div class="filters">
       <h2>Timeline</h2>
@@ -30,7 +49,10 @@
     </div>
     <ol id="feed" class="feed"></ol>
   </section>
+  </div>
 </main>
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
