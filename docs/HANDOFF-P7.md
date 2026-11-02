@@ -1,7 +1,7 @@
 # Bàn giao — omni squad 3.2.0, từ P7 trở đi
 
 > Viết ngày 2026-11-02 khi bàn giao từ Claude (Opus 5.5, Claude Code) sang một agent khác. Tài liệu này **tự đủ**: agent tiếp nhận không có lịch sử hội thoại trước đó. Đọc hết §0–§4 trước khi chạm vào code.
-> Branch `3.2.0`, HEAD lúc bàn giao **`f02543a`**. Không có thay đổi chưa commit trong code; trong cây làm việc chỉ còn vài file không theo dõi, do công cụ của người dùng sinh ra.
+> Branch `3.2.0`. Commit code cuối là **`f02543a`**; các commit sau đó (từ `bdde019`) chỉ là tài liệu bàn giao. Không có thay đổi chưa commit trong code; trong cây làm việc chỉ còn vài file không theo dõi, do công cụ của người dùng sinh ra.
 
 ---
 
@@ -345,4 +345,4 @@ Phân loại theo spec §6.1. Fixture lấy từ dấu hiệu thật đã gặp;
 
 ## 11. Prompt gợi ý cho agent tiếp nhận
 
-> Bạn tiếp nhận dự án omni-coder-kit ở branch `3.2.0` (HEAD f02543a). Đọc `docs/HANDOFF-P7.md` §0–§4, rồi `docs/SPEC-SQUAD-P7-ACCEPTANCE.md`. Tuân thủ §2 (không push, test xanh hai lượt trước mỗi commit, chỉ người dùng duyệt cổng). Chạy `npm test` một lần để xác nhận đang xanh (3103 test). Sau đó làm **P7a** theo §10, báo tiến độ bằng tiếng Việt, và hỏi người dùng trước mỗi quyết định không có trong spec.
+> Bạn tiếp nhận dự án omni-coder-kit ở branch `3.2.0` (commit code cuối f02543a). Đọc `docs/HANDOFF-P7.md` §0–§4, rồi `docs/SPEC-SQUAD-P7-ACCEPTANCE.md`. Tuân thủ §2 (không push, test xanh hai lượt trước mỗi commit, chỉ người dùng duyệt cổng). Chạy `npm test` một lần để xác nhận đang xanh (3103 test). Sau đó làm **P7a** theo §10, báo tiến độ bằng tiếng Việt, và hỏi người dùng trước mỗi quyết định không có trong spec.
