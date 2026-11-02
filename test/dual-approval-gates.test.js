@@ -139,6 +139,7 @@ test('omni squad auto: shows the state freely, changes it only on a TTY', (t) =>
 test('Codex hook denies gate decisions for any tool shape, without asking the daemon', async (t) => {
     const { root } = session(t);
     for (const toolInput of [{ command: 'omni squad approve integrate-T-1' }, { command: ['node', 'bin/omni.js', 'squad', 'approve'] },
+        { command: 'omni squad approve --all' }, { command: ['node', 'bin/omni.js', 'squad', 'approve', '--all', '--reject', '--reason', 'changes'] },
         { cmd: 'npx omni-coder-kit squad auto on' }, { command: 'curl -d \'{"method":"gate.decide"}\' localhost' }]) {
         const out = await evaluateHook({ session_id: 'codex', cwd: root, hook_event_name: 'PreToolUse', turn_id: 'turn-1',
             tool_name: 'exec_command', tool_use_id: 'call-1', tool_input: toolInput },

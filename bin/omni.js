@@ -331,6 +331,7 @@ addSessionCommands(squad);
 
 squad.command('approve [gateId]')
     .description('Duyệt cổng spec/plan/integrate (cần terminal, gõ mã xác nhận); không có gateId → liệt kê cổng đang chờ')
+    .option('--all', 'Duyệt hoặc từ chối mọi cổng đang chờ bằng một mã xác nhận')
     .option('--reject', 'Từ chối thay vì duyệt')
     .option('--reason <text>', 'Lý do từ chối (bắt buộc khi --reject)')
     .action(handleSquadApprove);
