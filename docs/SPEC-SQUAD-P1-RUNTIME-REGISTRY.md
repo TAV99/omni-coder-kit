@@ -421,13 +421,15 @@ Kèm commit P1a: cập nhật `SQUAD-ARCHITECTURE-PLAN.md` §10-P1 theo điều 
 
 ## 13. Điều kiện xong P1 (DoD)
 
-- [ ] `npm test` xanh; test cũ không đổi assertion.
-- [ ] Conformance §11.1 pass cho codex và agy.
-- [ ] `omni squad runtimes` trên máy dev macOS báo cả hai `ready` với version/model thật.
+- [x] `npm test` xanh; test cũ không đổi assertion.
+- [x] Conformance §11.1 pass cho codex và agy.
+- [x] `omni squad runtimes` trên máy dev macOS báo cả hai `ready` với version/model thật.
 - [x] Unit Windows (fixture `win32`) pass.
 - [ ] **Hoãn (người dùng quyết, 2026-11-01):** chạy `omni squad runtimes` và `npm test` trên máy Linux và Windows thật. Toàn bộ 3.2.0 hoàn thiện trên macOS trước; sau đó người dùng mang repo sang hai hệ điều hành kia để kiểm, phát triển và sửa lỗi nếu có. Kết quả ghi vào phụ lục spec này.
-- [ ] `lib/squad/**` không require `lib/dual/**`/`lib/harness/**`.
-- [ ] Không thêm dependency.
+- [x] `lib/squad/**` không require `lib/dual/**`/`lib/harness/**`.
+- [x] Không thêm dependency.
+
+> Kiểm lại 2026-11-02 (trước P7): `npm test` 3093 xanh (cả lượt dưới tải); conformance 28/28 (codex, agy, claude); `omni squad runtimes` báo codex 0.166.0, agy 1.4.12, claude 2.1.316 đều `ready`; `lib/squad/**` không require `lib/dual`/`lib/harness`. Phụ thuộc thêm về sau đều đã được duyệt ở pha của nó: `yaml` (P2), `optionalDependencies` node-pty/xterm (P6, Q-P6-2).
 
 ---
 
