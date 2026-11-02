@@ -2,7 +2,7 @@
 
 > File này dành cho Claude Code khi **phát triển chính omni-coder-kit** (không phải file omni sinh ra cho project người dùng). Đọc đầu mỗi phiên.
 
-> **Branch `3.2.0` (omni squad) — bàn giao 2026-11-02:** agent tiếp nhận đọc [`docs/HANDOFF-P7.md`](docs/HANDOFF-P7.md) trước tiên (trạng thái P1–P6, quy tắc, kế hoạch P7).
+> **Branch `3.2.0` (omni squad), handoff 2026-11-02:** any agent developing omni-coder-kit reads [`docs/HANDOFF-P7.md`](docs/HANDOFF-P7.md) first (P1–P6 status, working rules, P7 plan). Write docs and comments in English; talk to the user in Vietnamese.
 
 ## Bối cảnh dự án
 - `omni-coder-kit` là CLI (Node.js, CommonJS) inject mindset + SDLC workflow + skills vào các AI coding agent, và đang được nâng cấp thành **agent harness** (`lib/harness/`).
