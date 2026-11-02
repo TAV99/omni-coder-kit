@@ -157,11 +157,11 @@ Không parse chữ hiển thị trên terminal (plan §4.3): timeline lấy từ
 
 | # | Câu hỏi | Đề xuất |
 |---|---|---|
-| Q-P6-1 | Giao vận UI ↔ server: WebSocket (thêm `ws`) hay SSE + POST (không thêm gì)? | **SSE + POST** — không phụ thuộc runtime mới; loopback nên đủ nhanh cho gõ phím. |
-| Q-P6-2 | Tài nguyên xterm: `@xterm/xterm` + `@xterm/addon-fit` là `optionalDependencies` phục vụ offline, hay tải từ CDN? | **optionalDependencies**, phục vụ từ `node_modules` (offline, phiên bản ghim, CSP `'self'`). |
-| Q-P6-3 | `@worker-N` / `@reviewer` ở 3.2.0: ghi chú cho lượt kế, hay can thiệp ngay vào lượt đang chạy? | **Ghi chú cho lượt kế** (không ngắt lượt headless; dùng đường reply có sẵn). |
-| Q-P6-4 | Giao tin cho orchestrator: chỉ MCP tool (kéo), chỉ hook (đẩy), hay cả hai? | **Cả hai**: MCP tool chạy mọi CLI có MCP; hook đẩy khi CLI có hook (V42). |
-| Q-P6-5 | UI chạy CLI orchestrator (UI là cửa chính) hay chỉ quan sát một CLI người dùng mở ở terminal khác? | **UI chạy** (PTY host), vẫn cho phép mở CLI tay — khi đó pane PTY trống, timeline vẫn đủ. |
+| Q-P6-1 | Giao vận UI ↔ server: WebSocket (thêm `ws`) hay SSE + POST (không thêm gì)? | **Đã chốt 2026-11-02: SSE + POST** — không phụ thuộc runtime mới; loopback nên đủ nhanh cho gõ phím. |
+| Q-P6-2 | Tài nguyên xterm: `@xterm/xterm` + `@xterm/addon-fit` là `optionalDependencies` phục vụ offline, hay tải từ CDN? | **optionalDependencies** (mặc định đề xuất, người dùng chưa phản đối), phục vụ từ `node_modules` (offline, phiên bản ghim, CSP `'self'`). |
+| Q-P6-3 | `@worker-N` / `@reviewer` ở 3.2.0: ghi chú cho lượt kế, hay can thiệp ngay vào lượt đang chạy? | **Đã chốt: ghi chú cho lượt kế** (không ngắt lượt headless; dùng đường reply có sẵn). |
+| Q-P6-4 | Giao tin cho orchestrator: chỉ MCP tool (kéo), chỉ hook (đẩy), hay cả hai? | **Đã chốt: cả hai** — MCP tool chạy mọi CLI có MCP; hook đẩy khi CLI có hook (V42). |
+| Q-P6-5 | UI chạy CLI orchestrator (UI là cửa chính) hay chỉ quan sát một CLI người dùng mở ở terminal khác? | **Đã chốt: UI chạy CLI** (PTY host), vẫn cho phép mở CLI tay — khi đó pane PTY trống, timeline vẫn đủ. |
 
 ---
 
