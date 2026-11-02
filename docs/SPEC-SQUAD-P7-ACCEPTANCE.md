@@ -152,7 +152,7 @@ Agent thật: một lượt `dual` (codex) và một lượt `squad` (claude orc
 
 ### 3.4 Luồng một lượt kịch bản
 
-1. Chép `bookshelf` sang thư mục tạm, chạy `git init` và commit gốc. Chạy `omni init` (sinh cấu hình codex/claude như người dùng thật), `omni squad setup --preset … --bind … -y`, rồi `omni ui --no-open --no-start` để quan sát.
+1. Chép `bookshelf` sang thư mục tạm, chạy `git init` và commit gốc, rồi `omni squad setup --preset … --bind … -y`. Kể từ f7826ea, setup tự ghi cấu hình MCP/hook cho orchestrator codex và claude. `omni init` chỉ chạy tương tác nên tầng kịch bản không dùng (xem V48). Mở `omni ui --no-open --no-start` để quan sát.
 2. Gọi `session.begin` và `plan.register` (10 task) rồi `session.resume`. Đợi người duyệt `plan-r1`.
 3. Worker chạy theo lịch. Harness trả lời câu hỏi `NEEDS_CONTEXT` của T08 bằng context reply có nguồn (`plans/finance-format.md`).
 4. Với mỗi task: chạy `task.qc` (reviewer nếu là squad). Mọi task được giữ ở `AWAITING_HUMAN_APPROVAL`, rồi người duyệt cả loạt (§5).
@@ -226,7 +226,7 @@ Log `worker.task.failed` đã ghi lý do abort/guard từ P5c. Nếu gặp lại
 |---|---|---|
 | V46 | Bộ task tự đúng: với mỗi task, test ẩn **trượt** trên project gốc và **qua** khi áp lời giải tham chiếu; test thấy được qua ở cả hai | Test `node:test` offline (`test/acceptance-fixture.test.js`), chạy trong `npm test` |
 | V47 | Ước thời gian và chi phí một task cho mỗi runtime, từ các lượt thật P3–P6 (report và `turnUsage`) → ước một config 10 task | Đọc report cũ |
-| V48 | `omni init` + `omni squad setup` trên repo mới sinh đủ cấu hình để orchestrator thật gọi MCP/hook (codex: `.codex/config.toml` + `hooks.json`; claude: `.mcp.json` + `.claude/settings.json`), kể cả bước duyệt hook của codex (V42) | Thử một lượt ngắn |
+| V48 | Repo mới qua `omni squad setup` có đủ cấu hình để orchestrator thật gọi MCP/hook (codex: `.codex/config.toml` + `hooks.json`, kể cả bước duyệt hook V42; claude: `.mcp.json` + `.claude/settings.json`). `AGENTS.md` (luật controller) hiện chỉ `omni init` sinh, và lệnh này chỉ chạy tương tác: tầng agent thật cần cách tạo nó (gọi hàm trong `lib/init` hoặc nhờ người dùng chạy `omni init`) | Thử một lượt ngắn |
 | V49 | Prompt nhiều cổng trên TTY (`prompts`): hiện danh sách dài, mã một lần, hủy được | Thử tay |
 | V50 | Tầng agent thật: orchestrator nhận `requirements.md` có lập được plan hợp lệ qua `omni dual bootstrap` / MCP trong thời gian hợp lý không | Thử 1 lượt 2 task |
 
