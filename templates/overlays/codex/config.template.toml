@@ -5,12 +5,11 @@
 # Keep AGENTS.md compact. Omni stores long workflow instructions in .omni/workflows/.
 project_doc_max_bytes = 32768
 
-# Permission profile: controls filesystem and network access.
-# Built-in profiles: ":read-only", ":workspace", ":danger-no-sandbox"
-default_permissions = ":workspace"
+# Restrict command writes to the workspace and disable command networking.
+sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 
-[workspace_permissions]
+[sandbox_workspace_write]
 network_access = false
 
 [features]

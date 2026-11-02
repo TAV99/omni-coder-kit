@@ -271,7 +271,7 @@ describe('buildCodexConfig', () => {
     it('returns config content for codex + advanced', () => {
         const config = buildCodexConfig('codex', true);
         assert.ok(config);
-        assert.ok(config.includes('default_permissions'));
+        assert.ok(config.includes('sandbox_mode = "workspace-write"'));
         assert.ok(config.includes('approval_policy'));
         assert.ok(config.includes('network_access = false'));
         assert.doesNotMatch(config, /^\[profiles\./m, 'project config must not emit unsupported user-level profiles');
@@ -560,7 +560,9 @@ describe('Codex workflow content integrity', () => {
         );
         assert.ok(content.includes('network_access = false'));
         assert.ok(content.includes('approval_policy = "on-request"'));
-        assert.ok(content.includes('default_permissions = ":workspace"'));
+        assert.match(content, /^sandbox_mode = "workspace-write"$/m);
+        assert.match(content, /^\[sandbox_workspace_write\]\nnetwork_access = false$/m);
+        assert.doesNotMatch(content, /workspace_permissions|default_permissions/);
         assert.doesNotMatch(content, /^\[profiles\./m, 'Codex ignores profiles in project-local config');
     });
 
