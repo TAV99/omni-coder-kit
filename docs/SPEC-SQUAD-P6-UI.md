@@ -209,13 +209,13 @@ Không parse chữ hiển thị trên terminal (plan §4.3): timeline lấy từ
 
 ## 11. Điều kiện xong P6 (DoD)
 
-- [ ] `omni ui` trên macOS: sidebar + timeline đúng trạng thái một phiên squad đang chạy (cổng, task, reviewer).
-- [ ] Orchestrator (codex hoặc claude) chạy trong PTY trên trình duyệt; đóng/mở tab attach lại được.
-- [ ] `@orchestrator` tới được orchestrator (MCP hoặc hook) và vào ledger; `@worker-1` thành ghi chú lượt kế.
-- [ ] Transcript orchestrator hiện trong timeline (codex và claude).
-- [ ] Kiểm bảo mật: loopback, token, Host/Origin, không route duyệt cổng.
-- [ ] Không có `node-pty` thì `omni ui` chỉ đọc vẫn chạy, các lệnh khác không đổi.
-- [ ] `npm test` xanh trên macOS + một lượt dưới tải.
+- [x] `omni ui` trên macOS: sidebar + timeline đúng trạng thái một phiên squad đang chạy (cổng, task, reviewer).
+- [x] Orchestrator (codex hoặc claude) chạy trong PTY trên trình duyệt; đóng/mở tab attach lại được.
+- [x] `@orchestrator` tới được orchestrator (MCP hoặc hook) và vào ledger; `@worker-1` thành ghi chú lượt kế.
+- [x] Transcript orchestrator hiện trong timeline (codex và claude).
+- [x] Kiểm bảo mật: loopback, token, Host/Origin, không route duyệt cổng.
+- [x] Không có `node-pty` thì `omni ui` chỉ đọc vẫn chạy, các lệnh khác không đổi.
+- [x] `npm test` xanh trên macOS + một lượt dưới tải.
 - [x] Phụ lục V39–V43 đã ghi (Phụ lục A); V44 còn Safari/Firefox (V45 sau macOS).
 
 ---
@@ -234,3 +234,20 @@ Môi trường: Node 24.16.0, `node-pty` 1.1.0, `@xterm/headless` + `@xterm/xter
 | V44 | **Một phần.** SSE + `Last-Event-ID` đã có test tự động (P6a) và thử trên Chromium (pane trình duyệt của app): nối lại, cookie sau khi bỏ token khỏi URL. Safari/Firefox chưa thử tay. | Thử tay Safari/Firefox ở lượt chạy thật P6. |
 
 Phụ chú: lượt thử để lại cấu hình trust cho đúng thư mục tạm (claude `~/.claude.json`, codex trust thư mục + hook thử) — không chạm project thật.
+
+## Phụ lục B — Chạy thật P6 (macOS arm64, 2026-11-02)
+
+`OMNI_SQUAD_LIVE=1 node test/squad-p3-live.js … --orchestrator claude --worker agy` (claude sonnet làm orchestrator/discussion, agy gemini-3.8-flash-high làm worker-1), cùng lúc `omni ui --no-start` trên workspace của lượt chạy. Người dùng duyệt hai cổng bằng `omni squad approve` trong terminal riêng.
+
+| Bước | Kết quả |
+|---|---|
+| Sidebar lúc chờ `plan-r1` | session EXECUTING, TASK-P3-LIVE `ROUTED` → worker-1, cổng plan với lệnh `omni squad approve plan-r1` |
+| Gửi `@worker-1` trước khi duyệt plan | ledger `user.message.posted`; giao `via worker-turn` cho TASK-P3-LIVE attempt 1 **pha scout** (mục "Notes from the user" trong `scout.1.input.md`); worker làm đúng ghi chú: `TypeError('Expected array')`, không đụng hàm khác |
+| Duyệt plan → worker → QC → duyệt integrate | `TASK_VERIFIED`; timeline 96 mục ledger; sidebar "nothing waiting" |
+| `@orchestrator` (gửi lúc chưa có CLI) | chờ tới lượt kế; bấm Start → claude trong pane (`--session-id`), prompt đầu tiên → hook giao `via hook` (claude trả đúng mã KIWI-6) |
+| MCP trong phiên thật | claude gọi `omni_dual_inbox` + `omni_dual_status` — hook cho qua (sau fix `dfb5c64`); inbox rỗng vì hook đã giao |
+| Transcript (D13) | timeline: you → prompt, tool → ToolSearch / `omni_dual_inbox` / `omni_dual_status`, orchestrator → câu trả lời |
+| Stop hook ở ACCEPTANCE | đòi quality cycle 1–3; claude dừng theo lệnh, hook ngắt vòng "for user inspection" |
+
+Chưa làm: V44 Safari/Firefox (đã thử Chromium); orchestrator codex chạy cả vòng (codex trong pane đã thử ở P6d).
+
