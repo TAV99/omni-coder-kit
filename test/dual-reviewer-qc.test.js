@@ -366,3 +366,23 @@ test('user notes: worker-1 reads its message in the next phase only; the reviewe
     assert.equal(f.store.derive().messages[ids.reviewer].delivered.reviewer.via, 'reviewer-turn');
     assert.equal(call.args.join(' ').includes('Check the value'), false, 'the note is a file, not argv');
 });
+
+for (const recommendation of ['NEEDS_FIX', 'INVALID']) {
+    test(`acceptance capture records reviewer ${recommendation} actual contract without a technical retry`, async t => {
+        const f = await handoff(t);
+        const capture = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-review-capture-'));
+        t.after(() => fs.rmSync(capture, { recursive: true, force: true }));
+        const env = { ...process.env, OMNI_SQUAD_ACCEPTANCE_EVIDENCE: capture };
+        const output = recommendation === 'INVALID' ? '{"type":"result","subtype":"success","result":"{}"}'
+            : claudeVerdict(f.spec, 'NEEDS_FIX', [{ file: 'index.js', line: 1, description: 'Wrong result', severity: 'ERROR' }]);
+        const spawnImpl = fakeSpawn(() => ({ stdout: output, stderr: 'review stderr' }));
+        const result = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1', config: CONFIG, env, spawnImpl });
+        assert.equal(result.status, recommendation === 'INVALID' ? 'FAILED' : 'COMPLETED');
+        const records = fs.readdirSync(path.join(capture, 'turns')).map(name => JSON.parse(fs.readFileSync(path.join(capture, 'turns', name))));
+        assert.equal(records.length, 1);
+        assert.equal(records[0].contract.status, recommendation === 'INVALID' ? 'failed' : 'succeeded');
+        assert.equal(records[0].role, 'reviewer'); assert.equal(records[0].attempt, 1);
+        assert.equal(records[0].stderrTail, 'review stderr'); assert.equal(records[0].retry.applied, false);
+        assert.equal(spawnImpl.calls[0].options.env.OMNI_SQUAD_ACCEPTANCE_EVIDENCE, undefined);
+    });
+}

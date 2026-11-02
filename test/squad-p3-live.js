@@ -13,7 +13,9 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn, execFileSync } = require('node:child_process');
+const { execFileSync } = require('node:child_process');
+const { failure, check, pause, records, saveReport, createStageRunner, createPoller, spawnDaemon,
+    waitForApproval: waitForGate, answerContext: replyContext } = require('./helpers/squad-live');
 const { createHash } = require('node:crypto');
 
 const TASK_ID = 'TASK-P3-LIVE';
@@ -31,18 +33,6 @@ const ORCHESTRATORS = { codex: 'orchestrator=codex:gpt-6.1-sol:high', claude: 'o
 // An independent reviewer (SPEC-SQUAD-P5 §2) switches setup to preset squad: QC by the reviewer before command QC.
 const REVIEWERS = { claude: 'reviewer=claude:sonnet:low', codex: 'reviewer=codex:gpt-6-luna:low', agy: 'reviewer=agy:gemini-3.8-flash-high' };
 const OMNI = path.resolve(__dirname, '../bin/omni.js');
-
-const failure = (code, message = code) => Object.assign(new Error(message), { code });
-const check = (value, code, message) => { if (!value) throw failure(code, message); };
-const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const records = (file) => (fs.existsSync(file)
-    ? fs.readFileSync(file, 'utf8').split('\n').slice(0, -1).filter(Boolean).map(JSON.parse) : []);
-
-function stopTree(child) {
-    if (!child?.pid) return;
-    try { process.kill(-child.pid, 'SIGKILL'); } catch { /* not a group leader */ }
-    try { process.kill(child.pid, 'SIGKILL'); } catch { /* already exited */ }
-}
 
 function parseArgs(argv) {
     const args = { report: null, worker: 'agy', orchestrator: 'codex', reviewer: null, secondWorker: null, plantedBug: false, setupOnly: false };
@@ -82,93 +72,47 @@ async function main() {
     const deadline = started + DEADLINE_MS;
     const report = { protocol: 'squad-p3-live-v1', startedAt: new Date(started).toISOString(), ok: false,
         orchestrator: args.orchestrator, reviewer: args.reviewer, worker: args.worker, workerModel: worker.model, secondWorker: args.secondWorker, plantedBug: args.plantedBug, taskId: TASK_ID, failedStage: null, errorCode: null, stages: {} };
-    const save = () => {
-        const temp = `${output}.${process.pid}.tmp`;
-        fs.writeFileSync(temp, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
-        fs.renameSync(temp, output);
-    };
-    let root, child, client, authority, exitResult, childError, exited;
-
-    async function stage(name, timeoutMs, action) {
-        const time = Date.now();
-        console.error(`[${name}] started`);
-        const limit = Math.max(1, Math.min(timeoutMs, deadline - Date.now()));
-        let timer;
-        try {
-            const result = await Promise.race([action(limit), new Promise((_, reject) => {
-                timer = setTimeout(() => reject(failure('STAGE_TIMEOUT', `${name} exceeded ${limit}ms`)), limit);
-            })]);
-            report.stages[name] = { ok: true, wallMs: Date.now() - time };
-            console.error(`[${name}] OK`);
-            return result;
-        } catch (error) {
-            report.failedStage ||= name;
-            report.errorCode ||= error.code || 'LIVE_ERROR';
-            report.stages[name] = { ok: false, wallMs: Date.now() - time, errorCode: error.code || 'LIVE_ERROR',
-                errorMessage: require('../lib/dual/validator-security').redactDiagnostic(error.message) };
-            console.error(`[${name}] ${report.stages[name].errorCode}: ${report.stages[name].errorMessage}`);
-            throw error;
-        } finally { clearTimeout(timer); save(); }
-    }
+    const save = () => saveReport(output, report);
+    let root, daemon, client, authority;
+    const stage = createStageRunner({ report, save, deadline });
     const second = args.secondWorker ? WORKERS[args.secondWorker] : null;
     const taskIds = second ? [TASK_ID, TASK_B] : [TASK_ID];
     const task = (id = TASK_ID) => authority.derive().tasks[id];
     // With --planted-bug a reviewer NEEDS_FIX outcome is the expected detour, not a failure.
     const expectedDetour = (outcome) => args.plantedBug && outcome.status === 'NEEDS_FIX' && outcome.code === 'DUAL_CONTROLLER_REVIEW_REJECTED';
-    async function poll(predicate, limit, label) {
-        const until = Date.now() + limit;
-        while (Date.now() < until) {
-            if (childError) throw childError;
-            if (exitResult) throw failure('DAEMON_EXIT', JSON.stringify(exitResult));
-            if (await predicate()) return;
+    const poll = createPoller({
+        beforeCheck: () => {
+            if (daemon?.childError) throw daemon.childError;
+            if (daemon?.exitResult) throw failure('DAEMON_EXIT', JSON.stringify(daemon.exitResult));
+        },
+        afterCheck: () => {
             for (const id of authority ? taskIds : []) {
                 const current = task(id);
                 if (current?.lastOutcome && !expectedDetour(current.lastOutcome)) {
                     report.taskDiagnostic = current; throw failure('TASK_OUTCOME', JSON.stringify(current.lastOutcome));
                 }
             }
-            await pause(500);
-        }
-        throw failure('STAGE_TIMEOUT', `Timed out waiting for ${label}`);
-    }
+        },
+    });
     // The harness plays the orchestrator: a scout NEEDS_CONTEXT question gets the
     // grounded reply Codex would give (dual-controller.md), at most three times.
     const answered = new Set();
     async function answerContext(taskId = TASK_ID) {
-        const waiting = task(taskId).waitingContext;
-        const open = waiting.question_ids.filter((id) => !answered.has(id));
-        if (!open.length) return;
-        if (answered.size + open.length > 3) throw failure('ISOLATED_CONTROLLER_REQUIRED', 'Worker keeps asking for context');
-        for (const questionId of open) {
-            const messageId = `reply-${answered.size + 1}`;
-            const body = taskId === TASK_B
-                ? 'Decision: The task context is complete: README.md, lib/count.js and test/count.test.js are in scope; no more reconnaissance is needed. '
-                    + 'Change only lib/count.js: add an Array.isArray guard to countActive that throws TypeError("Expected array") for non-arrays and keep array behavior. '
-                : 'Decision: The task context is complete: README.md, entry.js, lib/util.js and test/smoke.test.js are in scope; no more reconnaissance is needed. '
-                    + 'Change only lib/util.js: add an Array.isArray guard to activeIds that throws TypeError("Expected array") for non-arrays and keep array behavior. ';
-            const ack = await client.replyToTask(report.sessionId, { task_id: taskId, plan_revision: 1, message_id: `${taskId}-${messageId}`, reply_to: questionId,
-                body: `${body}Source file/section: plans/plan.md; Question ID: ${questionId}; Plan revision: 1` });
-            check(ack.acknowledged === true, 'CONTEXT_REPLY_REJECTED', JSON.stringify(ack));
-            answered.add(questionId);
-            report.contextReplies = [...(report.contextReplies || []), { questionId, messageId }];
-            console.error(`[context] answered ${questionId}`);
-        }
-        await client.request('session.resume', { session_id: report.sessionId, task_id: taskId, plan_revision: 1 });
+        return replyContext({ waitingQuestionIds: task(taskId).waitingContext.question_ids, answered,
+            client, sessionId: report.sessionId, taskId, planRevision: 1, report,
+            body: ({ questionId }) => {
+                const body = taskId === TASK_B
+                    ? 'Decision: The task context is complete: README.md, lib/count.js and test/count.test.js are in scope; no more reconnaissance is needed. '
+                        + 'Change only lib/count.js: add an Array.isArray guard to countActive that throws TypeError("Expected array") for non-arrays and keep array behavior. '
+                    : 'Decision: The task context is complete: README.md, entry.js, lib/util.js and test/smoke.test.js are in scope; no more reconnaissance is needed. '
+                        + 'Change only lib/util.js: add an Array.isArray guard to activeIds that throws TypeError("Expected array") for non-arrays and keep array behavior. ';
+                return `${body}Source file/section: plans/plan.md; Question ID: ${questionId}; Plan revision: 1`;
+            } });
     }
 
     // The person approves in another terminal; the harness never approves.
-    async function waitForApproval(gateId, limit) {
-        const command = `cd ${root} && node ${OMNI} squad approve ${gateId}`;
-        console.error(`\n>>> Cổng ${gateId} đang chờ. Mở terminal khác và chạy:\n    ${command}\n`);
-        report.awaiting = { gateId, command };
-        save();
-        await poll(() => authority.derive().approvals?.[gateId]?.status !== 'pending', limit, `approval of ${gateId}`);
-        const decided = authority.derive().approvals[gateId];
-        report.decisions = [...(report.decisions || []), decided];
-        check(decided.status === 'approved', 'GATE_REJECTED', `${gateId} was ${decided.status}: ${decided.reason || ''}`);
-        check(decided.actor === 'human' && decided.via === 'cli-tty', 'GATE_NOT_HUMAN', `${decided.actor}/${decided.via}`);
-        delete report.awaiting;
-    }
+    const waitForApproval = (gateId, limit) => waitForGate({ authority, report, save, poll, limit, gateIds: gateId,
+        command: `cd ${root} && node ${OMNI} squad approve ${gateId}` });
 
     save();
     try {
@@ -228,21 +172,11 @@ async function main() {
         });
         await stage('daemonListened', 20_000, async (limit) => {
             report.daemonLog = path.join(path.dirname(root), 'daemon.log');
-            const log = fs.openSync(report.daemonLog, 'wx', 0o600);
-            const env = { ...process.env };
-            for (const key of ['OMNI_DUAL_WORKER_MODEL', 'OMNI_DUAL_WORKER_EFFORT', 'OMNI_DUAL_WORKER_RUNTIME', 'OMNI_DUAL_DISCUSSION_ENABLED']) delete env[key];
-            if (args.plantedBug) env.OMNI_CLAUDE_PATH = path.join(__dirname, 'fixtures', 'fake-claude-worker.js');
-            try {
-                child = spawn(process.execPath, [path.resolve(__dirname, '../bin/omni-daemon.js'), '--workspace', root],
-                    { env, detached: true, stdio: ['ignore', log, log] });
-            } finally { fs.closeSync(log); }
-            exited = new Promise((resolve) => child.once('close', (code, signal) => { exitResult = { code, signal }; resolve(exitResult); }));
-            child.on('error', (error) => { childError = error; });
-            client = require('../lib/dual/daemon-client').createDaemonClient({ workspaceRoot: root, timeoutMs: 10_000 });
-            await poll(() => { try { client.readDiscovery(); return true; } catch (error) {
-                if (error.code !== 'DUAL_DISCOVERY_MISSING') throw error; return false; } }, limit, 'daemon discovery');
-            check((await client.health()).status === 'healthy', 'DAEMON_UNHEALTHY');
-            authority = require('../lib/dual/authority-store').createAuthorityStore(path.join(root, '.omni/runs/dual-authority'));
+            daemon = spawnDaemon({ root, logFile: report.daemonLog,
+                envOverrides: args.plantedBug ? { OMNI_CLAUDE_PATH: path.join(__dirname, 'fixtures', 'fake-claude-worker.js') } : {} });
+            client = daemon.client;
+            await daemon.waitUntilReady(poll, limit);
+            authority = daemon.authority;
         });
         await stage('sessionBegun', 20_000, async (limit) => {
             const result = await client.beginSession({ workspace_root: root, mode: 'auto' }, { timeoutMs: limit });
@@ -380,13 +314,7 @@ async function main() {
         report.ok = true;
     } catch { /* the failing stage recorded its error */ }
     finally {
-        if (child && !exitResult) {
-            try {
-                await client.stop({ timeoutMs: 5_000 });
-                await Promise.race([exited, pause(10_000)]);
-            } catch { /* fall through to a hard stop */ }
-            if (!exitResult) stopTree(child);
-        }
+        if (daemon) await daemon.stop();
         if (!report.ok && report.daemonLog && fs.existsSync(report.daemonLog)) {
             report.daemonLogTail = require('../lib/dual/validator-security').redactDiagnostic(
                 fs.readFileSync(report.daemonLog, 'utf8').slice(-16000), { maxLength: 16000 });

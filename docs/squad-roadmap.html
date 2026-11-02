@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Omni Squad 3.2.0</title>
+<!--
+  HOW TO UPDATE (for any agent taking over):
+  1. Edit ONLY the data block in the <script>: STATE, PREP, PHASES.
+     - STATE.updated / STATE.head: date and `git rev-parse --short HEAD`.
+     - PHASES[].status: done | now | todo (exactly one phase is "now"; it is expanded).
+     - steps: [label, done|now|todo, note]. Keep commit hashes in the note.
+  2. Open the file in a browser to check it renders; progress bar and the
+     Done / Now / Next cards are computed from the data.
+  3. Commit it together with the work (docs(squad): update roadmap).
+  Source of truth for details: docs/HANDOFF-P7.md and docs/SQUAD-ARCHITECTURE-PLAN.md.
+  Exported from the Claude artifact https://claude.ai/artifact/TfAeVYPJL42BSEk6vvS8wC.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow column: status, a vertical phase timeline, then the target architecture. */
+:root {
+  --bg: #F1F5F7;
+  --surface: #FFFFFF;
+  --ink: #13212B;
+  --muted: #566874;
+  --line: #D3DDE3;
+  --accent: #1B5EA6;
+  --accent-soft: #DDE8F4;
+  --on-accent: #FFFFFF;
+  --done: #2C7A57;
+  --done-soft: #DCEFE5;
+  --now: #B8740A;
+  --now-soft: #F8EBD3;
+  --todo: #8797A1;
+  --todo-soft: #E8EEF1;
+  --gap: #B2432D;
+  --font-display: "Be Vietnam Pro", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-body: "Be Vietnam Pro", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0E151A; --surface: #152029; --ink: #E4ECF1; --muted: #93A5B0; --line: #263540;
+    --accent: #6FA9EA; --accent-soft: #1A2D42; --on-accent: #0B1218;
+    --done: #62C293; --done-soft: #16302A; --now: #EAAA3C; --now-soft: #33280F;
+    --todo: #6E808B; --todo-soft: #1C2830; --gap: #E57D66;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0E151A; --surface: #152029; --ink: #E4ECF1; --muted: #93A5B0; --line: #263540;
+  --accent: #6FA9EA; --accent-soft: #1A2D42; --on-accent: #0B1218;
+  --done: #62C293; --done-soft: #16302A; --now: #EAAA3C; --now-soft: #33280F;
+  --todo: #6E808B; --todo-soft: #1C2830; --gap: #E57D66;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { background: var(--bg); }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 880px; margin: 0 auto; padding-block: 40px 64px; display: flex; flex-direction: column; gap: 48px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.25; }
+h1 { font-size: clamp(32px, 6vw, 48px); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 22px; font-weight: 800; }
+h3 { font-size: 17px; font-weight: 600; }
+p { margin: 0; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.muted { color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+
+/* ---------- Header ---------- */
+.hero { display: flex; flex-direction: column; gap: 14px; }
+.hero .lede { font-size: 17px; color: var(--muted); max-width: 60ch; }
+.progress { display: flex; align-items: center; gap: 14px; }
+.bar { flex: 1; height: 10px; border-radius: 999px; background: var(--todo-soft); overflow: hidden; }
+.bar > span { display: block; height: 100%; width: var(--pct, 0%); background: linear-gradient(90deg, var(--done), var(--accent)); border-radius: inherit; animation: grow 1.4s cubic-bezier(.2,.8,.2,1) both; }
+.progress .num { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.relay { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.slot { border-radius: var(--radius); padding: 12px 14px; border: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.slot .eyebrow { font-size: 11px; }
+.slot b { font-family: var(--font-display); font-size: 15px; overflow-wrap: anywhere; }
+.slot .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.slot.done .eyebrow { color: var(--done); }
+.slot.now { border: 2px solid var(--now); background: var(--now-soft); }
+.slot.now .eyebrow { color: var(--now); }
+
+/* ---------- Timeline ---------- */
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tl { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 14px; position: relative; padding-bottom: 18px; }
+.tl:last-child { padding-bottom: 0; }
+.tl::before { content: ""; position: absolute; left: 17px; top: 34px; bottom: 0; width: 2px; background: var(--line); }
+.tl:last-child::before { display: none; }
+.tl.done::before { background: var(--done); }
+.tl .mark { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; position: relative; z-index: 1; font-family: var(--font-mono); font-size: 12px; font-weight: 600; background: var(--surface); border: 3px solid var(--todo); color: var(--todo); animation: pop .45s cubic-bezier(.3,1.5,.5,1) both; animation-delay: calc(var(--i) * 70ms); }
+.tl.done .mark { background: var(--done); border-color: var(--done); color: var(--on-accent); }
+.tl.now .mark { background: var(--now-soft); border-color: var(--now); color: var(--now); }
+.tl.now .mark::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--now); animation: ring 2s ease-out infinite; }
+.tl .body { min-width: 0; padding-top: 5px; display: flex; flex-direction: column; gap: 4px; }
+.tl .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.tl .head h3 { font-size: 16px; }
+.tl.now .head h3 { color: var(--now); }
+.tl .line { font-size: 14px; color: var(--muted); }
+.tl .line b { color: var(--ink); font-weight: 500; }
+.tag { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: var(--todo-soft); color: var(--muted); white-space: nowrap; }
+.tl.done .tag { background: var(--done-soft); color: var(--done); }
+.tl.now .tag { background: var(--now-soft); color: var(--now); }
+.donelist { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13.5px; color: var(--muted); }
+.donelist span::before { content: "✓ "; color: var(--done); }
+.donelist code { font-family: var(--font-mono); font-size: 12px; }
+
+/* expanded current phase */
+.focus { margin-top: 8px; border: 2px solid var(--now); border-radius: var(--radius); background: var(--surface); padding: 16px; display: flex; flex-direction: column; gap: 14px; animation: rise .5s .2s cubic-bezier(.2,.8,.2,1) both; }
+.steps { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.step { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--todo-soft); color: var(--muted); }
+.step.now { background: var(--now); color: var(--on-accent); }
+.step.done { background: var(--done-soft); color: var(--done); }
+.step .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.step.now .dot { animation: pulse 1.6s ease-in-out infinite; }
+.steps .arr { color: var(--muted); font-size: 13px; }
+.io { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.io ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+.io .res li::marker { content: "✓  "; color: var(--done); }
+
+/* ---------- Architecture ---------- */
+.diagram-scroll { overflow-x: auto; }
+svg.star { width: 100%; min-width: 640px; height: auto; display: block; }
+.star .node-box { fill: var(--bg); stroke: var(--line); stroke-width: 1.5; }
+.star .node-box.opt { stroke-dasharray: 6 5; }
+.star .hub-box { fill: var(--accent); }
+.star .hub-ring { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 7; opacity: .6; transform-origin: 400px 220px; animation: spin 24s linear infinite; }
+.star .t-title { fill: var(--ink); font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+.star .t-sub { fill: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+.star .t-hub { fill: var(--on-accent); font-family: var(--font-display); font-weight: 800; font-size: 26px; }
+.star .t-hubsub { fill: var(--on-accent); font-family: var(--font-mono); font-size: 12px; opacity: .85; }
+.star .edge { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 600; animation: draw 1.6s cubic-bezier(.2,.8,.2,1) both; }
+.star .edge.pty { stroke: var(--now); stroke-dasharray: 6 6; animation: none; }
+.star .edge-label { fill: var(--accent); font-family: var(--font-mono); font-size: 12px; }
+.star .edge-label.pty { fill: var(--now); }
+.star .packet { fill: var(--accent); }
+.star .packet.up { fill: var(--done); }
+.star .packet.pty { fill: var(--now); }
+.caption { font-size: 14px; color: var(--muted); margin-top: 14px; max-width: 70ch; }
+
+.layers { display: grid; gap: 8px; margin-top: 18px; }
+.layer { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 14px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+.layer b { font-family: var(--font-display); font-size: 15px; }
+.layer .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--font-mono); font-size: 12px; padding: 3px 9px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); overflow-wrap: anywhere; }
+.chip.hl { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.layer.keep { border-style: dashed; }
+
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+
+/* ---------- Motion ---------- */
+@keyframes grow { from { width: 0; } }
+@keyframes pop { from { transform: scale(.4); opacity: .3; } }
+@keyframes rise { from { transform: translateY(8px); opacity: .35; } }
+@keyframes draw { from { stroke-dashoffset: 600; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 50% { opacity: .35; } }
+@keyframes ring { from { transform: scale(1); opacity: .9; } to { transform: scale(1.8); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .star .packet { display: none; }
+}
+
+@media (max-width: 640px) {
+  .relay, .io { grid-template-columns: 1fr; }
+  .layer { grid-template-columns: 1fr; gap: 6px; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <span class="eyebrow">omni-coder-kit · nhánh 3.2.0</span>
+    <h1>Omni Squad 3.2.0</h1>
+    <p class="lede">Nâng dual thành đội agent theo vai. Mỗi vai có bộ skill riêng, gắn CLI và model nào cũng được.</p>
+    <div class="progress" aria-label="Tiến độ">
+      <div class="bar"><span id="bar"></span></div>
+      <span class="num" id="bar-label"></span>
+    </div>
+    <div class="relay" id="relay"></div>
+  </header>
+
+  <section aria-labelledby="h-plan">
+    <h2 id="h-plan" style="margin-bottom: 18px">Tiến độ</h2>
+    <ol class="timeline" id="timeline"></ol>
+  </section>
+
+  <section aria-labelledby="h-arch">
+    <h2 id="h-arch" style="margin-bottom: 18px">Kiến trúc đích</h2>
+    <div class="card">
+      <div class="diagram-scroll">
+        <svg class="star" viewBox="0 0 800 440" role="img" aria-labelledby="star-title">
+          <title id="star-title">Mọi tin nhắn đi qua omni; agent không nói chuyện trực tiếp với nhau</title>
+          <circle class="hub-ring" cx="400" cy="220" r="92"/>
+          <path id="e-orch" class="edge" d="M230 96 C 290 104, 300 176, 320 198"/>
+          <path id="e-user" class="edge" d="M230 344 C 290 336, 300 264, 320 242"/>
+          <path id="e-w1" class="edge" d="M480 198 C 510 160, 530 100, 570 96" style="animation-delay:.15s"/>
+          <path id="e-w2" class="edge" d="M480 220 L 570 220" style="animation-delay:.3s"/>
+          <path id="e-rev" class="edge" d="M480 242 C 510 280, 530 340, 570 344" style="animation-delay:.45s"/>
+          <path id="e-pty" class="edge pty" d="M130 130 L 130 310"/>
+
+          <text class="edge-label" x="246" y="140">MCP</text>
+          <text class="edge-label" x="246" y="312">inbox</text>
+          <text class="edge-label" x="512" y="132">đẩy việc</text>
+          <text class="edge-label pty" x="142" y="225">PTY</text>
+
+          <rect class="hub-box" x="320" y="170" width="160" height="100" rx="18"/>
+          <text class="t-hub" x="400" y="218" text-anchor="middle">omni</text>
+          <text class="t-hubsub" x="400" y="244" text-anchor="middle">relay · authority</text>
+
+          <rect class="node-box" x="30" y="60" width="200" height="70" rx="12"/>
+          <text class="t-title" x="48" y="90">orchestrator</text>
+          <text class="t-sub" x="48" y="112">vd. codex</text>
+
+          <rect class="node-box" x="30" y="310" width="200" height="70" rx="12"/>
+          <text class="t-title" x="48" y="340">Bạn</text>
+          <text class="t-sub" x="48" y="362">omni ui</text>
+
+          <rect class="node-box" x="570" y="60" width="200" height="70" rx="12"/>
+          <text class="t-title" x="588" y="90">worker-1</text>
+          <text class="t-sub" x="588" y="112">vd. agy</text>
+
+          <rect class="node-box opt" x="570" y="185" width="200" height="70" rx="12"/>
+          <text class="t-title" x="588" y="215">worker-2</text>
+          <text class="t-sub" x="588" y="237">tùy chọn</text>
+
+          <rect class="node-box opt" x="570" y="310" width="200" height="70" rx="12"/>
+          <text class="t-title" x="588" y="340">reviewer</text>
+          <text class="t-sub" x="588" y="362">tùy chọn · QC</text>
+
+          <circle class="packet up" r="5"><animateMotion dur="3.2s" repeatCount="indefinite"><mpath href="#e-orch"/></animateMotion></circle>
+          <circle class="packet" r="5"><animateMotion dur="3.2s" begin="1.6s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#e-orch"/></animateMotion></circle>
+          <circle class="packet" r="5"><animateMotion dur="2.8s" begin=".4s" repeatCount="indefinite"><mpath href="#e-w1"/></animateMotion></circle>
+          <circle class="packet up" r="5"><animateMotion dur="2.8s" begin="1.8s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#e-w1"/></animateMotion></circle>
+          <circle class="packet" r="5"><animateMotion dur="2.4s" begin=".9s" repeatCount="indefinite"><mpath href="#e-w2"/></animateMotion></circle>
+          <circle class="packet" r="5"><animateMotion dur="3s" begin="1.2s" repeatCount="indefinite"><mpath href="#e-rev"/></animateMotion></circle>
+          <circle class="packet up" r="5"><animateMotion dur="3.6s" begin=".6s" repeatCount="indefinite"><mpath href="#e-user"/></animateMotion></circle>
+          <circle class="packet pty" r="5"><animateMotion dur="2.6s" repeatCount="indefinite"><mpath href="#e-pty"/></animateMotion></circle>
+        </svg>
+      </div>
+      <p class="caption">Mọi tin nhắn đi qua omni. Bạn chat thẳng với orchestrator qua PTY; orchestrator kéo việc qua MCP; omni đẩy việc cho worker và reviewer. Các agent không nói chuyện trực tiếp với nhau.</p>
+
+      <div class="layers">
+        <div class="layer"><b>Vai</b><div class="chips"><span class="chip hl">orchestrator</span><span class="chip hl">worker ×N</span><span class="chip hl">reviewer</span><span class="chip">mỗi vai một bộ skill</span></div></div>
+        <div class="layer"><b>Gắn model</b><div class="chips"><span class="chip">vai → CLI → model → effort</span><span class="chip">mỗi người tự chọn</span></div></div>
+        <div class="layer"><b>CLI</b><div class="chips"><span class="chip hl">codex</span><span class="chip hl">agy</span><span class="chip">opencode</span><span class="chip">claude-code</span></div></div>
+        <div class="layer keep"><b>Lõi giữ nguyên</b><div class="chips"><span class="chip">ledger</span><span class="chip">lease</span><span class="chip">scope-guard</span><span class="chip">relay</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+// ---- Dữ liệu tiến độ: sửa phần này khi qua mỗi checkpoint ----
+const STATE = { updated: '02/11/2026', head: '638ece4 (parent of this P7c checkpoint)' };
+
+// Các việc chuẩn bị đã xong (hiện gọn trong một dòng).
+const PREP = [
+  ['Chốt 19 quyết định', ''],
+  ['Nhánh 3.2.0', '3199575'],
+  ['Bản kiến trúc', 'dbf7e6b'],
+  ['Spec P1', 'e6a966d'],
+];
+
+// status: done | now | todo. Pha "now" được mở rộng.
+const PHASES = [
+  {
+    id: 'P1', name: 'Runtime registry', status: 'done',
+    result: 'omni squad runtimes báo codex và agy sẵn sàng, kèm version và model thật',
+    steps: [['Kiểm V1–V6', 'done', 'kết quả trong phụ lục spec P1'], ['P1a · code module mới', 'done', 'commit a0bedd5 · omni squad runtimes chạy được'], ['npm test xanh trên macOS', 'done', '2858 pass · 0 fail · cả khi máy tải nặng'], ['P1b · thu hẹp, phần nối preflight sang P3', 'done', 'commit 3b58c01']],
+    does: ['Adapter codex và agy, cùng một hợp đồng', 'Dò CLI trên macOS, Windows, Linux', 'Kiểm version, đăng nhập, danh sách model', 'Phát hiện từ V6: agy chạy nền chỉ ghi file được ở chế độ full-auto trong thư mục cô lập'],
+    expect: ['Cả hai CLI báo sẵn sàng', 'npm test xanh, test cũ không đổi'],
+  },
+  {
+    id: 'P2', name: 'Vai và skill', status: 'done',
+    result: 'Mỗi vai chỉ nạp đúng bộ skill của mình',
+    steps: [['Viết spec P2', 'done', 'commit ccd512f'], ['Chốt Q4 + kiểm V8–V11', 'done', 'commit 030238d · git init worker root'], ['P2a · vai, danh mục, YAML', 'done', 'commit 8f85a52 · 3 vai + skills.yaml, agy effort đúng theo model'], ['P2b · kho, mount, setup, doctor', 'done', 'commit 1d395cd · omni squad setup chạy được'], ['P2c · worker root của dual', 'done', 'commit 58a65f0 · worker chỉ thấy skill của mình'], ['Chạy setup trên repo thật', 'done', 'orchestrator 27 skill · worker 20 · doctor 0 lỗi']],
+    does: ['File vai YAML: orchestrator, worker, reviewer', 'Skill theo vai; skill QC đi theo phase qc', 'Mount skill riêng cho từng vai, init hỏi CLI/model theo vai'],
+    expect: ['skills:doctor bắt được skill trùng giữa các vai', 'Worker không thấy skill của orchestrator'],
+  },
+  {
+    id: 'P3', name: 'Pipeline khai báo', status: 'done',
+    result: 'Preset dual chạy trọn vòng trên kiến trúc mới',
+    steps: [['Viết spec P3', 'done', 'commit f7787a1'], ['Chốt Q-P3-1..4 + kiểm V12–V16', 'done', 'commit 8c55e7c'], ['P3a pipeline', 'done', 'commit dcfa0f8 · omni squad pipeline'], ['P3b owner theo vai', 'done', 'commit db9baff · plan nhận owner: worker'], ['P3c-1 parseResult + effort/denied', 'done', 'commit b08761c'], ['P3c-2 probe qua adapter', 'done', 'commit 45cc0ac · aedc294'], ['P3c-3 codex làm worker', 'done', 'commit 4a1403c · V17–V19 đạt'], ['P3d cổng duyệt', 'done', 'commit 2489e72 · omni squad approve'], ['P3e omni squad', 'done', 'commit de7f0a3 · omni squad run/status/qc'], ['Chạy trọn vòng thật (DoD)', 'done', 'V20 agy + V21 codex · OK · commit 1f0a263']],
+    does: ['pipeline.yaml: phase → vai → artifact → cổng duyệt', 'owner đổi từ tên CLI sang tên vai', 'Nối preflight/daemon-ports vào adapter (chuyển từ P1b)', 'dual chạy được model không nhận effort (V10)'],
+    expect: ['Preset dual chạy trọn vòng qua daemon', 'Cổng trước integrate không bao giờ bị AUTO bỏ qua'],
+  },
+  {
+    id: 'P4', name: 'Thêm Claude Code', status: 'done',
+    result: 'Cắm được CLI thứ ba: claude giữ vai nào cũng được',
+    steps: [['Viết spec P4 + chốt Q-P4-1..4', 'done', 'commit b9c7fca · a680112'], ['Kiểm V22–V31 + R1–R3', 'done', 'commit 9550dd9 · giới hạn quyền bằng --tools'], ['P4a · adapter claude', 'done', 'commit 623a4a1 · 3/3 runtime sẵn sàng'], ['P4b · claude làm worker', 'done', 'commit be89867 · V29 + V32 đạt'], ['Chạy trọn vòng thật', 'done', 'codex + worker claude sonnet · TASK_VERIFIED · 14 phút'], ['P4c · claude làm orchestrator', 'done', 'commit 911e69a · V28, V30 đạt'], ['Chạy thật orchestrator claude', 'done', 'claude + worker agy · TASK_VERIFIED · 6 phút · commit 9149ee2']],
+    does: ['Adapter claude cùng hợp đồng với codex, agy', 'Worker claude cách ly: không đọc CLAUDE.md, skill, hook của project', 'Claude làm orchestrator qua MCP + hook của omni'],
+    expect: ['Conformance đạt cho cả 3 CLI', 'Vòng thật với worker claude đạt TASK_VERIFIED'],
+  },
+  {
+    id: 'P5', name: 'Reviewer và nhiều worker', status: 'done',
+    result: 'Đội 3 vai chạy trọn vòng, QC khác hệ',
+    steps: [['Viết spec P5', 'done', 'commit 2ec2d4e'], ['Chốt Q-P5-1..6', 'done', 'commit e6ed5de · tự sửa, reviewer trước'], ['Kiểm V33–V34', 'done', '3 CLI đều bắt được bug cài sẵn'], ['P5a · reviewer QC', 'done', 'commit c93bb1a'], ['Chạy thật preset squad (P5a)', 'done', 'reviewer claude APPROVE · TASK_VERIFIED · 9 phút'], ['P5b · worker theo task', 'done', 'plan task chọn worker-N · capability riêng'], ['P5c · chạy song song', 'done', 'commit 5842ade · integrate vẫn tuần tự'], ['Chạy thật 2 worker song song', 'done', 'chồng 205 s · cả hai TASK_VERIFIED · commit 53993de'], ['P5d · ngân sách', 'done', 'commit c85090b · turn_minutes, max_turns, token'], ['Vòng NEEDS_FIX thật', 'done', 'reviewer bắt bug → tự sửa → APPROVE · a6bbe86'], ['Codex giữ 2 vai (D18)', 'done', 'orchestrator + reviewer codex · TASK_VERIFIED · fe54b95'], ['Chạy lại preset dual', 'done', 'hồi quy đạt · TASK_VERIFIED · 5ac3814'], ['Đóng P5', 'done', 'WAITING_RUNTIME, V36, V37 chuyển sang P7 · 42deb3a']],
+    does: ['Reviewer QC độc lập, chỉ đọc spec + diff + evidence', 'NEEDS_FIX → tự sửa có giới hạn, quá thì leo thang', 'Nhiều worker, mỗi task đúng worker được giao', 'Task không đụng file nhau chạy song song'],
+    expect: ['Preset squad 3 vai đạt TASK_VERIFIED', 'Hai worker chạy song song, integrate tuần tự'],
+  },
+  {
+    id: 'P6', name: 'omni ui', status: 'done',
+    result: 'Một màn hình thấy mọi agent và hội thoại',
+    steps: [['Viết spec P6', 'done', 'commit 3008031'], ['Chốt Q-P6-1..5', 'done', 'SSE + POST · UI chạy CLI · MCP + hook'], ['P6a · UI chỉ đọc', 'done', 'commit 31fd210 · V44 bảo mật đạt · 3064 test xanh'], ['Kiểm V39–V43', 'done', 'đạt cả codex và claude · bẫy: spawn-helper 644, Enter gửi riêng, codex phải duyệt hook'], ['P6b · PTY orchestrator', 'done', 'commit 687952d · thử thật claude trong trang: 2 tab, exit, resume · 3076 test xanh'], ['P6c · inbox + gửi tin', 'done', 'commit 636f08f · thử thật: @orchestrator qua hook tới claude trong trang · 3084 test xanh'], ['Sửa allowlist tool omni_dual trong hook', 'done', 'commit dfb5c64 · 15 tool, chặn tên giả'], ['P6d · transcript', 'done', 'commit a44b5ae · thử thật claude + codex trong pane · 3093 test xanh'], ['Chạy thật P6', 'done', 'commit 7011e34 · @worker-1 tới pha scout, @orchestrator qua hook, TASK_VERIFIED'], ['V44 Safari/Firefox', 'todo', 'thử tay; Chromium đã qua']],
+    does: ['Trang web local, PTY thật cho orchestrator', 'Timeline chung: journal, ledger, transcript', 'Gọi @orchestrator, @worker-N, @reviewer'],
+    expect: ['Chạy được trên Mac, Windows, Linux'],
+  },
+  {
+    id: 'P7', name: 'Nghiệm thu 3.2.0', status: 'now',
+    result: '≥ 90% task đạt, 0 ngoài scope, 0 unknown, 0 dispatch trùng, cổng đúng 100%',
+    steps: [['Viết spec P7', 'done', 'commit fe6ca27'], ['Chốt Q-P7-1..5', 'done', 'hai tầng · approve --all · bookshelf · config A–D'], ['Rà nợ P1–P6 + sửa 3 nợ', 'done', 'f7826ea codex config · fc552b0 daemon cũ · f02543a worker isolated · 3103 test xanh'], ['Bàn giao cho agent khác', 'done', 'docs/HANDOFF-P7.md · bdde019'], ['P7a · project mẫu + 10 task', 'done', '60a8d4e fixture + task suite · 35d23b7 live-test fix'], ['P7b · approve --all', 'done', '42a11a7 · real TTY: 12 gates approved · normal/loaded: 3142 tests, 3130 passed, 12 skipped'], ['Codex sandbox template fix', 'done', '638ece4 · supported workspace-write/network settings; normal/loaded 3279 tests, 3267 passed, 12 skipped, 0 failed'], ['P7c · harness nghiệm thu', 'done', 'This checkpoint · V48 + T01 subset passed; normal/loaded 3279 tests, 3267 passed, 12 skipped, 0 failed'], ['P7d · chạy config A–D', 'todo', 'báo cáo ACCEPTANCE-3.2.0'], ['P7e · WAITING_RUNTIME', 'todo', 'chỉ theo dấu hiệu thật (V37)'], ['P7f · lượt agent thật', 'todo', '1 lượt mỗi preset']],
+    does: ['P7c complete in this checkpoint: generated project, frontier driver, private evidence, reports and acceptance telemetry', 'Approved design: generate controller instructions for V48; approve ready frontiers in batches to avoid scope-barrier deadlock', 'Measure worker dispatches separately from QC; capture runtime failure evidence without changing retry behaviour', 'P7d–P7f remain: configs A–D, conditional WAITING_RUNTIME, and real-orchestrator runs through MCP/hooks'],
+    expect: ['Next: P7d config A first; full configs A–D have not started', 'All four configs meet the thresholds; Safari/Firefox V44 and real Linux/Windows runs remain outstanding'],
+  },
+];
+
+// ---- Render ----
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const $ = (id) => document.getElementById(id);
+const LABEL = { done: 'Đã xong', now: 'Đang làm', todo: 'Sắp tới' };
+
+const total = PHASES.length + 1;                       // + bước chuẩn bị
+const done = 1 + PHASES.filter((p) => p.status === 'done').length;
+const pct = Math.round((done / total) * 100);
+$('bar').style.setProperty('--pct', pct + '%');
+$('bar-label').textContent = `${done}/${total} bước · ${pct}%`;
+
+const current = PHASES.find((p) => p.status === 'now');
+const nowStep = current && current.steps ? current.steps.find(([, s]) => s === 'now') : null;
+const prevPhase = [...PHASES].reverse().find((p) => p.status === 'done');
+const nextStep = current && current.steps ? current.steps.find(([, s]) => s === 'todo') : null;
+const nextPhase = PHASES.find((p, i) => i > PHASES.indexOf(current) && p.status === 'todo');
+const lastPrep = PREP[PREP.length - 1];
+const doneStep = current && current.steps ? [...current.steps].reverse().find(([, s]) => s === 'done') : null;
+const justDone = doneStep ? [doneStep[0], doneStep[2] || current.id]
+  : prevPhase ? [`${prevPhase.id} · ${prevPhase.name}`, prevPhase.result] : lastPrep;
+$('relay').innerHTML = `
+  <div class="slot done"><span class="eyebrow">Vừa xong</span><b>${esc(justDone[0])}</b><span class="sub">${esc(justDone[1])}</span></div>
+  <div class="slot now"><span class="eyebrow">Đang làm</span><b>${esc(nowStep ? nowStep[0] : current.name)}</b><span class="sub">${esc(current.id)} · ${esc(current.name)}</span></div>
+  <div class="slot"><span class="eyebrow">Tiếp theo</span><b>${esc(nextStep ? nextStep[0] : (nextPhase ? `${nextPhase.id} · ${nextPhase.name}` : '—'))}</b><span class="sub">${esc(nextStep ? current.id : (nextPhase ? nextPhase.result : ''))}</span></div>`;
+
+const items = [];
+items.push(`<li class="tl done" style="--i:0">
+  <span class="mark" aria-hidden="true">✓</span>
+  <div class="body">
+    <div class="head"><h3>Chuẩn bị</h3><span class="tag">Đã xong</span></div>
+    <div class="donelist">${PREP.map(([t, c]) => `<span>${esc(t)}${c ? ` <code>${esc(c)}</code>` : ''}</span>`).join('')}</div>
+  </div></li>`);
+PHASES.forEach((p, i) => {
+  let focus = '';
+  if (p.status === 'now') {
+    focus = `<div class="focus">
+      <div class="steps">${p.steps.map(([s, st], k) => `${k ? '<span class="arr">→</span>' : ''}<span class="step ${st}"><span class="dot"></span>${esc(s)}</span>`).join('')}</div>
+      <div class="io">
+        <div><span class="eyebrow">Làm gì</span><ul>${p.does.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>
+        <div><span class="eyebrow">Kết quả kỳ vọng</span><ul class="res">${p.expect.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>
+      </div>
+    </div>`;
+  }
+  items.push(`<li class="tl ${p.status}" style="--i:${i + 1}">
+    <span class="mark" aria-hidden="true">${p.status === 'done' ? '✓' : p.id}</span>
+    <div class="body">
+      <div class="head"><h3>${esc(p.id)} · ${esc(p.name)}</h3><span class="tag">${LABEL[p.status]}</span></div>
+      <p class="line"><b>Kết quả:</b> ${esc(p.result)}</p>
+      ${focus}
+    </div></li>`);
+});
+$('timeline').innerHTML = items.join('');
+
+$('foot').textContent = `Cập nhật ${STATE.updated} · HEAD ${STATE.head} · chi tiết trong docs/SQUAD-ARCHITECTURE-PLAN.md`;
+
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  document.querySelectorAll('animateMotion').forEach((n) => n.remove());
+}
+</script>
+
+</body>
+</html>

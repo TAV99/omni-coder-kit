@@ -325,6 +325,11 @@ test('T5 empty deny patterns preserve an explicit scope guard in the final worke
 });
 
 test('T5 exhausted technical retries preserve evidence and stop without resetting the session', async (t) => {
+    const capture = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-retry-capture-'));
+    const priorCapture = process.env.OMNI_SQUAD_ACCEPTANCE_EVIDENCE;
+    process.env.OMNI_SQUAD_ACCEPTANCE_EVIDENCE = capture;
+    t.after(() => { if (priorCapture === undefined) delete process.env.OMNI_SQUAD_ACCEPTANCE_EVIDENCE; else process.env.OMNI_SQUAD_ACCEPTANCE_EVIDENCE = priorCapture; fs.rmSync(capture, { recursive: true, force: true }); });
+
     const { repoRoot, head } = makeRepoFixture(t);
     let workerCalls = 0;
     const orch = createDualOrchestrator({
@@ -371,6 +376,12 @@ test('T5 exhausted technical retries preserve evidence and stop without resettin
     assert.equal(events.at(-1).error_code, 'DUAL_AGY_EMPTY_OUTPUT');
     assert.equal(events.at(-1).task_id, 'T5-RETRY-STOP');
     assert.equal(events.at(-1).expected_base_commit, head);
+    const captured = fs.readdirSync(path.join(capture, 'turns')).map(name => JSON.parse(fs.readFileSync(path.join(capture, 'turns', name))));
+    assert.equal(captured.length, 3);
+    captured.sort((a, b) => a.phaseAttempt - b.phaseAttempt);
+    assert.deepEqual(captured.map(r => r.retry.applied), [true, true, false]);
+    assert.ok(captured.every(r => r.contract.status === 'failed' && r.runtime === 'agy' && r.role === 'worker'));
+
 });
 
 test('T5 missing authoritative capability is a durable terminal preflight failure', async (t) => {
