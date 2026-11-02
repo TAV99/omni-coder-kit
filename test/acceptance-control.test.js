@@ -6,7 +6,7 @@ const path = require('node:path');
 const api = () => { assert.ok(fs.existsSync(path.join(__dirname, 'helpers/acceptance-control.js'))); return require('./helpers/acceptance-control'); };
 function scenario(ids = ['T01', 'T02']) {
     const trace = [], events = [], source = new Map(); let clock = 0;
-    const state = { sessionId: 's', planRevision: 1, tasks: {}, leases: {}, approvals: {}, lastSequence: 0 };
+    const state = { sessionId: 's', sessionState: 'EXECUTING', planRevision: 1, tasks: {}, leases: {}, approvals: {}, lastSequence: 0 };
     for (const id of ids) state.tasks[id] = { task_id: id, state: 'ROUTED', allowed_files: ['lib/shared.js'], context_files: [],
         isolatedWorkspace: { attempt: 1 }, ...(id === ids[0] ? { isolatedHandoff: { attempt: 1, result_sha256: id } } : {}) };
     const event = (e) => { events.push({ sequence: events.length + 1, ...e }); state.lastSequence = events.length; };
@@ -121,4 +121,33 @@ test('a claimed context dispatch or unsettled finalization prevents terminal pro
     delete s.state.tasks.T01.contextDispatch;
     s.state.tasks.T01.finalization = {settled:false};
     assert.equal(taskProjection(s.state,'T01').terminal,false);
+});
+
+test('a settled context continuation reaches QC with the audit waitingContext retained', async () => {
+    const { driveAcceptance } = api(), s = scenario(['T01']);
+    const park = { task_id: 'T01', attempt: 1, plan_revision: 1, question_ids: ['q1'], reason: 'NEEDS_CONTEXT' };
+    s.state.sessionState = 'EXECUTING';
+    s.state.tasks.T01.waitingContext = structuredClone(park);
+    s.state.tasks.T01.messages = [{ kind: 'question', message_id: 'q1' }, { kind: 'reply', message_id: 'r1', reply_to: 'q1' }];
+    s.state.tasks.T01.contextDispatch = { attempt: 1, status: 'completed', reply_ids: ['r1'] };
+    s.state.leases.first = { task_id: 'T01', status: 'released', released_at: 'settled' };
+    s.state.leases.continued = { task_id: 'T01', status: 'released', released_at: 'settled' };
+    const result = await driveAcceptance(s.options);
+    assert.equal(result.complete, true);
+    assert.ok(s.trace.includes('qc:T01'));
+    assert.deepEqual(s.state.tasks.T01.waitingContext, park, 'controller must preserve the authority audit record');
+    assert.equal(s.trace.filter(item => item.startsWith('human:')).length, 1);
+});
+
+test('a handoff does not enter QC until its context dispatch claim settles', async () => {
+    const { driveAcceptance } = api(), s = scenario(['T01']);
+    s.state.tasks.T01.contextDispatch = { status: 'claimed', attempt: 1 };
+    const qc = s.client.completeIsolatedTask;
+    s.client.completeIsolatedTask = async (...args) => {
+        assert.equal(s.state.tasks.T01.contextDispatch.status, 'completed');
+        return qc(...args);
+    };
+    const pause = s.options.pauseImpl;
+    s.options.pauseImpl = async ms => { await pause(ms); s.state.tasks.T01.contextDispatch.status = 'completed'; };
+    await driveAcceptance(s.options);
 });

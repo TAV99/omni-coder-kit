@@ -1,6 +1,7 @@
 'use strict';
 
 const { taskReadiness } = require('../../lib/dual/task-scheduler');
+const { continuationCheckpoint } = require('../../lib/dual/task-continuation');
 const { failure, pause } = require('./squad-live');
 
 function taskProjection(derived, id) {
@@ -74,7 +75,8 @@ async function driveAcceptance({ authority, client, sessionId, taskIds, planRevi
         const active = Object.values(derived.leases || {}).some(lease => !lease.released_at && lease.status !== 'released');
         if (!active) {
             const frontier = taskIds.filter(id => !taskProjection(derived, id).terminal && derived.tasks[id]?.isolatedHandoff
-                && !derived.tasks[id].waitingContext && !derived.tasks[id].handoffRejection
+                && !derived.tasks[id].handoffRejection && derived.tasks[id].contextDispatch?.status !== 'claimed'
+                && continuationCheckpoint(derived, id).status === 'QC'
                 && taskReadiness(derived, id).status === 'READY');
             const held = [];
             for (const id of frontier) {
