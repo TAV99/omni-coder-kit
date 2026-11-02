@@ -144,7 +144,7 @@ async function answerContext({ waitingQuestionIds, answered, client, sessionId, 
         report.contextReplies = [...(report.contextReplies || []), { questionId, messageId }];
         log(`[context] answered ${questionId}`);
     }
-    await client.request('session.resume', { session_id: sessionId, task_id: taskId, plan_revision: planRevision });
+    await client.request('session.resume', { session_id: sessionId, task_id: taskId, plan_revision: planRevision, projection: 'ack' });
 }
 
 module.exports = { failure, check, pause, records, stopTree, saveReport, createStageRunner, createPoller,

@@ -90,6 +90,43 @@ function createFakeClock(startIso = '2026-08-25T00:00:00.000Z') {
     return clock;
 }
 
+test('resume ACK survives large task history and preserves one dispatch plus session validation', async (t) => {
+    const root = createTempWorkspace(t);
+    const store = createAuthorityStore(path.join(root, '.omni/runs/dual-authority'));
+    store.append({ schema_version: 2, type: 'session.created', state: 'DISCOVERED',
+        workspace_id: computeWorkspaceId(root), workspace_root: root, session_id: 'large-resume',
+        plan_revision: 1, expected_baseline: { kind: 'git', id: 'c'.repeat(40) }, mode: 'auto' });
+    store.append({ schema_version: 2, type: 'capability.result', from_state: 'DISCOVERED',
+        to_state: 'CAPABILITY_SAFE', status: 'PASSED', checks: [{ name: 'hooks', status: 'PASSED' }] });
+    const tasks = Array.from({ length: 100 }, (_, i) => ({ task_id: `large-${i}`, title: `Task ${i}`,
+        goal: 'g'.repeat(1024), owner: 'agy', allowed_files: [`lib/${i}.js`] }));
+    store.append({ schema_version: 2, type: 'plan.registered', from_state: 'INTERVIEWING',
+        to_state: 'PLANNED', plan_path: 'plan.md', plan_sha256: 'a'.repeat(64), total_tasks: tasks.length, tasks });
+    let dispatches = 0, release;
+    const running = new Promise(resolve => { release = resolve; });
+    const daemon = await startDaemonServer({ workspaceRoot: root, authorityStore: store,
+        orchestrator: { runTask: async () => { dispatches++; await running; return []; } } });
+    const { createDaemonClient } = require('../lib/dual/daemon-client');
+    const client = createDaemonClient({ workspaceRoot: root });
+    try {
+        const ack = await client.resumeSession({ session_id: 'large-resume', projection: 'ack' });
+        assert.deepEqual(Object.keys(ack).sort(), ['plan_revision', 'resumed', 'session_id', 'session_state', 'state', 'worker_running']);
+        assert.equal(ack.session_id, 'large-resume');
+        assert.equal(ack.plan_revision, 1);
+        assert.equal(typeof ack.resumed, 'boolean');
+        assert.equal(ack.worker_running, true);
+        assert.equal(dispatches, 1);
+        assert.ok(Buffer.byteLength(JSON.stringify(ack)) < 1024);
+        await assert.rejects(client.resumeSession('large-resume'), { code: 'DUAL_CLIENT_RESPONSE_TOO_LARGE' });
+        await assert.rejects(client.resumeSession({ projection: 'ack' }), { code: 'DUAL_SESSION_REQUIRED' });
+        await assert.rejects(client.resumeSession({ session_id: 'other', projection: 'ack' }), { code: 'DUAL_SESSION_MISMATCH' });
+        await assert.rejects(client.resumeSession({ session_id: 'large-resume', task_id: 'missing', projection: 'ack' }), { code: 'DUAL_TASK_NOT_FOUND' });
+        await assert.rejects(client.resumeSession({ session_id: 'large-resume', plan_revision: 2, projection: 'ack' }), { code: 'DUAL_PLAN_REVISION_MISMATCH' });
+        assert.equal(dispatches, 1, 'response handling and rejected requests must not dispatch again');
+        assert.equal((await client.health()).status, 'healthy', 'health must not include accumulated task history');
+    } finally { release(); await daemon.close(); }
+});
+
 function initGitWorkspace(workspaceRoot) {
     let init = spawnSync('git', ['init', '-b', 'main'], { cwd: workspaceRoot, encoding: 'utf8' });
     if (init.status !== 0) {

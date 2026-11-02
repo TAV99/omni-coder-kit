@@ -274,7 +274,7 @@ test('context replies preserve IDs, body callback, report and task resume semant
     assert.deepEqual(options.calls, [
         ['reply', 's', { task_id: 'T01', plan_revision: 1, message_id: 'T01-reply-1', reply_to: 'q1', body: 'Source: plans/plan.md; q1; revision 1' }],
         ['reply', 's', { task_id: 'T01', plan_revision: 1, message_id: 'T01-reply-2', reply_to: 'q2', body: 'Source: plans/plan.md; q2; revision 1' }],
-        ['request', 'session.resume', { session_id: 's', task_id: 'T01', plan_revision: 1 }],
+        ['request', 'session.resume', { session_id: 's', task_id: 'T01', plan_revision: 1, projection: 'ack' }],
     ]);
     assert.deepEqual(options.report.contextReplies, [{ questionId: 'q1', messageId: 'reply-1' }, { questionId: 'q2', messageId: 'reply-2' }]);
     await live.answerContext(options);
@@ -293,7 +293,7 @@ test('context reply budget and plan revision are configurable with IDs shared ac
     await live.answerContext(options);
     assert.deepEqual(options.calls[0], ['reply', 's', { task_id: 'T02', plan_revision: 7,
         message_id: 'T02-reply-3', reply_to: 'q3', body: 'Source: plans/plan.md; q3; revision 7' }]);
-    assert.deepEqual(options.calls[1], ['request', 'session.resume', { session_id: 's', task_id: 'T02', plan_revision: 7 }]);
+    assert.deepEqual(options.calls[1], ['request', 'session.resume', { session_id: 's', task_id: 'T02', plan_revision: 7, projection: 'ack' }]);
 });
 
 test('rejected context acknowledgement does not mark answered or resume', async () => {

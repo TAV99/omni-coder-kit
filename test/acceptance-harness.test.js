@@ -45,6 +45,11 @@ test('partial harness run stops the daemon before hidden tests and archives befo
  assert.deepEqual(f.trace,['drive','daemon-stop','hidden','archive','ui-stop']);
  const saved=fs.readFileSync(path.join(f.outDir,'report.json'),'utf8');assert.doesNotMatch(saved,/private-ui|private@example/);
 });
+test('initial acceptance resume requests ACK instead of unrelated task history',async t=>{
+ const f=fake(t),daemon=f.deps.startDaemon();let calls=0;
+ daemon.client.resumeSession=async params=>{calls++;if(params.projection!=='ack')throw Object.assign(new Error('large history'),{code:'DUAL_CLIENT_RESPONSE_TOO_LARGE'});assert.equal(params.session_id,'s');return {session_id:'s',resumed:true};};
+ assert.equal((await f.run()).errorCode,null);assert.equal(calls,1);
+});
 test('failure preserves the workspace, collects evidence, closes UI and never releases hidden tests',async t=>{
  const f=fake(t,{driveError:true}),report=await f.run();
  assert.equal(report.ok,false);assert.equal(report.errorCode,'BROKEN');assert.ok(fs.existsSync(f.root));

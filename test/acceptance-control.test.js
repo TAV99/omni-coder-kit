@@ -47,6 +47,29 @@ test('ready-frontier integration releases a scope-blocked successor without an a
     assert.deepEqual(s.trace.filter(x => x.startsWith('human:')), ['human:integrate-T01','human:integrate-T02']);
 });
 
+test('frontier resume uses a compact ACK when accumulated task history exceeds the client cap', async () => {
+    const { driveAcceptance } = api(), s = scenario();
+    const resume = s.client.resumeSession;
+    let calls = 0;
+    s.client.resumeSession = async (params, options) => {
+        calls++;
+        if (params.projection !== 'ack') throw Object.assign(new Error('large task history'), { code: 'DUAL_CLIENT_RESPONSE_TOO_LARGE' });
+        assert.equal(params.session_id, 's');
+        return resume(params, options);
+    };
+    assert.equal((await driveAcceptance(s.options)).complete, true);
+    assert.ok(calls > 0);
+});
+
+test('a lost resume response is propagated without replaying a possibly dispatched operation', async () => {
+    const { driveAcceptance } = api(), s = scenario();
+    let calls = 0;
+    s.client.resumeSession = async () => { calls++; throw Object.assign(new Error('lost response'), { code: 'DUAL_CLIENT_RESPONSE_TOO_LARGE' }); };
+    await assert.rejects(driveAcceptance(s.options), { code: 'DUAL_CLIENT_RESPONSE_TOO_LARGE' });
+    assert.equal(calls, 1);
+    assert.equal(s.state.tasks.T01.state, 'TASK_VERIFIED');
+});
+
 test('driver services NEEDS_CONTEXT and waits for released leases before QC', async () => {
     const { driveAcceptance } = api(), s = scenario(['T08']);
     s.state.tasks.T08.waitingContext = { question_ids: ['q1'] };

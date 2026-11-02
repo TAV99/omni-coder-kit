@@ -147,7 +147,7 @@ async function runAcceptance(args, deps = {}) {
                 plan_revision: 1, tasks: prepared.tasks, acceptance_policy: { protocol_version: 1, checks: [], ui: {
                     required: false, viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true } } }, { timeoutMs: limit });
             check(registered.registered, 'PLAN_NOT_REGISTERED');
-            await client.resumeSession(report.sessionId, { timeoutMs: limit });
+            await client.resumeSession({ session_id: report.sessionId, projection: 'ack' }, { timeoutMs: limit });
         });
         const approvalCommand = gate => `cd ${quote(root)} && ${quote(process.execPath)} ${quote(OMNI)} squad approve ${gate}`;
         const wait = (gateIds, limit, allowAutoPlan = false) => waitForApproval({ authority, report, save, poll, limit,

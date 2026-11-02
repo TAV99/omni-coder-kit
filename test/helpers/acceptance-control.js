@@ -96,7 +96,7 @@ async function driveAcceptance({ authority, client, sessionId, taskIds, planRevi
                 // another pending gate and must return to the person.
                 continue;
             }
-            if (frontier.some(id => read().tasks[id]?.state === 'TASK_VERIFIED')) await client.resumeSession(sessionId, { timeoutMs: remaining() });
+            if (frontier.some(id => read().tasks[id]?.state === 'TASK_VERIFIED')) await client.resumeSession({ session_id: sessionId, projection: 'ack' }, { timeoutMs: remaining() });
         }
         await pauseImpl(Math.min(pollIntervalMs, remaining()));
     }
