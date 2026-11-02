@@ -44,6 +44,14 @@ ol.list { list-style: decimal inside; }
 .term-help { border: 1px dashed var(--line); border-radius: 6px; padding: 12px 14px; }
 .term-help p { margin: 0 0 8px; }
 .term-help code { display: inline-block; user-select: all; }
+.composer { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; padding: 10px 16px 0; }
+.composer label { font-size: 12px; color: var(--muted); padding-top: 6px; }
+.composer select, .composer textarea, .composer button { font: inherit; font-size: 13px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 4px; }
+.composer select { padding: 3px 4px; margin-left: 4px; }
+.composer textarea { flex: 1 1 280px; min-height: 2.6em; padding: 5px 8px; resize: vertical; }
+.composer button { padding: 5px 14px; cursor: pointer; }
+.composer button:hover { border-color: var(--accent); }
+.composer #msg-status { flex-basis: 100%; font-size: 12px; }
 .timeline { padding: 14px 16px; min-width: 0; }
 .filters { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; }
 .filters h2 { margin: 0; }

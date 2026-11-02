@@ -147,12 +147,14 @@ test('security: loopback only, token in the fragment, wrong Host/Origin/token â†
     assert.equal((await request(port, { headers: { cookie: `a=b; omni_ui=${TOKEN}` } })).status, 200);
 });
 
-test('no route writes or approves; the server binds 127.0.0.1 only', async (t) => {
+test('no route approves or writes the ledger by itself; the server binds 127.0.0.1 only', async (t) => {
     const root = project(t);
     session(root);
     const ui = await serve(t, root);
     const bearer = { authorization: `Bearer ${TOKEN}` };
-    for (const [method, url] of [['POST', '/api/message'], ['POST', '/api/approve'], ['POST', '/api/state'], ['PUT', '/api/state'],
+    // POST /api/message exists since P6c but only takes JSON (test/dual-inbox.test.js).
+    assert.equal((await request(ui.port, { method: 'POST', url: '/api/message', headers: bearer })).status, 415);
+    for (const [method, url] of [['POST', '/api/approve'], ['POST', '/api/state'], ['PUT', '/api/state'],
         ['POST', '/api/gates/integrate-TASK-1'], ['DELETE', '/api/events'], ['GET', '/../.omni/squad.local.json'], ['GET', '/api/../index.html']]) {
         assert.equal((await request(ui.port, { method, url, headers: bearer })).status, 404, `${method} ${url}`);
     }

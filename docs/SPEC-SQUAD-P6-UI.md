@@ -120,6 +120,14 @@ Không parse chữ hiển thị trên terminal (plan §4.3): timeline lấy từ
 - Không có task/lease phù hợp → tin vẫn vào ledger, UI báo "chưa có lượt nào để nhận".
 - Mọi ghi file của worker vẫn qua scope-guard + QC; tin của người dùng không mở rộng `allowed_files`.
 
+### 4.4 Đã làm ở P6c
+
+- Ledger: `user.message.posted { message_id, to, body, body_sha256, actor: 'human', via: ui|cli }` và `user.message.delivered { message_id, recipient, via: mcp|hook|worker-turn|reviewer-turn, task_id?, attempt?, phase? }`; mỗi vai nhận một tin đúng một lần, `@all` giao riêng cho từng vai (`derive().messages`). Logic chung ở `lib/dual/inbox.js`.
+- RPC `inbox.post/read/ack` cần `session_id`; `inbox.ack` qua RPC chỉ nhận `via: mcp|hook` (worker/reviewer ack trong daemon). Không có MCP tool để *gửi* tin — chỉ người gửi.
+- Orchestrator: MCP `omni_dual_inbox` (đọc + ack; hook xếp nó vào nhóm control như `omni_dual_status`) và hook SessionStart/UserPromptSubmit gắn tin chưa đọc vào `additionalContext` (giới hạn trường nâng 1 KiB → 8 KiB; tin không vừa ~6 KB để lượt sau). Hướng dẫn trong `dual-controller.md` và SKILL.
+- Worker: tin vào input của **pha kế** (scout/implement/review) dưới mục "Notes from the user", ack `worker-turn` kèm task/attempt/phase. Reviewer: tin ghi thành `user-notes.md` trong review root (không qua argv), prompt nhắc đọc, ack `reviewer-turn`.
+- UI: `POST /api/message` (JSON, kiểm vai theo binding, ≤ 8 KiB, `message_id` UUID — gửi lại cùng id không nhân đôi); chưa có session → 409; daemon chưa chạy → UI bật daemon như omni hook. Daemon cũ (trước khi nâng cấp) không biết `inbox.post` → UI báo chạy `omni dual daemon stop`. Sidebar "Your messages" hiện ai đã đọc / đang chờ lượt kế.
+
 ---
 
 ## 5. PTY orchestrator (P6b)

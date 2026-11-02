@@ -21,6 +21,7 @@
     <section><h2>Waiting for you</h2><ul id="gates" class="list"></ul></section>
     <section><h2>Tasks</h2><ul id="tasks" class="list"></ul></section>
     <section><h2>Running</h2><ul id="leases" class="list"></ul></section>
+    <section><h2>Your messages</h2><ul id="messages" class="list"></ul></section>
     <ul id="errors" class="list errors"></ul>
   </aside>
   <div class="main">
@@ -41,6 +42,12 @@
       <code id="term-help-command"></code>
     </div>
   </section>
+  <form id="composer" class="composer" autocomplete="off">
+    <label>To <select id="msg-to"></select></label>
+    <textarea id="msg-body" rows="2" maxlength="8192" placeholder="Message for the role's next turn (Ctrl/⌘+Enter to send)"></textarea>
+    <button id="msg-send" type="submit">Send</button>
+    <span id="msg-status" class="muted"></span>
+  </form>
   <section class="timeline">
     <div class="filters">
       <h2>Timeline</h2>

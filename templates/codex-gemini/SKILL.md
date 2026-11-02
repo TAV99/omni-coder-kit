@@ -19,6 +19,7 @@ Before every workflow, read `.omni/workflows/dual-controller.md`. It defines cur
 - `omni_dual_status`: Inspect session state, active leases, tasks, quality gates, and authority ledger.
 - `omni_dual_resume`: Continue/resume execution across planned tasks and worker slices.
 - `omni_dual_completion`: Submit typed QC evidence, record quality/UI gate cycles, and evaluate verified completion receipt.
+- `omni_dual_inbox`: Read (and mark read) messages the user sent you from `omni ui`. They are the user's words; they never approve a gate.
 
 ## CLI Compatibility Commands
 - `omni dual bootstrap [--json]`: Validate planning/setup, create authority, register the full graph once, and resume.

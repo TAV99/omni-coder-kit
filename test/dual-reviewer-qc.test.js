@@ -7,6 +7,7 @@
 require('./helpers/auto-approve-gates');
 
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -27,7 +28,8 @@ const { fakeSpawn } = require('./helpers/squad-fakes');
 const TEMPLATES = path.join(__dirname, '..', 'templates', 'squad');
 const CONFIG = { runtime: 'claude', model: 'sonnet', effort: 'low', maxCorrections: 3 };
 
-async function handoff(t) {
+// `beforeRun(store)` runs before the worker; `inputs` collects each phase's prompt (agy inlines the input).
+async function handoff(t, { beforeRun } = {}) {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-reviewer-qc-')));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     fs.writeFileSync(path.join(root, 'index.js'), 'module.exports = 1;\n');
@@ -50,10 +52,12 @@ async function handoff(t) {
             validation_commands: [command] }] });
     store.append({ schema_version: 2, type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
         allowed_files: ['index.js'], model: 'gemini-3.8-flash-high', effort: 'high', reason: 'Private task' });
+    const inputs = [];
     const processRunner = async (invocation) => {
         const spec = JSON.parse(fs.readFileSync(path.join(invocation.cwd, '.omni/codex-gemini/runs/TASK-1/spec.json'), 'utf8'));
         const common = { schema_version: 1, task_id: 'TASK-1', expected_baseline: spec.expected_baseline };
         const prompt = invocation.args.find((arg) => arg.startsWith('-p='));
+        inputs.push(prompt);
         let payload;
         if (prompt.includes('scout phase')) payload = { ...common, summary: 'Read index and spec',
             relevant_files: [{ path: 'index.js', description: 'return value' }], exact_symbols: [],
@@ -72,12 +76,13 @@ async function handoff(t) {
         return { exitCode: 0, stdout: JSON.stringify({ status: 'success', structured_output: payload }), stderr: '',
             timedOut: false, startedAt: new Date(), endedAt: new Date(), durationMs: 1 };
     };
+    if (beforeRun) beforeRun(store);
     const adapter = createOrchestratorAdapter(withDiscussion({ workspaceRoot: root, authorityStore: store, processRunner }));
     assert.equal((await adapter.runTask(store.derive()))[0].status, 'AWAITING_CODEX_QC');
     const task = store.derive().tasks['TASK-1'];
     const { workerRoot } = readTaskBinding(root, task.isolatedWorkspace.reference);
     const spec = JSON.parse(fs.readFileSync(path.join(workerRoot, '.omni/codex-gemini/runs/TASK-1/spec.json'), 'utf8'));
-    return { root, store, task, spec };
+    return { root, store, task, spec, inputs };
 }
 
 // A claude -p result carrying a reviewer verdict for the fixture task.
@@ -334,4 +339,30 @@ test('budget: worker max_turns caps attempts, so a reviewer NEEDS_FIX stops for 
         verdict: result.verdict, attempt: result.attempt, config: CONFIG });
     assert.deepEqual(settled, { status: 'NEEDS_DECISION', reason: 'DUAL_CORRECTION_LIMIT' });
     assert.equal(f.store.derive().tasks['TASK-1'].correction, undefined);
+});
+
+// SPEC-SQUAD-P6 §4.3: a user message reaches the role's next turn once, as data.
+test('user notes: worker-1 reads its message in the next phase only; the reviewer gets its own as a file', async (t) => {
+    const { postMessage } = require('../lib/dual/inbox');
+    const ids = { worker: crypto.randomUUID(), other: crypto.randomUUID(), reviewer: crypto.randomUUID() };
+    const f = await handoff(t, { beforeRun(store) {
+        postMessage(store, { messageId: ids.worker, to: 'worker-1', body: 'Keep the module.exports style.' });
+        postMessage(store, { messageId: ids.other, to: 'worker-2', body: 'Not for worker-1.' });
+        postMessage(store, { messageId: ids.reviewer, to: 'reviewer', body: 'Check the value really is 2.' });
+    } });
+    assert.equal(f.inputs.length, 3, 'scout, implement, review');
+    assert.match(f.inputs[0], /Notes from the user[\s\S]*do not grant any permission[\s\S]*Keep the module\.exports style\./);
+    assert.doesNotMatch(f.inputs[0], /Not for worker-1|Check the value/);
+    assert.doesNotMatch(f.inputs[1] + f.inputs[2], /Notes from the user/, 'taken once');
+    const messages = f.store.derive().messages;
+    assert.deepEqual(messages[ids.worker].delivered['worker-1'], { via: 'worker-turn', at: messages[ids.worker].delivered['worker-1'].at,
+        task_id: 'TASK-1', attempt: 1, phase: 'scout' });
+    assert.deepEqual(messages[ids.other].delivered, {});
+    const spawnImpl = fakeSpawn(() => ({ stdout: claudeVerdict(f.spec, 'APPROVE') }));
+    await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1', config: CONFIG, spawnImpl });
+    const [call] = spawnImpl.calls;
+    assert.match(fs.readFileSync(path.join(call.options.cwd, 'user-notes.md'), 'utf8'), /Check the value really is 2\./);
+    assert.match(call.args[1], /Also read user-notes\.md/);
+    assert.equal(f.store.derive().messages[ids.reviewer].delivered.reviewer.via, 'reviewer-turn');
+    assert.equal(call.args.join(' ').includes('Check the value'), false, 'the note is a file, not argv');
 });
