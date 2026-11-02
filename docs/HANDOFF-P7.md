@@ -163,10 +163,11 @@ User ─┬─ orchestrator CLI (codex | claude) ──MCP omni_dual──┐
 # Normal run (≈ 8–9 min; perl alarm guards against hangs)
 perl -e 'alarm 590; exec @ARGV' npm test
 # Loaded run (≈ 3–4 min). Use /usr/bin/find: an rtk hook on this machine rewrites `find` and breaks the command.
-{ /usr/bin/find test -maxdepth 1 -name '*.test.js' -print0; /usr/bin/find test -mindepth 2 -name '*.test.js' -print0; } | xargs -0 perl -e 'alarm 590; exec "node","--test","--test-concurrency=4","--test-timeout=90000",@ARGV'
+/usr/bin/find test -path test/fixtures -prune -o -name '*.test.js' -print0 | xargs -0 perl -e 'alarm 590; exec "node","--test","--test-concurrency=4","--test-timeout=90000",@ARGV'
 ```
 
 - The loaded run must report the **same test count** as the normal run. At handoff that is 3103: 3091 pass + 12 skipped.
+- P7a amendment (approved by the user, 2026-11-02): exclude `test/fixtures/` from direct loaded-run discovery. Its visible and deliberately failing hidden acceptance tests run inside `test/acceptance-fixture.test.js` (V46), matching the normal run's scope.
 - macOS-only test traps:
   - `os.tmpdir()` sits under `/var` → `/private/var`, so fixtures must `realpathSync.native` their temp roots;
   - the first exec of a freshly written script takes about 250 ms;

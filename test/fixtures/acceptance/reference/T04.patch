@@ -1,0 +1,28 @@
+diff --git a/lib/catalog.js b/lib/catalog.js
+--- a/lib/catalog.js
++++ b/lib/catalog.js
+@@ -22,6 +22,12 @@
+         return this.books.filter((book) => book.author === author);
+     }
+ 
++    search(query) {
++        const needle = String(query).toLowerCase();
++        return this.books.filter((book) => [book.title, book.author]
++            .some((value) => String(value ?? '').toLowerCase().includes(needle)));
++    }
++
+     removeBook(id) {
+         const index = this.books.findIndex((book) => book.id === id);
+         if (index === -1) return false;
+diff --git a/bin/cli.js b/bin/cli.js
+--- a/bin/cli.js
++++ b/bin/cli.js
+@@ -35,7 +35,7 @@
+         fs.writeFileSync(file, JSON.stringify(catalog.list(), null, 2) + '\n');
+         return `Added ${book.id}\n`;
+     }
+-    if (command === 'search') throw new Error('Search is not implemented');
++    if (command === 'search') return catalog.search(positional.slice(1).join(' ')).map(render).join('');
+     throw new Error(`Unknown command: ${command}`);
+ }
+ 

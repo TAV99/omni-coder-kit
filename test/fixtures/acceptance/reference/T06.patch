@@ -1,0 +1,23 @@
+diff --git a/test/format.test.js b/test/format.test.js
+--- a/test/format.test.js
++++ b/test/format.test.js
+@@ -6,3 +6,19 @@
+ test('price has two decimal places for a positive integer', () => {
+     assert.equal(format.price(12), '12.00');
+ });
++
++test('price formats zero and negative prices', () => {
++    assert.equal(format.price(0), '0.00');
++    assert.equal(format.price(-12.5), '-12.50');
++});
++
++test('price rounds fractions and pads cents', () => {
++    assert.equal(format.price(1.236), '1.24');
++    assert.equal(format.price(1.2), '1.20');
++});
++
++test('price rejects every non-finite or nonnumeric input', () => {
++    for (const value of [NaN, Infinity, -Infinity, null, undefined, '12', {}, []]) {
++        assert.throws(() => format.price(value), TypeError);
++    }
++});

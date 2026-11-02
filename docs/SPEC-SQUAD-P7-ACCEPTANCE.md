@@ -286,10 +286,26 @@ Since P5c, the `worker.task.failed` log records the abort/guard reason. If it re
 
 ## 11. Definition of done for P7
 
-- [ ] Task suite + V46 green in `npm test`.
+- [x] Task suite + V46 green in `npm test`.
 - [ ] Configs A–D finished, each meeting all 5 thresholds of §4; `docs/ACCEPTANCE-3.2.0.md` has the numbers per config.
 - [ ] Both real-agent runs finished; bugs found are fixed or clearly recorded.
 - [ ] V37: each CLI either has classification based on real signals or is recorded as "not observed"; V36 and the cross-task abort have recorded results.
 - [ ] `npm test` green on macOS, plus one loaded run.
 - [ ] V44 (Safari/Firefox, from P6) tried by hand.
 - [ ] Ready to take to real Linux/Windows machines (plan §11).
+
+---
+
+## 12. Done notes
+
+### P7a — acceptance fixture and task suite (2026-11-02)
+
+- Baseline confirmed before implementation: branch `3.2.0`, HEAD `197671b` (documentation only after code commit `f02543a`); normal `npm test`: 3103 tests, 3091 passed, 12 skipped, 0 failed.
+- Added versioned, dependency-free `test/fixtures/acceptance/bookshelf/`, visible tests, `plans/plan.md`, ten isolated task records, hidden tests and independent scope-limited reference patches.
+- V46 (`test/acceptance-fixture.test.js`) validates production task metadata and exact scopes, then verifies every hidden test fails by assertion on the original and passes after its reference patch; visible tests pass in both states. It also rejects source-only T03 solutions and weak T06 tests (including a negative-string assertion substituting for numeric-sign coverage).
+- User-approved details: books use `{id,title,author,price,publishedAt}`; the CLI persists JSON via `--file`; search matches title/author substrings without case sensitivity. Price accepts finite numbers and uses `toFixed(2)`, otherwise throws `TypeError`; a title must be a nonblank string. Totals sum raw prices and round once. Year counts use UTC, reject impossible calendar dates and put missing/malformed input in `unknown`.
+- T10 grammar was clarified and approved during review: `YYYY-MM-DD`, or `YYYY-MM-DDTHH:mm[:ss[.fraction]]` followed by `Z` or `±HH:mm`; fractional precision is unbounded, hours are 00–23 and minutes/seconds are 00–59. The old reference failed the added precision/minute-only checks before being corrected.
+- T05 checks unchanged date output and shared formatter delegation (including destructured imports). T06 uses ten independent mutation probes so a test-only reference solution is measurably different from the original tests. After review reproduced a source-only T03 solution passing without regression tests, the user approved an additional T03 mutation probe for its visible tests.
+- T08's finance format is controller-only: remove `bookshelf/plans/finance-format.md` when copying the initial workspace, retain it outside the run, and release a sourced reply only after `NEEDS_CONTEXT`. This withholding rule was approved by the user; P7c must preserve it. Functional hidden tests alone do not measure whether the context question occurred; the live ledger must do that.
+- User-approved loaded-run amendment: prune `test/fixtures/` from direct discovery (handoff §6.1). The root `npm test` command is unchanged; V46 runs fixture tests explicitly. Fresh child runners discard `NODE_TEST_CONTEXT` and assert a nonzero executed-test count to avoid recursive-run suppression.
+- Focused verification: 14/14 checks passed. Independent read-only review finished with no remaining P2-or-higher findings; final focused reviewer checks passed 6/6. Full normal verification: 3117 tests, 3105 passed, 12 skipped, 0 failed (522.3 seconds). Loaded verification (`--test-concurrency=4`, fixtures pruned): the same 3117 tests, 3105 passed, 12 skipped, 0 failed (205.1 seconds). Normal and loaded discovery both select 205 test files. The user approved the local P7a commit after reviewing these results; no push is authorized. P7b onward and live gates/runtimes are not exercised by P7a.

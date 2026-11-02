@@ -1,0 +1,11 @@
+diff --git a/lib/catalog.js b/lib/catalog.js
+--- a/lib/catalog.js
++++ b/lib/catalog.js
+@@ -10,6 +10,7 @@
+     }
+ 
+     addBook(book) {
++        if (typeof book.title !== 'string' || !book.title.trim()) throw new TypeError('Title is required');
+         this.books.push({ ...book });
+         return this.findById(book.id);
+     }

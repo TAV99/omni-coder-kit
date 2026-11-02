@@ -1,0 +1,12 @@
+diff --git a/lib/catalog.js b/lib/catalog.js
+--- a/lib/catalog.js
++++ b/lib/catalog.js
+@@ -19,7 +19,7 @@
+     }
+ 
+     findByAuthor(author) {
+-        return this.books.filter((book) => book.author === author);
++        return this.books.filter((book) => String(book.author ?? '').toLowerCase() === String(author).toLowerCase());
+     }
+ 
+     removeBook(id) {

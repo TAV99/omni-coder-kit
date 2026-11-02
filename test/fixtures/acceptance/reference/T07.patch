@@ -1,0 +1,33 @@
+diff --git a/bin/cli.js b/bin/cli.js
+--- a/bin/cli.js
++++ b/bin/cli.js
+@@ -10,7 +10,8 @@
+     const positional = [];
+     for (let index = 0; index < argv.length; index++) {
+         const arg = argv[index];
+-        if (!arg.startsWith('--')) positional.push(arg);
++        if (arg === '--json') flags.json = true;
++        else if (!arg.startsWith('--')) positional.push(arg);
+         else if (argv[index + 1] && !argv[index + 1].startsWith('--')) flags[arg.slice(2)] = argv[++index];
+         else flags[arg.slice(2)] = true;
+     }
+@@ -28,7 +29,7 @@
+     const file = flags.file || 'books.json';
+     const catalog = new Catalog(fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : []);
+     const command = positional[0] || 'list';
+-    if (command === 'list') return catalog.list().map(render).join('');
++    if (command === 'list') return flags.json ? JSON.stringify(catalog.list()) + '\n' : catalog.list().map(render).join('');
+     if (command === 'add') {
+         const book = catalog.addBook({ id: flags.id, title: flags.title, author: flags.author || '',
+             price: Number(flags.price || 0), publishedAt: flags['published-at'] || null });
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -31,3 +31,7 @@
+ ## Working on the suite
+ 
+ The ten tasks are independent changes against the starting project, with overlapping scopes intentionally retained for scheduler testing. See `plans/plan.md` for goals and file boundaries. Implement only the assigned task; do not repair adjacent gaps. The finance export task deliberately lacks its business format: request sourced context before implementing it.
++
++## JSON output
++
++Run `node bin/cli.js list --json --file books.json` to print the complete catalog as a JSON array, preserving values and order. An empty catalog prints `[]`. Omit `--json` for ordinary text output.

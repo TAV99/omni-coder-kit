@@ -1,0 +1,18 @@
+diff --git a/lib/report.js b/lib/report.js
+--- a/lib/report.js
++++ b/lib/report.js
+@@ -9,7 +9,13 @@
+ function byYear(books) {
+     const counts = {};
+     for (const book of books) {
+-        const year = String(book.publishedAt).slice(0, 4);
++        const value = book.publishedAt;
++        const match = typeof value === 'string' && /^(\d{4}-\d{2}-\d{2})(?:T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d))?$/.exec(value);
++        const calendar = match ? new Date(`${match[1]}T00:00:00Z`) : null;
++        const parsed = match ? new Date(value) : null;
++        const valid = calendar && Number.isFinite(calendar.getTime()) && calendar.toISOString().slice(0, 10) === match[1]
++            && Number.isFinite(parsed.getTime());
++        const year = valid ? String(parsed.getUTCFullYear()) : 'unknown';
+         counts[year] = (counts[year] || 0) + 1;
+     }
+     return counts;

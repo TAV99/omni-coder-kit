@@ -1,0 +1,13 @@
+diff --git a/lib/report.js b/lib/report.js
+--- a/lib/report.js
++++ b/lib/report.js
+@@ -3,7 +3,8 @@
+ const format = require('./format');
+ 
+ function total(books) {
+-    return books.reduce((sum, book) => sum + Number(format.price(book.price)), 0);
++    const sum = books.reduce((value, book) => value + book.price, 0);
++    return Number(sum.toFixed(2));
+ }
+ 
+ function byYear(books) {

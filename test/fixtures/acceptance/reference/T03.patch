@@ -1,0 +1,40 @@
+diff --git a/lib/csv.js b/lib/csv.js
+--- a/lib/csv.js
++++ b/lib/csv.js
+@@ -2,7 +2,22 @@
+ 
+ function parse(text) {
+     if (!text) return [];
+-    return text.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n').map((line) => line.split(','));
++    const rows = [];
++    let row = [], field = '', quoted = false;
++    for (let index = 0; index < text.length; index++) {
++        const char = text[index];
++        if (char === '"') {
++            if (quoted && text[index + 1] === '"') { field += '"'; index++; }
++            else quoted = !quoted;
++        } else if (!quoted && char === ',') {
++            row.push(field); field = '';
++        } else if (!quoted && (char === '\n' || char === '\r')) {
++            if (char === '\r' && text[index + 1] === '\n') index++;
++            rows.push([...row, field]); row = []; field = '';
++        } else field += char;
++    }
++    if (row.length || field || !/[\r\n]$/.test(text)) rows.push([...row, field]);
++    return rows;
+ }
+ 
+ function stringify(rows) {
+diff --git a/test/csv.test.js b/test/csv.test.js
+--- a/test/csv.test.js
++++ b/test/csv.test.js
+@@ -12,3 +12,9 @@
+     assert.equal(csv.stringify([['id', 'title'], ['a', 'Dune']]), 'id,title\na,Dune\n');
+     assert.equal(csv.stringify([]), '');
+ });
++
++test('quoted fields preserve commas, escaped quotes and empty fields', () => {
++    const rows = [['id', 'title', 'note'], ['a', 'Dune, Messiah', 'He said "read"'], ['', 'plain', '']];
++    assert.deepEqual(csv.parse(csv.stringify(rows)), rows);
++    assert.deepEqual(csv.parse('a,"b,c"\r\n'), [['a', 'b,c']]);
++});

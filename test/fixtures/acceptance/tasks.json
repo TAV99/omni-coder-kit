@@ -1,0 +1,362 @@
+{
+  "suite_version": 1,
+  "tasks": [
+    {
+      "id": "T01",
+      "task_id": "T01",
+      "title": "Case-insensitive author lookup",
+      "goal": "Make Catalog.findByAuthor(author) compare complete author names case-insensitively, preserving book order and existing case-sensitive ID operations.",
+      "owner": "worker",
+      "execution_mode": "isolated",
+      "dependency_mode": "none",
+      "category": "bugfix",
+      "complexity": "low",
+      "risk": "low",
+      "allowed_files": [
+        "lib/catalog.js"
+      ],
+      "context_files": [
+        "README.md",
+        "plans/plan.md",
+        "lib/catalog.js",
+        "test/catalog.test.js",
+        "test/csv.test.js",
+        "test/format.test.js",
+        "test/report.test.js",
+        "test/cli.test.js"
+      ],
+      "deny_patterns": [],
+      "validation_commands": [
+        {
+          "program": "node",
+          "args": [
+            "--test"
+          ],
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "T02",
+      "task_id": "T02",
+      "title": "Reject missing book titles",
+      "goal": "Make Catalog.addBook throw TypeError before mutation if title is missing, null, not a string, empty, or whitespace-only. Preserve valid title text and existing add/find/remove behaviour.",
+      "owner": "worker",
+      "execution_mode": "isolated",
+      "dependency_mode": "none",
+      "category": "guard",
+      "complexity": "low",
+      "risk": "low",
+      "allowed_files": [
+        "lib/catalog.js"
+      ],
+      "context_files": [
+        "README.md",
+        "plans/plan.md",
+        "lib/catalog.js",
+        "test/catalog.test.js",
+        "test/csv.test.js",
+        "test/format.test.js",
+        "test/report.test.js",
+        "test/cli.test.js"
+      ],
+      "deny_patterns": [],
+      "validation_commands": [
+        {
+          "program": "node",
+          "args": [
+            "--test"
+          ],
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "T03",
+      "task_id": "T03",
+      "title": "Parse quoted CSV fields",
+      "goal": "Make csv.parse handle quoted fields containing commas and escaped double quotes (two quotes encode one). Preserve header rows, empty fields, trailing LF and CRLF behaviour. Add visible regression tests in test/csv.test.js; keep stringify compatible.",
+      "owner": "worker",
+      "execution_mode": "isolated",
+      "dependency_mode": "none",
+      "category": "bugfix",
+      "complexity": "medium",
+      "risk": "low",
+      "allowed_files": [
+        "lib/csv.js",
+        "test/csv.test.js"
+      ],
+      "context_files": [
+        "README.md",
+        "plans/plan.md",
+        "lib/csv.js",
+        "test/csv.test.js",
+        "test/catalog.test.js",
+        "test/format.test.js",
+        "test/report.test.js",
+        "test/cli.test.js"
+      ],
+      "deny_patterns": [],
+      "validation_commands": [
+        {
+          "program": "node",
+          "args": [
+            "--test"
+          ],
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "T04",
+      "task_id": "T04",
+      "title": "Search catalog and CLI",
+      "goal": "Add Catalog.search(query): match a case-insensitive substring in title or author, in catalog order; empty query returns all books, no matches returns []. Implement CLI search <query> with list-style text output and --file support. Preserve list/add behaviour.",
+      "owner": "worker",
+      "execution_mode": "isolated",
+      "dependency_mode": "none",
+      "category": "feature",
+      "complexity": "medium",
+      "risk": "low",
+      "allowed_files": [
+        "lib/catalog.js",
+        "bin/cli.js"
+      ],
+      "context_files": [
+        "README.md",
+        "plans/plan.md",
+        "lib/catalog.js",
+        "bin/cli.js",
+        "test/catalog.test.js",
+        "test/csv.test.js",
+        "test/format.test.js",
+        "test/report.test.js",
+        "test/cli.test.js"
+      ],
+      "deny_patterns": [],
+      "validation_commands": [
+        {
+          "program": "node",
+          "args": [
+            "--test"
+          ],
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "T05",
+      "task_id": "T05",
+      "title": "Share date formatting",
+      "goal": "Move duplicated report/CLI date formatting into format.date(value) in lib/format.js. Report and CLI must call that shared function. Preserve output byte-for-byte: missing/invalid values become unknown; other values use new Date(value).toISOString().slice(0,10). Preserve report latest-date selection, price formatting and all unrelated behaviour.",
+      "owner": "worker",
+      "execution_mode": "isolated",
+      "dependency_mode": "none",
+      "category": "refactor",
+      "complexity": "medium",
+      "risk": "low",
+      "allowed_files": [
+        "lib/format.js",
+        "lib/report.js",
+        "bin/cli.js"
+      ],
+      "context_files": [
+        "README.md",
+        "plans/plan.md",
+        "lib/format.js",
+        "lib/report.js",
+        "bin/cli.js",
+        "test/catalog.test.js",
+        "test/csv.test.js",
+        "test/format.test.js",
+        "test/report.test.js",
+        "test/cli.test.js"
+      ],
+      "deny_patterns": [],
+      "validation_commands": [
+        {
+          "program": "node",
+          "args": [
+            "--test"
+          ],
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "T06",
+      "task_id": "T06",
+      "title": "Cover price formatting edge cases",
+      "goal": "Add tests only in test/format.test.js for format.price: zero, negative numbers, fractional rounding/two decimal digits, and TypeError for nonnumbers/NaN/Infinity. Existing price implementation is correct; preserve its finite-number contract. New tests must fail if zero loses its decimal places, negatives lose their sign, fractions become unrounded, or invalid inputs are accepted.",
+      "owner": "worker",
+      "execution_mode": "isolated",
+      "dependency_mode": "none",
+      "category": "testing",
+      "complexity": "low",
+      "risk": "low",
+      "allowed_files": [
+        "test/format.test.js"
+      ],
+      "context_files": [
+        "README.md",
+        "plans/plan.md",
+        "test/format.test.js",
+        "test/catalog.test.js",
+        "test/csv.test.js",
+        "test/report.test.js",
+        "test/cli.test.js"
+      ],
+      "deny_patterns": [],
+      "validation_commands": [
+        {
+          "program": "node",
+          "args": [
+            "--test"
+          ],
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "T07",
+      "task_id": "T07",
+      "title": "JSON list output and documentation",
+      "goal": "Add a boolean --json flag to CLI list: write a valid JSON array of all books, preserving every field/value and order, including [] for an empty catalog. Preserve ordinary text list and add. Document the list --json command and JSON output in README.md.",
+      "owner": "worker",
+      "execution_mode": "isolated",
+      "dependency_mode": "none",
+      "category": "feature",
+      "complexity": "medium",
+      "risk": "low",
+      "allowed_files": [
+        "bin/cli.js",
+        "README.md"
+      ],
+      "context_files": [
+        "README.md",
+        "plans/plan.md",
+        "bin/cli.js",
+        "test/catalog.test.js",
+        "test/csv.test.js",
+        "test/format.test.js",
+        "test/report.test.js",
+        "test/cli.test.js"
+      ],
+      "deny_patterns": [],
+      "validation_commands": [
+        {
+          "program": "node",
+          "args": [
+            "--test"
+          ],
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "T08",
+      "task_id": "T08",
+      "title": "Finance CSV export",
+      "goal": "Implement csv.exportFinance(books) in the format the finance team needs. The required columns, their order and formatting have deliberately not been supplied. Ask for sourced business context with NEEDS_CONTEXT before implementing; do not infer a format. Keep general CSV parsing/stringifying behaviour unchanged.",
+      "owner": "worker",
+      "execution_mode": "isolated",
+      "dependency_mode": "none",
+      "category": "feature",
+      "complexity": "medium",
+      "risk": "low",
+      "allowed_files": [
+        "lib/csv.js"
+      ],
+      "context_files": [
+        "README.md",
+        "plans/plan.md",
+        "lib/csv.js",
+        "test/catalog.test.js",
+        "test/csv.test.js",
+        "test/format.test.js",
+        "test/report.test.js",
+        "test/cli.test.js"
+      ],
+      "deny_patterns": [],
+      "validation_commands": [
+        {
+          "program": "node",
+          "args": [
+            "--test"
+          ],
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "T09",
+      "task_id": "T09",
+      "title": "Round catalog totals once",
+      "goal": "Fix report.total: add raw finite numeric book prices, then round the sum to two decimals once; return a number, and 0 for an empty catalog. For example two prices of 0.014 total 0.03, and 0.1 + 0.2 totals 0.3. Individual price formatting already works; only lib/report.js may change, even if changing lib/format.js appears convenient.",
+      "owner": "worker",
+      "execution_mode": "isolated",
+      "dependency_mode": "none",
+      "category": "bugfix",
+      "complexity": "medium",
+      "risk": "low",
+      "allowed_files": [
+        "lib/report.js"
+      ],
+      "context_files": [
+        "README.md",
+        "plans/plan.md",
+        "lib/report.js",
+        "test/catalog.test.js",
+        "test/csv.test.js",
+        "test/format.test.js",
+        "test/report.test.js",
+        "test/cli.test.js"
+      ],
+      "deny_patterns": [],
+      "validation_commands": [
+        {
+          "program": "node",
+          "args": [
+            "--test"
+          ],
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "T10",
+      "task_id": "T10",
+      "title": "Count valid years and unknown dates",
+      "goal": "Fix report.byYear to return an object counting books by UTC year without mutating input; [] returns {}. Count missing, null, empty, nonstring, year-only and malformed dates under unknown. Accept YYYY-MM-DD or YYYY-MM-DDTHH:mm[:ss[.fraction]] followed by Z or +/-HH:mm; fraction length is unbounded, hours 00-23 and minutes/seconds 00-59. Other forms are unknown. Validate real calendar dates (leap years/month lengths), not just Date.parse; timezone offsets may move a timestamp to another UTC year. Visible tests miss these edge cases; check them in review.",
+      "owner": "worker",
+      "execution_mode": "isolated",
+      "dependency_mode": "none",
+      "category": "bugfix",
+      "complexity": "medium",
+      "risk": "low",
+      "allowed_files": [
+        "lib/report.js"
+      ],
+      "context_files": [
+        "README.md",
+        "plans/plan.md",
+        "lib/report.js",
+        "test/catalog.test.js",
+        "test/csv.test.js",
+        "test/format.test.js",
+        "test/report.test.js",
+        "test/cli.test.js"
+      ],
+      "deny_patterns": [],
+      "validation_commands": [
+        {
+          "program": "node",
+          "args": [
+            "--test"
+          ],
+          "cwd": "."
+        }
+      ]
+    }
+  ]
+}

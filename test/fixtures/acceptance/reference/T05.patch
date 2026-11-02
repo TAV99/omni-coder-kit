@@ -1,0 +1,40 @@
+diff --git a/lib/format.js b/lib/format.js
+--- a/lib/format.js
++++ b/lib/format.js
+@@ -7,4 +7,9 @@
+     return value.toFixed(2);
+ }
+ 
+-module.exports = { price };
++function date(value) {
++    const parsed = value ? new Date(value) : null;
++    return parsed && Number.isFinite(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : 'unknown';
++}
++
++module.exports = { price, date };
+diff --git a/lib/report.js b/lib/report.js
+--- a/lib/report.js
++++ b/lib/report.js
+@@ -17,8 +17,7 @@
+ 
+ function summary(books) {
+     const latest = books.map((book) => book.publishedAt).filter(Boolean).sort().at(-1);
+-    const date = latest ? new Date(latest) : null;
+-    const label = date && Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : 'unknown';
++    const label = format.date(latest);
+     return `Books: ${books.length}\nTotal: ${format.price(total(books))}\nLatest: ${label}\n`;
+ }
+ 
+diff --git a/bin/cli.js b/bin/cli.js
+--- a/bin/cli.js
++++ b/bin/cli.js
+@@ -18,8 +18,7 @@
+ }
+ 
+ function render(book) {
+-    const date = book.publishedAt ? new Date(book.publishedAt) : null;
+-    const label = date && Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : 'unknown';
++    const label = format.date(book.publishedAt);
+     return `${book.id} | ${book.title} | ${book.author ?? ''} | ${format.price(book.price)} | ${label}\n`;
+ }
+ 

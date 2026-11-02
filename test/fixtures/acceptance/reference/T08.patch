@@ -1,0 +1,13 @@
+diff --git a/lib/csv.js b/lib/csv.js
+--- a/lib/csv.js
++++ b/lib/csv.js
+@@ -14,4 +14,8 @@
+     return rows.map((row) => row.map(field).join(',')).join('\n') + '\n';
+ }
+ 
+-module.exports = { parse, stringify };
++function exportFinance(books) {
++    return stringify([['book_id', 'title', 'amount'], ...books.map((book) => [book.id, book.title, book.price.toFixed(2)])]);
++}
++
++module.exports = { parse, stringify, exportFinance };
