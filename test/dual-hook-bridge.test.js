@@ -1931,3 +1931,36 @@ test('classifyTool allows compound read-only shell commands and expanded git/nod
     assert.equal(verifRes.classification, 'read');
     assert.equal(verifRes.phaseOperation, 'verification');
 });
+
+// A daemon from before an omni upgrade (other build id) is restarted by the next
+// prompt hook while idle; while a task holds a lease the person is told instead.
+test('stale daemon: restarted by the prompt hook when idle, reported while busy', async (t) => {
+    const { currentBuildId } = require('../lib/dual/daemon-freshness');
+    const wsRoot = createTempWorkspace(t);
+    const { store } = setupTestSession(wsRoot, { tasks: [{ id: 'TASK-1', title: 'Task', owner: 'codex', allowed_files: ['src/main.js'] }] });
+    const daemons = [await startDaemonServer({ workspaceRoot: wsRoot, authorityStore: store, buildId: 'old-build' })];
+    t.after(async () => { for (const daemon of daemons) await daemon.close().catch(() => {}); });
+    const spawns = [];
+    // Stands in for `node bin/omni-daemon.js`: a new daemon on the current code.
+    const spawn = () => {
+        spawns.push('spawn');
+        startDaemonServer({ workspaceRoot: wsRoot, authorityStore: store }).then((daemon) => daemons.push(daemon));
+        return { unref() {}, on() {} };
+    };
+    const prompt = () => evaluateHook({ session_id: 'cli', cwd: wsRoot, hook_event_name: 'UserPromptSubmit', prompt: 'go' }, { spawn });
+
+    const lease = store.acquireLease('TASK-1', 'codex');
+    const busy = await prompt();
+    assert.match(busy.systemMessage || '', /older code than this omni; it restarts by itself/);
+    assert.match(busy.hookSpecificOutput.additionalContext, /Dual authority active/, 'the session still works meanwhile');
+    assert.deepEqual(spawns, []);
+
+    store.releaseLease(lease.lease_id, 'test done');
+    const idle = await prompt();
+    assert.equal(idle.systemMessage, undefined);
+    assert.deepEqual(spawns, ['spawn']);
+    const client = require('../lib/dual/daemon-client').createDaemonClient({ workspaceRoot: wsRoot, timeoutMs: 5000 });
+    assert.equal((await client.health()).build_id, currentBuildId(), 'now on the current code');
+    await prompt();
+    assert.deepEqual(spawns, ['spawn'], 'a fresh daemon is left alone');
+});
