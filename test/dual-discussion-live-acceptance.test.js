@@ -25,7 +25,7 @@ test('F01 WP4b: real discussion host delivers two live AGY scouts to the orchest
     const { createAgyAdapter, seedAgyConversation, classify: classifyAgyOutput } = require('../lib/dual/discussion/live-agy-invoke');
     const { spawnBoundedProcess } = require('../lib/dual/capability-preflight');
 
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-disc-live-acceptance-'));
+    const tempDir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-disc-live-acceptance-')));
     const repoRoot = path.join(tempDir, 'workspace');
     const stateDir = path.join(tempDir, 'discussion');
     const taskIds = ['TASK-LIVE-ALPHA', 'TASK-LIVE-BETA'];
@@ -96,7 +96,7 @@ test('F01 WP4b: real discussion host delivers two live AGY scouts to the orchest
         }
         const codex = createCodexAdapter(codexOptions);
         const agy = createAgyAdapter(agyOptions);
-        const schema = toDraft7Schema(ContextSchema, 'omni-dual-context-v1');
+        const schema = toDraft7Schema(ContextSchema, 'omni-dual-context-v1', { schemaVersion: 1, baselineKind: 'snapshot' });
         // The seed API has a fixed readiness prompt. Its wrapper resumes that
         // actual conversation once via a bounded CLI call to load the brief.
         // This is setup only; neither this call nor controller fakes supply a scout.
