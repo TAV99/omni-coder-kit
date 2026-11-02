@@ -67,6 +67,18 @@
   - `user.message.*`.
 - Rate limit: chưa phân loại riêng, đi theo luật technical retry (P5 §4.3).
 
+### 1.1 Nợ P1–P6 đã xử lý trước P7 (2026-11-02)
+
+Rà lại P1–P6 trước khi vào P7; ba nợ ảnh hưởng tới nghiệm thu đã sửa:
+
+| Nợ | Sửa |
+|---|---|
+| `omni squad setup` không ghi cấu hình cho orchestrator **codex** (chỉ `omni init` ghi), preflight chặn mà không chỉ cách sửa | setup ghi/gộp `.codex/config.toml` (MCP `omni_dual`, `[features] hooks = true`) và `.codex/hooks.json`, giữ cấu hình người dùng; chạy lại không đổi gì |
+| Daemon chạy từ trước khi nâng cấp/sửa omni vẫn chạy code cũ, không ai biết | `health` có `build_id` (phiên bản + kích thước/mtime code), `active_leases`, `validator_active`; hook (SessionStart/UserPromptSubmit) và `omni ui` tự khởi động lại daemon cũ khi rảnh, đang bận thì báo người dùng |
+| Task worker chạy `shared` không qua cổng `integrate` (P3 ghi "chưa đổi") | project có pipeline squad: `plan.register` từ chối task worker không `isolated` |
+
+Nợ còn lại đều đã có chỗ: V36/V37/abort chéo/V44/lượt codex orchestrator đầy đủ ở P7; gộp builder argv (agy worker, discussion codex, `omni run` host-cli), Linux/Windows thật, agy song song, OpenCode, vai tự định nghĩa, engine phase tùy ý — sau 3.2.0 hoặc pha đa OS.
+
 ---
 
 ## 2. Project mẫu và bộ task

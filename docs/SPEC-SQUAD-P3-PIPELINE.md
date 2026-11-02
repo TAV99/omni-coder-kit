@@ -263,7 +263,7 @@ Cổng `integrate` **cũng áp dụng** cho dual không squad, vì đây là quy
 - **Hook (V15):** `hook-bridge` chặn `PreToolUse` cho **mọi** tool khi input khớp `omni … squad|dual approve|auto` (chuỗi hoặc mảng argv, mọi cách gọi binary) hoặc `gate.decide`; chạy trước mọi tra cứu daemon nên không rơi vào nhánh fail-open.
 - **Mô hình đe dọa (V16):** chặn agent duyệt nhầm/theo thói quen; không chống agent cố tình mở PTY để gõ mã. Đường mạnh hơn là UI P6 với token phiên.
 - **Test cũ:** 7 file viết trước cổng nạp `test/helpers/auto-approve-gates.js`; hành vi cổng có test riêng (`dual-approval-gates.test.js`, 2 test e2e trong `dual-isolated-runner.test.js`, spec+plan qua daemon trong `dual-coverage-daemon.test.js`).
-- **Chưa làm:** shared mode (worker sửa thẳng workspace chính) không có bước integrate tách riêng nên không có cổng integrate; ghi rõ, chưa đổi.
+- ~~**Chưa làm:** shared mode (worker sửa thẳng workspace chính) không có bước integrate tách riêng nên không có cổng integrate; ghi rõ, chưa đổi.~~ **Đã xử lý 2026-11-02 (trước P7):** project có `.omni/squad/pipeline.yaml` → `plan.register` từ chối task của worker không `isolated` (`SQUAD_WORKER_TASK_NOT_ISOLATED`, kèm danh sách task); task không đủ điều kiện isolated thì giao orchestrator. Project dual trước squad (không pipeline) giữ nguyên.
 
 ---
 
