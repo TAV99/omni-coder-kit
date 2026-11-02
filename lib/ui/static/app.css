@@ -60,6 +60,9 @@ ol.list { list-style: decimal inside; }
 .feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .feed li { display: grid; grid-template-columns: 70px 90px 1fr; gap: 8px; padding: 5px 8px; border-left: 3px solid var(--line); background: var(--panel); }
 .feed li.discussion { border-left-color: var(--accent); }
+.feed li.transcript { border-left-color: var(--muted); }
+.feed li.transcript.user { border-left-color: var(--warn); }
+.feed li.transcript.tool { opacity: .75; }
 .feed li.ledger.bad { border-left-color: var(--bad); }
 .feed li.ledger.ok { border-left-color: var(--ok); }
 .feed .type { font-weight: 600; }

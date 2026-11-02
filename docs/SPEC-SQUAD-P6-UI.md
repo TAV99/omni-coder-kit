@@ -151,6 +151,11 @@ Không parse chữ hiển thị trên terminal (plan §4.3): timeline lấy từ
 - Thêm `readTranscript(sessionRef | { cwd, since })` cho adapter codex và claude (agy sau, nếu định dạng ổn định) → `transcript: true`.
 - Chỉ đọc file phiên của **chính phiên orchestrator** UI đã chạy (tìm theo cwd + thời điểm bắt đầu PTY, xác nhận bằng session id); không quét phiên khác của người dùng.
 - Đọc giới hạn kích thước, bỏ qua dòng không nhận ra; lỗi → timeline chỉ hiện sự kiện omni (hạ cấp có kiểm soát, plan §4.3).
+- *Đã làm ở P6d:*
+  - `readTranscript(ref, ctx)` chung ở `lib/squad/runtimes/transcript.js`; codex và claude khai `transcript: true` (agy chưa). `ref = { sessionId?, cwd, since?, cursor? }` → `{ found, sessionId, file, entries: [{ role: user|assistant|tool, text, at, end }], cursor: { file, offset } }`. Đọc ≤ 1 MiB mỗi lần, chỉ dòng trọn; dòng hỏng bỏ qua; dòng quá cỡ bị bước qua.
+  - claude: file theo `--session-id` omni đã chọn (`CLAUDE_CONFIG_DIR` hoặc `~/.claude`), thư mục tên rút gọn → tìm đúng file `<id>.jsonl`. Chỉ lấy `user`/`assistant` không `isMeta`/`isSidechain`; bỏ tool result và lệnh `/…`; `tool_use` chỉ hiện tên tool, không hiện input.
+  - codex: theo id nếu biết, không thì rollout đầu tiên có `session_meta.cwd` = project và bắt đầu sau lúc mở PTY (chỉ đọc dòng đầu các file mới); id tìm được ghi vào `.omni/ui/orchestrator.json` (resume dùng luôn). Chữ lấy từ `item_completed` `UserMessage`/`AgentMessage` (và dạng cũ `user_message`/`agent_message`).
+  - Timeline: nguồn thứ ba `transcript` (nhãn "you" / "orchestrator" / "tool", bộ lọc "orchestrator chat"). Cursor gửi trình duyệt chỉ là hash file + offset, không bao giờ là đường dẫn; server tự chọn file.
 
 ---
 
