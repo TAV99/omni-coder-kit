@@ -96,6 +96,9 @@ test('MCP initialize handshake succeeds and tools/list exposes the complete appr
     ].sort();
 
     assert.deepEqual(toolNames, expectedToolNames, 'Must expose the complete approved omni_dual tool surface');
+    // The omni hook allows exactly this surface (lib/dual/mcp-tools.js); keep them in step.
+    assert.deepEqual(toolNames, [...require('../lib/dual/mcp-tools').OMNI_DUAL_TOOLS].sort(),
+        'lib/dual/mcp-tools.js must list every tool the server registers');
 
     // Verify all tools have strict input schemas (additionalProperties: false)
     for (const tool of toolListResult.tools) {

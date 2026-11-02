@@ -1031,6 +1031,24 @@ test('design-ready phase blocks source mutation but permits planning, setup, and
     }
 });
 
+// Every omni_dual MCP tool reaches the daemon, which re-checks it; the v3.1.0
+// allowlist only knew the first five, so later tools were refused mid-session.
+test('PreToolUse passes every omni_dual MCP tool during a session and still refuses look-alikes', async (t) => {
+    const { OMNI_DUAL_TOOLS } = require('../lib/dual/mcp-tools');
+    const wsRoot = createTempWorkspace(t);
+    const { store } = setupTestSession(wsRoot, { tasks: [{ id: 'TASK-1', title: 'Task', owner: 'codex', allowed_files: ['src/main.js'] }] });
+    const daemon = await startDaemonServer({ workspaceRoot: wsRoot, authorityStore: store });
+    t.after(() => daemon.close());
+    const decide = (tool_name) => evaluateHook({ session_id: 'cli-sess', cwd: wsRoot, hook_event_name: 'PreToolUse', tool_name, tool_input: {} });
+    for (const name of OMNI_DUAL_TOOLS) {
+        const out = await decide(`mcp__omni_dual__${name}`);
+        assert.notEqual(out.hookSpecificOutput?.permissionDecision, 'deny', `${name}: ${out.hookSpecificOutput?.permissionDecisionReason}`);
+    }
+    for (const tool_name of ['mcp__omni_dual__omni_dual_gate_decide', 'mcp__omni_dual__omni_dual_approve', 'mcp__other__omni_dual_status']) {
+        assert.equal((await decide(tool_name)).hookSpecificOutput?.permissionDecision, 'deny', tool_name);
+    }
+});
+
 test('design-ready phase remains fail-closed for source mutation when daemon is unavailable', async (t) => {
     const wsRoot = createTempWorkspace(t);
     const sdlcDir = path.join(wsRoot, '.omni', 'sdlc');
