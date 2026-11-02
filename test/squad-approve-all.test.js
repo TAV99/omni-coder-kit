@@ -42,6 +42,50 @@ function backend(store, overrides = {}) {
 
 const decisions = (store) => store.readEvents().filter((event) => ['gate.approved', 'gate.rejected'].includes(event.type));
 
+function registerLargePlan(store) {
+    store.append({ schema_version: 2, type: 'capability.result', from_state: 'DISCOVERED',
+        to_state: 'CAPABILITY_SAFE', status: 'PASSED', checks: [{ name: 'hooks', status: 'PASSED' }] });
+    const tasks = Array.from({ length: 100 }, (_, index) => ({ task_id: `large-${index}`,
+        title: `Task ${index}`, goal: 'g'.repeat(1024), owner: 'agy', allowed_files: [`lib/${index}.js`] }));
+    store.append({ schema_version: 2, type: 'plan.registered', from_state: 'INTERVIEWING',
+        to_state: 'PLANNED', plan_path: 'plans/plan.md', plan_sha256: digest('large-plan'),
+        total_tasks: tasks.length, tasks });
+}
+
+test('approvals projection stays small without weakening the full-status response cap or session checks', async (t) => {
+    const { root, store } = fixture(t);
+    registerLargePlan(store);
+    const { startDaemonServer } = require('../lib/dual/daemon-server');
+    const { createDaemonClient } = require('../lib/dual/daemon-client');
+    const daemon = await startDaemonServer({ workspaceRoot: root, authorityStore: store });
+    try {
+        const client = createDaemonClient({ workspaceRoot: root });
+        const before = store.readEvents().length;
+        const projected = await client.status({ session_id: 'session-batch', projection: 'approvals' });
+        assert.deepEqual(projected, { session_id: 'session-batch', approvals: store.derive().approvals });
+        await assert.rejects(client.status('session-batch'), { code: 'DUAL_CLIENT_RESPONSE_TOO_LARGE' });
+        await assert.rejects(client.status({ projection: 'approvals' }), { code: 'DUAL_SESSION_REQUIRED' });
+        await assert.rejects(client.status({ session_id: 'other', projection: 'approvals' }), { code: 'DUAL_SESSION_MISMATCH' });
+        assert.equal(store.readEvents().length, before, 'status reads must not append events');
+    } finally { await daemon.close(); }
+});
+
+test('--all approves through the daemon when unrelated task history exceeds 64 KiB', async (t) => {
+    const { root, store } = fixture(t);
+    registerLargePlan(store);
+    const { startDaemonServer } = require('../lib/dual/daemon-server');
+    const daemon = await startDaemonServer({ workspaceRoot: root, authorityStore: store });
+    try {
+        let prompts = 0;
+        const result = await runSquadApprove({ root, all: true, isTTY: true, log: quiet,
+            ask: async (message) => { prompts++; return typedCode(message); } });
+        assert.equal(prompts, 1);
+        assert.equal(result.gates.length, 3);
+        assert.equal(decisions(store).length, 3);
+        assert.ok(decisions(store).every(event => event.actor === 'human' && event.via === 'cli-tty'));
+    } finally { await daemon.close(); }
+});
+
 test('batch code is deterministic, includes gate identity, and leaves single-gate codes unchanged', () => {
     const a = { gate_id: 'integrate-A', digest: digest('a') };
     const b = { gate_id: 'integrate-B', digest: digest('b') };
