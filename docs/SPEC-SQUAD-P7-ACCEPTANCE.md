@@ -222,13 +222,13 @@ Log `worker.task.failed` đã ghi lý do abort/guard từ P5c. Nếu gặp lại
 
 ## 8. Câu hỏi mở
 
-| # | Câu hỏi | Đề xuất |
+| # | Câu hỏi | Quyết định (2026-11-02) |
 |---|---|---|
-| Q-P7-1 | Ai điều khiển lượt nghiệm thu: harness kịch bản, orchestrator thật, hay cả hai? | **Cả hai**: kịch bản đo ngưỡng trên mọi config; agent thật 1 lượt/preset (4 task) để bắt lỗi chỉ lộ qua MCP/hook |
-| Q-P7-2 | Duyệt hơn 40 cổng integrate thế nào? | **`omni squad approve --all`** (TTY, một mã cho cả loạt, mỗi cổng vẫn một sự kiện riêng) |
-| Q-P7-3 | Bộ task trên project mẫu tự viết hay repo mã nguồn mở có thật? | **Project mẫu tự viết** (`bookshelf`, Node thuần, test ẩn, lời giải tham chiếu): tất định, có phiên bản, không phụ thuộc mạng |
-| Q-P7-4 | Bao nhiêu config? | **Bốn (A–D)**: phủ cả 3 runtime ở mọi vai cần thiết, D18 và AUTO. Ước tốn: §7 V47 |
-| Q-P7-5 | `WAITING_RUNTIME` khi chưa gặp dấu hiệu thật? | **Chỉ cài cho CLI đã lộ dấu hiệu thật**; CLI chưa lộ giữ technical retry, V37 ghi "chưa quan sát" |
+| Q-P7-1 | Ai điều khiển lượt nghiệm thu: harness kịch bản, orchestrator thật, hay cả hai? | **Đã chốt: cả hai** — kịch bản đo ngưỡng trên mọi config; agent thật 1 lượt/preset (4 task) để bắt lỗi chỉ lộ qua MCP/hook |
+| Q-P7-2 | Duyệt hơn 40 cổng integrate thế nào? | **Đã chốt: `omni squad approve --all`** (TTY, một mã cho cả loạt, mỗi cổng vẫn một sự kiện riêng) |
+| Q-P7-3 | Bộ task trên project mẫu tự viết hay repo mã nguồn mở có thật? | **Đã chốt: project mẫu tự viết** (`bookshelf`, Node thuần, test ẩn, lời giải tham chiếu) |
+| Q-P7-4 | Bao nhiêu config? | **Đã chốt: bốn (A–D)** — phủ cả 3 runtime ở mọi vai cần thiết, D18 và AUTO. Ước tốn: §7 V47 |
+| Q-P7-5 | `WAITING_RUNTIME` khi chưa gặp dấu hiệu thật? | **Đề xuất mặc định (người dùng chưa phản đối):** chỉ cài cho CLI đã lộ dấu hiệu thật; CLI chưa lộ giữ technical retry, V37 ghi "chưa quan sát" |
 
 ---
 
