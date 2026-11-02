@@ -65,6 +65,7 @@ Trình duyệt ──(127.0.0.1, token, Origin)──▶ UI server (omni ui, ti�
 ```
 
 - `omni ui [--port N] [--no-open]`: cần project squad (`.omni/squad`), bật daemon nếu chưa chạy (như `omni squad run`), in URL `http://127.0.0.1:<port>/#token=<…>` và mở trình duyệt (trừ `--no-open`).
+  - *Đã làm ở P6a:* UI chỉ đọc nên **không** bật daemon — sidebar đọc thẳng `.omni/squad*` và `derive()` của ledger, timeline tail file; daemon chỉ cần từ P6c (`POST /api/message`). Thiếu/sai token cũng trả 403 (không 401), để không phân biệt được lý do từ chối.
 - UI server sống tới khi người dùng `Ctrl-C`; đóng tab không giết PTY.
 - Module: `lib/ui/server.js` (HTTP + auth + SSE + PTY routes), `lib/ui/feed.js` (gộp nguồn sự kiện), `lib/ui/pty-host.js` (spawn/attach/scrollback qua seam `spawnPty`), `lib/ui/static/` (HTML/CSS/JS thuần, không bundler).
 

@@ -39,6 +39,7 @@ const {
     handleDualBlock,
 } = require('../lib/commands/dual');
 const { handleSquadRuntimes, handleSquadSetup, handleSquadSkills, handleSquadPipeline, handleSquadApprove, handleSquadAuto } = require('../lib/commands/squad');
+const { handleUi } = require('../lib/commands/ui');
 
 // `omni skills` no-arg = auto-equip + status (one-stop "show me my skills").
 async function handleSkillsDefault(options = {}) {
@@ -337,6 +338,12 @@ squad.command('approve [gateId]')
 squad.command('auto [state]')
     .description('AUTO on|off: bỏ qua cổng có auto_ok (spec/plan); cổng integrate luôn chờ người')
     .action(handleSquadAuto);
+
+program.command('ui')
+    .description('Trang web local (chỉ đọc) cho project squad: vai, task, cổng duyệt, timeline')
+    .option('--port <n>', 'Cổng lắng nghe trên 127.0.0.1 (mặc định: cổng trống bất kỳ)')
+    .option('--no-open', 'Không tự mở trình duyệt')
+    .action(handleUi);
 
 // ---------------------------------------------------------------------------
 // Hidden utility commands (not aliases of the main groups — power-user tools)

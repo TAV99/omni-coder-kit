@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>omni squad</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="bar">
+  <strong id="project">omni squad</strong>
+  <span id="session" class="muted"></span>
+  <span id="link" class="pill">connecting…</span>
+</header>
+<main class="layout">
+  <aside class="side">
+    <section><h2>Roles</h2><ul id="roles" class="list"></ul></section>
+    <section><h2>Pipeline</h2><ol id="pipeline" class="list"></ol></section>
+    <section><h2>Waiting for you</h2><ul id="gates" class="list"></ul></section>
+    <section><h2>Tasks</h2><ul id="tasks" class="list"></ul></section>
+    <section><h2>Running</h2><ul id="leases" class="list"></ul></section>
+    <ul id="errors" class="list errors"></ul>
+  </aside>
+  <section class="timeline">
+    <div class="filters">
+      <h2>Timeline</h2>
+      <label>Source <select id="source"><option value="">all</option><option value="ledger">ledger</option><option value="discussion">discussion</option></select></label>
+      <label>Task <input id="task" placeholder="task id" size="10"></label>
+    </div>
+    <ol id="feed" class="feed"></ol>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
