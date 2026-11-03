@@ -22,7 +22,7 @@ test('finance source appears only in sourced T08 context replies and other tasks
  assert.doesNotMatch(sourceContextBody({...input,task:{task_id:'T01',goal:'case-insensitive'}}),/book_id|finance-format/);
 });
 function fake(t,{auto=false,driveError=false}={}){
- const {runAcceptance}=api(),container=temp(t),root=path.join(container,'workspace'),outDir=path.join(container,'report');fs.mkdirSync(root);const trace=[];
+ const {runAcceptance}=api(),container=temp(t),root=path.join(container,'workspace'),outDir=path.join(container,'report');fs.mkdirSync(root);execFileSync('git',['init','-q'],{cwd:root});const trace=[];
  const state={sessionId:'s',workspaceId:'w',planRevision:1,lastSequence:1,tasks:{T01:{state:'TASK_VERIFIED'}},leases:{},approvals:{'plan-r1':{gate_id:'plan-r1',phase:'plan',status:'approved',actor:auto?'auto':'human',via:auto?'pipeline-auto':'cli-tty'}}};
  const events=[{sequence:1,type:'session.started',timestamp:new Date().toISOString()}];
  const daemon={client:{beginSession:async()=>({session_id:'s'}),registerPlan:async()=>({registered:true}),resumeSession:async()=>({})},authority:{derive:()=>structuredClone(state),readEvents:()=>structuredClone(events)},waitUntilReady:async()=>{},stop:async()=>{trace.push('daemon-stop');}};
@@ -100,4 +100,29 @@ test('snapshot retries a concurrent authority append and rejects unstable snapsh
  const authority={derive:()=>({sessionId:'s',workspaceId:'w',planRevision:1,lastSequence:++count}),readEvents:()=>[{sequence:2}]};
  assert.equal(coherentAuthoritySnapshot(authority).snapshot.lastSequence,2);
  assert.throws(()=>coherentAuthoritySnapshot({derive:()=>({lastSequence:1}),readEvents:()=>[{sequence:2}]}),{code:'ACCEPTANCE_SNAPSHOT_UNSTABLE'});
+});
+
+test('source drift during a long worker operation stops the daemon and withholds hidden tests',async t=>{
+ const f=fake(t);
+ f.deps.drive=async opts=>{
+  fs.writeFileSync(path.join(f.root,'unauthorized.js'),'source changed outside integration');
+  await new Promise(resolve=>setTimeout(resolve,750));
+  assert.ok(f.trace.includes('daemon-stop'),'periodic observer must stop the daemon before the operation returns');
+  opts.beforeCheck();
+  return {complete:true};
+ };
+ const report=await f.run();
+ assert.equal(report.errorCode,'ACCEPTANCE_SOURCE_DRIFT');assert.equal(report.ok,false);
+ assert.equal(report.sourceIntegrity.passed,false);
+ assert.deepEqual(report.sourceIntegrity.violations[0].changed_files,['unauthorized.js']);
+ assert.ok(!f.trace.includes('hidden'));
+ assert.equal(fs.readFileSync(path.join(f.root,'unauthorized.js'),'utf8'),'source changed outside integration');
+});
+
+test('a source reset by initial resume is caught before entering worker drive',async t=>{
+ const f=fake(t);
+ f.deps.startDaemon().client.resumeSession=async()=>{fs.writeFileSync(path.join(f.root,'unexpected.js'),'bad');return {};};
+ const report=await f.run();
+ assert.equal(report.errorCode,'ACCEPTANCE_SOURCE_DRIFT');
+ assert.ok(!f.trace.includes('drive'));assert.ok(!f.trace.includes('hidden'));
 });

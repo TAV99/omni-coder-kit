@@ -9,6 +9,17 @@ const SUITE = Array.from({ length: 10 }, (_, i) => `T${String(i + 1).padStart(2,
 const digest = (id) => createHash('sha256').update(id).digest('hex');
 const baseTime = Date.parse('2026-11-02T00:00:00Z');
 
+test('whole-run source drift fails scope even when captured QC integrations are in scope', () => {
+    const f = ledger();
+    for (const id of SUITE) { f.worker(id); f.finishTask(id); }
+    const input = f.input();
+    input.sourceIntegrity = { passed: false, violations: [{ code: 'ACCEPTANCE_SOURCE_DRIFT', changed_files: ['lib/report.js'] }] };
+    const result = measureAcceptance(input);
+    assert.equal(result.thresholds.scope.passed, false);
+    assert.equal(result.passed, false);
+    assert.ok(result.thresholds.scope.violations.some(v => v.code === 'ACCEPTANCE_SOURCE_DRIFT'));
+});
+
 // This fixture projects only the authority fields required by the public input.
 // The event history remains explicit so assertions identify causal sequences.
 function ledger(ids = SUITE, auto = false) {

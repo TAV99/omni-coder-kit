@@ -23,6 +23,13 @@ function measureAcceptance(input = {}) {
     thresholds.scope.blockedAttempts = [];
     thresholds.duplicates.authorizedResumptions = [];
     thresholds.duplicates.controllerStarts = [];
+    if (input.sourceIntegrity) {
+        const source = input.sourceIntegrity;
+        if (source.passed !== true || source.violations?.length) {
+            const violations = source.violations?.length ? source.violations : [{ code: 'ACCEPTANCE_SOURCE_OBSERVATION_INCOMPLETE' }];
+            for (const violation of violations) add('scope', violation.code, null, { changed_files: violation.changed_files || [] });
+        }
+    }
     if (!Array.isArray(events) || !Array.isArray(taskContracts) || !Array.isArray(integrations) || !Array.isArray(suiteTaskIds)) {
         evidence('INVALID_INPUT');
         return { passed: false, thresholdsPassed: false, completeSuite: false, taskResults: [], thresholds };

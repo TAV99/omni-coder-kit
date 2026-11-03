@@ -12,6 +12,7 @@ const { driveAcceptance } = require('./helpers/acceptance-control');
 const { measureAcceptance } = require('./helpers/acceptance-metrics');
 const { collectRuntimeEvidence, writeAcceptanceReport, redactReport } = require('./helpers/acceptance-evidence');
 const { archiveAcceptanceEvidence } = require('./helpers/acceptance-archive');
+const { createSourceGuard } = require('./helpers/acceptance-source');
 
 const TOTAL_MS = 4 * 60 * 60 * 1000;
 const APPROVAL_MS = 30 * 60 * 1000;
@@ -108,9 +109,16 @@ async function runAcceptance(args, deps = {}) {
     const redaction = { secrets: [] };
     const save = () => writeAcceptanceReport(outDir, report, redaction);
     const stage = createStageRunner({ report, save, deadline, log, redact: text => redactReport(text, redaction) });
-    let prepared, root, container, ui, daemon, authority, client, stopped = false, driveResult;
-    const stop = async () => { if (daemon && !stopped) { await daemon.stop(); stopped = true; } };
+    let prepared, root, container, ui, daemon, authority, client, stopped = false, driveResult, sourceGuard, sourceError, stopPromise, sourceObservationComplete = false;
+    const stop = async () => {
+        if (daemon && !stopped) {
+            stopPromise ||= Promise.resolve().then(() => daemon.stop()).then(() => { stopped = true; });
+            await stopPromise;
+        }
+    };
     const beforeCheck = () => {
+        if (sourceError) throw sourceError;
+        sourceGuard?.check();
         if (deps.signal?.aborted) throw failure('ACCEPTANCE_INTERRUPTED');
         if (daemon?.childError) throw daemon.childError;
         if (!stopped && daemon?.exitResult) throw failure('DAEMON_EXIT', JSON.stringify(daemon.exitResult));
@@ -126,12 +134,21 @@ async function runAcceptance(args, deps = {}) {
                 planSha256: prepared.planSha256, binding: prepared.binding, setup: prepared.setup });
             check(prepared.setup.engine.supported, 'ENGINE_UNSUPPORTED');
         });
+        sourceGuard = createSourceGuard({ root, capture: () => snapshotSource(root),
+            authority: { derive: () => authority.derive(), readEvents: () => authority.readEvents() } });
+        sourceGuard.start({ onFailure: error => {
+            sourceError = error;
+            report.sourceIntegrity = sourceGuard.summary(); save();
+            // Stop owned processes even if a runtime RPC has not returned yet.
+            void stop().catch(() => {});
+        } });
         await stage('observer', 20_000, async () => {
             ui = await (deps.startUi || require('../lib/ui/server').startUiServer)({ projectRoot: root, autoStart: false });
             redaction.secrets.push(ui.token); report.observer.url = ui.url;
             log(`UI quan sát: ${ui.url}\nKhông khởi động orchestrator trong UI khi harness đang chạy.`);
         });
         await stage('daemon', 20_000, async limit => {
+            beforeCheck();
             report.daemonLog = path.join(container, 'daemon.log');
             report.captureDir = path.join(container, 'runtime-capture');
             daemon = (deps.startDaemon || spawnDaemon)({ root, logFile: report.daemonLog,
@@ -139,10 +156,12 @@ async function runAcceptance(args, deps = {}) {
             client = daemon.client; await daemon.waitUntilReady(poll, limit); authority = daemon.authority;
         });
         await stage('session', 20_000, async limit => {
+            beforeCheck();
             const result = await client.beginSession({ workspace_root: root, mode: 'auto' }, { timeoutMs: limit });
             check(result.session_id, 'SESSION_ID_MISSING'); report.sessionId = result.session_id;
         });
         await stage('plan', 120_000, async limit => {
+            beforeCheck();
             const registered = await client.registerPlan(report.sessionId, { plan_path: 'plans/plan.md', plan_sha256: prepared.planSha256,
                 plan_revision: 1, tasks: prepared.tasks, acceptance_policy: { protocol_version: 1, checks: [], ui: {
                     required: false, viewport_widths: [390, 768, 1024, 1440], reduced_motion_required: true } } }, { timeoutMs: limit });
@@ -150,21 +169,30 @@ async function runAcceptance(args, deps = {}) {
             await client.resumeSession({ session_id: report.sessionId, projection: 'ack' }, { timeoutMs: limit });
         });
         const approvalCommand = gate => `cd ${quote(root)} && ${quote(process.execPath)} ${quote(OMNI)} squad approve ${gate}`;
-        const wait = (gateIds, limit, allowAutoPlan = false) => waitForApproval({ authority, report, save, poll, limit,
-            gateIds, allowAutoPlan, command: approvalCommand(Array.isArray(gateIds) ? '--all' : gateIds),
-            log: text => log(`${text}Nhập mã vừa in trong terminal; không dùng lại mã cũ.`) });
+        const wait = (gateIds, limit, allowAutoPlan = false) => {
+            beforeCheck();
+            return waitForApproval({ authority, report, save, poll, limit,
+                gateIds, allowAutoPlan, command: approvalCommand(Array.isArray(gateIds) ? '--all' : gateIds),
+                log: text => log(`${text}Nhập mã vừa in trong terminal; không dùng lại mã cũ.`) });
+        };
         await stage('planApproval', APPROVAL_MS, async limit => {
+            beforeCheck();
             const gate = authority.derive().approvals?.['plan-r1'];
             if (gate?.status === 'approved') {
                 check(gate.actor === 'human' && gate.via === 'cli-tty' || args.auto && gate.actor === 'auto' && gate.via === 'pipeline-auto' && gate.phase === 'plan', 'GATE_NOT_HUMAN');
                 report.decisions = [gate];
             } else await wait('plan-r1', limit, args.auto);
         });
+        beforeCheck();
         const answered = new Map();
         // The driver has its own total deadline, including each human wait.
         driveResult = await (deps.drive || driveAcceptance)({ authority, client, sessionId: report.sessionId, taskIds: args.taskIds,
             deadline, beforeCheck, captureSource: () => snapshotSource(root),
-            collectIntegration: ({ before, after, ...record }) => ({ ...record, changed_files: changedFiles(before, after) }),
+            beforeQc: id => sourceGuard.beginQc(id), afterQc: () => sourceGuard.endQc(),
+            collectIntegration: ({ before, after, ...record }) => {
+                sourceGuard.acceptIntegration(record);
+                return { ...record, changed_files: changedFiles(before, after) };
+            },
             onIntegration: record => { report.integrations.push(record); save(); },
             onProgress: ({ taskId, status }) => { log(`[${taskId}] ${status}`); report.lastProgress = { taskId, status, at: new Date().toISOString() }; save(); },
             waitForGates: ({ gateIds, remainingMs }) => wait(gateIds, Math.min(APPROVAL_MS, remainingMs)),
@@ -178,6 +206,10 @@ async function runAcceptance(args, deps = {}) {
             } });
         report.drive = driveResult;
         await stop();
+        beforeCheck();
+        sourceGuard.close();
+        sourceObservationComplete = true;
+        report.sourceIntegrity = sourceGuard.summary();
         const final = authority.derive();
         check(driveResult.complete && !Object.values(final.leases || {}).some(lease => !lease.released_at && lease.status !== 'released'), 'ACCEPTANCE_NOT_SETTLED');
         await stage('hidden', Math.max(1, deadline - Date.now()), async () => {
@@ -185,10 +217,17 @@ async function runAcceptance(args, deps = {}) {
             check(!deps.signal?.aborted, 'ACCEPTANCE_INTERRUPTED');
         });
     } catch (error) {
+        if (sourceError) error = sourceError;
         report.errorCode ||= error.code || 'ACCEPTANCE_ERROR'; report.errorMessage = error.message;
         report.failedStage ||= 'drive'; if (error.partial) report.drive = error.partial;
     } finally {
         try { await stop(); } catch (error) { report.errorCode ||= error.code || 'DAEMON_STOP_FAILED'; }
+        sourceGuard?.close();
+        if (sourceGuard && !sourceObservationComplete) {
+            try { sourceGuard.check(); } catch (error) { sourceError ||= error; }
+        }
+        if (sourceGuard) report.sourceIntegrity = sourceGuard.summary();
+        if (sourceError) { report.errorCode = sourceError.code; report.errorMessage = sourceError.message; }
         try {
             const capture = report.captureDir ? (deps.collect || collectRuntimeEvidence)(report.captureDir, redaction, { daemonLog: report.daemonLog }) : { complete: false, problems: [{ code: 'CAPTURE_NOT_STARTED' }], turns: [], runtimeFailures: [] };
             report.runtimeFailures = capture.runtimeFailures; report.capture = { complete: capture.complete, problems: capture.problems, status: capture.status };
@@ -200,7 +239,7 @@ async function runAcceptance(args, deps = {}) {
                 const policy = deps.gatePolicy || require('../lib/dual/approval-gates').phaseGatePolicy;
                 report.measurements = (deps.measure || measureAcceptance)({ ...snapshot, taskContracts: prepared.tasks, suiteTaskIds: ALL_TASK_IDS,
                     gatePolicy: { auto: args.auto, phases: Object.fromEntries(['spec', 'plan', 'integrate'].map(phase => [phase, policy(root, phase)])) },
-                    integrations: report.integrations, hiddenTests: report.hiddenTests || {} });
+                    integrations: report.integrations, hiddenTests: report.hiddenTests || {}, sourceIntegrity: report.sourceIntegrity });
                 report.tasks = prepared.tasks.map(task => {
                     const own = snapshot.events.filter(event => event.task_id === task.task_id);
                     const start = own.find(event => event.type === 'task.execution.started'), end = own.findLast(event => event.type === 'task.completed' || event.type === 'task.execution.outcome');
@@ -208,9 +247,10 @@ async function runAcceptance(args, deps = {}) {
                         wallMs: start && end ? Math.max(0, Date.parse(end.timestamp) - Date.parse(start.timestamp)) : null,
                         reviewerVerdicts: own.filter(event => event.type === 'qc.review.completed').map(event => ({ attempt: event.attempt, verdict: event.verdict, sequence: event.sequence })) };
                 });
-                report.checks = { t08Context: !args.taskIds.includes('T08') || (report.contextByTask?.T08?.length || 0) > 0 };
+                report.checks = { t08Context: !args.taskIds.includes('T08') || (report.contextByTask?.T08?.length || 0) > 0,
+                    sourceIntegrity: report.sourceIntegrity?.passed === true };
                 report.selectedPassed = Boolean(!report.errorCode && driveResult?.complete && capture.complete && !report.evidence?.problems.length
-                    && report.checks.t08Context && report.measurements.thresholdsPassed);
+                    && report.checks.t08Context && report.checks.sourceIntegrity && report.measurements.thresholdsPassed);
                 report.ok = report.selectedPassed && report.measurements.passed;
             }
         } catch (error) { report.errorCode ||= error.code || 'EVIDENCE_FAILED'; report.errorMessage ||= error.message; report.ok = false; }

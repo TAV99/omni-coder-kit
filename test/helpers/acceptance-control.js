@@ -21,7 +21,8 @@ function taskProjection(derived, id) {
 /** Drive public RPCs only; human approval and source evidence remain caller-owned. */
 async function driveAcceptance({ authority, client, sessionId, taskIds, planRevision = 1, deadline, now = Date.now,
     pauseImpl = pause, pollIntervalMs = 500, serviceContext = async () => {}, waitForGates,
-    captureSource, collectIntegration, onIntegration = () => {}, beforeCheck = () => {}, onProgress = () => {} }) {
+    captureSource, collectIntegration, onIntegration = () => {}, beforeCheck = () => {}, onProgress = () => {},
+    beforeQc = () => {}, afterQc = () => {} }) {
     const integrations = [], frontiers = [], captured = new Set();
     const remaining = () => Math.max(1, deadline - now());
     const read = () => {
@@ -29,7 +30,7 @@ async function driveAcceptance({ authority, client, sessionId, taskIds, planRevi
         if (derived.sessionId !== sessionId || derived.planRevision !== planRevision) throw failure('ACCEPTANCE_AUTHORITY_CHANGED');
         return derived;
     };
-    async function qc(id) {
+    async function performQc(id) {
         const current = read().tasks[id], attempt = taskProjection(read(), id).attempt;
         const sequenceBefore = read().lastSequence;
         const before = await captureSource({ taskId: id, phase: 'before' });
@@ -63,11 +64,17 @@ async function driveAcceptance({ authority, client, sessionId, taskIds, planRevi
         await onProgress({ taskId: id, attempt, status: result?.status, result_sha256: current?.isolatedHandoff?.result_sha256 });
         return result;
     }
+    async function qc(id) {
+        await beforeQc(id);
+        try { return await performQc(id); }
+        finally { await afterQc(id); }
+    }
     while (now() < deadline) {
         await beforeCheck();
         let derived = read();
         for (const id of taskIds) if (derived.tasks[id]?.waitingContext) {
             await serviceContext({ taskId: id, task: derived.tasks[id], remainingMs: remaining() });
+            await beforeCheck();
         }
         derived = read();
         const results = taskIds.map(id => ({ task_id: id, ...taskProjection(derived, id) }));
@@ -91,12 +98,17 @@ async function driveAcceptance({ authority, client, sessionId, taskIds, planRevi
                 if (gates.length) {
                     frontiers.push(gates.map(gate => gate.gate_id));
                     await waitForGates({ gates, gateIds: gates.map(gate => gate.gate_id), remainingMs: remaining() });
+                    await beforeCheck();
                 }
                 // Re-enter QC from fresh authority; a changed digest will open
                 // another pending gate and must return to the person.
                 continue;
             }
-            if (frontier.some(id => read().tasks[id]?.state === 'TASK_VERIFIED')) await client.resumeSession({ session_id: sessionId, projection: 'ack' }, { timeoutMs: remaining() });
+            if (frontier.some(id => read().tasks[id]?.state === 'TASK_VERIFIED')) {
+                await beforeCheck();
+                await client.resumeSession({ session_id: sessionId, projection: 'ack' }, { timeoutMs: remaining() });
+                await beforeCheck();
+            }
         }
         await pauseImpl(Math.min(pollIntervalMs, remaining()));
     }

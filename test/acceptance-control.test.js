@@ -112,6 +112,25 @@ test('unanchored source changes are never accepted as a successful capture', asy
     await assert.rejects(driveAcceptance(s.options), { code: 'ACCEPTANCE_UNANCHORED_INTEGRATION' });
 });
 
+test('source integrity is checked before QC opens a human gate', async () => {
+    const { driveAcceptance } = api(), s = scenario(['T01']);
+    let checked = 0;
+    s.options.beforeQc = () => { checked++; throw Object.assign(new Error('source reset during worker'), { code: 'ACCEPTANCE_SOURCE_DRIFT' }); };
+    await assert.rejects(driveAcceptance(s.options), { code: 'ACCEPTANCE_SOURCE_DRIFT' });
+    assert.equal(checked, 1);
+    assert.deepEqual(s.trace, [], 'no QC or human prompt may follow detected source drift');
+});
+
+test('QC reconciliation runs even after an RPC failure', async () => {
+    const { driveAcceptance } = api(), s = scenario(['T01']);
+    const brackets = [];
+    s.options.beforeQc = id => brackets.push('before:' + id);
+    s.options.afterQc = id => brackets.push('after:' + id);
+    s.client.completeIsolatedTask = async () => { throw Object.assign(new Error('lost RPC'), { code: 'LOST' }); };
+    await assert.rejects(driveAcceptance(s.options), { code: 'LOST' });
+    assert.deepEqual(brackets, ['before:T01', 'after:T01']);
+});
+
 test('settled matching-attempt failure is terminal, NEEDS_FIX and pending integrate are not', async () => {
     const { taskProjection, driveAcceptance } = api(), s = scenario(['T01']);
     s.state.tasks.T01.lastOutcome = { attempt: 1, status: 'FAILED' };
