@@ -115,6 +115,7 @@ async function runAcceptance() {
         projectRoot: tmpDir,
         port: 0,
         squadRegistry: testRegistry,
+        allowShell: true,
     });
 
     const baseUrl = `http://127.0.0.1:${serverInstance.port}`;

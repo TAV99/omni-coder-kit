@@ -101,7 +101,8 @@ test('T13 hook-bridge: single session mode bypasses squad authority but maintain
         session_mode: 'single',
     });
 
-    assert.equal(resAllow.hookSpecificOutput?.permissionDecision, 'allow');
+    // Steps aside: no decision, so the CLI's own permission prompts still apply.
+    assert.deepEqual(resAllow, {});
 
     // 2. Human approval gate attempt in Single mode is STILL strictly denied!
     const resGateDeny = await evaluateHook({

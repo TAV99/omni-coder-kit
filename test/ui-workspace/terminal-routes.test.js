@@ -98,6 +98,7 @@ test('T04: terminal HTTP and SSE routes', async (t) => {
             projectRoot: root,
             token: TOKEN,
             pty: { spawnPty: fake.spawnPty },
+            allowShell: true,
         });
 
         await t.test('security: authentication and headers', async () => {
@@ -108,6 +109,23 @@ test('T04: terminal HTTP and SSE routes', async (t) => {
             // Wrong host -> 403
             const badHost = await req(ui.port, '/api/terminals', { headers: { Host: 'evil.com:1234' } });
             assert.equal(badHost.status, 403);
+        });
+
+        await t.test('user shells are off unless omni ui --allow-shell', async () => {
+            const locked = await startUiServer({ projectRoot: root, token: TOKEN, pty: { spawnPty: fake.spawnPty } });
+            try {
+                const res = await req(locked.port, '/api/terminals', { method: 'POST',
+                    body: { request_id: crypto.randomUUID(), kind: 'user-shell' } });
+                assert.deepEqual([res.status, res.json.code], [403, 'SHELL_DISABLED']);
+                const implicit = await req(locked.port, '/api/terminals', { method: 'POST', body: { request_id: crypto.randomUUID() } });
+                assert.equal(implicit.status, 403, 'no kind means user-shell');
+            } finally { await locked.close(); }
+        });
+
+        await t.test('cwd_relative into a sibling with the same prefix is refused', async () => {
+            const res = await req(ui.port, '/api/terminals', { method: 'POST',
+                body: { request_id: crypto.randomUUID(), kind: 'user-shell', cwd_relative: `../${path.basename(root)}-evil` } });
+            assert.equal(res.status, 403);
         });
 
         await t.test('GET /api/terminals: list terminals', async () => {

@@ -345,6 +345,7 @@ program.command('ui')
     .option('--port <n>', 'Cổng lắng nghe trên 127.0.0.1 (mặc định: cổng trống bất kỳ)')
     .option('--no-open', 'Không tự mở trình duyệt')
     .option('--no-start', 'Không tự chạy CLI orchestrator (bấm Start trong trang)')
+    .option('--allow-shell', 'Cho phép mở shell tự do từ trang (mặc định tắt)')
     .option('--resume', 'Chạy lại phiên orchestrator lần trước omni ui đã mở')
     .action(handleUi);
 
