@@ -1,0 +1,163 @@
+/* Semantic Theme Tokens for Omni UI Workspace (T09) */
+
+:root {
+  --os-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --os-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --os-radius: 6px;
+  --os-panel-width: 294px;
+  --os-sidebar-width: 210px;
+}
+
+/* Graphite Theme (Light Default) */
+[data-theme="graphite"], :root:not([data-theme]) {
+  color-scheme: light;
+  --os-bg: #fcfdfd;
+  --os-side: #f3f5f5;
+  --os-text: #242c30;
+  --os-sub: #65747a;
+  --os-line: #dce3e5;
+  --os-soft: #eaf0f2;
+  --os-accent: #4b6876;
+  --os-inverse: #ffffff;
+  --os-term: #f0f4f4;
+  --os-term-cursor: #242c30;
+  --os-term-selection: #dce3e5;
+}
+
+/* Midnight Theme (Dark) */
+[data-theme="midnight"] {
+  color-scheme: dark;
+  --os-bg: #1a1d1e;
+  --os-side: #16191a;
+  --os-text: #e9edeb;
+  --os-sub: #a5b0aa;
+  --os-line: #333d37;
+  --os-soft: #26302b;
+  --os-accent: #bbcebd;
+  --os-inverse: #19211c;
+  --os-term: #121715;
+  --os-term-cursor: #e9edeb;
+  --os-term-selection: #333d37;
+}
+
+/* Paper Theme (Warm Neutral) */
+[data-theme="paper"] {
+  color-scheme: light;
+  --os-bg: #faf8f2;
+  --os-side: #f2efe6;
+  --os-text: #302e27;
+  --os-sub: #756f62;
+  --os-line: #ddd7c9;
+  --os-soft: #ece7da;
+  --os-accent: #6d6952;
+  --os-inverse: #fffdf6;
+  --os-term: #f1eee5;
+  --os-term-cursor: #302e27;
+  --os-term-selection: #ddd7c9;
+}
+
+/* Nordic Theme (Arctic Frost Dark) */
+[data-theme="nordic"] {
+  color-scheme: dark;
+  --os-bg: #242933;
+  --os-side: #1e222a;
+  --os-text: #eceff4;
+  --os-sub: #909bb0;
+  --os-line: #3b4252;
+  --os-soft: #2e3440;
+  --os-accent: #88c0d0;
+  --os-inverse: #1b1f27;
+  --os-term: #191c24;
+  --os-term-cursor: #88c0d0;
+  --os-term-selection: #3b4252;
+}
+
+/* Obsidian Theme (OLED Pure Black & Gold) */
+[data-theme="obsidian"] {
+  color-scheme: dark;
+  --os-bg: #090a0b;
+  --os-side: #000000;
+  --os-text: #f3f4f6;
+  --os-sub: #7a828e;
+  --os-line: #1f2428;
+  --os-soft: #16191d;
+  --os-accent: #f59e0b;
+  --os-inverse: #000000;
+  --os-term: #050506;
+  --os-term-cursor: #f59e0b;
+  --os-term-selection: #272d34;
+}
+
+/* Emerald Theme (Botanical Forest Dark) */
+[data-theme="emerald"] {
+  color-scheme: dark;
+  --os-bg: #111a16;
+  --os-side: #0c1310;
+  --os-text: #e3ece7;
+  --os-sub: #78988b;
+  --os-line: #1e3027;
+  --os-soft: #17261f;
+  --os-accent: #34d399;
+  --os-inverse: #0a120e;
+  --os-term: #09100d;
+  --os-term-cursor: #34d399;
+  --os-term-selection: #1e3027;
+}
+
+/* Tokyo Night Theme (Neon Twilight) */
+[data-theme="tokyo"] {
+  color-scheme: dark;
+  --os-bg: #1a1b26;
+  --os-side: #16161e;
+  --os-text: #c0caf5;
+  --os-sub: #787c99;
+  --os-line: #292e42;
+  --os-soft: #202330;
+  --os-accent: #7aa2f7;
+  --os-inverse: #13141c;
+  --os-term: #13141c;
+  --os-term-cursor: #7aa2f7;
+  --os-term-selection: #283457;
+}
+
+/* System Theme (Resolves via prefers-color-scheme) */
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    color-scheme: dark;
+    --os-bg: #1a1d1e;
+    --os-side: #16191a;
+    --os-text: #e9edeb;
+    --os-sub: #a5b0aa;
+    --os-line: #333d37;
+    --os-soft: #26302b;
+    --os-accent: #bbcebd;
+    --os-inverse: #19211c;
+    --os-term: #121715;
+    --os-term-cursor: #e9edeb;
+    --os-term-selection: #333d37;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    color-scheme: light;
+    --os-bg: #fcfdfd;
+    --os-side: #f3f5f5;
+    --os-text: #242c30;
+    --os-sub: #65747a;
+    --os-line: #dce3e5;
+    --os-soft: #eaf0f2;
+    --os-accent: #4b6876;
+    --os-inverse: #ffffff;
+    --os-term: #f0f4f4;
+    --os-term-cursor: #242c30;
+    --os-term-selection: #dce3e5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

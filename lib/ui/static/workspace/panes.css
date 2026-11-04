@@ -1,0 +1,71 @@
+/* Panes, Tabs, and Splits Layout Styles (T09) */
+
+.os-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--os-side);
+  border-bottom: 1px solid var(--os-line);
+  min-height: 40px;
+  flex: none;
+  overflow-x: auto;
+}
+
+.os-tab-btn {
+  font: 11px/1 var(--os-font-sans);
+  color: var(--os-sub);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 12px 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.os-tab-btn:hover {
+  color: var(--os-text);
+}
+
+.os-tab-btn.active {
+  color: var(--os-text);
+  font-weight: 500;
+  border-bottom-color: var(--os-accent);
+}
+
+.os-split-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.os-split-container.horizontal {
+  flex-direction: row;
+}
+
+.os-split-container.vertical {
+  flex-direction: column;
+}
+
+.os-split-gutter {
+  background: var(--os-line);
+  flex: none;
+  z-index: 5;
+}
+
+.os-split-container.horizontal > .os-split-gutter {
+  width: 4px;
+  cursor: col-resize;
+}
+
+.os-split-container.vertical > .os-split-gutter {
+  height: 4px;
+  cursor: row-resize;
+}
+
+.os-split-gutter:hover {
+  background: var(--os-accent);
+}
