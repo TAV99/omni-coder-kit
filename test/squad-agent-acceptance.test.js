@@ -157,3 +157,10 @@ test('orchestrator login shells resolve omni to this checkout through a private 
     const out = execFileSync(zsh, ['-lc', 'echo $OMNI_FROM_PROFILE; omni'], { env, encoding: 'utf8' }).trim().split('\n');
     assert.deepEqual(out, ['1', 'SHIM'], 'the profile still loads and omni is the shim');
 });
+
+test('the harness recognises both CLIs\' own usage-limit refusals', () => {
+    const { usageLimited } = require('./squad-agent-acceptance');
+    assert.equal(usageLimited(fs.readFileSync(path.join(__dirname, 'fixtures/squad-cli/codex-usage-limit.jsonl'), 'utf8')), true);
+    assert.equal(usageLimited(fs.readFileSync(path.join(__dirname, 'fixtures/squad-cli/claude-usage-limit.json'), 'utf8')), true);
+    assert.equal(usageLimited('{"type":"turn.failed","error":{"message":"boom"}}'), false);
+});

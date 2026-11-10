@@ -25,6 +25,9 @@ const TASK_IDS = Object.freeze(['T01', 'T03', 'T06', 'T09']);
 const TOTAL_MS = 4 * 3600000 - 60000;
 const ORCHESTRATOR_MS = 3.5 * 3600000;
 const MAX_CONTINUATIONS = 60;
+const USAGE_LIMIT_PAUSE_MS = 10 * 60_000;
+// Both CLIs' own usage-limit refusals as captured live (claude B-05, codex P7f dual-12).
+const usageLimited = (text) => /hit your (usage|\d+-hour|weekly) limit|usage_limit_reached/i.test(text);
 const OMNI = path.resolve(__dirname, '../bin/omni.js');
 const MCP_SERVER = path.resolve(__dirname, '../lib/dual/mcp-server.mjs');
 // dual: codex orchestrator + claude worker (config B); squad: claude orchestrator
@@ -202,7 +205,7 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
         const until = Math.min(deadline - 15 * 60000, Date.now() + ORCHESTRATOR_MS);
         const allVerified = (derived) => Object.keys(derived.tasks || {}).length > 0
             && Object.values(derived.tasks).every((task) => task.state === 'TASK_VERIFIED');
-        let running = true, idleSince = null, lastFingerprint = null;
+        let running = true, idleSince = null, lastFingerprint = null, waitUntil = 0;
         for (;;) {
             if (signal?.aborted) throw failure('ACCEPTANCE_INTERRUPTED');
             const derived = authority.derive();
@@ -226,7 +229,13 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
                     running = false; idleSince = Date.now();
                     report.orchestrator.turns.at(-1).exit = exit; report.orchestrator.turns.at(-1).endedAt = new Date().toISOString();
                     lastFingerprint = JSON.stringify([states, key, derived.lastSequence]);
-                    if (exit.code !== 0) break;
+                    if (exit.code !== 0) {
+                        // An orchestrator refused by its own usage limit is resumed after a
+                        // pause (P7f dual-12, codex "hit your usage limit"); other failures end the run.
+                        if (!usageLimited(fs.readFileSync(orchestratorLog, 'utf8').slice(-8192))) break;
+                        waitUntil = Date.now() + USAGE_LIMIT_PAUSE_MS;
+                        report.orchestrator.turns.at(-1).usageLimited = true; save();
+                    }
                 }
                 continue;
             }
@@ -234,7 +243,7 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
             // Like a person nudging an idle agent: resume when the authority moved,
             // a gate was decided, or two quiet minutes passed; never while a gate waits.
             const fingerprint = JSON.stringify([states, key, derived.lastSequence]);
-            const due = !pending.length && (fingerprint !== lastFingerprint || Date.now() - idleSince >= 120_000);
+            const due = !pending.length && Date.now() >= waitUntil && (fingerprint !== lastFingerprint || Date.now() - idleSince >= 120_000);
             if (due && report.orchestrator.turns.length < MAX_CONTINUATIONS) {
                 const sessionRef = sessionRefFrom(fs.readFileSync(orchestratorLog, 'utf8'), args.preset);
                 if (!sessionRef) { report.continuationError = 'ORCHESTRATOR_SESSION_UNKNOWN'; break; }
@@ -295,4 +304,4 @@ async function main() {
 }
 if (require.main === module) main().catch((error) => { console.error(`${error.code || 'ACCEPTANCE_ERROR'}: ${error.message}`); process.exitCode = 1; });
 
-module.exports = { parseArgs, requirementsMarkdown, orchestratorPrompt, orchestratorCommand, orchestratorEnvironment, continuationPrompt, sessionRefFrom, changedSourceFiles, TASK_IDS, PRESETS };
+module.exports = { usageLimited, parseArgs, requirementsMarkdown, orchestratorPrompt, orchestratorCommand, orchestratorEnvironment, continuationPrompt, sessionRefFrom, changedSourceFiles, TASK_IDS, PRESETS };

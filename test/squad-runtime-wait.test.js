@@ -52,12 +52,23 @@ test('claude classifier: 429 + limit text without the typed field; everything el
     assert.deepEqual(classifyWorkerFailure('claude', { ...limited, timedOut: true }), { kind: 'other' });
 });
 
-test('runtimes without an observed signal classify nothing (V37 not observed)', () => {
-    assert.equal(codex.classifyFailure, undefined);
+test('runtimes without an observed signal classify nothing (V37 not observed: agy)', () => {
     assert.equal(agy.classifyFailure, undefined);
-    assert.deepEqual(classifyRuntimeFailure(codex, limited), { kind: 'other' });
+    assert.deepEqual(classifyRuntimeFailure(codex, limited), { kind: 'other' }, 'a claude envelope is not a codex signal');
     assert.deepEqual(classifyWorkerFailure('agy', limited), { kind: 'other' });
     assert.deepEqual(classifyWorkerFailure('codex', limited), { kind: 'other' });
+});
+
+test('codex classifier: the real P7f dual-12 usage-limit stream is rate_limited', () => {
+    const stream = fs.readFileSync(path.join(__dirname, 'fixtures', 'squad-cli', 'codex-usage-limit.jsonl'), 'utf8');
+    const raw = { exitCode: 1, stdout: `{"type":"thread.started","thread_id":"t"}\n{"type":"turn.started"}\n${stream}`, stderr: '', timedOut: false };
+    assert.deepEqual(classifyRuntimeFailure(codex, raw), { kind: 'rate_limited', signal: 'usage_limit' });
+    assert.deepEqual(classifyWorkerFailure('codex', raw), { kind: 'rate_limited', signal: 'usage_limit' });
+    assert.equal(codex.parseResult(raw).completion, 'failed');
+    for (const stdout of ['{"type":"error","message":"stream disconnected"}', '{"type":"turn.failed","error":{"message":"boom"}}',
+        '{"type":"item.completed","item":{"type":"agent_message","text":"you hit your usage limit"}}', 'not json']) {
+        assert.deepEqual(classifyRuntimeFailure(codex, { ...raw, stdout }), { kind: 'other' });
+    }
 });
 
 test('classifyRuntimeFailure never throws and rejects unknown kinds', () => {
