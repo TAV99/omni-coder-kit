@@ -30,6 +30,18 @@ test('quality plan runs only existing or explicitly registered scripts', (t) => 
     assert.equal(executed.find((item) => item.script === 'test').ok, true);
 });
 
+test('npm audit is omitted for a zero-dependency package without a lockfile, kept UNAVAILABLE when dependencies are declared (P7f)', (t) => {
+    const root = temp(t);
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'x', scripts: { test: 'node --test' } }));
+    assert.equal(buildQualityPlan(root).commands.some((item) => item.id === 'p0-security'), false, 'nothing to audit');
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'x', dependencies: { left: '1.0.0' }, scripts: { test: 'node --test' } }));
+    const withDeps = buildQualityPlan(root).commands.find((item) => item.id === 'p0-security');
+    assert.equal(withDeps.available, false, 'declared dependencies without a lockfile still cannot be audited');
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'x', devDependencies: {}, scripts: { test: 'node --test' } }));
+    fs.writeFileSync(path.join(root, 'package-lock.json'), '{"lockfileVersion":3}');
+    assert.equal(buildQualityPlan(root).commands.find((item) => item.id === 'p0-security').available, true, 'a lockfile keeps the audit');
+});
+
 test('isolated QC compares validator output to a pre-validator manifest and never restores source', (t) => {
     const root = temp(t); fs.writeFileSync(path.join(root, 'src.js'), 'before'); const before = manifestWorker(root);
     fs.mkdirSync(path.join(root, 'dist')); fs.writeFileSync(path.join(root, 'dist', 'bundle.js'), 'generated'); fs.writeFileSync(path.join(root, 'src.js'), 'mutated');
