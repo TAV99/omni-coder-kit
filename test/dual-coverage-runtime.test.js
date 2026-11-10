@@ -190,3 +190,40 @@ test('review still rejects duplicate satisfied coverage checks', (t) => {
     assert.throws(() => assertRuntimeReview(f.dir, f.runDir, 'TASK-A', { schema_version: 2, coverage_checks: [check, { ...check }] }),
         (error) => error.code === 'SPEC_COVERAGE_REQUIRED' && error.details.errors.includes('Duplicate coverage checks'));
 });
+
+test('read-only scout runs while v2 coverage is still DRAFT (P7f reconnaissance deadlock)', async (t) => {
+    const dir = root(t);
+    const { expandCatalog, digest } = require('../lib/dual/spec-coverage');
+    const { buildBindings } = require('../lib/dual/discussion/session');
+    const artifact = { schema_version: 1, catalog_version: 1, revision: 1, app_types: ['booking'],
+        classification_sources: ['user:request'], dimensions: expandCatalog(['booking']).map((d) => ({ id: d.id, state: 'unresolved', sources: [] })) };
+    save(dir, '.omni/sdlc/spec-coverage.json', artifact);
+    save(dir, '.omni/sdlc/dual-plan.json', { schema_version: 2, plan_revision: 1,
+        coverage: { path: '.omni/sdlc/spec-coverage.json', sha256: digest(JSON.stringify(artifact)), catalog_version: 1 },
+        acceptance_policy: { protocol_version: 1, checks: [] },
+        tasks: [{ task_id: 'TASK-A', title: 'Booking', owner: 'agy', goal: 'Implement booking', category: 'frontend', complexity: 'medium', risk: 'low',
+            execution_mode: 'isolated', allowed_files: ['src/booking.js'], context_files: [], deny_patterns: [],
+            validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }], decision_ids: [] }] });
+    assert.equal(inspectRuntimeCoverage(dir).state, 'DRAFT');
+    fs.mkdirSync(path.join(dir, 'src')); fs.writeFileSync(path.join(dir, 'src/booking.js'), '');
+    const initialSnapshot = require('../lib/dual/snapshot-policy').createConfiguredSnapshotBaseline({ root: dir }).baseline.capture();
+    let dispatched = 0;
+    // Stops at the first worker dispatch: reaching it proves the scout input and schema were prepared.
+    const discussion = { enabled: true, sessionResolver: async ({ taskId, snapshotSha256 }) => {
+        const messages = [];
+        return { enabled: true, bindings: buildBindings({ models: { agy: 'test-model' }, efforts: { agy: 'high' }, sessionId: 's', taskId,
+            planRevision: 1, snapshotSha256: snapshotSha256 || 'a'.repeat(64), codexConversationId: 'c', agyConversationId: 'a' }),
+        relay: { async inspect() { return { messages, unknown: null }; }, async receive(message) { messages.push(message); },
+            async dispatch() { dispatched++; throw Object.assign(new Error('stop after dispatch'), { code: 'TEST_STOP' }); } } };
+    } };
+    const orchestrator = createDualOrchestrator({ cwd: dir, backend: 'snapshot', initialSnapshot, workerModel: 'test-model', workerEffort: 'high',
+        authoritativeCapabilityEvidence: { version: '1.4.12', model: 'test-model' }, discussion });
+    orchestrator.newTask('TASK-A');
+    await orchestrator.runPhase('preflight', 'TASK-A');
+    const scoutError = await orchestrator.runPhase('scout', 'TASK-A').then(() => null, (error) => error);
+    assert.notEqual(scoutError?.code, 'SPEC_COVERAGE_REQUIRED', String(scoutError?.message));
+    assert.equal(dispatched, 1, `scout reached its worker: ${scoutError?.code} ${scoutError?.message}`);
+    const runDir = path.join(dir, '.omni/codex-gemini/runs/TASK-A/raw');
+    assert.ok(fs.readdirSync(runDir).some((file) => /^scout\.\d+\.schema\.json$/.test(file)), 'v2 scout schema written');
+    assert.equal(inspectRuntimeCoverage(dir).state, 'DRAFT', 'scouting does not approve coverage');
+});
