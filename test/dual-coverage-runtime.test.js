@@ -284,3 +284,18 @@ test('decision-log validation failures name the worker artifact (P7f dual-11)', 
     assert.throws(() => assertRuntimeDecisionLog(f.dir, f.runDir, 'TASK-A'),
         (error) => error.code === 'SPEC_COVERAGE_REQUIRED' && error.details.worker_artifact === 'decision_log');
 });
+
+test('review coverage brief carries only the task-bound rows (P7f dual-13 envelope overflow)', () => {
+    const { scopeCoverageToTask } = require('../lib/dual/coverage-runtime');
+    const { expandCatalog } = require('../lib/dual/spec-coverage');
+    const artifact = { schema_version: 1, dimensions: expandCatalog(['core']).map((d) => ({ id: d.id, state: 'not_applicable', reason: 'x'.repeat(400) })) };
+    assert.ok(artifact.dimensions.length > 10);
+    const bound = artifact.dimensions[0].id;
+    const plan = { tasks: [{ task_id: 'TASK-1', decision_ids: [bound] }, { task_id: 'TASK-2' }] };
+    const scoped = scopeCoverageToTask(artifact, plan, 'TASK-1');
+    assert.deepEqual(scoped.dimensions.map((row) => row.id), [bound]);
+    assert.ok(JSON.stringify(scoped).length < JSON.stringify(artifact).length / 5);
+    assert.equal(scopeCoverageToTask(artifact, plan, 'TASK-2'), artifact, 'unknown binding keeps the full artifact');
+    assert.equal(scopeCoverageToTask(artifact, plan, 'NOPE'), artifact);
+    assert.equal(artifact.dimensions.length > 10, true, 'the input is not mutated');
+});
