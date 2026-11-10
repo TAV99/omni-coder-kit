@@ -61,6 +61,7 @@ function orchestratorPrompt(root) {
         'Goal: deliver every requirement in requirements.md end to end in AUTO mode through the Omni dual authority, exactly as that workflow describes.',
         `Workspace root: ${root}. Prepare the planning artifacts the workflow names and start with \`omni dual bootstrap --json\` (its single AUTO entrypoint), then drive every task with the omni_dual MCP tools (status, resume, completion) until each task is TASK_VERIFIED.`,
         'A person approves spec/plan gates in a terminal with `omni squad approve`; never try to approve a gate yourself. When only a human gate or a running worker is pending, end your turn with one line saying so; you will be resumed in this same conversation.',
+        'requirements.md is the user\'s complete authorization for spec-coverage decisions: submit the coverage approval yourself, grounded in it (dimensions it does not mention are not applicable or delegated to the implementation). The spec and plan gates themselves are decided by the person, separately.',
         'Do not edit source files yourself; workers implement. Answer worker questions only from requirements.md. Stop when every task is TASK_VERIFIED or when you are blocked, and end with a short summary of the final state.',
     ].join('\n\n');
 }
@@ -102,6 +103,23 @@ function orchestratorCommand({ preset, root, binding, resume }) {
     return { command: codex.command, args: resume
         ? [...codex.prefixArgs, 'exec', 'resume', ...flags, resume.sessionRef, resume.prompt]
         : [...codex.prefixArgs, 'exec', ...flags, orchestratorPrompt(root)] };
+}
+
+// `omni` must resolve to this checkout in every shell the orchestrator opens.
+// codex runs commands through `zsh -lc`, a login shell that rebuilds PATH from the
+// user's profile (P7f dual-10 reached the global omni 3.1.2 without `omni squad`).
+// A private ZDOTDIR sources the user's own zsh files unchanged, then puts the shim first.
+function orchestratorEnvironment({ shimDir, privateDir, env }) {
+    const zdot = path.join(privateDir, 'zdotdir');
+    fs.mkdirSync(zdot, { recursive: true, mode: 0o700 });
+    const home = env.ZDOTDIR || env.HOME || '';
+    for (const name of ['.zshenv', '.zprofile', '.zshrc', '.zlogin']) {
+        const original = path.join(home, name);
+        fs.writeFileSync(path.join(zdot, name), [
+            `[ -f ${quote(original)} ] && ZDOTDIR=${quote(home)} source ${quote(original)}`,
+            `export PATH=${quote(shimDir)}:"$PATH"`, ''].join('\n'), { mode: 0o600 });
+    }
+    return { ...env, PATH: `${shimDir}${path.delimiter}${env.PATH}`, ZDOTDIR: zdot };
 }
 
 // The orchestrator conversation id from its own JSON event stream.
@@ -163,7 +181,7 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
         // `omni` on the orchestrator's PATH must be this checkout, not a globally installed release.
         const shimDir = path.join(privateDir, 'bin'); fs.mkdirSync(shimDir, { mode: 0o700 });
         fs.writeFileSync(path.join(shimDir, 'omni'), `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(OMNI)} "$@"\n`, { mode: 0o700 });
-        const orchestratorEnv = { ...process.env, PATH: `${shimDir}${path.delimiter}${process.env.PATH}` };
+        const orchestratorEnv = orchestratorEnvironment({ shimDir, privateDir, env: process.env });
         const orchestratorLog = path.join(privateDir, 'orchestrator.jsonl');
         fs.writeFileSync(orchestratorLog, '', { flag: 'wx', mode: 0o600 });
         const launch = (resume) => {
@@ -277,4 +295,4 @@ async function main() {
 }
 if (require.main === module) main().catch((error) => { console.error(`${error.code || 'ACCEPTANCE_ERROR'}: ${error.message}`); process.exitCode = 1; });
 
-module.exports = { parseArgs, requirementsMarkdown, orchestratorPrompt, orchestratorCommand, continuationPrompt, sessionRefFrom, changedSourceFiles, TASK_IDS, PRESETS };
+module.exports = { parseArgs, requirementsMarkdown, orchestratorPrompt, orchestratorCommand, orchestratorEnvironment, continuationPrompt, sessionRefFrom, changedSourceFiles, TASK_IDS, PRESETS };

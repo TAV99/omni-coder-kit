@@ -142,3 +142,18 @@ test('all-gates delegation (user decision 2026-11-11) approves spec, the current
     assert.equal(isAgentDelegatedDecision(decided, decided, { ...delegation, scope: 'integrate' }), false);
     assert.equal(parseArgs(['out', '--preset', 'dual', '--delegate-all-gates']).delegateAllGates, true);
 });
+
+test('orchestrator login shells resolve omni to this checkout through a private ZDOTDIR', (t) => {
+    const { orchestratorEnvironment } = require('./squad-agent-acceptance');
+    const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-zdot-')));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const home = path.join(dir, 'home'), shim = path.join(dir, 'bin'), priv = path.join(dir, 'private');
+    fs.mkdirSync(home); fs.mkdirSync(shim); fs.mkdirSync(priv);
+    fs.writeFileSync(path.join(home, '.zprofile'), 'export PATH=/usr/bin:/bin\nexport OMNI_FROM_PROFILE=1\n');
+    fs.writeFileSync(path.join(shim, 'omni'), '#!/bin/sh\necho SHIM\n', { mode: 0o755 });
+    const env = orchestratorEnvironment({ shimDir: shim, privateDir: priv, env: { HOME: home, PATH: '/usr/bin:/bin' } });
+    const zsh = ['/bin/zsh', '/usr/bin/zsh'].find((file) => fs.existsSync(file));
+    if (!zsh) return t.skip('zsh not installed');
+    const out = execFileSync(zsh, ['-lc', 'echo $OMNI_FROM_PROFILE; omni'], { env, encoding: 'utf8' }).trim().split('\n');
+    assert.deepEqual(out, ['1', 'SHIM'], 'the profile still loads and omni is the shim');
+});
