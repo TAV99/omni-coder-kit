@@ -1888,3 +1888,17 @@ test('unavailable QC source fence releases its lease and never launches validati
         assert.ok(Object.values(store.derive().leases).every(lease => lease.status === 'released'));
         assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 1;\n');
     });
+
+test('a worker decision-log coverage failure is recorded as DUAL_DECISION_LOG_INVALID, a correctable worker failure (P7f dual-11)', async (t) => {
+    const input = fixture(t), { store } = seedAuthority(input);
+    const processRunner = async () => {
+        throw Object.assign(new Error('SPEC_COVERAGE_REQUIRED: delegated decisions failed validation'),
+            { code: 'SPEC_COVERAGE_REQUIRED', details: { state: 'STALE', errors: ['data.fields: object required'], worker_artifact: 'decision_log' } });
+    };
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker: processRunner });
+    await assert.rejects(() => adapter.runTask(store.derive()), { code: 'SPEC_COVERAGE_REQUIRED' });
+    const task = store.derive().tasks['TASK-1'];
+    assert.equal(task.lastOutcome.code, 'DUAL_DECISION_LOG_INVALID');
+    const { classifyFailure } = require('../lib/dual/correction-policy');
+    assert.deepEqual(classifyFailure(task), { category: 'worker', phase: 'worker_result' });
+});

@@ -242,3 +242,11 @@ test('legacy unknown history remains readable while new unknown requests fail cl
     assert.deepEqual(applyCorrectionBudget(t, { previous_attempt: 1, attempt: 2 }, context), { budget_class: 'worker' });
     assert.throws(() => authorizeCorrection(t, { expectedAttempt: 1 }), { code: 'DUAL_CORRECTION_CLASSIFICATION_REQUIRED' });
 });
+
+test('a worker coverage artifact failure is a correctable worker failure; bare SPEC_COVERAGE_REQUIRED stays unknown (P7f dual-11)', () => {
+    for (const code of ['DUAL_DECISION_LOG_INVALID', 'DUAL_COVERAGE_REVIEW_INVALID']) {
+        assert.deepEqual(classifyFailure(task(code)), { category: 'worker', phase: 'worker_result' });
+        assert.deepEqual(authorizeCorrection(task(code), { expectedAttempt: 1 }), { budget_class: 'worker' });
+    }
+    assert.deepEqual(classifyFailure(task('SPEC_COVERAGE_REQUIRED')), { category: 'unknown', phase: 'unclassified' });
+});

@@ -274,3 +274,13 @@ test('coverage reconnaissance holds a released controller lease while each scout
     await assert.rejects(adapter.prepareCoverage(derived));
     assert.deepEqual(events, [['acquire', 'TASK-A', 'codex'], ['dispatch', 'TASK-A', true], ['release', 'L-TASK-A', 'coverage_reconnaissance']]);
 });
+
+test('decision-log validation failures name the worker artifact (P7f dual-11)', (t) => {
+    const f = approvedFixture(t);
+    // The P7f shape: a string where the delegated decision needs an object.
+    fs.writeFileSync(path.join(f.runDir, 'decision-log.json'), JSON.stringify([{ dimension_id: 'actions.edit', chosen_value: 'allow edits',
+        rationale: 'Explicitly delegated', evidence_refs: ['src/api.js:10'] }]));
+    const { assertRuntimeDecisionLog } = require('../lib/dual/coverage-runtime');
+    assert.throws(() => assertRuntimeDecisionLog(f.dir, f.runDir, 'TASK-A'),
+        (error) => error.code === 'SPEC_COVERAGE_REQUIRED' && error.details.worker_artifact === 'decision_log');
+});
