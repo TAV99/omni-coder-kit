@@ -227,3 +227,50 @@ test('read-only scout runs while v2 coverage is still DRAFT (P7f reconnaissance 
     assert.ok(fs.readdirSync(runDir).some((file) => /^scout\.\d+\.schema\.json$/.test(file)), 'v2 scout schema written');
     assert.equal(inspectRuntimeCoverage(dir).state, 'DRAFT', 'scouting does not approve coverage');
 });
+
+test('coverage reconnaissance holds a released controller lease while each scout dispatches (P7f dual-6)', async (t) => {
+    const { execFileSync } = require('node:child_process');
+    const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
+    const { expandCatalog, digest } = require('../lib/dual/spec-coverage');
+    const { buildBindings } = require('../lib/dual/discussion/session');
+    const dir = fs.realpathSync.native(root(t));
+    const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
+    git('init', '-q', '-b', 'main'); git('config', 'user.email', 'x@example.invalid'); git('config', 'user.name', 'x');
+    fs.mkdirSync(path.join(dir, 'src')); fs.writeFileSync(path.join(dir, 'src/booking.js'), '');
+    fs.writeFileSync(path.join(dir, '.gitignore'), '.omni/\n');
+    git('add', '-A'); git('commit', '-q', '-m', 'base');
+    const head = git('rev-parse', 'HEAD').trim();
+    const artifact = { schema_version: 1, catalog_version: 1, revision: 1, app_types: ['booking'],
+        classification_sources: ['user:request'], dimensions: expandCatalog(['booking']).map((d) => ({ id: d.id, state: 'unresolved', sources: [] })) };
+    save(dir, '.omni/sdlc/spec-coverage.json', artifact);
+    const plan = { schema_version: 2, plan_revision: 1,
+        coverage: { path: '.omni/sdlc/spec-coverage.json', sha256: digest(JSON.stringify(artifact)), catalog_version: 1 },
+        acceptance_policy: { protocol_version: 1, checks: [] },
+        tasks: ['TASK-A', 'TASK-B'].map((task_id) => ({ task_id, title: 'Booking', owner: 'agy', goal: 'Implement booking', category: 'frontend', complexity: 'medium', risk: 'low',
+            execution_mode: 'isolated', allowed_files: ['src/booking.js'], context_files: [], deny_patterns: [],
+            validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }], decision_ids: [] })) };
+    save(dir, '.omni/sdlc/dual-plan.json', plan);
+    const leases = new Map(), events = [];
+    const store = {
+        derive: () => ({ leases: Object.fromEntries(leases) }),
+        acquireLease(taskId, owner) { const lease = { lease_id: `L-${taskId}`, task_id: taskId, owner, status: 'active' }; leases.set(lease.lease_id, lease); events.push(['acquire', taskId, owner]); return lease; },
+        renewLease() {},
+        releaseLease(leaseId, reason) { leases.get(leaseId).status = 'released'; events.push(['release', leaseId, reason]); },
+    };
+    const discussion = { enabled: true, sessionResolver: async ({ taskId, snapshotSha256 }) => {
+        const messages = [];
+        return { enabled: true, bindings: buildBindings({ models: { agy: 'test-model' }, efforts: { agy: 'high' }, sessionId: 's', taskId,
+            planRevision: 1, snapshotSha256: snapshotSha256 || 'a'.repeat(64), codexConversationId: 'c', agyConversationId: 'a' }),
+        relay: { async inspect() { return { messages, unknown: null }; }, async receive(message) { messages.push(message); },
+            async dispatch() {
+                events.push(['dispatch', taskId, [...leases.values()].some((lease) => lease.task_id === taskId && lease.status === 'active')]);
+                throw Object.assign(new Error('stop after dispatch'), { code: 'TEST_STOP' });
+            } } };
+    } };
+    const adapter = createOrchestratorAdapter({ workspaceRoot: dir, authorityStore: store, operationWriter: {}, discussion, workerModel: 'test-model', workerEffort: 'high' });
+    const derived = { sessionId: 's', workspaceId: 'w', planRevision: 1, currentBaseline: { kind: 'git', id: head },
+        capability: { details: { agy_version: '1.4.12', agy_model: 'test-model' } },
+        plan: { schema_version: 2, plan_path: '.omni/sdlc/dual-plan.json', plan_sha256: digest(fs.readFileSync(path.join(dir, '.omni/sdlc/dual-plan.json'))) } };
+    await assert.rejects(adapter.prepareCoverage(derived));
+    assert.deepEqual(events, [['acquire', 'TASK-A', 'codex'], ['dispatch', 'TASK-A', true], ['release', 'L-TASK-A', 'coverage_reconnaissance']]);
+});

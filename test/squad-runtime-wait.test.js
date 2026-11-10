@@ -239,3 +239,15 @@ test('ledger: a released lease no longer shows WAITING_RUNTIME', (t) => {
     store.releaseLease(lease.lease_id, 'fixture_done');
     assert.notEqual(statusOf(store).state, 'WAITING_RUNTIME');
 });
+
+test('ledger: a released controller reconnaissance lease leaves the task free for its worker lease', (t) => {
+    const { dir, store } = authorityFixture(t, { execution: false });
+    const derivedLeases = () => Object.values(store.derive().leases);
+    for (const lease of derivedLeases()) store.releaseLease(lease.lease_id, 'fixture');
+    const recon = store.acquireLease('TASK-1', 'codex', { ttlMs: 120000 });
+    store.renewLease(recon.lease_id, { ttlMs: 120000 });
+    store.releaseLease(recon.lease_id, 'coverage_reconnaissance');
+    const worker = store.acquireLease('TASK-1', 'agy', { ttlMs: 120000 });
+    assert.equal(store.derive().leases[worker.lease_id].status, 'active');
+    assert.equal(createAuthorityStore(dir).derive().leases[worker.lease_id].status, 'active', 'a fresh reader replays the same chain');
+});
