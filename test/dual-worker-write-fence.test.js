@@ -59,6 +59,22 @@ test('OS fence blocks source writes and file operations while private writes and
         assert.equal(fs.readFileSync(f.source, 'utf8'), 'controller integration');
     });
 
+test('OMNI_WORKER_WRITE_FENCE=off is the only explicit opt-out; it spawns unfenced on any platform', (t) => {
+    const f = fixture(t);
+    for (const platform of ['linux', 'win32', 'darwin']) {
+        const calls = [];
+        const fence = createWorkerWriteFence({ ...f, platform, env: { OMNI_WORKER_WRITE_FENCE: ' OFF ' },
+            spawn: (...args) => { calls.push(args); return 'child'; } });
+        assert.equal(fence.backend, 'none');
+        assert.equal(fence.spawn('agy', ['-p'], { cwd: f.workerRoot }), 'child');
+        assert.deepEqual(calls, [['agy', ['-p'], { cwd: f.workerRoot }]]);
+    }
+    for (const value of ['0', 'false', 'no', 'disabled', '']) {
+        assert.throws(() => createWorkerWriteFence({ ...f, platform: 'linux', env: { OMNI_WORKER_WRITE_FENCE: value } }),
+            (error) => error.code === 'DUAL_WORKER_WRITE_FENCE_UNAVAILABLE' && /OMNI_WORKER_WRITE_FENCE=off/.test(error.message));
+    }
+});
+
 test('fence fails closed for unsupported platforms before spawning a worker', (t) => {
     const f = fixture(t); let spawned = false;
     assert.throws(() => createWorkerWriteFence({ ...f, platform: 'win32', spawn() { spawned = true; } })
