@@ -90,6 +90,7 @@ test('orchestrator argv: claude reads project MCP/hooks; codex gets MCP as sessi
     assert.ok(codex.args.includes('sandbox_mode="workspace-write"'));
     assert.ok(codex.args.some((arg) => arg.startsWith('mcp_servers.omni_dual.args=') && arg.includes('"--workspace","/w"')));
     assert.ok(codex.args.includes('mcp_servers.omni_dual.default_tools_approval_mode="approve"'));
+    assert.ok(codex.args.includes('sandbox_workspace_write.network_access=true') && !codex.args.some((arg) => /danger-full-access/.test(arg)));
 });
 
 test('arguments and changed-file accounting', (t) => {

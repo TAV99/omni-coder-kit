@@ -93,7 +93,11 @@ function orchestratorCommand({ preset, root, binding, resume }) {
         '-c', `mcp_servers.omni_dual.command=${JSON.stringify(process.execPath)}`,
         '-c', `mcp_servers.omni_dual.args=${JSON.stringify([MCP_SERVER, '--workspace', root])}`,
         // Same as the generated project config (lib/init/strategies.js).
-        '-c', 'mcp_servers.omni_dual.default_tools_approval_mode="approve"'];
+        '-c', 'mcp_servers.omni_dual.default_tools_approval_mode="approve"',
+        // Stands in for the person approving the escalation `omni dual bootstrap`
+        // needs to reach the loopback daemon (P7f dual-2: EPERM in the default
+        // network-off workspace-write sandbox). Writes stay workspace-confined.
+        '-c', 'sandbox_workspace_write.network_access=true'];
     return { command: codex.command, args: resume
         ? [...codex.prefixArgs, 'exec', 'resume', ...flags, resume.sessionRef, resume.prompt]
         : [...codex.prefixArgs, 'exec', ...flags, orchestratorPrompt(root)] };
