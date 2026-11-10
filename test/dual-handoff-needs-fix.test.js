@@ -311,20 +311,24 @@ test('(3) REGRESSION: empty command_outputs array is STILL rejected DUAL_ISOLATE
     );
 });
 
-test('(3) REGRESSION: review not APPROVE is STILL rejected DUAL_ISOLATED_EVIDENCE_INVALID', async (t) => {
-    const input = fixture(t);
-    const { store } = seedAuthority(input);
-    const commandOutputs = [
-        { command: 'node scripts/check-shop-main.mjs', exit_code: 0, output: 'ok' },
-        { command: 'node scripts/behavior-qc.mjs', exit_code: 1, output: 'failed' },
-    ];
-    const worker = workerWithOutputs(commandOutputs, { reviewRecommendation: 'NEEDS_FIX' });
-    const adapter = createAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, processRunner: worker });
-
-    await assert.rejects(
-        () => adapter.runTask(store.derive()),
-        (error) => error.code === 'DUAL_ISOLATED_EVIDENCE_INVALID'
-    );
+test('(3) REGRESSION: NEEDS_FIX and REJECT cannot hand off and keep distinct correction eligibility', async (t) => {
+    for (const recommendation of ['NEEDS_FIX', 'REJECT']) {
+        const input = fixture(t);
+        const { store } = seedAuthority(input);
+        const commandOutputs = [
+            { command: 'node scripts/check-shop-main.mjs', exit_code: 0, output: 'ok' },
+            { command: 'node scripts/behavior-qc.mjs', exit_code: 1, output: 'failed' },
+        ];
+        const worker = workerWithOutputs(commandOutputs, { reviewRecommendation: recommendation });
+        const adapter = createAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, processRunner: worker });
+        const code = recommendation === 'NEEDS_FIX' ? 'DUAL_WORKER_REVIEW_NEEDS_FIX' : 'DUAL_ISOLATED_EVIDENCE_INVALID';
+        await assert.rejects(() => adapter.runTask(store.derive()), { code });
+        const task = store.derive().tasks[input.task.task_id];
+        assert.equal(Boolean(task.isolatedHandoff), false);
+        assert.equal(task.lastOutcome.code, code);
+        assert.equal(classifyFailure(task).category, recommendation === 'NEEDS_FIX' ? 'worker' : 'unknown');
+        assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 1;\n');
+    }
 });
 
 test('(3) REGRESSION: evidence status not SUCCESS is STILL rejected DUAL_ISOLATED_EVIDENCE_INVALID', async (t) => {

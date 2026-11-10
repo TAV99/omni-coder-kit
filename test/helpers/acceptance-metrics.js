@@ -1,6 +1,7 @@
 'use strict';
 
 const { classifyFailure } = require('../../lib/dual/correction-policy');
+const { isDelegatedDecision } = require('./acceptance-delegation');
 
 const time = (value) => Date.parse(value);
 const attemptOf = (task) => task?.isolatedWorkspace?.attempt || task?.correction?.attempt || task?.attempt || 1;
@@ -23,6 +24,8 @@ function measureAcceptance(input = {}) {
     thresholds.scope.blockedAttempts = [];
     thresholds.duplicates.authorizedResumptions = [];
     thresholds.duplicates.controllerStarts = [];
+    thresholds.gates.evidenceMode = gatePolicy.delegation ? 'delegated-benchmark' : 'human-tty';
+    thresholds.gates.provesHumanTty = !gatePolicy.delegation;
     if (input.sourceIntegrity) {
         const source = input.sourceIntegrity;
         if (source.passed !== true || source.violations?.length) {
@@ -242,7 +245,7 @@ function measureAcceptance(input = {}) {
                 const human = e.actor === 'human' && e.via === 'cli-tty';
                 const auto = e.type === 'gate.approved' && e.actor === 'auto' && e.via === 'pipeline-auto'
                     && gatePolicy.auto === true && ['spec', 'plan'].includes(gate.phase) && policy?.gated === true && policy.autoOk === true;
-                const authorized = human || auto;
+                const authorized = human || auto || isDelegatedDecision(gate, e, gatePolicy.delegation);
                 if (!authorized) add('gates', 'UNAUTHORIZED_GATE_DECISION', e, { ...(gate.task_id ? { task_id: gate.task_id } : {}), gate_id: e.gate_id });
                 Object.assign(gate, { status: e.type === 'gate.approved' ? 'approved' : 'rejected', authorized });
                 break;
@@ -343,11 +346,12 @@ function measureAcceptance(input = {}) {
         const integrated = observedIntegrationTasks.has(id);
         if (task?.state === 'TASK_VERIFIED' && (!completion || !integrated || !hasWorker)) evidence('MISSING_TASK_EVIDENCE', completion || { task_id: id });
         if (completion && !integrated) add('scope', 'MISSING_INTEGRATION_EVIDENCE', completion);
-        const met = verified && terminal && hidden && integrated && hasWorker;
+        const supplemental = !input.supplementalTaskChecks?.[id] || input.supplementalTaskChecks[id].passed === true;
+        const met = verified && terminal && hidden && supplemental && integrated && hasWorker;
         if (!met) add('requirements', 'REQUIREMENT_NOT_MET', completion || { task_id: id, sequence: outcomes.get(id)?.sequence || null },
-            { verified: Boolean(verified), hidden_passed: hidden });
+            { verified: Boolean(verified), hidden_passed: hidden, supplemental_passed: supplemental });
         return { task_id: id, authority_state: task?.state || 'MISSING', effective_state: effective, terminal,
-            attempt, hidden_passed: hidden, requirements_met: met };
+            attempt, hidden_passed: hidden, supplemental_passed: supplemental, requirements_met: met };
     });
     const met = taskResults.filter((t) => t.requirements_met).length, total = taskContracts.length;
     Object.assign(thresholds.requirements, { total, met, rate: total ? met / total : 0, minimum: 0.9 });

@@ -148,6 +148,47 @@ for (const snapshot of [false, true]) {
         assert.equal(f.read('review.json').recommendation, 'APPROVE');
     });
 }
+for (const snapshot of [false, true]) {
+    test(`every review chunk carries complete implementation evidence (snapshot=${snapshot})`, async (t) => {
+        const f = await ready(t, large, { snapshot });
+        const evidence = JSON.stringify(f.read('evidence.json'));
+        const receive = f.session.relay.receive;
+        f.session.relay.receive = async (message) => {
+            const shared = message.body.split('--- BEGIN REVIEW DIFF ---')[0];
+            assert.ok(shared.includes(evidence), 'review must receive the full evidence JSON, not only its path');
+            assert.ok(shared.includes('untrusted worker report'), 'worker claims must not become controller authority');
+            return receive(message);
+        };
+        await f.orch.runPhase('review', f.taskId);
+        const manifest = verifyManifest(f);
+        assert.ok(manifest.chunks.length > 1);
+        assert.equal(f.read('review.json').recommendation, 'APPROVE');
+    });
+}
+
+test('oversized implementation evidence stops review before any transport call', async (t) => {
+    const f = await fixture(t, { enabled: true });
+    await f.orch.runPhase('scout', f.taskId);
+    await f.route();
+    f.payloads.implement.command_outputs[0].output = 'large validation output '.repeat(1000);
+    await f.orch.runPhase('implement', f.taskId);
+    await f.orch.runPhase('scope', f.taskId);
+    f.messages.length = 0;
+    await assert.rejects(f.orch.runPhase('review', f.taskId), { code: 'LIMIT_EXCEEDED' });
+    assert.equal(f.messages.length, 0);
+    assert.equal(fs.existsSync(path.join(f.runDir, 'review.json')), false);
+    assert.equal(f.read('raw/review.1.failure.json').retryable, false);
+});
+
+test('changed implementation evidence is rejected before review transport', async (t) => {
+    const f = await ready(t, '<body>Small</body>\n');
+    const evidence = f.read('evidence.json');
+    evidence.command_outputs[0].output = 'invented passing output';
+    fs.writeFileSync(path.join(f.runDir, 'evidence.json'), JSON.stringify(evidence));
+    await assert.rejects(f.orch.runPhase('review', f.taskId), { code: 'DUAL_ARTIFACT_HASH' });
+    assert.equal(f.messages.length, 0);
+});
+
 test('small review preserves its single question body', async (t) => {
     const f = await ready(t, '<body>Small</body>\n');
     await f.orch.runPhase('review', f.taskId);
@@ -253,6 +294,112 @@ test('whole file boundaries and initial git headers stay with hunks', () => {
         assert.ok(c.text.includes('@@ -1 +1,300 @@\n+tiếng Việt 😀\n'));
     }
 });
+
+test('review reserve cannot reject diff units that fit the exact envelope capacity', () => {
+    const diff = 'Snapshot change: entry.js\nBaseline entry: ' + 'a'.repeat(180)
+        + '\nCurrent contents:\n' + 'const text = "tiếng Việt 😀";\n'.repeat(400);
+    for (const padding of [14700, 15500]) {
+        const input = 'p'.repeat(padding);
+        const plan = planReviewChunks(input, '{}', diff);
+        assert.ok(plan.chunks.length > 1);
+        assert.equal(plan.chunks.map(chunk => chunk.text).join(''), diff);
+        assert.equal(plan.sha256, hash(Buffer.from(diff)));
+        for (const chunk of plan.chunks) {
+            assert.ok(chunk.body.startsWith(input));
+            assert.ok(chunk.body_bytes <= CEILINGS.maxBodyBytes);
+        }
+    }
+    assert.throws(() => planReviewChunks('p'.repeat(15500), '{}',
+        'Snapshot change: entry.js\n' + 'x'.repeat(1200) + '\n' + 'line\n'.repeat(400)),
+    { code: 'LIMIT_EXCEEDED' }, 'units exceeding actual capacity must still fail');
+});
+
+test('an empty review at the exact ceiling survives lossless schema compaction', () => {
+    const input = 'p'.repeat(CEILINGS.maxBodyBytes - Buffer.byteLength(reviewBody('', '{}', '')));
+    const plan = planReviewChunks(input, ' { } ', '');
+    assert.equal(plan.chunks.length, 1);
+    assert.equal(plan.chunks[0].body_bytes, CEILINGS.maxBodyBytes);
+    assert.equal(plan.chunks[0].text, '');
+});
+
+test('the complete diff stays together when compacting schema whitespace makes it fit', () => {
+    const input = 'p'.repeat(15000);
+    const schema = '{\n' + ' '.repeat(1000) + '"type": "object"\n}';
+    const diff = 'Snapshot change: entry.js\n' + 'const value = 1;\n'.repeat(65);
+    assert.ok(Buffer.byteLength(reviewBody(input, schema, diff)) > CEILINGS.maxBodyBytes);
+    const plan = planReviewChunks(input, schema, diff);
+    assert.equal(plan.chunks.length, 1);
+    assert.equal(plan.chunks[0].body, reviewBody(input, '{"type":"object"}', diff));
+});
+
+test('review packs repeated controller answer tails without losing any clarification', async (t) => {
+    const source = '  Dữ liệu nguồn 😀 "quotes" \\ \t\n'.repeat(46);
+    const replies = Array.from({ length: 7 }, (_, i) => ({
+        question: `Question ${i}`,
+        answer: `Source file/section: spec; Question ID: q-${i}; Plan revision: 1\n${source}`,
+    }));
+    replies.splice(3, 0, { question: 'Different source?', answer: 'Exact answer.\nOther source.\n' });
+    const context = { task_id: 'TASK-DISCUSSION', plan_revision: 1, replies };
+    const raw = JSON.stringify(context, null, 2) + '\n';
+    const f = await ready(t, 'const item = "unchanged contract";\n'.repeat(81), { snapshot: true });
+    const file = path.join(f.runDir, 'controller-context.json');
+    fs.writeFileSync(file, raw);
+
+    await f.orch.runPhase('review', f.taskId);
+
+    const manifest = verifyManifest(f);
+    assert.equal(manifest.chunks.length, 1);
+    const body = fs.readFileSync(path.join(f.runDir, manifest.chunks[0].input_file), 'utf8');
+    assert.ok(body.includes(`sha256=${hash(raw)}`));
+    const packed = JSON.parse(body.split('\n').find(line => line.startsWith('{"task_id":')));
+    const { answer_suffixes, replies: packedReplies, ...rest } = packed;
+    const restored = packedReplies.map(({ answer_prefix, answer_suffix_index, ...reply }) => {
+        if (answer_suffix_index === undefined) return reply;
+        return { ...reply, answer: answer_prefix + answer_suffixes[answer_suffix_index] };
+    });
+    assert.deepEqual({ ...rest, replies: restored }, context);
+    assert.deepEqual(answer_suffixes, [source]);
+    assert.equal(fs.readFileSync(file, 'utf8'), raw);
+});
+
+test('controller clarification JSON compacts losslessly and keeps a raw-byte hash anchor', async (t) => {
+    const f = await ready(t, large, { snapshot: true });
+    const answer = JSON.stringify('  Giữ khoảng trắng 😀 "quote" \\ \t \u00a0 ');
+    const raw = '{\n  "answer" : ' + answer + ',\n'
+        + '  "number" : 900719925474099312345,\n  "negativeZero" : -0,\n  "array" : [ 1, 2 ]\n}\n';
+    const compact = '{"answer":' + answer + ','
+        + '"number":900719925474099312345,"negativeZero":-0,"array":[1,2]}';
+    const file = path.join(f.runDir, 'controller-context.json');
+    assert.doesNotThrow(() => JSON.parse(raw));
+    fs.writeFileSync(file, raw);
+    await f.orch.runPhase('review', f.taskId);
+    const input = fs.readFileSync(path.join(f.runDir, 'raw/review.1.input.md'), 'utf8');
+    assert.ok(input.includes(compact));
+    assert.ok(input.includes(`sha256=${hash(Buffer.from(raw))}`));
+    assert.ok(!input.includes(raw));
+    assert.equal(fs.readFileSync(file, 'utf8'), raw);
+    verifyManifest(f);
+});
+
+test('review keeps existing reply extensions out of the packed format', async (t) => {
+    const f = await ready(t, 'const item = 1;\n', { snapshot: true });
+    const tail = 'Source text with exact spacing.\n'.repeat(20);
+    const context = { task_id: f.taskId, plan_revision: 1, replies: [
+        { question: 'First?', answer: `First source\n${tail}` },
+        { question: 'Second?', answer: `Second source\n${tail}` },
+        { question: 'Legacy?', answer: 'Full answer.', answer_suffix_index: 0 },
+    ] };
+    const file = path.join(f.runDir, 'controller-context.json');
+    fs.writeFileSync(file, JSON.stringify(context, null, 2));
+
+    await f.orch.runPhase('review', f.taskId);
+
+    const input = fs.readFileSync(path.join(f.runDir, 'raw/review.1.input.md'), 'utf8');
+    assert.ok(input.includes(JSON.stringify(context)));
+    assert.ok(!input.includes('For an indexed reply'));
+    verifyManifest(f);
+});
+
 test('NEEDS_FIX and higher risk survive later approvals', () => {
     const base = { findings: [], review_checks: ['a', 'b', 'c'], challenge_summary: 'checked' };
     const r = aggregateReviews([{ ...base, recommendation: 'NEEDS_FIX', risk_level: 'HIGH' },

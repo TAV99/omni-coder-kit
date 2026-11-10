@@ -14,6 +14,18 @@ const MODELS_TAB = 'Fetching available models...\ngemini-3.8-flash-high\tGemini 
 const ctxWith = (script, env = {}) => probeContext({ platform: 'linux', homedir: '/home/me', env, resolved, spawnImpl: fakeSpawn(script) });
 const turn = { prompt: 'look around', cwd: '/work', model: 'gemini-3.8-flash-high', permission: 'read-only', timeoutMs: 120_000 };
 
+test('isolated fresh AGY turns create a project while resume keeps the conversation project', () => {
+    const isolated = { ...turn, isolatedRoot: true };
+    const fresh = agy.buildHeadless(isolated, { resolved });
+    assert.equal(fresh.args.includes('--new-project'), true);
+    assert.equal(fresh.args[fresh.args.indexOf('--add-dir') + 1], isolated.cwd);
+    const resumed = agy.buildResume('private-conversation', isolated, { resolved });
+    assert.equal(resumed.args.includes('--new-project'), false);
+    assert.equal(resumed.args[resumed.args.indexOf('--conversation') + 1], 'private-conversation');
+    assert.equal(resumed.cwd, isolated.cwd);
+    assert.equal(agy.buildHeadless(turn, { resolved }).args.includes('--new-project'), false);
+});
+
 test('models: tab listing, skipping the progress line, family by model vendor', async () => {
     const r = await agy.listModels(ctxWith(() => ({ stdout: MODELS_TAB })));
     assert.deepEqual(r.models.map((m) => [m.id, m.label, m.family]), [

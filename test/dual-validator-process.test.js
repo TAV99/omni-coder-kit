@@ -302,3 +302,25 @@ test('Windows process handle whitelist contains only validator stdin/stdout/stde
     assert.match(handleListSetup, /Marshal\.WriteIntPtr\(handleList, IntPtr\.Size \* 2, stderrWrite\)/);
     assert.doesNotMatch(handleListSetup, /ControlInput|ControlOutput|\bjob\b/i);
 });
+
+test('declarative private-validator fence preserves real execution proof and ignores injected launch functions',
+    { skip: process.platform !== 'darwin' }, async (t) => {
+        const sourceRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'validator-source-fence-')));
+        const workerRoot = path.join(sourceRoot, '.omni', 'worker'); fs.mkdirSync(workerRoot, { recursive: true });
+        t.after(() => fs.rmSync(sourceRoot, { recursive: true, force: true }));
+        const source = path.join(sourceRoot, 'source.txt'), target = path.join(workerRoot, 'private.txt');
+        fs.writeFileSync(source, 'original'); let injected = false;
+        const poison = () => { injected = true; throw new Error('untrusted launch injection'); };
+        const result = await runOwnedValidator({ program: process.execPath,
+            args: ['-e', "const fs=require('fs');try{fs.writeFileSync(process.argv[1],'escaped')}catch(e){console.log(e.code)}fs.writeFileSync(process.argv[2],'private');", source, target],
+            cwd: workerRoot, commandIndex: 0, runId: crypto.randomUUID(), purpose: 'quality', env: { PATH: process.env.PATH } },
+        { timeoutMs: 5000, launchSpawn: poison, spawn: poison, sourceWriteFence: { sourceRoot, workerRoot, spawn: poison, probe: poison } });
+        assert.equal(injected, false);
+        assert.equal(result.exitCode, 0);
+        assert.match(result.stdoutSummary, /EPERM|EACCES/);
+        assert.equal(fs.readFileSync(source, 'utf8'), 'original');
+        assert.equal(fs.readFileSync(target, 'utf8'), 'private');
+        assert.equal(Object.isFrozen(result), true);
+        assert.equal(createOwnedResultProofReader()(result).cleanupVerified, true);
+        assert.equal(createOwnedResultProofReader()({ ...result }), null);
+    });

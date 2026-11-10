@@ -31,9 +31,11 @@ function parseAcceptanceArgs(argv) {
     const seen = new Set();
     for (let index = 0; index < argv.length; index++) {
         const arg = argv[index];
-        if (arg === '--auto') {
+        if (arg === '--auto' || arg === '--delegate-approvals') {
             if (seen.has(arg)) fail('Duplicate --auto');
-            seen.add(arg); args.auto = true;
+            seen.add(arg);
+            if (arg === '--auto') args.auto = true;
+            else args.delegateApprovals = true;
         } else if (arg === '--config' || arg === '--tasks') {
             if (seen.has(arg)) fail(`Duplicate ${arg}`);
             seen.add(arg);
@@ -57,6 +59,7 @@ function acceptanceTasks(configName, taskIds = ALL_TASK_IDS) {
     if (!config || !taskIds.length || new Set(taskIds).size !== taskIds.length || taskIds.some((id) => !ALL_TASK_IDS.includes(id))) fail('Invalid config/task selection');
     return suite.tasks.filter((task) => taskIds.includes(task.id)).map((task) => {
         const { id, ...contract } = structuredClone(task);
+        if (id === 'T04') contract.goal += ' User-approved clarification: a missing CLI query must produce an error; an explicitly supplied empty query still returns all books. Preserve whitespace literally; do not trim the query.';
         const index = configName === 'C' ? (Number(id.slice(1)) - 1) % 2 : 0;
         const worker = config.workers[index];
         const registration = { ...contract, worker: `worker-${index + 1}`, model: worker.model, effort: worker.effort };
@@ -76,6 +79,7 @@ async function prepareAcceptanceProject({ config: configName, taskIds = ALL_TASK
     onCreated({ root, container, home });
     const project = path.join(FIXTURE, 'bookshelf');
     fs.cpSync(project, root, { recursive: true, filter: (file) => file !== path.join(project, 'plans/finance-format.md') });
+    fs.appendFileSync(path.join(root, 'plans/plan.md'), '\n## User-approved clarification (2026-11-03)\n\nT04: CLI search requires a query argument; a missing query must produce an error. An explicitly supplied empty string returns all books. Whitespace is literal and must not be trimmed.\n');
     const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', timeout: 20_000, stdio: ['ignore', 'pipe', 'pipe'] });
     git('init', '-b', 'main');
     git('config', 'user.name', 'Omni Acceptance');

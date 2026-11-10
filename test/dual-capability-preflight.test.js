@@ -16,6 +16,52 @@ const {
     runCapabilityPreflight,
 } = require('../lib/dual/capability-preflight');
 const { createAuthorityStore } = require('../lib/dual/authority-store');
+const { writeClaudeOrchestratorConfig } = require('../lib/squad/claude-orchestrator');
+
+function claudeProject(t) {
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'preflight-claude-')));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(root, '.omni'));
+    fs.writeFileSync(path.join(root, '.omni', 'manifest.json'), JSON.stringify({ orchestratorRuntime: 'claude' }));
+    writeClaudeOrchestratorConfig({ projectRoot: root });
+    return root;
+}
+
+const claudePreflightOptions = {
+    workerModel: 'gemini-3.8-flash-high', workerEffort: 'high',
+    agyVersion: '1.4.12', agyModels: ['gemini-3.8-flash-high'],
+    checkLedger: () => ({ name: 'authority_ledger_integrity', status: 'PASSED' }),
+    checkBaseline: () => ({ name: 'baseline_backend', status: 'PASSED' }),
+};
+
+test('Claude preflight accepts its generated configuration without Codex hooks, including a separate configRoot', async (t) => {
+    const root = claudeProject(t);
+    assert.equal(fs.existsSync(path.join(root, '.codex')), false);
+    const direct = await runCapabilityPreflight(root, claudePreflightOptions);
+    assert.equal(direct.status, 'PASSED', JSON.stringify(direct.checks));
+    const workerRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'preflight-claude-worker-')));
+    t.after(() => fs.rmSync(workerRoot, { recursive: true, force: true }));
+    const isolated = await runCapabilityPreflight(workerRoot, { ...claudePreflightOptions, configRoot: root });
+    assert.equal(isolated.status, 'PASSED', JSON.stringify(isolated.checks));
+});
+
+test('Claude preflight rejects missing, invalid or disabled hook settings even with valid Codex configuration', async (t) => {
+    const root = claudeProject(t);
+    fs.mkdirSync(path.join(root, '.codex'));
+    fs.writeFileSync(path.join(root, '.codex', 'config.toml'), '[features]\nhooks = true\n[mcp_servers.omni_dual]\n');
+    fs.writeFileSync(path.join(root, '.codex', 'hooks.json'), JSON.stringify({ hooks: {} }));
+    const settings = path.join(root, '.claude', 'settings.json');
+    for (const value of [undefined, '{broken', 'null', '{}', '{"hooks":[]}', '{"hooks":{},"disableAllHooks":true}']) {
+        if (value === undefined) fs.unlinkSync(settings);
+        else fs.writeFileSync(settings, value);
+        const result = await runCapabilityPreflight(root, claudePreflightOptions);
+        assert.equal(result.status, 'BLOCKED', `settings ${value}: ${JSON.stringify(result.checks)}`);
+        const config = result.checks.find(check => check.name === 'project_configuration');
+        assert.equal(config.status, 'BLOCKED');
+        assert.match(config.reason, /\.claude[\/]settings\.json/);
+        assert.equal(result.checks.find(check => check.name === 'mcp_and_hook_setup').status, 'PASSED');
+    }
+});
 
 function createMockChild() {
     const child = new EventEmitter();
@@ -387,6 +433,70 @@ test('execution hooks: bounded timeout with signal drains and preserves exit evi
     assert.equal(result.timedOut, true);
     assert.equal(result.code, 137);
     assert.equal(result.stdout, 'tail');
+});
+
+test('execution hooks: signal-bound output overflow stays owned until close and keeps the cap', async () => {
+    for (const stream of ['stdout', 'stderr']) {
+        const controller = new AbortController(), child = createMockChild();
+        const pending = spawnBoundedProcess('probe', [], { signal: controller.signal,
+            maxOutputBytes: 10, spawnImpl: () => child });
+        let settled = false;
+        pending.then(() => { settled = true; });
+        try {
+            child[stream].write('x'.repeat(11));
+            await new Promise(resolve => setImmediate(resolve));
+            assert.equal(settled, false, `${stream} overflow must drain actual close`);
+            assert.equal(child.killSignal, 'SIGTERM');
+            child[stream].write('x'.repeat(100));
+            child.emit('close', 143, 'SIGTERM');
+            const result = await pending;
+            assert.equal(result.overflow, true);
+            assert.equal(result.code, 143);
+            assert.equal(result.stdout, '');
+            assert.equal(result.stderr, '');
+        } finally { child.emit('close', 143, 'SIGTERM'); await pending; }
+    }
+});
+
+test('execution hooks: signal-bound post-spawn errors keep ownership until actual close', async () => {
+    const controller = new AbortController(), child = createMockChild();
+    child.pid = 12345;
+    const pending = spawnBoundedProcess('probe', [], { signal: controller.signal, spawnImpl: () => child });
+    let settled = false;
+    pending.then(() => { settled = true; });
+    try {
+        child.emit('spawn');
+        child.emit('error', Object.assign(new Error('kill EPERM'), { code: 'EPERM' }));
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(settled, false);
+        child.emit('close', 1, null);
+        const result = await pending;
+        assert.equal(result.ok, false);
+        assert.equal(result.code, 1);
+        assert.equal(result.error, 'kill EPERM');
+    } finally { child.emit('close', 1, null); await pending; }
+});
+
+test('execution hooks: overflow remains sticky through later abort, timeout or process error', async () => {
+    for (const cause of ['abort', 'timeout', 'error']) {
+        const controller = new AbortController(), child = createMockChild();
+        child.pid = 12345;
+        const pending = spawnBoundedProcess('probe', [], { signal: controller.signal,
+            timeoutMs: cause === 'timeout' ? 10 : 1000, maxOutputBytes: 10, spawnImpl: () => child });
+        try {
+            child.stdout.write('x'.repeat(11));
+            if (cause === 'abort') controller.abort();
+            else if (cause === 'timeout') await new Promise(resolve => setTimeout(resolve, 25));
+            else child.emit('error', new Error('kill denied'));
+            child.stderr.write('tail');
+            child.emit('close', 143, 'SIGTERM');
+            const result = await pending;
+            assert.equal(result.overflow, true, cause);
+            assert.equal(result.stdout, '', cause);
+            assert.equal(result.stderr, '', cause);
+            assert.equal(result.code, 143, cause);
+        } finally { child.emit('close', 143, 'SIGTERM'); await pending; }
+    }
 });
 
 test('execution hooks: guard rejection propagates unchanged and pre-abort prevents spawn', async () => {

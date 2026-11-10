@@ -60,10 +60,16 @@ test('resume does not await pipeline and exposes subsequent worker death through
         return new Promise((resolve, reject) => { rejectWorker = reject; });
     });
     const result = await client.resumeSession('SESSION-RESUME');
-    assert.deepEqual(received, { resume: true });
-    assert.equal(result.resumed, true);
-    assert.equal(result.worker_start.state, 'running');
-    rejectWorker(Object.assign(new Error('late failure'), { code: 'LATE_FAILURE' }));
+    try {
+        const { signal, ...options } = received;
+        assert.deepEqual(options, { resume: true });
+        assert.ok(signal instanceof AbortSignal);
+        assert.equal(signal.aborted, false);
+        assert.equal(result.resumed, true);
+        assert.equal(result.worker_start.state, 'running');
+    } finally {
+        rejectWorker(Object.assign(new Error('late failure'), { code: 'LATE_FAILURE' }));
+    }
     await new Promise(resolve => setImmediate(resolve));
     const status = await client.status('SESSION-RESUME');
     assert.equal(status.worker_start.state, 'failed');

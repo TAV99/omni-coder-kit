@@ -9,7 +9,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { EventEmitter } = require('node:events');
+const { EventEmitter, once } = require('node:events');
 const { EvidenceSchema, toDraft7Schema } = require('../lib/dual/contracts');
 const {
     workerOutputSchema, buildWorkerInvocation, extractWorkerPayload, workerCommandFor, probeAdapterWorker,
@@ -161,8 +161,11 @@ function isolatedFixture(t) {
         capability: { version: '2.1.316', model: 'sonnet' }, authorize: () => true };
 }
 
-test('isolated task with a claude worker: scout/review by discussion, implement by claude -p, QC handoff', async (t) => {
-    const input = isolatedFixture(t);
+test('isolated Claude implementation denies source writes and still reaches a QC handoff', { skip: process.platform !== 'darwin' }, async (t) => {
+    const { workerRuntime, ...input } = isolatedFixture(t);
+    const manifest = path.join(input.workspaceRoot, '.omni', 'manifest.json');
+    fs.mkdirSync(path.dirname(manifest), { recursive: true });
+    fs.writeFileSync(manifest, JSON.stringify({ workerRuntime }));
     const implementCalls = [];
     const common = (workerRoot, taskId) => {
         const spec = JSON.parse(fs.readFileSync(path.join(workerRoot, '.omni/codex-gemini/runs', taskId, 'spec.json'), 'utf8'));
@@ -183,10 +186,30 @@ test('isolated task with a claude worker: scout/review by discussion, implement 
         },
     });
     const handoff = await runIsolatedTask({ ...input, discussion,
-        processRunner: async (invocation) => {
+        onPrepared() {
+            // A concurrent configuration change must not separate the launcher from the fence.
+            fs.writeFileSync(manifest, JSON.stringify({ workerRuntime: 'agy' }));
+        },
+        processRunner: async (invocation, deps) => {
             implementCalls.push(invocation);
+            assert.equal(invocation.command, '/opt/claude', 'the launcher uses the runtime selected before preparation');
             const taskId = fs.readdirSync(path.join(invocation.cwd, '.omni/codex-gemini/runs'))[0];
-            fs.writeFileSync(path.join(invocation.cwd, 'index.js'), 'module.exports = 2;\n');
+            const source = path.join(input.workspaceRoot, 'index.js');
+            const child = deps.spawn(process.execPath, ['-e', `
+                const fs = require('node:fs');
+                try {
+                    fs.writeFileSync(process.argv[1], 'escaped');
+                    console.log('ESCAPED');
+                } catch (error) {
+                    console.log(error.code);
+                }
+                fs.writeFileSync('index.js', 'module.exports = 2;\\n');
+            `, source], { cwd: invocation.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+            let output = '';
+            child.stdout.on('data', (chunk) => { output += chunk; });
+            assert.deepEqual(await once(child, 'close'), [0, null]);
+            assert.match(output.trim(), /^(EPERM|EACCES)$/);
+            assert.equal(fs.readFileSync(source, 'utf8'), 'module.exports = 1;\n');
             const schema = JSON.parse(invocation.args[invocation.args.indexOf('--json-schema') + 1]);
             assert.equal(schema.properties.toolAction, undefined, 'the worker gets the claude schema inline');
             const payload = { ...common(invocation.cwd, taskId), status: 'SUCCESS', modified_files: ['index.js'],
@@ -198,7 +221,6 @@ test('isolated task with a claude worker: scout/review by discussion, implement 
     assert.equal(handoff.status, 'AWAITING_CODEX_QC');
     assert.equal(implementCalls.length, 1, 'only implement spawns the worker CLI');
     const [call] = implementCalls;
-    assert.equal(call.command, '/opt/claude');
     assert.equal(call.cwd, handoff.reference.workerRoot);
     assert.ok(call.args.includes('bypassPermissions') && call.args.includes('--strict-mcp-config'));
     const settings = JSON.parse(call.args[call.args.indexOf('--settings') + 1]);

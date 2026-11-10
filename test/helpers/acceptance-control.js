@@ -30,6 +30,27 @@ async function driveAcceptance({ authority, client, sessionId, taskIds, planRevi
         if (derived.sessionId !== sessionId || derived.planRevision !== planRevision) throw failure('ACCEPTANCE_AUTHORITY_CHANGED');
         return derived;
     };
+    const quiescent = derived => {
+        return !Object.values(derived.leases || {}).some(lease => !lease.released_at && lease.status !== 'released')
+            && Object.entries(derived.tasks || {}).every(([id, task]) => task.finalization?.settled !== false
+                && task.contextDispatch?.status !== 'claimed'
+                && !(task.qcReview?.attempt === taskProjection(derived, id).attempt && task.qcReview.status === 'running'));
+    };
+    function checkDecision(id, expected, attempt, result) {
+        if (!['REVIEW_REJECTED', 'REVIEW_BUDGET_EXHAUSTED'].includes(result?.status)) return;
+        const derived = read(), task = derived.tasks[id], review = task?.qcReview;
+        if (!quiescent(derived) || taskProjection(derived, id).attempt !== attempt
+            || !task?.isolatedHandoff || !expected.isolatedHandoff
+            || ['attempt', 'handoff_sha256', 'result_sha256'].some(key => task.isolatedHandoff[key] !== expected.isolatedHandoff[key])
+            || review?.attempt === attempt && review.status === 'completed' && review.verdict === 'APPROVE'
+            || ['attempt', 'status', 'input_sha256', 'verdict', 'verdict_sha256', 'finished_at']
+                .some(key => result.qc_review?.[key] !== review?.[key])
+            || result.status === 'REVIEW_REJECTED' && task.handoffRejection?.attempt !== attempt) return;
+        const error = failure('ACCEPTANCE_NEEDS_DECISION', `${id}: ${result.status}; no automatic correction remains scheduled`);
+        error.partial = { integrations, frontiers, taskResults: taskIds.map(id => ({ task_id: id, ...taskProjection(derived, id) })),
+            decision: { task_id: id, attempt, status: result.status, qc_review: result.qc_review || null } };
+        throw error;
+    }
     async function performQc(id) {
         const current = read().tasks[id], attempt = taskProjection(read(), id).attempt;
         const sequenceBefore = read().lastSequence;
@@ -62,6 +83,7 @@ async function driveAcceptance({ authority, client, sessionId, taskIds, planRevi
         if (!operations.size && JSON.stringify([...before]) !== JSON.stringify([...after])) throw failure('ACCEPTANCE_UNANCHORED_INTEGRATION');
         if (error) throw error;
         await onProgress({ taskId: id, attempt, status: result?.status, result_sha256: current?.isolatedHandoff?.result_sha256 });
+        checkDecision(id, current, attempt, result);
         return result;
     }
     async function qc(id) {
@@ -77,6 +99,13 @@ async function driveAcceptance({ authority, client, sessionId, taskIds, planRevi
             await beforeCheck();
         }
         derived = read();
+        // A rejected handoff is deliberately outside the integration frontier.
+        // Probe its public decision status so NEEDS_FIX cannot become a silent wait.
+        for (const id of taskIds) if (derived.tasks[id]?.handoffRejection
+            && !taskProjection(derived, id).terminal && quiescent(derived)) {
+            await qc(id);
+            derived = read();
+        }
         const results = taskIds.map(id => ({ task_id: id, ...taskProjection(derived, id) }));
         if (results.every(task => task.terminal)) return { complete: true, taskResults: results, integrations, frontiers };
         const active = Object.values(derived.leases || {}).some(lease => !lease.released_at && lease.status !== 'released');

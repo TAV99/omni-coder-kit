@@ -9,6 +9,58 @@ const { EventEmitter } = require('node:events');
 const live = require('./helpers/squad-live');
 const quiet = () => {};
 
+test('acceptance context budget admits six questions in one round, is idempotent, and stops before a fourth round', async () => {
+    const answered=new Set(),roundState={count:0,history:[]},replies=[],resumes=[];
+    const client={replyToTask:async(_session,p)=>{replies.push(p);return {acknowledged:true};},request:async(...args)=>resumes.push(args)};
+    const opts={answered,roundState,maxRounds:3,maxQuestionsPerRound:20,client,sessionId:'s',taskId:'T08',report:{contextReplies:[]},log:quiet,
+        body:({questionId})=>`Source: finance contract; Question ID: ${questionId}; Plan revision: 1`};
+    const first=Array.from({length:6},(_,i)=>'q'+i);
+    await live.answerContext({...opts,waitingQuestionIds:first});
+    assert.equal(roundState.count,1);assert.equal(replies.length,6);assert.equal(resumes.length,1);
+    assert.deepEqual(replies.map(r=>r.reply_to),first);
+    assert.ok(replies.every(r=>r.body.includes(r.reply_to)));
+    await live.answerContext({...opts,waitingQuestionIds:first});assert.equal(roundState.count,1);assert.equal(replies.length,6);
+    await live.answerContext({...opts,waitingQuestionIds:['q6']});
+    await live.answerContext({...opts,waitingQuestionIds:['q7']});
+    assert.equal(roundState.count,3);assert.equal(replies.length,8);
+    await assert.rejects(live.answerContext({...opts,waitingQuestionIds:['q8']}),{code:'ISOLATED_CONTROLLER_REQUIRED'});
+    assert.equal(replies.length,8);assert.equal(roundState.history.length,3);
+    assert.ok(roundState.history.every(r=>r.complete));
+});
+
+test('acceptance context round admits twenty questions and rejects twenty-one before any reply', async () => {
+    const answered=new Set(),accepted={count:0,history:[]};
+    await live.answerContext({waitingQuestionIds:Array.from({length:20},(_,i)=>'q'+i),answered,roundState:accepted,
+        client:{replyToTask:async()=>({acknowledged:true}),request:async()=>({})},sessionId:'s',taskId:'T08',report:{},body:()=>'',log:quiet});
+    assert.equal(answered.size,20);assert.equal(accepted.count,1);
+    const state={count:0,history:[]};
+    await assert.rejects(live.answerContext({waitingQuestionIds:Array.from({length:21},(_,i)=>'q'+i),answered:new Set(),roundState:state,
+        client:{replyToTask:()=>assert.fail('must not write')},sessionId:'s',taskId:'T08',report:{},body:()=>'',log:quiet}),
+        {code:'ISOLATED_CONTROLLER_REQUIRED'});
+    assert.equal(state.count,0);
+});
+
+test('a rejected reply preserves the partial context-round history and never resumes', async () => {
+    const answered=new Set(),roundState={count:0,history:[]};let calls=0;
+    await assert.rejects(live.answerContext({waitingQuestionIds:['q1','q2'],answered,roundState,
+        client:{replyToTask:async()=>({acknowledged:++calls===1}),request:()=>assert.fail('must not resume')},
+        sessionId:'s',taskId:'T08',report:{},body:({questionId})=>questionId,log:quiet}),{code:'CONTEXT_REPLY_REJECTED'});
+    assert.deepEqual([...answered],['q1']);assert.equal(roundState.count,1);
+    assert.deepEqual(roundState.history[0].acknowledgedQuestionIds,['q1']);assert.equal(roundState.history[0].complete,false);
+});
+
+test('delegated gate waits accept explicit test provenance and never print a terminal command', async () => {
+    const digest='a'.repeat(64),now=new Date().toISOString();
+    const gate={gate_id:'integrate-T01',task_id:'T01',phase:'integrate',digest,status:'approved',actor:'test',via:'test-harness',decided_at:now};
+    const delegation={protocol:'benchmark-delegation-v1',id:'unit',artifactSha256:'b'.repeat(64),taskIds:['T01'],planRevision:1,
+        createdAt:new Date(Date.now()-1000).toISOString(),expiresAt:new Date(Date.now()+60000).toISOString()};
+    const opts={authority:{derive:()=>({approvals:{'integrate-T01':gate}})},report:{},save:()=>{},poll:async()=>{},limit:100,
+        gateIds:['integrate-T01'],command:'do not print',delegation,log:()=>assert.fail('delegated flow must not ask for a TTY')};
+    await live.waitForApproval(opts);
+    gate.status='pending';
+    await assert.rejects(live.waitForApproval(opts),{code:'ACCEPTANCE_DELEGATED_GATE_PENDING'});
+});
+
 function temporary(t) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-live-unit-'));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));

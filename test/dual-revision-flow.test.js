@@ -12,7 +12,7 @@ const { revisionSourceFingerprint, prepareRevisionWorkspace, reconcileRevisionPr
 const { collectTaskResult } = require('../lib/dual/task-workspace');
 const { runRevisionChecks, revisionRpc } = require('../lib/dual/task-revision');
 const command = source => ({ program: 'node', args: ['-e', source], cwd: '.' });
-function fixture(t, { mutatingCheck = false, operationLifecycle = false } = {}) {
+function fixture(t, { mutatingCheck = false, operationLifecycle = false, sourceWriteProbe = false } = {}) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'revision-controller-flow-'));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     fs.writeFileSync(path.join(root, 'app.js'), 'module.exports = 1;\n');
@@ -90,7 +90,9 @@ function fixture(t, { mutatingCheck = false, operationLifecycle = false } = {}) 
     scoped.append({ type: 'task.workspace.prepared', task_id: 'task', lease_id: candidateLease.lease_id, attempt: 1,
         reference: { bindingPath: reference.bindingPath, bindingSha256: reference.bindingSha256,
             workerBaselineSha256: revisionDigest('worker-baseline'), workerContractSha256: revisionDigest('worker-contract') } });
-    fs.writeFileSync(path.join(reference.workerRoot, 'app.js'), 'module.exports = 2;\n');
+    fs.writeFileSync(path.join(reference.workerRoot, 'app.js'), sourceWriteProbe
+        ? `try { require('fs').writeFileSync(${JSON.stringify(path.join(root, 'app.js'))}, 'revision QC escaped'); } catch {}\nmodule.exports = 2;\n`
+        : 'module.exports = 2;\n');
     const result = collectTaskResult({ workspaceRoot: root, reference });
     scoped.append({ type: 'task.workspace.handoff', task_id: 'task', lease_id: candidateLease.lease_id, attempt: 1,
         handoff_path: '.omni/runs/handoff.json', handoff_sha256: revisionDigest('handoff'), result_sha256: result.resultSha256 });
@@ -309,3 +311,13 @@ test('scoped operation begin and settle commit durable records with candidate co
     assert.deepEqual(task.current_verified_version, parentVersion);
     assert.ok(task.active_revision.isolatedHandoff);
 });
+
+
+test('private revision validation cannot write the source version before promotion',
+    { skip: process.platform !== 'darwin' }, async (t) => {
+        const f = fixture(t, { sourceWriteProbe: true });
+        const result = await runRevisionChecks({ workspaceRoot: f.root, authorityStore: f.store,
+            taskId: 'task', revisionId: 'revision', phase: 'pre_integration' });
+        assert.equal(fs.readFileSync(path.join(f.root, 'app.js'), 'utf8'), 'module.exports = 1;\n');
+        assert.equal(result.status, 'PASSED');
+    });

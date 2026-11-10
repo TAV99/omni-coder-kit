@@ -14,13 +14,14 @@ const path = require('node:path');
 const test = require('node:test');
 const { withDiscussion } = require('./helpers/dual-discussion-stub');
 const { createAuthorityStore } = require('../lib/dual/authority-store');
+const { getRuntimeDir } = require('../lib/dual/daemon-lock');
 const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
 const { createConfiguredSnapshotBaseline } = require('../lib/dual/snapshot-policy');
 const { writeInitialSnapshot } = require('../lib/dual/snapshot-store');
 const { readTaskBinding } = require('../lib/dual/task-workspace');
 const { ReviewSchema } = require('../lib/dual/contracts');
 const {
-    reviewerConfig, needsReview, reviewApproved, runReviewerQc, settleReviewVerdict, rejectionFindings,
+    reviewerConfig, needsReview, reviewApproved, runReviewerQc, settleReviewVerdict, rejectionFindings, prepareReviewRoot,
 } = require('../lib/dual/reviewer-qc');
 const { writeBinding } = require('../lib/squad/bindings');
 const { fakeSpawn } = require('./helpers/squad-fakes');
@@ -29,47 +30,52 @@ const TEMPLATES = path.join(__dirname, '..', 'templates', 'squad');
 const CONFIG = { runtime: 'claude', model: 'sonnet', effort: 'low', maxCorrections: 3 };
 
 // `beforeRun(store)` runs before the worker; `inputs` collects each phase's prompt (agy inlines the input).
-async function handoff(t, { beforeRun } = {}) {
+async function handoff(t, { beforeRun, taskIds = ['TASK-1'], sessionId = 'session-1', planRevision = 1,
+    questions = [], contextAnswer = 'Decision: return two. Source: spec.md. Scope unchanged.' } = {}) {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-reviewer-qc-')));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-    fs.writeFileSync(path.join(root, 'index.js'), 'module.exports = 1;\n');
+    const tasks = taskIds.map((task_id, index) => {
+        const file = index ? `index-${index}.js` : 'index.js';
+        fs.writeFileSync(path.join(root, file), 'module.exports = 1;\n');
+        return { task_id, title: 'Return two', goal: 'Return two', owner: 'agy', risk: 'low',
+            execution_mode: 'isolated', allowed_files: [file], context_files: ['spec.md'], deny_patterns: [],
+            validation_commands: [{ program: 'node', args: ['--check', file], cwd: '.' }] };
+    });
     fs.writeFileSync(path.join(root, 'spec.md'), 'Return two.\n');
     const dir = path.join(root, '.omni/runs/dual-authority');
     const store = createAuthorityStore(dir);
     const snapshot = createConfiguredSnapshotBaseline({ root }).baseline.capture();
-    const command = { program: 'node', args: ['--check', 'index.js'], cwd: '.' };
     store.append({ schema_version: 2, type: 'session.created', state: 'DISCOVERED', workspace_root: root,
-        workspace_id: 'workspace-test', session_id: 'session-1', plan_revision: 1, expected_baseline: snapshot.identity, mode: 'auto' });
-    writeInitialSnapshot({ authorityDir: dir, sessionId: 'session-1', workspaceId: 'workspace-test', workspaceRoot: root,
+        workspace_id: 'workspace-test', session_id: sessionId, plan_revision: planRevision, expected_baseline: snapshot.identity, mode: 'auto' });
+    writeInitialSnapshot({ authorityDir: dir, sessionId, workspaceId: 'workspace-test', workspaceRoot: root,
         identity: snapshot.identity, manifest: snapshot.manifest });
     store.append({ schema_version: 2, type: 'capability.result', from_state: 'DISCOVERED', to_state: 'CAPABILITY_SAFE',
         status: 'PASSED', checks: [{ name: 'agy_cli_and_model', status: 'PASSED' }],
         details: { agy_version: '1.1.27-test', agy_model: 'gemini-3.8-flash-high' } });
     store.append({ schema_version: 2, type: 'plan.registered', from_state: 'INTERVIEWING', to_state: 'PLANNED',
-        plan_path: 'spec.md', plan_sha256: 'b'.repeat(64), total_tasks: 1,
-        tasks: [{ task_id: 'TASK-1', title: 'Return two', goal: 'Return two', owner: 'agy', risk: 'low',
-            execution_mode: 'isolated', allowed_files: ['index.js'], context_files: ['spec.md'], deny_patterns: [],
-            validation_commands: [command] }] });
-    store.append({ schema_version: 2, type: 'task.routed', task_id: 'TASK-1', owner: 'agy', authority_state: 'ROUTED',
-        allowed_files: ['index.js'], model: 'gemini-3.8-flash-high', effort: 'high', reason: 'Private task' });
+        plan_path: 'spec.md', plan_sha256: 'b'.repeat(64), total_tasks: tasks.length, tasks });
+    for (const task of tasks) store.append({ schema_version: 2, type: 'task.routed', task_id: task.task_id, owner: 'agy', authority_state: 'ROUTED',
+        allowed_files: task.allowed_files, model: 'gemini-3.8-flash-high', effort: 'high', reason: 'Private task' });
     const inputs = [];
     const processRunner = async (invocation) => {
-        const spec = JSON.parse(fs.readFileSync(path.join(invocation.cwd, '.omni/codex-gemini/runs/TASK-1/spec.json'), 'utf8'));
-        const common = { schema_version: 1, task_id: 'TASK-1', expected_baseline: spec.expected_baseline };
+        const runs = path.join(invocation.cwd, '.omni/codex-gemini/runs');
+        const spec = JSON.parse(fs.readFileSync(path.join(runs, fs.readdirSync(runs)[0], 'spec.json'), 'utf8'));
+        const file = spec.allowed_files[0];
+        const common = { schema_version: 1, task_id: spec.task_id, expected_baseline: spec.expected_baseline };
         const prompt = invocation.args.find((arg) => arg.startsWith('-p='));
         inputs.push(prompt);
         let payload;
         if (prompt.includes('scout phase')) payload = { ...common, summary: 'Read index and spec',
-            relevant_files: [{ path: 'index.js', description: 'return value' }], exact_symbols: [],
-            validation_commands: ['node --check index.js'], constraints: ['scope only'], risks: [], open_questions: [],
-            research_trace: ['index.js', 'spec.md'].map((source) => ({ question: 'What to change?', source,
+            relevant_files: [{ path: file, description: 'return value' }], exact_symbols: [],
+            validation_commands: [`node --check ${file}`], constraints: ['scope only'], risks: [], open_questions: questions,
+            research_trace: [file, 'spec.md'].map((source) => ({ question: 'What to change?', source,
                 source_type: 'REPOSITORY', conclusion: 'Return two' })),
             alternatives_considered: [{ option: 'Edit existing', tradeoff: 'small' }, { option: 'New file', tradeoff: 'unnecessary' }],
             failure_modes: ['wrong return value'] };
         else if (prompt.includes('implement phase')) {
-            fs.writeFileSync(path.join(invocation.cwd, 'index.js'), 'module.exports = 2;\n');
-            payload = { ...common, status: 'SUCCESS', modified_files: ['index.js'],
-                command_outputs: [{ command: 'node --check index.js', exit_code: 0, output: '' }], unverified_items: [],
+            fs.writeFileSync(path.join(invocation.cwd, file), 'module.exports = 2;\n');
+            payload = { ...common, status: 'SUCCESS', modified_files: [file],
+                command_outputs: [{ command: `node --check ${file}`, exit_code: 0, output: '' }], unverified_items: [],
                 self_review: { checks: ['scope', 'syntax', 'value'], remaining_risks: [] } };
         } else payload = { ...common, recommendation: 'APPROVE', risk_level: 'LOW', findings: [],
             review_checks: ['scope', 'syntax', 'value'], challenge_summary: 'Compared original and changed return.' };
@@ -78,16 +84,26 @@ async function handoff(t, { beforeRun } = {}) {
     };
     if (beforeRun) beforeRun(store);
     const adapter = createOrchestratorAdapter(withDiscussion({ workspaceRoot: root, authorityStore: store, processRunner }));
-    assert.equal((await adapter.runTask(store.derive()))[0].status, 'AWAITING_CODEX_QC');
-    const task = store.derive().tasks['TASK-1'];
+    let results = await adapter.runTask(store.derive());
+    if (questions.length) {
+        const { postTaskMessage } = require('../lib/dual/task-messages');
+        for (const taskId of taskIds) for (const question of store.derive().tasks[taskId].messages.filter(m => m.kind === 'question')) {
+            postTaskMessage({ authorityStore: store, sessionId, planRevision, taskId, kind: 'reply',
+                messageId: `reply-${taskId}-${question.message_id.slice(-12)}`, replyTo: question.message_id, body: contextAnswer });
+        }
+        results = await adapter.runTask(store.derive());
+    }
+    assert.equal(results.length, taskIds.length);
+    assert.ok(results.every(result => result.status === 'AWAITING_CODEX_QC'));
+    const task = store.derive().tasks[taskIds[0]];
     const { workerRoot } = readTaskBinding(root, task.isolatedWorkspace.reference);
-    const spec = JSON.parse(fs.readFileSync(path.join(workerRoot, '.omni/codex-gemini/runs/TASK-1/spec.json'), 'utf8'));
-    return { root, store, task, spec, inputs };
+    const spec = JSON.parse(fs.readFileSync(path.join(workerRoot, '.omni/codex-gemini/runs', taskIds[0], 'spec.json'), 'utf8'));
+    return { root, store, task, spec, inputs, adapter };
 }
 
 // A claude -p result carrying a reviewer verdict for the fixture task.
 function claudeVerdict(spec, recommendation, findings = []) {
-    const verdict = { schema_version: 1, task_id: 'TASK-1', expected_baseline: spec.expected_baseline, recommendation,
+    const verdict = { schema_version: 1, task_id: spec.task_id, expected_baseline: spec.expected_baseline, recommendation,
         risk_level: recommendation === 'APPROVE' ? 'LOW' : 'MEDIUM', findings,
         review_checks: ['spec vs diff', 'evidence', 'regression'], challenge_summary: 'Checked the return value against the spec.' };
     return JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: 'review-session',
@@ -138,6 +154,104 @@ test('APPROVE: review root holds spec, diff, evidence and scope files only; argv
     assert.equal(ReviewSchema.safeParse(JSON.parse(fs.readFileSync(verdictFile, 'utf8'))).success, false, 'the stored verdict carries reviewer metadata');
 });
 
+test('codex reviewer may read local files through shell while sandbox and no-execution rules remain', async (t) => {
+    const f = await handoff(t);
+    const payload = JSON.parse(claudeVerdict(f.spec, 'APPROVE')).structured_output;
+    const stdout = [{ type: 'thread.started', thread_id: 'review-session' },
+        { type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify(payload) } },
+        { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } }].map(JSON.stringify).join('\n');
+    const spawnImpl = fakeSpawn(() => ({ stdout }));
+    const result = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1',
+        config: { ...CONFIG, runtime: 'codex', model: 'gpt-6-luna' }, spawnImpl });
+    assert.equal(result.status, 'COMPLETED');
+    const [call] = spawnImpl.calls;
+    assert.equal(call.args[call.args.indexOf('-s') + 1], 'read-only');
+    assert.ok(call.args.includes('project_root_markers=[]'));
+    assert.ok(!call.args.includes('--dangerously-bypass-approvals-and-sandbox'));
+    const prompt = call.args.at(-1);
+    assert.match(prompt, /read-only shell commands.*cat.*sed.*rg/i);
+    assert.doesNotMatch(prompt, /Do not run shell commands/);
+    assert.match(prompt, /Do not modify any file/);
+    assert.match(prompt, /Do not run tests, validation commands or scripts/);
+    assert.match(prompt, /only.*local file/i);
+});
+
+test('reviewer receives current authority clarifications, not worker context or previous attempts', async (t) => {
+    const answer = 'Decision: finance fields are id,title,amount. Source: approved-format.md §1. Scope unchanged.';
+    const f = await handoff(t, { questions: ['Which approved export format?'], contextAnswer: answer });
+    const { workerRoot } = readTaskBinding(f.root, f.task.isolatedWorkspace.reference);
+    fs.writeFileSync(path.join(workerRoot, '.omni/codex-gemini/runs/TASK-1/controller-context.json'), 'FORGED WORKER CONTEXT');
+    const spawnImpl = fakeSpawn(() => ({ stdout: claudeVerdict(f.spec, 'APPROVE') }));
+    const authorityStore = { ...f.store, derive() {
+        const snapshot = f.store.derive();
+        snapshot.tasks['TASK-1'].previousAttempts = [{ messages: [{ kind: 'reply', body: 'STALE PREVIOUS ANSWER' }] }];
+        return snapshot;
+    } };
+    await runReviewerQc({ workspaceRoot: f.root, authorityStore, taskId: 'TASK-1', config: CONFIG, spawnImpl });
+    const call = spawnImpl.calls[0], root = call.options.cwd;
+    const text = fs.readFileSync(path.join(root, '.qc-controller-context.json'), 'utf8');
+    const context = JSON.parse(text), messages = f.store.derive().tasks['TASK-1'].messages;
+    assert.equal(context.session_id, 'session-1'); assert.equal(context.plan_revision, 1);
+    assert.equal(context.task_id, 'TASK-1'); assert.equal(context.attempt, 1);
+    assert.deepEqual(context.replies, [{ question_id: messages[0].message_id, question: messages[0].body,
+        reply_id: messages[1].message_id, answer }]);
+    assert.ok(!text.includes('FORGED'));
+    assert.ok(!text.includes('STALE PREVIOUS ANSWER'));
+    assert.match(call.args[1], /\.qc-controller-context\.json/);
+    assert.match(call.args[1], /does not expand.*scope/i);
+    assert.equal(fs.existsSync(path.join(root, 'context.json')), false);
+    assert.equal(fs.existsSync(path.join(root, 'review.json')), false);
+});
+
+test('review input hash binds exact current authority clarification data', async (t) => {
+    const f = await handoff(t, { questions: ['Which approved value?'] });
+    const runtime = require('../lib/squad/runtimes').defaultRegistry.get('claude');
+    const snapshot = f.store.derive();
+    const before = prepareReviewRoot({ workspaceRoot: f.root, task: f.task, runtime, authoritySnapshot: snapshot });
+    const changed = structuredClone(snapshot);
+    changed.tasks['TASK-1'].messages.find(m => m.kind === 'reply').body += ' Additional approved clarification.';
+    const after = prepareReviewRoot({ workspaceRoot: f.root, task: f.task, runtime, authoritySnapshot: changed });
+    assert.notEqual(before.inputSha256, after.inputSha256);
+    const staleOnly = structuredClone(snapshot);
+    staleOnly.tasks['TASK-1'].previousAttempts = [{ messages: [{ body: 'Old answer changes' }] }];
+    const same = prepareReviewRoot({ workspaceRoot: f.root, task: f.task, runtime, authoritySnapshot: staleOnly });
+    assert.equal(before.inputSha256, same.inputSha256);
+});
+
+test('review clarification rejects stale, unpaired or oversized authority data without truncation', async (t) => {
+    const f = await handoff(t, { questions: ['Which approved value?'] });
+    const runtime = require('../lib/squad/runtimes').defaultRegistry.get('claude');
+    for (const mode of ['stale', 'unpaired', 'oversized', 'session', 'revision']) {
+        const snapshot = f.store.derive();
+        const reply = snapshot.tasks['TASK-1'].messages.find(m => m.kind === 'reply');
+        if (mode === 'stale') reply.plan_revision++;
+        else if (mode === 'unpaired') reply.reply_to = 'not-a-current-question';
+        else if (mode === 'oversized') reply.body = 'x'.repeat(2 * 1024 * 1024);
+        else if (mode === 'session') snapshot.sessionId = 'other-session';
+        else {
+            snapshot.planRevision++;
+            for (const message of snapshot.tasks['TASK-1'].messages) message.plan_revision++;
+        }
+        assert.throws(() => prepareReviewRoot({ workspaceRoot: f.root, task: f.task, runtime, authoritySnapshot: snapshot }),
+            { code: 'DUAL_REVIEW_INPUT_INVALID' });
+    }
+});
+
+test('a changed authority clarification cannot publish a successful reviewer verdict', async (t) => {
+    const f = await handoff(t, { questions: ['Which approved value?'] });
+    let changed = false;
+    const authorityStore = { ...f.store, derive() {
+        const snapshot = f.store.derive();
+        if (changed) snapshot.tasks['TASK-1'].messages.find(m => m.kind === 'reply').body += ' New authority answer.';
+        return snapshot;
+    } };
+    const spawnImpl = fakeSpawn(() => { changed = true; return { stdout: claudeVerdict(f.spec, 'APPROVE') }; });
+    const result = await runReviewerQc({ workspaceRoot: f.root, authorityStore, taskId: 'TASK-1', config: CONFIG, spawnImpl });
+    assert.equal(result.status, 'FAILED');
+    assert.equal(result.code, 'DUAL_REVIEW_INPUT_INVALID');
+    assert.equal(f.store.readEvents().some(event => event.type === 'qc.review.completed'), false);
+});
+
 test('NEEDS_FIX: findings reach the handoff rejection verbatim and a correction opens', async (t) => {
     const f = await handoff(t);
     const findings = [{ file: 'index.js', line: 1, description: 'Returns 2 but the spec asks for the string "two".', severity: 'ERROR' },
@@ -156,6 +270,64 @@ test('NEEDS_FIX: findings reach the handoff rejection verbatim and a correction 
     ]);
     assert.equal(task.correction.attempt, 2);
     assert.equal(reviewApproved(task), false);
+});
+
+test('multiple tasks and attempts open distinct bounded corrections', async (t) => {
+    const taskIds = ['TASK-1', 'T'.repeat(64)];
+    const f = await handoff(t, { taskIds });
+    for (const attempt of [1, 2]) {
+        if (attempt === 2) {
+            const results = await f.adapter.runTask(f.store.derive());
+            assert.equal(results.length, 2);
+            assert.ok(results.every(result => result.status === 'AWAITING_CODEX_QC'));
+        }
+        for (const taskId of taskIds) {
+            const task = f.store.derive().tasks[taskId];
+            const { workerRoot } = readTaskBinding(f.root, task.isolatedWorkspace.reference);
+            const spec = JSON.parse(fs.readFileSync(path.join(workerRoot, '.omni/codex-gemini/runs', taskId, 'spec.json')));
+            const result = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId, config: CONFIG,
+                spawnImpl: fakeSpawn(() => ({ stdout: claudeVerdict(spec, 'NEEDS_FIX',
+                    [{ file: spec.allowed_files[0], line: 1, description: 'Must return a string.', severity: 'ERROR' }]) })) });
+            assert.deepEqual(settleReviewVerdict({ workspaceRoot: f.root, authorityStore: f.store, taskId,
+                verdict: result.verdict, attempt, config: CONFIG }), { status: 'CORRECTING', attempt: attempt + 1 });
+        }
+    }
+    const events = f.store.readEvents().filter(e => ['task.handoff.rejected', 'task.correction.requested'].includes(e.type));
+    assert.equal(events.length, 8);
+    assert.equal(new Set(events.map(e => e.request_id)).size, 8);
+    for (const event of events) assert.equal(require('../lib/dual/contracts').TaskIdSchema.safeParse(event.request_id).success, true);
+    for (const taskId of taskIds) assert.equal(f.store.derive().tasks[taskId].correction.attempt, 3);
+});
+
+test('review settlement request IDs distinguish session and plan revision', async (t) => {
+    const ids = [];
+    for (const [sessionId, planRevision] of [['session-1', 1], ['session-2', 1], ['session-1', 2]]) {
+        const f = await handoff(t, { sessionId, planRevision });
+        const result = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1', config: CONFIG,
+            spawnImpl: fakeSpawn(() => ({ stdout: claudeVerdict(f.spec, 'NEEDS_FIX',
+                [{ file: 'index.js', description: 'Wrong return value.', severity: 'ERROR' }]) })) });
+        assert.equal(settleReviewVerdict({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1',
+            verdict: result.verdict, attempt: 1, config: CONFIG }).status, 'CORRECTING');
+        ids.push(...f.store.readEvents().filter(e => ['task.handoff.rejected', 'task.correction.requested'].includes(e.type)).map(e => e.request_id));
+    }
+    assert.equal(ids.length, 6);
+    assert.equal(new Set(ids).size, 6);
+});
+
+test('replaying the same rejected verdict is idempotent and changed findings conflict', async (t) => {
+    const f = await handoff(t);
+    const result = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1', config: CONFIG,
+        spawnImpl: fakeSpawn(() => ({ stdout: claudeVerdict(f.spec, 'REJECT',
+            [{ file: 'index.js', description: 'Wrong approach.', severity: 'ERROR' }]) })) });
+    const opts = { workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1', verdict: result.verdict, attempt: 1, config: CONFIG };
+    assert.equal(settleReviewVerdict(opts).status, 'NEEDS_DECISION');
+    const count = f.store.readEvents().length;
+    assert.equal(settleReviewVerdict(opts).status, 'NEEDS_DECISION');
+    assert.equal(f.store.readEvents().length, count);
+    assert.throws(() => settleReviewVerdict({ ...opts, verdict: { ...result.verdict,
+        findings: [{ file: 'index.js', description: 'Changed finding.', severity: 'ERROR' }] } }),
+        { code: 'DUAL_HANDOFF_REJECTION_CONFLICT' });
+    assert.equal(f.store.readEvents().length, count);
 });
 
 test('REJECT and an exhausted budget stop for the orchestrator without a correction', async (t) => {
@@ -198,7 +370,7 @@ test('rejection findings: in-scope files keep their line; out-of-scope paths mov
 
 // Daemon wiring (SPEC-SQUAD-P5 §2.1): task.qc waits for the reviewer, the daemon
 // pushes the review, APPROVE lets command QC integrate, NEEDS_FIX re-dispatches.
-async function daemonFor(t, f, recommendation) {
+async function daemonFor(t, f, recommendation, { review } = {}) {
     const http = require('node:http');
     const { EventEmitter } = require('node:events');
     const { startDaemonServer } = require('../lib/dual/daemon-server');
@@ -222,11 +394,11 @@ async function daemonFor(t, f, recommendation) {
     const dispatched = [];
     const daemon = await startDaemonServer({ workspaceRoot: f.root, authorityStore: f.store,
         orchestrator: { runTask: async (_derived, options) => { dispatched.push(options); return []; } },
-        runReviewerQc: async (args) => {
+        runReviewerQc: review || (async (args) => {
             reviews.push(args.config);
             return runReviewerQc({ ...args, spawnImpl: fakeSpawn(() => ({ stdout: claudeVerdict(f.spec, recommendation,
                 recommendation === 'APPROVE' ? [] : [{ file: 'index.js', line: 1, description: 'Must return the string "two".', severity: 'ERROR' }]) })) });
-        } });
+        }) });
     t.after(() => daemon.close());
     const rpc = (method, params) => new Promise((resolve, reject) => {
         const req = new EventEmitter();
@@ -243,8 +415,68 @@ async function daemonFor(t, f, recommendation) {
             await new Promise((resolve) => setTimeout(resolve, 10));
         }
     };
-    return { rpc, reviews, dispatched, settle };
+    return { rpc, reviews, dispatched, settle, daemon };
 }
+
+test('daemon shutdown holds ownership until reviewer drain and ignores a late correction verdict', async (t) => {
+    const f = await handoff(t);
+    let release, started, signal;
+    const ready = new Promise(resolve => { started = resolve; });
+    const pending = new Promise(resolve => { release = () => resolve({ status: 'COMPLETED', attempt: 1,
+        verdict: JSON.parse(claudeVerdict(f.spec, 'NEEDS_FIX', [
+            { file: 'index.js', line: 1, description: 'Change requested after shutdown', severity: 'ERROR' },
+        ])).structured_output }); });
+    const d = await daemonFor(t, f, 'NEEDS_FIX', { review: async args => {
+        signal = args.signal;
+        started();
+        return pending;
+    } });
+    let closing;
+    try {
+        const result = await d.rpc('task.qc', { session_id: 'session-1', task_id: 'TASK-1', plan_revision: 1 });
+        assert.equal(result.status, 'AWAITING_REVIEW');
+        await ready;
+        let closed = false;
+        closing = d.daemon.close().then(() => { closed = true; });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(signal?.aborted, true);
+        assert.equal(closed, false, 'a noncooperative reviewer is still owned until it returns');
+        assert.equal(fs.existsSync(path.join(getRuntimeDir(f.root), 'daemon.lock')), true);
+        release();
+        await closing;
+        assert.equal(fs.existsSync(path.join(getRuntimeDir(f.root), 'daemon.lock')), false);
+        assert.equal(f.store.readEvents().some(event => event.type === 'task.correction.requested'), false);
+        assert.equal(d.dispatched.length, 0);
+    } finally {
+        release();
+        if (closing) await closing;
+    }
+});
+
+test('reviewer cancellation drains close and cannot publish a buffered successful verdict', async (t) => {
+    const { EventEmitter } = require('node:events');
+    const f = await handoff(t), controller = new AbortController();
+    let childClosed = false;
+    const spawnImpl = (_command, _args, options) => {
+        assert.equal(options.signal, controller.signal);
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = () => true;
+        setImmediate(() => {
+            child.stdout.emit('data', Buffer.from(claudeVerdict(f.spec, 'APPROVE')));
+            controller.abort(Object.assign(new Error('Daemon is shutting down'), { code: 'DUAL_DAEMON_STOPPED' }));
+            childClosed = true;
+            child.emit('close', 0, null);
+        });
+        return child;
+    };
+    const result = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1',
+        config: CONFIG, spawnImpl, signal: controller.signal });
+    assert.equal(childClosed, true);
+    assert.equal(result.status, 'FAILED');
+    assert.equal(result.code, 'DUAL_DAEMON_STOPPED');
+    assert.equal(f.store.readEvents().some(event => event.type === 'qc.review.completed'), false);
+    assert.equal(f.store.derive().tasks['TASK-1'].qcReview.status, 'failed');
+});
 
 test('daemon: task.qc waits for the pushed review, then APPROVE runs command QC to TASK_VERIFIED', async (t) => {
     const f = await handoff(t);
@@ -268,7 +500,10 @@ test('daemon: NEEDS_FIX rejects the handoff and re-dispatches the worker for att
     await d.settle();
     const task = f.store.derive().tasks['TASK-1'];
     assert.equal(task.correction.attempt, 2);
-    assert.deepEqual(d.dispatched.at(-1), { resume: true });
+    const { signal, ...dispatchOptions } = d.dispatched.at(-1);
+    assert.deepEqual(dispatchOptions, { resume: true });
+    assert.ok(signal instanceof AbortSignal);
+    assert.equal(signal.aborted, false);
     assert.equal(fs.readFileSync(path.join(f.root, 'index.js'), 'utf8'), 'module.exports = 1;\n', 'nothing integrated');
 });
 

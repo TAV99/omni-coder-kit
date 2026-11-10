@@ -8,6 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { createAgyAdapter, classify: classifyAgy } = require('../lib/dual/discussion/live-agy-invoke');
 const { createCodexAdapter } = require('../lib/dual/discussion/live-codex-invoke');
+const { workerSlotSeed, workerSlotAdapter } = require('../lib/dual/discussion/worker-slot');
 const { sha256Utf8, validatePayload } = require('../lib/dual/discussion/contracts');
 
 // Synthetic provider outputs only: no live CLI or network calls.
@@ -31,6 +32,36 @@ function output(provider, response, expectedKind) {
 }
 const content = { phase: 'scout', findings: [{ file: 'index.js' }] };
 const envelope = { schema_version: 1, kind: 'reply', body: JSON.stringify(content) };
+
+test('isolated AGY worker seed binds the private project and resume retains its conversation', async () => {
+    const calls = [];
+    const cwd = path.resolve('private-worker-fixture');
+    const options = { cwd, isolatedRoot: true, model: 'fixture', effort: 'medium', agyPath: '/fixture/agy',
+        spawnImpl(command, args) {
+            calls.push(args);
+            return hookChild(output('agy', JSON.stringify({ schema_version: 1, kind: 'reply', body: 'ready' })).stdout);
+        } };
+    const seeded = await workerSlotSeed('agy')(options);
+    assert.equal(calls[0].includes('--new-project'), true);
+    assert.equal(calls[0][calls[0].indexOf('--add-dir') + 1], cwd);
+    const raw = await workerSlotAdapter('agy', options).invoke(hookParams('agy'));
+    assert.equal(raw.exitCode, 0);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].includes('--new-project'), false);
+    assert.equal(calls[1][calls[1].indexOf('--conversation') + 1], seeded.conversationId);
+});
+
+test('isolated AGY seed refuses missing or relative roots before spawning', async () => {
+    let calls = 0;
+    for (const cwd of [undefined, 'relative-worker']) {
+        await assert.rejects(workerSlotSeed('agy')({ cwd, isolatedRoot: true, model: 'fixture', effort: 'medium',
+            spawnImpl() {
+                calls++;
+                return hookChild(output('agy', JSON.stringify({ schema_version: 1, kind: 'reply', body: 'ready' })).stdout);
+            } }), /absolute cwd/);
+    }
+    assert.equal(calls, 0);
+});
 
 for (const [provider, create] of [['agy', createAgyAdapter], ['codex', createCodexAdapter]]) {
     const adapter = create();

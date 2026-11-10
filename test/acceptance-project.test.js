@@ -40,6 +40,20 @@ test('acceptance rejects incomplete/unknown/duplicate arguments before creating 
     assert.deepEqual(Object.keys(CONFIGS), ['A', 'B', 'C', 'D']);
 });
 
+test('delegated approvals are an explicit acceptance-only flag, separate from pipeline AUTO', () => {
+    const args = api().parseAcceptanceArgs(['out', '--config', 'B', '--delegate-approvals']);
+    assert.equal(args.delegateApprovals, true);
+    assert.equal(args.auto, false);
+    assert.throws(() => api().parseAcceptanceArgs(['out', '--config', 'B', '--delegate-approvals', '--delegate-approvals']),
+        { code: 'ACCEPTANCE_BAD_ARGS' });
+});
+
+test('T04 registration carries the user-required missing-query error without changing fixture files', () => {
+    const t04 = api().acceptanceTasks('B', ['T04'])[0];
+    assert.match(t04.goal, /missing.*query.*error/i);
+    assert.match(t04.goal, /whitespace.*literal/i);
+});
+
 for (const config of ['A', 'B', 'C', 'D']) {
     test(`fresh ${config} project: generated controller, bindings, clean baseline, finance withheld`, async (t) => {
         const { prepareAcceptanceProject, CONFIGS } = api();

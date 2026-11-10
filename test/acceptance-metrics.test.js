@@ -112,6 +112,26 @@ function ledger(ids = SUITE, auto = false) {
     return { events, integrations, hiddenTests, add, acquire, start, release, worker, finishTask, failed, input };
 }
 function clean() { const l = ledger(); for (const id of SUITE) { l.worker(id); l.finishTask(id); } return l; }
+
+test('explicit delegated benchmark decisions are accepted and are not reported as human TTY proof', () => {
+    const l = clean(), input = l.input();
+    for (const event of input.events) if (event.type === 'gate.approved') { event.actor = 'test'; event.via = 'test-harness'; }
+    input.gatePolicy.delegation = { protocol: 'benchmark-delegation-v1', id: 'delegation', artifactSha256: 'a'.repeat(64),
+        createdAt: new Date(baseTime - 1000).toISOString(), expiresAt: new Date(baseTime - 1000 + 4*3600000).toISOString(),
+        planRevision: 1, planSha256: digest('plan'), taskIds: SUITE };
+    const result = measureAcceptance(input);
+    assert.equal(result.passed, true);
+    assert.equal(result.thresholds.gates.evidenceMode, 'delegated-benchmark');
+    assert.equal(result.thresholds.gates.provesHumanTty, false);
+});
+
+test('a user-required supplemental task check can fail despite an unchanged hidden oracle passing', () => {
+    const input=clean().input();input.supplementalTaskChecks={T04:{passed:false}};
+    const result=measureAcceptance(input);
+    assert.equal(result.taskResults.find(t=>t.task_id==='T04').hidden_passed,true);
+    assert.equal(result.taskResults.find(t=>t.task_id==='T04').requirements_met,false);
+    assert.equal(result.thresholds.requirements.met,9);
+});
 function has(result, threshold, code, task_id, sequence) {
     assert.ok(result.thresholds[threshold].violations.some((v) => v.code === code && (!task_id || v.task_id === task_id)
         && (sequence === undefined || v.sequence === sequence)), JSON.stringify(result.thresholds[threshold].violations));

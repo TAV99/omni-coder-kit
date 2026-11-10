@@ -21,7 +21,7 @@ test('finance source appears only in sourced T08 context replies and other tasks
  assert.match(body,/book_id,title,amount/);assert.match(body,/Question ID: q1/);assert.match(body,/finance-format.md/);
  assert.doesNotMatch(sourceContextBody({...input,task:{task_id:'T01',goal:'case-insensitive'}}),/book_id|finance-format/);
 });
-function fake(t,{auto=false,driveError=false}={}){
+function fake(t,{auto=false,driveError=false,delegateApprovals=false}={}){
  const {runAcceptance}=api(),container=temp(t),root=path.join(container,'workspace'),outDir=path.join(container,'report');fs.mkdirSync(root);execFileSync('git',['init','-q'],{cwd:root});const trace=[];
  const state={sessionId:'s',workspaceId:'w',planRevision:1,lastSequence:1,tasks:{T01:{state:'TASK_VERIFIED'}},leases:{},approvals:{'plan-r1':{gate_id:'plan-r1',phase:'plan',status:'approved',actor:auto?'auto':'human',via:auto?'pipeline-auto':'cli-tty'}}};
  const events=[{sequence:1,type:'session.started',timestamp:new Date().toISOString()}];
@@ -37,8 +37,37 @@ function fake(t,{auto=false,driveError=false}={}){
   measure:input=>{assert.equal(input.snapshot.lastSequence,1);return {passed:false,thresholdsPassed:true,completeSuite:false,taskResults:[],thresholds:{requirements:{passed:true}}};},
   gatePolicy:()=>({gated:true,autoOk:true}),log:()=>{},
  };
- return {run:()=>runAcceptance({outDir,config:'A',taskIds:['T01'],auto},deps),trace,outDir,root,state,deps};
+ return {run:()=>runAcceptance({outDir,config:'A',taskIds:['T01'],auto,delegateApprovals},deps),trace,outDir,root,state,deps};
 }
+
+test('explicit delegation starts the acceptance wrapper and accepts test provenance without a TTY prompt',async t=>{
+ const f=fake(t,{delegateApprovals:true});
+ const delegation={protocol:'benchmark-delegation-v1',id:'unit',artifactSha256:'b'.repeat(64),planRevision:1,planSha256:'a'.repeat(64),taskIds:['T01'],createdAt:new Date(Date.now()-1000).toISOString(),expiresAt:new Date(Date.now()+60000).toISOString()};
+ const file=path.join(path.dirname(f.root),'delegation.json');fs.writeFileSync(file,'{}');
+ const hash=require('node:crypto').createHash('sha256').update('{}').digest('hex');
+ f.deps.createDelegation=()=>({path:file,sha256:hash});f.deps.loadDelegation=()=>delegation;
+ Object.assign(f.state.approvals['plan-r1'],{actor:'test',via:'test-harness',digest:delegation.planSha256,decided_at:new Date().toISOString()});
+ const start=f.deps.startDaemon;
+ f.deps.startDaemon=opts=>{assert.match(opts.entryPoint,/acceptance-daemon\.js$/);assert.deepEqual(opts.argvPrefix,['--delegation',file,'--sha256',hash]);return start();};
+ const report=await f.run();assert.equal(report.errorCode,null);assert.equal(report.approvalMode,'delegated-benchmark');
+ assert.equal(report.delegation.id,'unit');
+});
+
+test('T04 supplement rejects permissive missing args, falsey empty rejection and whitespace trimming', t=>{
+ const {runSearchContractCheck}=api(),container=temp(t),root=path.join(container,'workspace');
+ fs.mkdirSync(path.join(root,'bin'),{recursive:true});
+ const cli=path.join(root,'bin/cli.js');
+ // Fixed response witnesses isolate the validator from the bookshelf implementation.
+ const stub="const q=process.argv[3];if(q==='--file'){process.stderr.write('Query required\\n');process.exitCode=1;}else{const ids=q===''?['plain','one','three']:q===' '?['one','three']:q==='   '?['three']:[];process.stdout.write(ids.map(id=>id+' | row\\n').join(''));}";
+ for(const [name,code,passed] of [
+  ['permissive',"process.stdout.write('');",false],
+  ['empty-rejected',stub.replace("q==='--file'","!q||q==='--file'"),false],
+  ['trimmed',stub.replace('q=process.argv[3]','q=process.argv[3].trim()'),false],
+  ['correct',stub,true],
+ ]){const privateDir=path.join(container,name);fs.mkdirSync(privateDir);fs.writeFileSync(cli,code);
+  const result=runSearchContractCheck({root,privateDir,deadline:Date.now()+5000});assert.equal(result.passed,passed,name);
+ }
+});
 test('partial harness run stops the daemon before hidden tests and archives before its sanitized final report',async t=>{
  const f=fake(t),report=await f.run();
  assert.equal(report.ok,false);assert.equal(report.partial,true);assert.equal(report.selectedPassed,true);
@@ -125,4 +154,12 @@ test('a source reset by initial resume is caught before entering worker drive',a
  const report=await f.run();
  assert.equal(report.errorCode,'ACCEPTANCE_SOURCE_DRIFT');
  assert.ok(!f.trace.includes('drive'));assert.ok(!f.trace.includes('hidden'));
+});
+
+test('P7 services a six-question batch as one context round and reports exact acknowledged IDs',async t=>{
+ const f=fake(t),client=f.deps.startDaemon().client;
+ client.replyToTask=async()=>({acknowledged:true});client.request=async()=>({resumed:true});
+ f.deps.drive=async opts=>{await opts.serviceContext({taskId:'T01',task:{waitingContext:{question_ids:Array.from({length:6},(_,i)=>'q'+i)}},remainingMs:1000});return {complete:true};};
+ const report=await f.run();assert.equal(report.errorCode,null);assert.equal(report.contextByTask.T01.length,6);
+ assert.equal(report.contextRoundBudget.T01.count,1);assert.equal(report.contextRoundBudget.T01.history[0].complete,true);
 });

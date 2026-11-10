@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 
-// Opt-in scripted acceptance. Only a person using the CLI can decide gates.
+// Opt-in scripted acceptance. Delegation uses an isolated test-only entry point.
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { execFileSync, spawn } = require('node:child_process');
+const { execFileSync, spawn, spawnSync } = require('node:child_process');
 const { ALL_TASK_IDS, FIXTURE, parseAcceptanceArgs, prepareAcceptanceProject } = require('./helpers/acceptance-project');
 const { failure, check, createStageRunner, createPoller, spawnDaemon, waitForApproval, answerContext, stopTree } = require('./helpers/squad-live');
 const { driveAcceptance } = require('./helpers/acceptance-control');
@@ -13,6 +13,7 @@ const { measureAcceptance } = require('./helpers/acceptance-metrics');
 const { collectRuntimeEvidence, writeAcceptanceReport, redactReport } = require('./helpers/acceptance-evidence');
 const { archiveAcceptanceEvidence } = require('./helpers/acceptance-archive');
 const { createSourceGuard } = require('./helpers/acceptance-source');
+const { createDelegation, loadDelegation, isDelegatedDecision } = require('./helpers/acceptance-delegation');
 
 const TOTAL_MS = 4 * 60 * 60 * 1000;
 const APPROVAL_MS = 30 * 60 * 1000;
@@ -96,20 +97,62 @@ async function runHiddenTests({ root, taskIds, privateDir, deadline, signal }) {
     return results;
 }
 
+function runSearchContractCheck({ root, privateDir, deadline }) {
+    const file = path.join(privateDir, 't04-missing-query-catalog.json');
+    const books = [{ id: 'plain', title: 'Dense', author: 'Anon', price: 1, publishedAt: '2020-01-01' },
+        { id: 'one', title: 'Space Book', author: 'Anon', price: 2, publishedAt: '2020-01-01' },
+        { id: 'three', title: 'Deep   Space', author: 'Anon', price: 3, publishedAt: '2020-01-01' }];
+    const original = JSON.stringify(books) + '\n';
+    fs.writeFileSync(file, original, { flag: 'wx', mode: 0o600 });
+    const checks = {};
+    for (const [name, query, ids] of [['missing', null, null], ['empty', '', ['plain', 'one', 'three']],
+        ['one-space', ' ', ['one', 'three']], ['three-spaces', '   ', ['three']]]) {
+        const result = spawnSync(process.execPath, [path.join(root, 'bin/cli.js'), 'search',
+            ...(query === null ? [] : [query]), '--file', file], { cwd: root, env: { PATH: process.env.PATH || '' },
+            encoding: 'utf8', timeout: Math.max(1, Math.min(5000, deadline - Date.now())) });
+        const log = path.join(privateDir, `t04-query-${name}.log`);
+        fs.writeFileSync(log, (result.stdout || '') + (result.stderr || ''), { flag: 'wx', mode: 0o600 });
+        const actualIds = (result.stdout || '').split('\n').filter(Boolean).map(line => line.split(' | ')[0]);
+        checks[name] = { passed: !result.error && !result.signal && result.status === (query === null ? 1 : 0)
+            && !/SyntaxError|MODULE_NOT_FOUND|ReferenceError/.test(result.stderr || '')
+            && (query === null || JSON.stringify(actualIds) === JSON.stringify(ids)) && fs.readFileSync(file, 'utf8') === original,
+            exitCode: result.status, signal: result.signal, errorCode: result.error?.code || null,
+            evidence: path.relative(path.dirname(privateDir), log) };
+    }
+    return { passed: Object.values(checks).every(check => check.passed), checks, source: 'User-required T04 missing, empty and literal-whitespace CLI queries' };
+}
+
+function recordControllerSource(privateDir) {
+    const repo = path.resolve(__dirname, '..'), files = ['test/squad-acceptance.js', 'test/acceptance-daemon.js',
+        ...['acceptance-project', 'acceptance-control', 'acceptance-source', 'acceptance-delegation', 'acceptance-metrics',
+            'acceptance-evidence', 'acceptance-archive', 'squad-live'].map(name => `test/helpers/${name}.js`)];
+    const hashes = {};
+    for (const file of files) {
+        const bytes = fs.readFileSync(path.join(repo, file)), target = path.join(privateDir, 'controller-source', file);
+        fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
+        fs.writeFileSync(target, bytes, { flag: 'wx', mode: 0o600 });
+        hashes[file] = createHash('sha256').update(bytes).digest('hex');
+    }
+    return { commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim(),
+        dirty: Boolean(execFileSync('git', ['status', '--porcelain', '--', 'lib', 'bin', ...files], { cwd: repo, encoding: 'utf8' }).trim()), sha256: hashes };
+}
+
 async function runAcceptance(args, deps = {}) {
     const outDir = path.resolve(args.outDir), log = deps.log || console.error;
     if (fs.existsSync(outDir) && (fs.lstatSync(outDir).isSymbolicLink() || !fs.statSync(outDir).isDirectory() || fs.readdirSync(outDir).length)) throw failure('ACCEPTANCE_OUTPUT_EXISTS');
     fs.mkdirSync(outDir, { recursive: true, mode: 0o700 }); fs.chmodSync(outDir, 0o700);
     const privateDir = path.join(outDir, 'private'); fs.mkdirSync(privateDir, { mode: 0o700 });
     const started = Date.now(), deadline = started + TOTAL_MS;
-    const report = { protocol: 'squad-acceptance-v1', config: args.config, auto: args.auto, taskIds: args.taskIds,
+    const report = { protocol: args.delegateApprovals ? 'squad-acceptance-delegated-v1' : 'squad-acceptance-v1',
+        approvalMode: args.delegateApprovals ? 'delegated-benchmark' : 'human-tty',
+        contractRevision: 'user-clarifications-2026-11-03', config: args.config, auto: args.auto, taskIds: args.taskIds,
         partial: args.taskIds.length !== ALL_TASK_IDS.length, completeSuite: args.taskIds.length === ALL_TASK_IDS.length,
         startedAt: new Date(started).toISOString(), ok: false, selectedPassed: false, failedStage: null, errorCode: null,
         stages: {}, integrations: [], contextReplies: [], runtimeFailures: [], observer: { autoStart: false } };
     const redaction = { secrets: [] };
     const save = () => writeAcceptanceReport(outDir, report, redaction);
     const stage = createStageRunner({ report, save, deadline, log, redact: text => redactReport(text, redaction) });
-    let prepared, root, container, ui, daemon, authority, client, stopped = false, driveResult, sourceGuard, sourceError, stopPromise, sourceObservationComplete = false;
+    let prepared, root, container, ui, daemon, authority, client, stopped = false, driveResult, sourceGuard, sourceError, stopPromise, sourceObservationComplete = false, delegation, delegationRef;
     const stop = async () => {
         if (daemon && !stopped) {
             stopPromise ||= Promise.resolve().then(() => daemon.stop()).then(() => { stopped = true; });
@@ -134,6 +177,12 @@ async function runAcceptance(args, deps = {}) {
                 planSha256: prepared.planSha256, binding: prepared.binding, setup: prepared.setup });
             check(prepared.setup.engine.supported, 'ENGINE_UNSUPPORTED');
         });
+        report.controllerSource = recordControllerSource(privateDir);
+        if (args.delegateApprovals) {
+            delegationRef = (deps.createDelegation || createDelegation)({ prepared, privateDir, deadline });
+            delegation = (deps.loadDelegation || loadDelegation)({ root, ...delegationRef });
+            report.delegation = delegation;
+        }
         sourceGuard = createSourceGuard({ root, capture: () => snapshotSource(root),
             authority: { derive: () => authority.derive(), readEvents: () => authority.readEvents() } });
         sourceGuard.start({ onFailure: error => {
@@ -152,6 +201,8 @@ async function runAcceptance(args, deps = {}) {
             report.daemonLog = path.join(container, 'daemon.log');
             report.captureDir = path.join(container, 'runtime-capture');
             daemon = (deps.startDaemon || spawnDaemon)({ root, logFile: report.daemonLog,
+                ...(delegation ? { entryPoint: path.resolve(__dirname, 'acceptance-daemon.js'),
+                    argvPrefix: ['--delegation', delegationRef.path, '--sha256', delegationRef.sha256] } : {}),
                 envOverrides: { OMNI_SQUAD_ACCEPTANCE_EVIDENCE: report.captureDir } });
             client = daemon.client; await daemon.waitUntilReady(poll, limit); authority = daemon.authority;
         });
@@ -172,19 +223,20 @@ async function runAcceptance(args, deps = {}) {
         const wait = (gateIds, limit, allowAutoPlan = false) => {
             beforeCheck();
             return waitForApproval({ authority, report, save, poll, limit,
-                gateIds, allowAutoPlan, command: approvalCommand(Array.isArray(gateIds) ? '--all' : gateIds),
+                gateIds, allowAutoPlan, delegation, command: approvalCommand(Array.isArray(gateIds) ? '--all' : gateIds),
                 log: text => log(`${text}Nhập mã vừa in trong terminal; không dùng lại mã cũ.`) });
         };
         await stage('planApproval', APPROVAL_MS, async limit => {
             beforeCheck();
             const gate = authority.derive().approvals?.['plan-r1'];
             if (gate?.status === 'approved') {
-                check(gate.actor === 'human' && gate.via === 'cli-tty' || args.auto && gate.actor === 'auto' && gate.via === 'pipeline-auto' && gate.phase === 'plan', 'GATE_NOT_HUMAN');
+                check(gate.actor === 'human' && gate.via === 'cli-tty' || args.auto && gate.actor === 'auto' && gate.via === 'pipeline-auto' && gate.phase === 'plan'
+                    || isDelegatedDecision(gate, gate, delegation), 'GATE_NOT_HUMAN');
                 report.decisions = [gate];
             } else await wait('plan-r1', limit, args.auto);
         });
         beforeCheck();
-        const answered = new Map();
+        const answered = new Map(), contextRounds = new Map();
         // The driver has its own total deadline, including each human wait.
         driveResult = await (deps.drive || driveAcceptance)({ authority, client, sessionId: report.sessionId, taskIds: args.taskIds,
             deadline, beforeCheck, captureSource: () => snapshotSource(root),
@@ -198,10 +250,16 @@ async function runAcceptance(args, deps = {}) {
             waitForGates: ({ gateIds, remainingMs }) => wait(gateIds, Math.min(APPROVAL_MS, remainingMs)),
             serviceContext: async ({ taskId, task, remainingMs }) => {
                 if (!answered.has(taskId)) answered.set(taskId, new Set());
-                await answerContext({ waitingQuestionIds: task.waitingContext.question_ids, answered: answered.get(taskId),
-                    client, sessionId: report.sessionId, taskId, report, log,
-                    body: details => sourceContextBody({ ...details, task: prepared.tasks.find(item => item.task_id === taskId) }) });
-                report.contextByTask = Object.fromEntries([...answered].map(([id, ids]) => [id, [...ids]])); save();
+                if (!contextRounds.has(taskId)) contextRounds.set(taskId, { count: 0, history: [] });
+                try {
+                    await answerContext({ waitingQuestionIds: task.waitingContext.question_ids, answered: answered.get(taskId),
+                        roundState: contextRounds.get(taskId), maxRounds: 3, maxQuestionsPerRound: 20,
+                        client, sessionId: report.sessionId, taskId, report, log,
+                        body: details => sourceContextBody({ ...details, task: prepared.tasks.find(item => item.task_id === taskId) }) });
+                } finally {
+                    report.contextByTask = Object.fromEntries([...answered].map(([id, ids]) => [id, [...ids]]));
+                    report.contextRoundBudget = Object.fromEntries(contextRounds); save();
+                }
                 check(remainingMs > 0, 'ACCEPTANCE_INCOMPLETE');
             } });
         report.drive = driveResult;
@@ -214,6 +272,7 @@ async function runAcceptance(args, deps = {}) {
         check(driveResult.complete && !Object.values(final.leases || {}).some(lease => !lease.released_at && lease.status !== 'released'), 'ACCEPTANCE_NOT_SETTLED');
         await stage('hidden', Math.max(1, deadline - Date.now()), async () => {
             report.hiddenTests = await (deps.hidden || runHiddenTests)({ root, taskIds: args.taskIds, privateDir, deadline, signal: deps.signal });
+            if (args.taskIds.includes('T04')) report.supplementalTaskChecks = { T04: runSearchContractCheck({ root, privateDir, deadline }) };
             check(!deps.signal?.aborted, 'ACCEPTANCE_INTERRUPTED');
         });
     } catch (error) {
@@ -235,11 +294,14 @@ async function runAcceptance(args, deps = {}) {
             if (root) report.evidence = await (deps.archive || archiveAcceptanceEvidence)({ root, outDir, captureDir: report.captureDir,
                 daemonLog: report.daemonLog, turns: capture.turns, sessionId: report.sessionId });
             if (authority && prepared) {
+                if (delegationRef) check(createHash('sha256').update(fs.readFileSync(delegationRef.path)).digest('hex') === delegationRef.sha256,
+                    'ACCEPTANCE_DELEGATION_INVALID');
                 const snapshot = coherentAuthoritySnapshot(authority);
                 const policy = deps.gatePolicy || require('../lib/dual/approval-gates').phaseGatePolicy;
                 report.measurements = (deps.measure || measureAcceptance)({ ...snapshot, taskContracts: prepared.tasks, suiteTaskIds: ALL_TASK_IDS,
-                    gatePolicy: { auto: args.auto, phases: Object.fromEntries(['spec', 'plan', 'integrate'].map(phase => [phase, policy(root, phase)])) },
-                    integrations: report.integrations, hiddenTests: report.hiddenTests || {}, sourceIntegrity: report.sourceIntegrity });
+                    gatePolicy: { auto: args.auto, delegation, phases: Object.fromEntries(['spec', 'plan', 'integrate'].map(phase => [phase, policy(root, phase)])) },
+                    integrations: report.integrations, hiddenTests: report.hiddenTests || {}, sourceIntegrity: report.sourceIntegrity,
+                    supplementalTaskChecks: report.supplementalTaskChecks });
                 report.tasks = prepared.tasks.map(task => {
                     const own = snapshot.events.filter(event => event.task_id === task.task_id);
                     const start = own.find(event => event.type === 'task.execution.started'), end = own.findLast(event => event.type === 'task.completed' || event.type === 'task.execution.outcome');
@@ -263,7 +325,7 @@ async function runAcceptance(args, deps = {}) {
 
 async function main() {
     if (process.env.OMNI_SQUAD_LIVE !== '1') {
-        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-acceptance.js <out-dir> --config A|B|C|D [--tasks T01,T03] [--auto]'); return;
+        console.log('Usage: OMNI_SQUAD_LIVE=1 node test/squad-acceptance.js <out-dir> --config A|B|C|D [--tasks T01,T03] [--auto] [--delegate-approvals]'); return;
     }
     const controller = new AbortController();
     const interrupt = () => controller.abort();
@@ -275,4 +337,4 @@ async function main() {
 }
 if (require.main === module) main().catch(error => { console.error(`${error.code || 'ACCEPTANCE_ERROR'}: ${error.message}`); process.exitCode = 1; });
 
-module.exports = { runAcceptance, snapshotSource, changedFiles, sourceContextBody, coherentAuthoritySnapshot, runHiddenTests };
+module.exports = { runAcceptance, snapshotSource, changedFiles, sourceContextBody, coherentAuthoritySnapshot, runHiddenTests, runSearchContractCheck };

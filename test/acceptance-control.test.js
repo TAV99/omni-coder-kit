@@ -155,6 +155,124 @@ test('waiting is bounded and a foreign authority snapshot aborts without QC', as
     assert.deepEqual(s.trace,[]);
 });
 
+test('a stable rejected handoff stops for a decision without inventing terminal failure', async () => {
+    const { driveAcceptance, taskProjection } = api(), s = scenario(['T01']);
+    s.state.tasks.T01.lastOutcome = { attempt: 1, status: 'NEEDS_FIX' };
+    s.state.tasks.T01.handoffRejection = { attempt: 1 };
+    s.state.tasks.T01.qcReview = { attempt: 1, status: 'completed', verdict: 'NEEDS_FIX' };
+    s.client.completeIsolatedTask = async () => ({ status: 'REVIEW_REJECTED', qc_review: structuredClone(s.state.tasks.T01.qcReview) });
+    await assert.rejects(driveAcceptance(s.options), error => {
+        assert.equal(error.code, 'ACCEPTANCE_NEEDS_DECISION');
+        assert.equal(error.partial.taskResults[0].terminal, false);
+        return true;
+    });
+    assert.equal(taskProjection(s.state, 'T01').terminal, false);
+    assert.equal(s.state.tasks.T01.lastOutcome.status, 'NEEDS_FIX');
+});
+
+test('a stable exhausted review budget stops before the total deadline', async () => {
+    const { driveAcceptance } = api(), s = scenario(['T01']);
+    s.state.tasks.T01.qcReview = { attempt: 1, status: 'failed' };
+    s.client.completeIsolatedTask = async () => ({ status: 'REVIEW_BUDGET_EXHAUSTED', qc_review: structuredClone(s.state.tasks.T01.qcReview) });
+    await assert.rejects(driveAcceptance(s.options), { code: 'ACCEPTANCE_NEEDS_DECISION' });
+    assert.deepEqual(s.trace, []);
+});
+
+test('a correction advancing after a rejected response is not mistaken for a decision stop', async () => {
+    const { driveAcceptance } = api(), s = scenario(['T01']);
+    s.state.tasks.T01.lastOutcome = { attempt: 1, status: 'NEEDS_FIX' };
+    s.state.tasks.T01.handoffRejection = { attempt: 1 };
+    s.state.tasks.T01.qcReview = { attempt: 1, status: 'completed', verdict: 'NEEDS_FIX' };
+    const qc = s.client.completeIsolatedTask; let changed = false;
+    s.client.completeIsolatedTask = async (...args) => {
+        if (!changed) {
+            changed = true;
+            const old = structuredClone(s.state.tasks.T01.qcReview);
+            delete s.state.tasks.T01.lastOutcome; delete s.state.tasks.T01.handoffRejection;
+            s.state.tasks.T01.isolatedWorkspace.attempt = 2;
+            s.state.tasks.T01.isolatedHandoff = { attempt: 2, result_sha256: 'second' };
+            delete s.state.tasks.T01.qcReview;
+            return { status: 'REVIEW_REJECTED', qc_review: old };
+        }
+        return qc(...args);
+    };
+    assert.equal((await driveAcceptance(s.options)).complete, true);
+    assert.equal(changed, true);
+});
+
+test('the last allowed reviewer still running or just approved is not a decision stop', async () => {
+    const { driveAcceptance } = api();
+    for (const completeBeforeResponse of [false, true]) {
+        const s = scenario(['T01']), qc = s.client.completeIsolatedTask;
+        s.state.tasks.T01.qcReview = { attempt: 1, status: 'running' };
+        let first = true;
+        s.client.completeIsolatedTask = async (...args) => {
+            if (first) {
+                first = false;
+                const old = structuredClone(s.state.tasks.T01.qcReview);
+                if (completeBeforeResponse) s.state.tasks.T01.qcReview = { attempt: 1, status: 'completed', verdict: 'APPROVE' };
+                return { status: 'REVIEW_BUDGET_EXHAUSTED', qc_review: old };
+            }
+            return qc(...args);
+        };
+        const pause = s.options.pauseImpl;
+        s.options.pauseImpl = async ms => { await pause(ms); s.state.tasks.T01.qcReview = { attempt: 1, status: 'completed', verdict: 'APPROVE' }; };
+        assert.equal((await driveAcceptance(s.options)).complete, true);
+    }
+});
+
+test('a rejected handoff cannot trigger a decision probe before execution finalization settles', async () => {
+    const { driveAcceptance } = api();
+    for (const mode of ['lease', 'finalization', 'context']) {
+        const s = scenario(['T01']);
+        s.state.tasks.T01.lastOutcome = { attempt: 1, status: 'NEEDS_FIX' };
+        s.state.tasks.T01.handoffRejection = { attempt: 1 };
+        if (mode === 'lease') s.state.leases.active = { task_id: 'T01', status: 'active' };
+        if (mode === 'finalization') s.state.tasks.T01.finalization = { settled: false };
+        if (mode === 'context') s.state.tasks.T01.contextDispatch = { status: 'claimed' };
+        let advanced = false;
+        const qc = s.client.completeIsolatedTask;
+        s.client.completeIsolatedTask = async (...args) => { assert.equal(advanced, true); return qc(...args); };
+        const pause = s.options.pauseImpl;
+        s.options.pauseImpl = async ms => {
+            await pause(ms); advanced = true; s.state.leases = {};
+            delete s.state.tasks.T01.finalization; delete s.state.tasks.T01.contextDispatch;
+            delete s.state.tasks.T01.lastOutcome; delete s.state.tasks.T01.handoffRejection;
+            s.state.tasks.T01.isolatedWorkspace.attempt = 2;
+            s.state.tasks.T01.isolatedHandoff = { attempt: 2, result_sha256: 'next' };
+        };
+        assert.equal((await driveAcceptance(s.options)).complete, true);
+    }
+});
+
+test('a decision stop waits for other workers, reviews and finalization to become quiescent', async () => {
+    const { driveAcceptance } = api();
+    for (const mode of ['worker', 'reviewer', 'context', 'finalization']) {
+        const s = scenario(['T01', 'T02']);
+        s.state.tasks.T01.lastOutcome = { attempt: 1, status: 'NEEDS_FIX' };
+        s.state.tasks.T01.handoffRejection = { attempt: 1 };
+        s.state.tasks.T01.qcReview = { attempt: 1, status: 'completed', verdict: 'NEEDS_FIX' };
+        if (mode === 'worker') s.state.leases.other = { task_id: 'T02', status: 'active' };
+        if (mode === 'reviewer') s.state.tasks.T02.qcReview = { attempt: 1, status: 'running' };
+        if (mode === 'context') s.state.tasks.T02.contextDispatch = { status: 'claimed' };
+        if (mode === 'finalization') s.state.tasks.T02.finalization = { settled: false };
+        let settled = false;
+        s.client.completeIsolatedTask = async () => {
+            assert.equal(settled, true, `must not interrupt other ${mode}`);
+            return { status: 'REVIEW_REJECTED', qc_review: structuredClone(s.state.tasks.T01.qcReview) };
+        };
+        const pause = s.options.pauseImpl;
+        s.options.pauseImpl = async ms => {
+            await pause(ms); settled = true; s.state.leases = {};
+            s.state.tasks.T02.state = 'TASK_VERIFIED';
+            delete s.state.tasks.T02.qcReview; delete s.state.tasks.T02.contextDispatch;
+            delete s.state.tasks.T02.finalization;
+        };
+        await assert.rejects(driveAcceptance(s.options), { code: 'ACCEPTANCE_NEEDS_DECISION' });
+        assert.equal(s.state.tasks.T02.state, 'TASK_VERIFIED');
+    }
+});
+
 test('a claimed context dispatch or unsettled finalization prevents terminal projection', () => {
     const { taskProjection } = api(), s = scenario(['T01']);
     s.state.tasks.T01.state = 'TASK_VERIFIED';

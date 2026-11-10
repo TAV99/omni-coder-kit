@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { redactDiagnostic } = require('../../lib/dual/validator-security');
+const { isDelegatedDecision } = require('./acceptance-delegation');
 
 const failure = (code, message = code) => Object.assign(new Error(message), { code });
 const check = (value, code, message) => { if (!value) throw failure(code, message); };
@@ -67,6 +68,7 @@ function createPoller({ beforeCheck = () => {}, afterCheck = () => {}, pauseImpl
 }
 
 function spawnDaemon({ root, logFile, env = process.env, envOverrides = {}, spawnImpl = spawn,
+    entryPoint = path.resolve(__dirname, '../../bin/omni-daemon.js'), argvPrefix = [],
     createClient = require('../../lib/dual/daemon-client').createDaemonClient,
     createAuthority = require('../../lib/dual/authority-store').createAuthorityStore,
     pauseImpl = pause, stopTreeImpl = stopTree }) {
@@ -76,7 +78,7 @@ function spawnDaemon({ root, logFile, env = process.env, envOverrides = {}, spaw
     Object.assign(childEnv, envOverrides);
     let child, client, authority, exitResult, childError;
     try {
-        child = spawnImpl(process.execPath, [path.resolve(__dirname, '../../bin/omni-daemon.js'), '--workspace', root],
+        child = spawnImpl(process.execPath, [entryPoint, ...argvPrefix, '--workspace', root],
             { env: childEnv, detached: true, stdio: ['ignore', log, log] });
     } finally { fs.closeSync(log); }
     const exited = new Promise((resolve) => child.once('close', (code, signal) => { exitResult = { code, signal }; resolve(exitResult); }));
@@ -105,17 +107,22 @@ function spawnDaemon({ root, logFile, env = process.env, envOverrides = {}, spaw
     };
 }
 
-async function waitForApproval({ authority, report, save, poll, limit, command, gateIds, allowAutoPlan = false, log = console.error }) {
+async function waitForApproval({ authority, report, save, poll, limit, command, gateIds, allowAutoPlan = false, delegation, log = console.error }) {
     const ids = Array.isArray(gateIds) ? gateIds : [gateIds];
     check(ids.length && ids.every((id) => typeof id === 'string' && id.length), 'GATE_ID_REQUIRED');
     const label = ids.join(', ');
-    log(`\n>>> Cổng ${label} đang chờ. Mở terminal khác và chạy:\n    ${command}\n`);
-    report.awaiting = ids.length === 1 ? { gateId: ids[0], command } : { gateIds: ids, command };
-    save();
-    await poll(() => {
+    if (delegation) {
         const approvals = authority.derive().approvals;
-        return ids.every((id) => approvals?.[id] && approvals[id].status !== 'pending');
-    }, limit, `approval of ${label}`);
+        check(ids.every(id => approvals?.[id] && approvals[id].status !== 'pending'), 'ACCEPTANCE_DELEGATED_GATE_PENDING');
+    } else {
+        log(`\n>>> Cổng ${label} đang chờ. Mở terminal khác và chạy:\n    ${command}\n`);
+        report.awaiting = ids.length === 1 ? { gateId: ids[0], command } : { gateIds: ids, command };
+        save();
+        await poll(() => {
+            const approvals = authority.derive().approvals;
+            return ids.every((id) => approvals?.[id] && approvals[id].status !== 'pending');
+        }, limit, `approval of ${label}`);
+    }
     const approvals = authority.derive().approvals;
     for (const gateId of ids) {
         const decided = approvals?.[gateId];
@@ -124,26 +131,35 @@ async function waitForApproval({ authority, report, save, poll, limit, command, 
         check(decided.status === 'approved', 'GATE_REJECTED', `${gateId} was ${decided.status}: ${decided.reason || ''}`);
         const autoPlan = allowAutoPlan && /^plan-r\d+$/.test(gateId) && decided.phase === 'plan'
             && decided.actor === 'auto' && decided.via === 'pipeline-auto';
-        check((decided.actor === 'human' && decided.via === 'cli-tty') || autoPlan,
+        check((decided.actor === 'human' && decided.via === 'cli-tty') || autoPlan || isDelegatedDecision(decided, decided, delegation),
             'GATE_NOT_HUMAN', `${decided.actor}/${decided.via}`);
     }
     delete report.awaiting;
 }
 
 async function answerContext({ waitingQuestionIds, answered, client, sessionId, taskId, planRevision = 1,
-    maxReplies = 3, body, report, log = console.error }) {
+    maxReplies = 3, roundState, maxRounds = 3, maxQuestionsPerRound = 20, body, report, log = console.error }) {
     const open = waitingQuestionIds.filter((id) => !answered.has(id));
     if (!open.length) return;
-    check(answered.size + open.length <= maxReplies, 'ISOLATED_CONTROLLER_REQUIRED', 'Worker keeps asking for context');
+    let round;
+    if (roundState) {
+        check(Number.isInteger(roundState.count) && roundState.count >= 0 && roundState.count < maxRounds
+            && open.length <= maxQuestionsPerRound, 'ISOLATED_CONTROLLER_REQUIRED', 'Context round budget exceeded');
+        roundState.count++;
+        round = { number: roundState.count, questionIds: [...open], acknowledgedQuestionIds: [], complete: false };
+        roundState.history.push(round);
+    } else check(answered.size + open.length <= maxReplies, 'ISOLATED_CONTROLLER_REQUIRED', 'Worker keeps asking for context');
     for (const questionId of open) {
         const messageId = `reply-${answered.size + 1}`;
         const ack = await client.replyToTask(sessionId, { task_id: taskId, plan_revision: planRevision,
             message_id: `${taskId}-${messageId}`, reply_to: questionId, body: await body({ questionId, messageId, taskId, planRevision }) });
         check(ack.acknowledged === true, 'CONTEXT_REPLY_REJECTED', JSON.stringify(ack));
         answered.add(questionId);
+        if (round) round.acknowledgedQuestionIds.push(questionId);
         report.contextReplies = [...(report.contextReplies || []), { questionId, messageId }];
         log(`[context] answered ${questionId}`);
     }
+    if (round) round.complete = true;
     await client.request('session.resume', { session_id: sessionId, task_id: taskId, plan_revision: planRevision, projection: 'ack' });
 }
 

@@ -350,6 +350,59 @@ test('a cancellation signal requested after worker completion does not force a c
     assert.equal(Object.values(store.derive().leases).every((lease) => lease.status === 'released'), true);
 });
 
+test('daemon shutdown cancels and drains a detached isolated implement before resolving close', async (t) => {
+    const input = fixture(t), { store } = seedAuthority(input), calls = [];
+    const { runProcess } = require('../lib/dual/agy-runner');
+    const { createDaemonClient } = require('../lib/dual/daemon-client');
+    const cleanup = new AbortController();
+    let ready, child, childClosed = false, taskDone, daemonSignal;
+    const started = new Promise(resolve => { ready = resolve; });
+    const ordinary = fakeWorker(calls);
+    const worker = async (invocation, deps) => {
+        if (!invocation.args.some(arg => arg.includes('implement phase'))) return ordinary(invocation, deps);
+        return runProcess({ ...invocation, command: process.execPath,
+            args: ['-e', "process.stdout.write('implement-ready\\n');setInterval(() => {}, 1000)"], timeoutMs: 30000 }, {
+            ...deps, signal: deps.signal ? AbortSignal.any([deps.signal, cleanup.signal]) : cleanup.signal,
+            spawn(...args) {
+                child = deps.spawn(...args);
+                child.once('close', () => { childClosed = true; });
+                child.stdout.on('data', bytes => { if (String(bytes).includes('implement-ready')) ready(); });
+                return child;
+            },
+        });
+    };
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker });
+    const daemon = await startDaemonServer({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+        orchestrator: { runTask(derived, options) {
+            daemonSignal = options.signal;
+            const pending = adapter.runTask(derived, options);
+            taskDone = pending.then(value => ({ value }), error => ({ error }));
+            return pending;
+        } } });
+    try {
+        const client = createDaemonClient({ workspaceRoot: input.workspaceRoot });
+        await client.resumeSession({ session_id: input.sessionId, projection: 'ack' });
+        await Promise.race([started, new Promise((_, reject) => {
+            const timer = setTimeout(() => reject(new Error('Implement did not start')), 4000); timer.unref();
+        })]);
+        await daemon.close();
+        assert.equal(daemonSignal?.aborted, true, 'daemon owns the broadcast cancellation signal');
+        assert.equal(childClosed, true, 'shutdown must observe the actual implement close event');
+        assert.throws(() => process.kill(child.pid, 0), { code: 'ESRCH' });
+        await taskDone;
+        const events = store.readEvents();
+        assert.ok(events.some(event => event.type === 'task.process.exited'));
+        assert.equal(Object.values(store.derive().tasks['TASK-1'].executions).every(execution =>
+            Object.values(execution.processes).every(record => record.state === 'exited')), true);
+        assert.equal(events.some(event => event.type === 'task.workspace.handoff'), false);
+        assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 1;\n');
+    } finally {
+        cleanup.abort();
+        if (taskDone) await taskDone;
+        await daemon.close();
+    }
+});
+
 test('isolated QC rejects missing, active, failed, and wrong-lineage operation evidence before mutation', async (t) => {
     const { completeIsolatedTask } = require('../lib/dual/isolated-qc');
     const scenarios = ['missing', 'active', 'failed', 'wrong-lineage'];
@@ -814,6 +867,56 @@ test('Codex correction after failed QC creates a bounded new attempt and preserv
     assert.equal((await completeIsolatedTask(qcArgs)).status, 'TASK_VERIFIED');
     assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 3;\n');
     assert.equal(store.derive().tasks['TASK-1'].previousAttempts.length, 1);
+});
+
+test('validated worker NEEDS_FIX permits only the existing bounded public corrections', async (t) => {
+    const input = fixture(t), { store } = seedAuthority(input);
+    const worker = fakeWorker([], payload => payload.recommendation ? { ...payload, recommendation: 'NEEDS_FIX',
+        findings: [{ file: 'index.js', line: 1, description: 'Recheck the registered value.', severity: 'ERROR' }] } : payload);
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker });
+    const daemon = await startDaemonServer({ workspaceRoot: input.workspaceRoot, authorityStore: store, orchestrator: adapter });
+    t.after(() => daemon.close());
+    const client = require('../lib/dual/daemon-client').createDaemonClient({ workspaceRoot: input.workspaceRoot });
+    const preserved = [];
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        await assert.rejects(adapter.runTask(store.derive()), { code: 'DUAL_WORKER_REVIEW_NEEDS_FIX' });
+        const task = store.derive().tasks['TASK-1'];
+        assert.equal(task.lastOutcome.attempt, attempt);
+        assert.equal(task.isolatedHandoff, undefined);
+        assert.equal(Object.values(store.derive().leases).every(lease => lease.status === 'released'), true);
+        const review = path.join(input.workspaceRoot, path.dirname(task.isolatedWorkspace.reference.bindingPath),
+            'workspace/.omni/codex-gemini/runs/TASK-1/review.json');
+        preserved.push([review, fs.readFileSync(review)]);
+        const correction = { task_id: 'TASK-1', plan_revision: 1, expected_attempt: attempt,
+            request_id: `worker-review-${attempt}`, reason: 'Recheck the recorded value finding; preserve the registered goal and scope.' };
+        if (attempt < 3) assert.equal((await client.correctTask(input.sessionId, correction)).attempt, attempt + 1);
+        else await assert.rejects(client.correctTask(input.sessionId, correction), { code: 'DUAL_CORRECTION_LIMIT' });
+    }
+    for (const [file, bytes] of preserved) assert.deepEqual(fs.readFileSync(file), bytes);
+    assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 1;\n');
+});
+
+test('worker review needs-fix classification is a worker charge, never a harness recovery credit', () => {
+    const { classifyFailure } = require('../lib/dual/correction-policy');
+    assert.deepEqual(classifyFailure({ lastOutcome: { code: 'DUAL_WORKER_REVIEW_NEEDS_FIX' },
+        finalization: { settled: true, stage: 'post_worker_collection' } }), { category: 'worker', phase: 'worker_review' });
+    assert.deepEqual(classifyFailure({ lastOutcome: { code: 'DUAL_ISOLATED_EVIDENCE_INVALID' } }),
+        { category: 'unknown', phase: 'unclassified' });
+});
+
+test('rejected review never makes malformed evidence or REJECT worker-correctable', async (t) => {
+    for (const mode of ['false-files', 'commands', 'REJECT']) {
+        const input = fixture(t);
+        const worker = fakeWorker([], payload => {
+            if (payload.recommendation) return { ...payload, recommendation: mode === 'REJECT' ? 'REJECT' : 'NEEDS_FIX',
+                findings: [{ file: 'index.js', line: 1, description: 'Check the value.', severity: 'ERROR' }] };
+            if (payload.status === 'SUCCESS' && mode === 'false-files') return { ...payload, modified_files: [] };
+            if (payload.status === 'SUCCESS' && mode === 'commands') return { ...payload,
+                command_outputs: [{ command: 'node --version', exit_code: 0, output: '' }] };
+            return payload;
+        });
+        await assert.rejects(runIsolatedTask({ ...input, worker }), { code: 'DUAL_ISOLATED_EVIDENCE_INVALID' });
+    }
 });
 
 test('correction budget and active-lease checks prevent duplicate or unbounded worker attempts', async (t) => {
@@ -1691,3 +1794,97 @@ test('squad project: worker root holds only the worker bundle and the task still
     assert.equal(fs.readFileSync(path.join(root, 'index.js'), 'utf8'), 'module.exports = 2;\n');
     assert.deepEqual(fs.readdirSync(path.join(root, '.agents', 'skills')), ['om-think'], 'project skills untouched');
 });
+
+test('AGY isolated seed, discussion, nudge and implement spawns cannot write source',
+    { skip: process.platform !== 'darwin' }, async (t) => {
+        const input = fixture(t), phases = [], spawnedCommands = [];
+        const probe = async (spawnImpl, label) => {
+            phases.push(label);
+            const child = spawnImpl(process.execPath, ['-e',
+                "try{require('fs').writeFileSync(process.argv[1],'escaped');console.log('ESCAPED')}catch(e){console.log(e.code)}",
+                path.join(input.workspaceRoot, 'index.js')], { stdio: ['ignore', 'pipe', 'pipe'] });
+            let text = ''; child.stdout.on('data', (b) => { text += b; });
+            await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
+            assert.match(text, /EACCES|EPERM/, label);
+        };
+        const worker = fakeWorker([]);
+        const discussion = discussionForWorker(async (invocation, deps) => {
+            await probe(deps.spawn, invocation.transport || 'implement');
+            return worker(invocation, deps);
+        }, { internalNudge: true,
+            beforeSeed: async (ctx) => {
+                const child = ctx.spawnImpl('/usr/bin/true', [], { shell: false, stdio: 'ignore' });
+                await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
+                await probe(ctx.spawnImpl, 'seed-' + ctx.provider);
+            },
+            beforeNudge: (ctx) => probe(ctx.spawnImpl, 'nudge-' + ctx.phase) });
+        const handoff = await runIsolatedTask({ ...input, discussion, agyCommand: process.execPath,
+            spawnImpl(command, args, options) { spawnedCommands.push(command); return spawn(command, args, options); },
+            worker: async (invocation, deps) => {
+                await probe(deps.spawn, 'implement');
+                return worker(invocation, deps);
+            } });
+        assert.equal(handoff.status, 'AWAITING_CODEX_QC');
+        assert.ok(phases.includes('seed-agy') && phases.includes('implement') && phases.includes('nudge-review'));
+        assert.ok(spawnedCommands.includes('/usr/bin/true'), 'unrelated runtime invocation keeps its own launch profile');
+        assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 1;\n');
+    });
+
+for (const layer of ['checker', 'behavior']) {
+    test(`private QC ${layer} commands cannot write source before human integration`,
+        { skip: process.platform !== 'darwin' }, async (t) => {
+            const { completeIsolatedTask } = require('../lib/dual/isolated-qc');
+            const gates = require('../lib/dual/approval-gates');
+            gates.setTestApprover(null); t.after(() => gates.setTestApprover(() => true));
+            const input = fixture(t), sourceFile = path.join(input.workspaceRoot, 'index.js');
+            if (layer === 'checker') input.task.validation_commands = [{ program: 'node', args: ['index.js'], cwd: '.' }];
+            else input.task.behavior_commands = [{ program: 'node', args: ['index.js'], cwd: '.' }];
+            const command = layer === 'checker' ? 'node index.js' : 'node --check index.js';
+            const base = fakeWorker([]);
+            const worker = async (invocation, deps) => {
+                const result = await base(invocation, deps), parsed = JSON.parse(result.stdout);
+                if (parsed.structured_output.status === 'SUCCESS') {
+                    fs.writeFileSync(path.join(invocation.cwd, 'index.js'),
+                        `let denied=false; try { require('fs').writeFileSync(${JSON.stringify(sourceFile)}, 'QC escaped'); } catch(e) { denied=['EPERM','EACCES'].includes(e.code); }\n`
+                        + `console.log('---QC-BEHAVIOR-RESULTS-BEGIN---'+JSON.stringify({tests:[{name:'source denied',passed:denied}]})+'---QC-BEHAVIOR-RESULTS-END---');\nmodule.exports=2;\n`);
+                    parsed.structured_output.command_outputs[0].command = command;
+                    result.stdout = JSON.stringify(parsed);
+                }
+                return result;
+            };
+            const { store } = seedAuthority(input);
+            await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker }).runTask(store.derive());
+            const request = { workspaceRoot: input.workspaceRoot, authorityStore: store,
+                sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 };
+            const waiting = await completeIsolatedTask(request);
+            assert.equal(fs.readFileSync(sourceFile, 'utf8'), 'module.exports = 1;\n', 'validator cannot modify source');
+            assert.equal(waiting.status, 'AWAITING_HUMAN_APPROVAL');
+            assert.ok(Object.values(store.derive().leases).every(lease => lease.status === 'released'));
+            gates.setTestApprover(() => true);
+            const integrated = await completeIsolatedTask(request);
+            assert.equal(integrated.status, 'TASK_VERIFIED', 'controller can still integrate the approved private result');
+            assert.match(fs.readFileSync(sourceFile, 'utf8'), /module.exports=2/);
+        });
+}
+
+test('unavailable QC source fence releases its lease and never launches validation or integration',
+    { skip: process.platform !== 'darwin' }, async (t) => {
+        const { completeIsolatedTask } = require('../lib/dual/isolated-qc');
+        const cp = require('node:child_process');
+        const input = fixture(t), { store } = seedAuthority(input);
+        await createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+            worker: fakeWorker([]) }).runTask(store.derive());
+        const beforeProcesses = store.readEvents().filter(e => e.type === 'task.process.started').length;
+        const probe = cp.spawnSync;
+        try {
+            cp.spawnSync = function (command, ...args) {
+                return command === '/usr/bin/sandbox-exec' ? { status: null, error: Object.assign(new Error('missing backend'), { code: 'ENOENT' }) }
+                    : probe.call(this, command, ...args);
+            };
+            await assert.rejects(completeIsolatedTask({ workspaceRoot: input.workspaceRoot, authorityStore: store,
+                sessionId: input.sessionId, taskId: 'TASK-1', planRevision: 1 }), { code: 'DUAL_WORKER_WRITE_FENCE_UNAVAILABLE' });
+        } finally { cp.spawnSync = probe; }
+        assert.equal(store.readEvents().filter(e => e.type === 'task.process.started').length, beforeProcesses);
+        assert.ok(Object.values(store.derive().leases).every(lease => lease.status === 'released'));
+        assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 1;\n');
+    });

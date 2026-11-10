@@ -17,7 +17,8 @@ function loadModule(relativePath, mocks, processImpl = process) {
     const localRequire = createRequire(filename);
     const module = { exports: {} };
     const wrapped = vm.runInNewContext('(function(require, module, exports) {\n'
-        + fs.readFileSync(filename, 'utf8').replace(/^#![^\n]*/, '') + '\n})', { process: processImpl, Buffer, setTimeout, clearTimeout, setInterval, clearInterval }, { filename });
+        + fs.readFileSync(filename, 'utf8').replace(/^#![^\n]*/, '') + '\n})', { process: processImpl, Buffer, AbortController,
+        setTimeout, clearTimeout, setInterval, clearInterval }, { filename });
     wrapped((name) => Object.hasOwn(mocks, name) ? mocks[name] : localRequire(name), module, module.exports);
     return module.exports;
 }
