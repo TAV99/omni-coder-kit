@@ -123,6 +123,16 @@ test('bootstrap rejects multiple AGY slices before side effects because sessions
     assert.equal(sessionCalls, 0);
 });
 
+test('bootstrap names the invalid plan fields so an orchestrator can repair its own plan (P7f)', async (t) => {
+    const root = workspace(t);
+    // The real P7f orchestrator plan: a non-UI project wrote ui {required:false} only.
+    writePlan(root, { ...validPlan(), acceptance_policy: { ...acceptancePolicy(), ui: { required: false } } });
+    await assert.rejects(() => executeDualBootstrap({ workspaceRoot: root }), (error) => error.code === 'DUAL_BOOTSTRAP_PLAN_INVALID'
+        && /acceptance_policy\.ui\.viewport_widths/.test(error.details.issues)
+        && /acceptance_policy\.ui\.reduced_motion_required/.test(error.details.issues)
+        && error.details.issues.length <= 1024);
+});
+
 test('bootstrap rejects setup and final-QC pseudo tasks because they belong to controller/gates', async (t) => {
     const root = workspace(t);
     const task = validPlan().tasks[0];

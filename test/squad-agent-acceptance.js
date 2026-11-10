@@ -87,7 +87,7 @@ function orchestratorCommand({ preset, root, binding }) {
 function changedSourceFiles(root, baselineCommit) {
     const tracked = execFileSync('git', ['diff', '--name-only', baselineCommit], { cwd: root, encoding: 'utf8' }).split('\n');
     const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { cwd: root, encoding: 'utf8' }).split('\n');
-    const generated = /^(\.omni\/|\.codex\/|\.claude\/|\.agents\/|\.mcp\.json$|AGENTS\.md$|CLAUDE\.md$|GEMINI\.md$|hidden\/|plans\/|requirements\.md$)/;
+    const generated = /^(\.omni\/|\.codex\/|\.claude\/|\.agents\/|\.mcp\.json$|\.gitignore$|AGENTS\.md$|CLAUDE\.md$|GEMINI\.md$|hidden\/|plans\/|requirements\.md$)/;
     return [...new Set([...tracked, ...untracked].filter(Boolean))].filter((file) => !generated.test(file)).sort();
 }
 
