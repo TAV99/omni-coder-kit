@@ -311,3 +311,32 @@ test('a handoff does not enter QC until its context dispatch claim settles', asy
     s.options.pauseImpl = async ms => { await pause(ms); s.state.tasks.T01.contextDispatch.status = 'completed'; };
     await driveAcceptance(s.options);
 });
+
+test('a worker-classified failure gets bounded corrections like a real controller, then stays terminal', async () => {
+    const { driveAcceptance } = api(), s = scenario(['T01']);
+    delete s.state.tasks.T01.isolatedHandoff;
+    s.state.tasks.T01.lastOutcome = { attempt: 1, status: 'FAILED', code: 'RESULT_MALFORMED' };
+    const requests = [];
+    s.client.correctTask = async (_session, request) => {
+        requests.push(request);
+        const task = s.state.tasks.T01;
+        task.isolatedWorkspace = { attempt: request.expected_attempt + 1 };
+        task.lastOutcome = { attempt: request.expected_attempt + 1, status: 'FAILED', code: 'RESULT_MALFORMED' };
+    };
+    const result = await driveAcceptance(s.options);
+    assert.equal(result.complete, true);
+    assert.deepEqual(requests.map((r) => [r.task_id, r.expected_attempt, r.request_id]), [['T01', 1, 'acceptance-T01-1'], ['T01', 2, 'acceptance-T01-2']]);
+    assert.deepEqual(result.taskResults.map((t) => [t.effective_state, t.attempt]), [['FAILED', 3]], 'no correction past the worker budget');
+    assert.equal(result.corrections.length, 2);
+});
+
+test('harness or unknown failures are never corrected by the driver', async () => {
+    const { driveAcceptance } = api(), s = scenario(['T01']);
+    delete s.state.tasks.T01.isolatedHandoff;
+    s.state.tasks.T01.lastOutcome = { attempt: 1, status: 'FAILED', code: 'DUAL_WORKER_EXECUTION_FAILED' };
+    let calls = 0;
+    s.client.correctTask = async () => { calls++; };
+    const result = await driveAcceptance(s.options);
+    assert.equal(calls, 0);
+    assert.deepEqual(result.taskResults.map((t) => t.effective_state), ['FAILED']);
+});

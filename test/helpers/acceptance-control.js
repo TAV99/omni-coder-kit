@@ -2,6 +2,11 @@
 
 const { taskReadiness } = require('../../lib/dual/task-scheduler');
 const { continuationCheckpoint } = require('../../lib/dual/task-continuation');
+const { classifyFailure } = require('../../lib/dual/correction-policy');
+// Like a real controller ("Immediate Bounded Correction"), the driver asks for a
+// correction of a worker-classified failure within the worker budget (attempts 2
+// and 3). Harness/unknown failures stay terminal for a person to decide.
+const MAX_DRIVER_ATTEMPT = 3;
 const { failure, pause } = require('./squad-live');
 
 function taskProjection(derived, id) {
@@ -23,7 +28,7 @@ async function driveAcceptance({ authority, client, sessionId, taskIds, planRevi
     pauseImpl = pause, pollIntervalMs = 500, serviceContext = async () => {}, waitForGates,
     captureSource, collectIntegration, onIntegration = () => {}, beforeCheck = () => {}, onProgress = () => {},
     beforeQc = () => {}, afterQc = () => {} }) {
-    const integrations = [], frontiers = [], captured = new Set();
+    const integrations = [], frontiers = [], captured = new Set(), corrections = [];
     const remaining = () => Math.max(1, deadline - now());
     const read = () => {
         const derived = authority.derive();
@@ -106,8 +111,28 @@ async function driveAcceptance({ authority, client, sessionId, taskIds, planRevi
             await qc(id);
             derived = read();
         }
+        if (quiescent(derived) && typeof client.correctTask === 'function') {
+            let corrected = false;
+            for (const id of taskIds) {
+                const projection = taskProjection(derived, id), task = derived.tasks[id];
+                if (!projection.terminal || projection.effective_state !== 'FAILED' || projection.attempt >= MAX_DRIVER_ATTEMPT
+                    || task?.revision_id || classifyFailure(task).category !== 'worker') continue;
+                const request = { task_id: id, plan_revision: planRevision, expected_attempt: projection.attempt,
+                    request_id: `acceptance-${id}-${projection.attempt}`,
+                    reason: `Bounded correction after ${task.lastOutcome.code}: redo the attempt and return the exact strict JSON contract.` };
+                await client.correctTask(sessionId, request, { timeoutMs: remaining() });
+                corrections.push({ ...request, at: new Date(now()).toISOString() });
+                await onProgress({ taskId: id, attempt: projection.attempt, status: `CORRECTION_REQUESTED:${task.lastOutcome.code}` });
+                corrected = true;
+            }
+            if (corrected) {
+                await client.resumeSession({ session_id: sessionId, projection: 'ack' }, { timeoutMs: remaining() });
+                await beforeCheck();
+                continue;
+            }
+        }
         const results = taskIds.map(id => ({ task_id: id, ...taskProjection(derived, id) }));
-        if (results.every(task => task.terminal)) return { complete: true, taskResults: results, integrations, frontiers };
+        if (results.every(task => task.terminal)) return { complete: true, taskResults: results, integrations, frontiers, corrections };
         const active = Object.values(derived.leases || {}).some(lease => !lease.released_at && lease.status !== 'released');
         if (!active) {
             const frontier = taskIds.filter(id => !taskProjection(derived, id).terminal && derived.tasks[id]?.isolatedHandoff
@@ -142,7 +167,7 @@ async function driveAcceptance({ authority, client, sessionId, taskIds, planRevi
         await pauseImpl(Math.min(pollIntervalMs, remaining()));
     }
     const error = failure('ACCEPTANCE_INCOMPLETE', 'Run deadline reached with nonterminal tasks');
-    error.partial = { integrations, frontiers, taskResults: taskIds.map(id => ({ task_id: id, ...taskProjection(read(), id) })) };
+    error.partial = { integrations, frontiers, corrections, taskResults: taskIds.map(id => ({ task_id: id, ...taskProjection(read(), id) })) };
     throw error;
 }
 
