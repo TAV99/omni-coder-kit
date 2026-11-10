@@ -141,7 +141,10 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
         // The orchestrator plans from requirements.md alone: drop the scripted ten-task plan.
         git('rm', '-q', 'plans/plan.md');
         fs.writeFileSync(path.join(root, 'requirements.md'), requirementsMarkdown());
-        git('add', 'requirements.md'); git('commit', '-q', '-m', 'P7f agent baseline: requirements only');
+        // A user commits what `omni init`/`omni squad setup` wrote before handing the
+        // project to an orchestrator (.omni/ itself stays ignored). P7f dual-3: an
+        // untracked setup file makes the Git-baseline coverage scout refuse to start.
+        git('add', '-A'); git('commit', '-q', '-m', 'P7f agent baseline: omni setup + requirements only');
         const baselineCommit = git('rev-parse', 'HEAD').trim();
         Object.assign(report, { workspaceRoot: root, container: prepared.container, baselineCommit, binding: prepared.binding, setup: prepared.setup });
         save();
