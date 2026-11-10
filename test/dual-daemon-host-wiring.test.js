@@ -559,3 +559,17 @@ for (const condition of ['session', 'plan_revision', 'execution_mode', 'attempt'
         assert.equal(f.hooks(), undefined);
     });
 }
+
+test('shared discussion adapters run in the workspace root for every runtime (P7f dual-8)', () => {
+    const { sharedDiscussionAdapters } = require('../lib/dual/daemon-server');
+    const calls = [];
+    const adapters = sharedDiscussionAdapters({ workspaceRoot: '/work', workerRuntime: 'claude', orchestratorRuntime: 'codex',
+        workerSlot: (runtime, options) => { calls.push(['worker', runtime, options]); return 'w'; },
+        orchestratorSlot: (runtime, options) => { calls.push(['orchestrator', runtime, options]); return 'o'; } });
+    assert.deepEqual(adapters, { codex: 'o', agy: 'w' });
+    assert.deepEqual(calls, [['orchestrator', 'codex', { cwd: '/work' }], ['worker', 'claude', { cwd: '/work' }]]);
+    // The real claude worker slot accepts the turn with that cwd instead of SQUAD_RUNTIME_BAD_TURN.
+    const real = sharedDiscussionAdapters({ workspaceRoot: path.resolve('/work'), workerRuntime: 'claude', orchestratorRuntime: 'claude' });
+    assert.equal(typeof real.agy.invoke, 'function');
+    assert.equal(typeof real.codex.invoke, 'function');
+});
