@@ -121,3 +121,24 @@ test('continuations resume the same orchestrator conversation', () => {
     assert.match(continuationPrompt('TASK-1=ROUTED'), /TASK-1=ROUTED/);
     assert.doesNotMatch(continuationPrompt('x'), /approve/i);
 });
+
+test('all-gates delegation (user decision 2026-11-11) approves spec, the current plan and its integrates as test/test-harness', (t) => {
+    const { root, privateDir, head } = repo(t);
+    const ref = createAgentDelegation({ root, baselineCommit: head, privateDir, deadline: Date.now() + 3600000, preset: 'dual', scope: 'all-gates' });
+    const delegation = loadAgentDelegation({ root, ...ref });
+    let state = { planRevision: 1, plan: { planSha256: digest }, approvals: {}, tasks: { 'TASK-1': { task_id: 'TASK-1' } } };
+    const approve = createPlanBoundApprover({ root, delegation, ref, authorityStore: { derive: () => state } });
+    assert.equal(approve({ gate_id: 'spec-r1', phase: 'spec', status: 'pending', digest }), true);
+    assert.equal(approve({ gate_id: 'plan-r1', phase: 'plan', status: 'pending', digest }), true);
+    assert.equal(approve({ gate_id: 'plan-r1', phase: 'plan', status: 'pending', digest: 'c'.repeat(64) }), false, 'only the registered plan digest');
+    assert.equal(approve({ gate_id: 'plan-r2', phase: 'plan', status: 'pending', digest }), false, 'only the current revision');
+    assert.equal(approve(integrate), false, 'integrate waits for an approved plan');
+    state = { ...state, approvals: { 'plan-r1': { status: 'approved', actor: 'test', via: 'test-harness', digest } } };
+    assert.equal(approve(integrate), true);
+    assert.equal(approve({ gate_id: 'x', phase: 'other', status: 'pending', digest }), false);
+    assert.throws(() => createAgentDelegation({ root, baselineCommit: head, privateDir, deadline: Date.now() + 3600000, scope: 'everything' }), { code: 'AGENT_DELEGATION_INVALID' });
+    const decided = { phase: 'plan', digest, actor: 'test', via: 'test-harness', timestamp: new Date().toISOString() };
+    assert.equal(isAgentDelegatedDecision(decided, decided, delegation), true);
+    assert.equal(isAgentDelegatedDecision(decided, decided, { ...delegation, scope: 'integrate' }), false);
+    assert.equal(parseArgs(['out', '--preset', 'dual', '--delegate-all-gates']).delegateAllGates, true);
+});

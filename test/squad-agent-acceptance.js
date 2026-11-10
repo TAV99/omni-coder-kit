@@ -33,9 +33,10 @@ const PRESETS = Object.freeze({ dual: 'B', squad: 'E' });
 const quote = (value) => `'${String(value).replace(/'/g, `'\\''`)}'`;
 
 function parseArgs(argv) {
-    const args = { outDir: null, preset: null };
+    const args = { outDir: null, preset: null, delegateAllGates: false };
     for (let i = 0; i < argv.length; i++) {
         if (argv[i] === '--preset') args.preset = argv[++i];
+        else if (argv[i] === '--delegate-all-gates') args.delegateAllGates = true;
         else if (!argv[i].startsWith('--') && !args.outDir) args.outDir = path.resolve(argv[i]);
         else throw failure('ACCEPTANCE_BAD_ARGS', `Unknown argument ${argv[i]}`);
     }
@@ -127,7 +128,8 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
     const privateDir = path.join(outDir, 'private'); fs.mkdirSync(privateDir, { mode: 0o700 });
     const started = Date.now(), deadline = started + TOTAL_MS;
     const report = { protocol: 'squad-agent-acceptance-v1', preset: args.preset, config: PRESETS[args.preset], taskIds: TASK_IDS,
-        approvalMode: 'human-plan-delegated-integrate', provesHumanTty: 'plan/spec gates only',
+        approvalMode: args.delegateAllGates ? 'delegated-all-gates' : 'human-plan-delegated-integrate',
+        provesHumanTty: args.delegateAllGates ? false : 'plan/spec gates only',
         startedAt: new Date(started).toISOString(), ok: false, errorCode: null, humanGates: [] };
     const redaction = { secrets: [] };
     const save = () => fs.writeFileSync(path.join(outDir, 'report.json'), JSON.stringify(redactReport(report, redaction), null, 2) + '\n', { mode: 0o600 });
@@ -148,7 +150,8 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
         const baselineCommit = git('rev-parse', 'HEAD').trim();
         Object.assign(report, { workspaceRoot: root, container: prepared.container, baselineCommit, binding: prepared.binding, setup: prepared.setup });
         save();
-        const delegationRef = createAgentDelegation({ root, baselineCommit, privateDir, deadline, preset: args.preset });
+        const delegationRef = createAgentDelegation({ root, baselineCommit, privateDir, deadline, preset: args.preset,
+            scope: args.delegateAllGates ? 'all-gates' : 'integrate' });
         report.delegation = delegationRef;
         report.daemonLog = path.join(prepared.container, 'daemon.log');
         report.captureDir = path.join(prepared.container, 'runtime-capture');
@@ -234,7 +237,8 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
             attempt: task.isolatedWorkspace?.attempt || null, worker: task.worker || null }));
         const planGate = humanPlanApproval(final);
         report.gates = Object.values(final.approvals || {}).map((gate) => ({ gate_id: gate.gate_id, phase: gate.phase, status: gate.status,
-            actor: gate.actor, via: gate.via, delegated: gate.phase === 'integrate' ? isAgentDelegatedDecision(gate, gate, { ...JSON.parse(fs.readFileSync(delegationRef.path, 'utf8')) }) : false }));
+            actor: gate.actor, via: gate.via, delegated: isAgentDelegatedDecision(gate, gate, JSON.parse(fs.readFileSync(delegationRef.path, 'utf8'))) }));
+        const delegatedPlan = report.gates.find((gate) => gate.gate_id === `plan-r${final.planRevision}` && gate.status === 'approved' && gate.delegated);
         const changed = changedSourceFiles(root, baselineCommit);
         const allowed = new Set(tasks.flatMap((task) => task.allowed_files || []));
         report.hiddenTests = await runHiddenTests({ root, taskIds: TASK_IDS, privateDir, deadline, signal });
@@ -246,8 +250,9 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
             requirements: { met, total: TASK_IDS.length, passed: met / TASK_IDS.length >= 0.9 },
             scope: { changed, outside: changed.filter((file) => !allowed.has(file)), passed: changed.every((file) => allowed.has(file)) },
             unknown: { unsettled: tasks.filter((task) => task.state !== 'TASK_VERIFIED').map((task) => task.task_id), passed: tasks.length > 0 && tasks.every((task) => task.state === 'TASK_VERIFIED') },
-            gates: { humanPlan: Boolean(planGate), passed: Boolean(planGate) && report.gates.every((gate) => gate.status !== 'approved'
-                || (gate.phase === 'integrate' ? gate.delegated || (gate.actor === 'human' && gate.via === 'cli-tty') : gate.actor === 'human' && gate.via === 'cli-tty')) },
+            gates: { humanPlan: Boolean(planGate), delegatedPlan: Boolean(delegatedPlan),
+                passed: Boolean(planGate || delegatedPlan) && report.gates.every((gate) => gate.status !== 'approved'
+                    || gate.delegated || (gate.actor === 'human' && gate.via === 'cli-tty')) },
         };
         report.ok = Object.values(report.thresholds).every((item) => item.passed) && !report.orchestratorTimedOut;
         report.orchestrator.continuations = report.orchestrator.turns.length - 1;
