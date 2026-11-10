@@ -24,6 +24,7 @@ const { resolveBinary } = require('../lib/squad/runtimes/resolve-binary');
 const TASK_IDS = Object.freeze(['T01', 'T03', 'T06', 'T09']);
 const TOTAL_MS = 4 * 3600000 - 60000;
 const ORCHESTRATOR_MS = 3.5 * 3600000;
+const MAX_CONTINUATIONS = 60;
 const OMNI = path.resolve(__dirname, '../bin/omni.js');
 const MCP_SERVER = path.resolve(__dirname, '../lib/dual/mcp-server.mjs');
 // dual: codex orchestrator + claude worker (config B); squad: claude orchestrator
@@ -58,18 +59,28 @@ function orchestratorPrompt(root) {
         'You are the Omni orchestrator for this repository. Read AGENTS.md and .omni/workflows/dual-controller.md first and follow them.',
         'Goal: deliver every requirement in requirements.md end to end in AUTO mode through the Omni dual authority, exactly as that workflow describes.',
         `Workspace root: ${root}. Prepare the planning artifacts the workflow names and start with \`omni dual bootstrap --json\` (its single AUTO entrypoint), then drive every task with the omni_dual MCP tools (status, resume, completion) until each task is TASK_VERIFIED.`,
-        'A person approves spec/plan gates in a terminal with `omni squad approve`; never try to approve a gate yourself. While a gate or a worker is pending, wait with `sleep 60` between status checks instead of polling continuously.',
+        'A person approves spec/plan gates in a terminal with `omni squad approve`; never try to approve a gate yourself. When only a human gate or a running worker is pending, end your turn with one line saying so; you will be resumed in this same conversation.',
         'Do not edit source files yourself; workers implement. Answer worker questions only from requirements.md. Stop when every task is TASK_VERIFIED or when you are blocked, and end with a short summary of the final state.',
     ].join('\n\n');
 }
 
-function orchestratorCommand({ preset, root, binding }) {
+// What a person types when the orchestrator ended its turn early: carry on in
+// the same conversation. The harness never answers questions or gates here.
+function continuationPrompt(summary) {
+    return [`Continue the same Omni AUTO session. Current authority state: ${summary}.`,
+        'Keep driving with the omni_dual tools: check status, answer worker questions from requirements.md, request QC/completion and corrections as the workflow says.',
+        'If only a human gate or a running worker is pending, end your turn with one line saying so; you will be resumed later. Stop when every task is TASK_VERIFIED.'].join(' ');
+}
+
+// `resume` = { sessionRef, prompt } continues the orchestrator's own conversation.
+function orchestratorCommand({ preset, root, binding, resume }) {
     const role = binding.roles.orchestrator;
     if (preset === 'squad') {
         const claude = resolveBinary(require('../lib/squad/runtimes/claude').binary);
         if (!claude.found) throw failure('ORCHESTRATOR_MISSING', 'claude not found');
         // Project .mcp.json and .claude/settings.json hooks are written by `omni squad setup` (V30).
-        return { command: claude.command, args: [...claude.prefixArgs, '-p', orchestratorPrompt(root), '--model', role.model,
+        return { command: claude.command, args: [...claude.prefixArgs, '-p', resume ? resume.prompt : orchestratorPrompt(root),
+            ...(resume ? ['--resume', resume.sessionRef] : []), '--model', role.model,
             '--output-format', 'stream-json', '--verbose', '--permission-mode', 'acceptEdits',
             '--allowedTools', 'mcp__omni_dual__*', 'Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash'] };
     }
@@ -77,11 +88,23 @@ function orchestratorCommand({ preset, root, binding }) {
     if (!codex.found) throw failure('ORCHESTRATOR_MISSING', 'codex not found');
     // codex exec ignores the project's .codex/config.toml in a folder the user has
     // not trusted (P7f V48 finding), so the same MCP server is passed as session flags.
-    return { command: codex.command, args: [...codex.prefixArgs, 'exec', '--json', '--skip-git-repo-check', '-m', role.model,
-        '-c', `model_reasoning_effort="${role.effort}"`, '--sandbox', 'workspace-write',
+    const flags = ['--json', '--skip-git-repo-check', '-m', role.model,
+        '-c', `model_reasoning_effort="${role.effort}"`, '-c', 'sandbox_mode="workspace-write"',
         '-c', `mcp_servers.omni_dual.command=${JSON.stringify(process.execPath)}`,
-        '-c', `mcp_servers.omni_dual.args=${JSON.stringify([MCP_SERVER, '--workspace', root])}`,
-        orchestratorPrompt(root)] };
+        '-c', `mcp_servers.omni_dual.args=${JSON.stringify([MCP_SERVER, '--workspace', root])}`];
+    return { command: codex.command, args: resume
+        ? [...codex.prefixArgs, 'exec', 'resume', ...flags, resume.sessionRef, resume.prompt]
+        : [...codex.prefixArgs, 'exec', ...flags, orchestratorPrompt(root)] };
+}
+
+// The orchestrator conversation id from its own JSON event stream.
+function sessionRefFrom(logText, preset) {
+    for (const line of logText.split('\n')) {
+        let event; try { event = JSON.parse(line); } catch { continue; }
+        if (preset === 'squad' && typeof event.session_id === 'string') return event.session_id;
+        if (preset === 'dual' && event.type === 'thread.started' && typeof event.thread_id === 'string') return event.thread_id;
+    }
+    return null;
 }
 
 function changedSourceFiles(root, baselineCommit) {
@@ -125,25 +148,32 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
             envOverrides: { OMNI_SQUAD_ACCEPTANCE_EVIDENCE: report.captureDir } });
         await daemon.waitUntilReady(poll, 20_000);
         const authority = daemon.authority;
-        const invocation = orchestratorCommand({ preset: args.preset, root, binding: prepared.binding });
         // `omni` on the orchestrator's PATH must be this checkout, not a globally installed release.
         const shimDir = path.join(privateDir, 'bin'); fs.mkdirSync(shimDir, { mode: 0o700 });
         fs.writeFileSync(path.join(shimDir, 'omni'), `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(OMNI)} "$@"\n`, { mode: 0o700 });
         const orchestratorEnv = { ...process.env, PATH: `${shimDir}${path.delimiter}${process.env.PATH}` };
         const orchestratorLog = path.join(privateDir, 'orchestrator.jsonl');
-        const fd = fs.openSync(orchestratorLog, 'wx', 0o600);
-        try {
-            orchestrator = spawn(invocation.command, invocation.args, { cwd: root, detached: true, stdio: ['ignore', fd, fd], env: orchestratorEnv });
-        } finally { fs.closeSync(fd); }
+        fs.writeFileSync(orchestratorLog, '', { flag: 'wx', mode: 0o600 });
+        const launch = (resume) => {
+            const invocation = orchestratorCommand({ preset: args.preset, root, binding: prepared.binding, resume });
+            const fd = fs.openSync(orchestratorLog, 'a', 0o600);
+            try { orchestrator = spawn(invocation.command, invocation.args, { cwd: root, detached: true, stdio: ['ignore', fd, fd], env: orchestratorEnv }); }
+            finally { fs.closeSync(fd); }
+            const child = orchestrator;
+            return new Promise((resolve) => child.once('close', (code, sig) => resolve({ code, signal: sig })));
+        };
         report.orchestrator = { runtime: prepared.binding.roles.orchestrator.runtime, model: prepared.binding.roles.orchestrator.model,
-            pid: orchestrator.pid, startedAt: new Date().toISOString(), log: path.relative(outDir, orchestratorLog) };
+            startedAt: new Date().toISOString(), log: path.relative(outDir, orchestratorLog), turns: [] };
+        let exited = launch(null);
+        report.orchestrator.turns.push({ kind: 'initial', pid: orchestrator.pid, startedAt: new Date().toISOString() });
         save();
         log(`P7f ${args.preset}: orchestrator started in ${root}`);
-        const exited = new Promise((resolve) => orchestrator.once('close', (code, sig) => resolve({ code, signal: sig })));
         const announced = new Set();
-        let exit;
         const until = Math.min(deadline - 15 * 60000, Date.now() + ORCHESTRATOR_MS);
-        while (!exit) {
+        const allVerified = (derived) => Object.keys(derived.tasks || {}).length > 0
+            && Object.values(derived.tasks).every((task) => task.state === 'TASK_VERIFIED');
+        let running = true, idleSince = null, lastFingerprint = null;
+        for (;;) {
             if (signal?.aborted) throw failure('ACCEPTANCE_INTERRUPTED');
             const derived = authority.derive();
             const pending = Object.values(derived.approvals || {}).filter((gate) => gate.status === 'pending' && gate.phase !== 'integrate');
@@ -156,12 +186,36 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
                 save();
                 log(`Human approval needed (${pending.map((g) => g.gate_id).join(', ')}):\n${command}`);
             } else if (!pending.length && fs.existsSync(path.join(outDir, 'NEEDS_HUMAN.txt'))) fs.unlinkSync(path.join(outDir, 'NEEDS_HUMAN.txt'));
-            report.progress = { at: new Date().toISOString(), tasks: Object.fromEntries(Object.entries(derived.tasks || {}).map(([id, task]) => [id, task.state])) };
+            const states = Object.fromEntries(Object.entries(derived.tasks || {}).map(([id, task]) => [id, task.state]));
+            report.progress = { at: new Date().toISOString(), tasks: states };
             save();
-            if (Date.now() >= until) { stopTree(orchestrator); report.orchestratorTimedOut = true; }
-            exit = await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5000, null))]);
+            if (Date.now() >= until) { if (running) stopTree(orchestrator); report.orchestratorTimedOut = true; await exited; break; }
+            if (running) {
+                const exit = await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5000, null))]);
+                if (exit) {
+                    running = false; idleSince = Date.now();
+                    report.orchestrator.turns.at(-1).exit = exit; report.orchestrator.turns.at(-1).endedAt = new Date().toISOString();
+                    lastFingerprint = JSON.stringify([states, key, derived.lastSequence]);
+                    if (exit.code !== 0) break;
+                }
+                continue;
+            }
+            if (allVerified(derived)) break;
+            // Like a person nudging an idle agent: resume when the authority moved,
+            // a gate was decided, or two quiet minutes passed; never while a gate waits.
+            const fingerprint = JSON.stringify([states, key, derived.lastSequence]);
+            const due = !pending.length && (fingerprint !== lastFingerprint || Date.now() - idleSince >= 120_000);
+            if (due && report.orchestrator.turns.length < MAX_CONTINUATIONS) {
+                const sessionRef = sessionRefFrom(fs.readFileSync(orchestratorLog, 'utf8'), args.preset);
+                if (!sessionRef) { report.continuationError = 'ORCHESTRATOR_SESSION_UNKNOWN'; break; }
+                const summary = Object.entries(states).map(([id, state]) => `${id}=${state}`).join(', ') || 'no tasks registered';
+                exited = launch({ sessionRef, prompt: continuationPrompt(summary) });
+                report.orchestrator.turns.push({ kind: 'continue', pid: orchestrator.pid, startedAt: new Date().toISOString(), summary });
+                running = true; save();
+            } else if (report.orchestrator.turns.length >= MAX_CONTINUATIONS) { report.continuationLimit = true; break; }
+            await new Promise((resolve) => setTimeout(resolve, 5000));
         }
-        report.orchestrator.exit = exit; report.orchestrator.endedAt = new Date().toISOString();
+        report.orchestrator.endedAt = new Date().toISOString();
         // Let a last dispatched worker settle before grading.
         await poll(() => !Object.values(authority.derive().leases || {}).some((lease) => lease.status === 'active'), 10 * 60000, 'lease settlement').catch(() => { report.leasesUnsettled = true; });
         await daemon.stop(); stopped = true;
@@ -187,10 +241,11 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
                 || (gate.phase === 'integrate' ? gate.delegated || (gate.actor === 'human' && gate.via === 'cli-tty') : gate.actor === 'human' && gate.via === 'cli-tty')) },
         };
         report.ok = Object.values(report.thresholds).every((item) => item.passed) && !report.orchestratorTimedOut;
+        report.orchestrator.continuations = report.orchestrator.turns.length - 1;
     } catch (error) {
         report.errorCode = error.code || 'ACCEPTANCE_ERROR'; report.errorMessage = error.message;
     } finally {
-        if (orchestrator && orchestrator.exitCode === null) stopTree(orchestrator);
+        if (orchestrator && orchestrator.exitCode === null && orchestrator.signalCode === null) stopTree(orchestrator);
         if (daemon && !stopped) { try { await daemon.stop(); } catch { /* reported by state */ } }
         report.endedAt = new Date().toISOString(); report.wallMs = Date.now() - started; save();
         log(`Report: ${path.join(outDir, 'report.json')}; ${report.ok ? 'PASS' : `FAIL (${report.errorCode || 'thresholds'})`}`);
@@ -208,4 +263,4 @@ async function main() {
 }
 if (require.main === module) main().catch((error) => { console.error(`${error.code || 'ACCEPTANCE_ERROR'}: ${error.message}`); process.exitCode = 1; });
 
-module.exports = { parseArgs, requirementsMarkdown, orchestratorPrompt, orchestratorCommand, changedSourceFiles, TASK_IDS, PRESETS };
+module.exports = { parseArgs, requirementsMarkdown, orchestratorPrompt, orchestratorCommand, continuationPrompt, sessionRefFrom, changedSourceFiles, TASK_IDS, PRESETS };

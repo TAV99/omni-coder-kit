@@ -87,7 +87,7 @@ test('orchestrator argv: claude reads project MCP/hooks; codex gets MCP as sessi
     assert.ok(claude.args.includes('-p') && claude.args.includes('acceptEdits') && claude.args.includes('mcp__omni_dual__*'));
     assert.ok(!claude.args.includes('bypassPermissions'));
     const codex = orchestratorCommand({ preset: 'dual', root: '/w', binding: { roles: { orchestrator: { runtime: 'codex', model: 'gpt-6.1-sol', effort: 'high' } } } });
-    assert.equal(codex.args[codex.args.indexOf('--sandbox') + 1], 'workspace-write');
+    assert.ok(codex.args.includes('sandbox_mode="workspace-write"'));
     assert.ok(codex.args.some((arg) => arg.startsWith('mcp_servers.omni_dual.args=') && arg.includes('"--workspace","/w"')));
 });
 
@@ -100,4 +100,22 @@ test('arguments and changed-file accounting', (t) => {
     fs.writeFileSync(path.join(root, '.omni', 'x.json'), '{}');
     fs.writeFileSync(path.join(root, 'new.js'), '');
     assert.deepEqual(changedSourceFiles(root, head), ['.private/agent-gate-delegation.json', 'a.js', 'new.js'].filter((file) => fs.existsSync(path.join(root, file))));
+});
+
+test('continuations resume the same orchestrator conversation', () => {
+    const { sessionRefFrom, continuationPrompt } = require('./squad-agent-acceptance');
+    const claudeBinding = { roles: { orchestrator: { runtime: 'claude', model: 'sonnet', effort: 'low' } } };
+    const claude = orchestratorCommand({ preset: 'squad', root: '/w', binding: claudeBinding, resume: { sessionRef: 'S-1', prompt: 'go on' } });
+    assert.equal(claude.args[claude.args.indexOf('--resume') + 1], 'S-1');
+    assert.equal(claude.args[claude.args.indexOf('-p') + 1], 'go on');
+    const codexBinding = { roles: { orchestrator: { runtime: 'codex', model: 'gpt-6.1-sol', effort: 'high' } } };
+    const codex = orchestratorCommand({ preset: 'dual', root: '/w', binding: codexBinding, resume: { sessionRef: 'T-1', prompt: 'go on' } });
+    assert.deepEqual(codex.args.slice(0, 2), ['exec', 'resume']);
+    assert.deepEqual(codex.args.slice(-2), ['T-1', 'go on']);
+    assert.ok(codex.args.some((arg) => arg.startsWith('mcp_servers.omni_dual.args=')), 'MCP stays configured on resume');
+    assert.equal(sessionRefFrom('noise\n{"type":"system","subtype":"init","session_id":"S-9"}\n', 'squad'), 'S-9');
+    assert.equal(sessionRefFrom('{"type":"thread.started","thread_id":"T-9"}\n', 'dual'), 'T-9');
+    assert.equal(sessionRefFrom('{}\n', 'dual'), null);
+    assert.match(continuationPrompt('TASK-1=ROUTED'), /TASK-1=ROUTED/);
+    assert.doesNotMatch(continuationPrompt('x'), /approve/i);
 });
