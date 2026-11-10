@@ -24,6 +24,12 @@ const CONFIGS = Object.freeze({
     C: Object.freeze({ preset: 'squad', orchestrator: claude, workers: [agy, claude], reviewer }),
     D: Object.freeze({ preset: 'squad', orchestrator: codex, workers: [agy], reviewer }),
 });
+// P7f real-orchestrator squad binding without agy, so it never shares the one
+// agy slot with a concurrent scripted A–D run. Not a scripted matrix config.
+const AGENT_CONFIGS = Object.freeze({
+    E: Object.freeze({ preset: 'squad', orchestrator: claude, workers: [claude], reviewer }),
+});
+const configFor = (name) => (Object.hasOwn(CONFIGS, name) ? CONFIGS[name] : AGENT_CONFIGS[name]);
 const fail = (message) => { throw Object.assign(new Error(message), { code: 'ACCEPTANCE_BAD_ARGS' }); };
 
 function parseAcceptanceArgs(argv) {
@@ -55,7 +61,7 @@ function parseAcceptanceArgs(argv) {
 }
 
 function acceptanceTasks(configName, taskIds = ALL_TASK_IDS) {
-    const config = CONFIGS[configName];
+    const config = configFor(configName);
     if (!config || !taskIds.length || new Set(taskIds).size !== taskIds.length || taskIds.some((id) => !ALL_TASK_IDS.includes(id))) fail('Invalid config/task selection');
     return suite.tasks.filter((task) => taskIds.includes(task.id)).map((task) => {
         const { id, ...contract } = structuredClone(task);
@@ -69,7 +75,7 @@ function acceptanceTasks(configName, taskIds = ALL_TASK_IDS) {
 }
 
 async function prepareAcceptanceProject({ config: configName, taskIds = ALL_TASK_IDS, auto = false, registry, parent = os.tmpdir(), onCreated = () => {} }) {
-    const config = CONFIGS[configName];
+    const config = configFor(configName);
     const tasks = acceptanceTasks(configName, taskIds);
     const container = fs.realpathSync.native(fs.mkdtempSync(path.join(parent, 'omni-squad-acceptance-')));
     fs.chmodSync(container, 0o700);
