@@ -1,6 +1,6 @@
 # Acceptance RPC response audit
 
-Date: 2026-11-03 (Asia/Ho_Chi_Minh). Scope: the P7 scripted acceptance harness, bookshelf v1, ten tasks per fresh run. Source: `058b42a` plus the pending resume ACK fix.
+Date: 2026-11-03 (Asia/Ho_Chi_Minh). Scope: the P7 scripted acceptance harness, bookshelf v1, ten tasks per fresh run. Source: approval projection `058b42a`, followed by user-approved resume ACK fix `c5e7b82`.
 
 ## Observed defects and contract
 
@@ -29,6 +29,6 @@ The user approved `session.resume` with optional `projection: "ack"`. Its succes
 - The real-daemon regression verifies one dispatch, compact shape, unchanged default cap and session/task/revision rejection. A driver regression verifies lost-resume errors propagate without replay.
 - This audit addresses whole-session history growth in the current P7 path. Task-local validation/reviewer/coverage/error details can still exceed the cap if individually oversized; the client continues to reject them. There is no unlimited-response or automatic-retry fallback.
 - Default status/resume and the separate P3 initial resume retain their existing full responses. This fix does not claim those callers support arbitrary history sizes.
-- Fresh normal and loaded checks each passed 3287 tests, 3275 passed, 12 skipped, 0 failed (530.1 / 200.2 seconds). Logs: `/tmp/omni-p7d-resume-normal.log` and `/tmp/omni-p7d-resume-loaded.log`. Explicit local commit approval remains pending before A-04. No retained benchmark workspace is reused or combined into a full pass.
+- Fresh normal and loaded checks each passed 3287 tests, 3275 passed, 12 skipped, 0 failed (530.1 / 200.2 seconds). Logs: `/tmp/omni-p7d-resume-normal.log` and `/tmp/omni-p7d-resume-loaded.log`. The user approved local fix commit `c5e7b82`; A-04 started fresh afterwards. No retained benchmark workspace is reused or combined into a full pass.
 
 Private observer records: `A-03-T06-approval-projection-observer.json` and `A-03-plan-response-audit.json` under `/private/tmp/omni-p7d-oK0Yu0/`. Raw evidence stays private; reports remain sanitized.
