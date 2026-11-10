@@ -89,6 +89,7 @@ test('orchestrator argv: claude reads project MCP/hooks; codex gets MCP as sessi
     const codex = orchestratorCommand({ preset: 'dual', root: '/w', binding: { roles: { orchestrator: { runtime: 'codex', model: 'gpt-6.1-sol', effort: 'high' } } } });
     assert.ok(codex.args.includes('sandbox_mode="workspace-write"'));
     assert.ok(codex.args.some((arg) => arg.startsWith('mcp_servers.omni_dual.args=') && arg.includes('"--workspace","/w"')));
+    assert.ok(codex.args.includes('mcp_servers.omni_dual.default_tools_approval_mode="approve"'));
 });
 
 test('arguments and changed-file accounting', (t) => {

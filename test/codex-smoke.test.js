@@ -511,6 +511,8 @@ describe('E2E: dual init', () => {
         const hooks = buildCodexHooks('dual', true, { dualPair: 'codex-agy', mode: 'auto' });
         assert.ok(config, 'dual + advanced should generate Codex config');
         assert.ok(config.includes('[mcp_servers.omni_dual]'));
+        // P7f: codex must not prompt for (or, headless, reject) each authority-guarded call.
+        assert.match(config.slice(config.indexOf('[mcp_servers.omni_dual]')), /^default_tools_approval_mode = "approve"$/m);
         assert.ok(hooks, 'dual + advanced should generate Codex hooks');
         const parsed = JSON.parse(hooks);
         assert.ok(parsed.hooks.PreToolUse);

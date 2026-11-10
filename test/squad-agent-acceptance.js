@@ -91,7 +91,9 @@ function orchestratorCommand({ preset, root, binding, resume }) {
     const flags = ['--json', '--skip-git-repo-check', '-m', role.model,
         '-c', `model_reasoning_effort="${role.effort}"`, '-c', 'sandbox_mode="workspace-write"',
         '-c', `mcp_servers.omni_dual.command=${JSON.stringify(process.execPath)}`,
-        '-c', `mcp_servers.omni_dual.args=${JSON.stringify([MCP_SERVER, '--workspace', root])}`];
+        '-c', `mcp_servers.omni_dual.args=${JSON.stringify([MCP_SERVER, '--workspace', root])}`,
+        // Same as the generated project config (lib/init/strategies.js).
+        '-c', 'mcp_servers.omni_dual.default_tools_approval_mode="approve"'];
     return { command: codex.command, args: resume
         ? [...codex.prefixArgs, 'exec', 'resume', ...flags, resume.sessionRef, resume.prompt]
         : [...codex.prefixArgs, 'exec', ...flags, orchestratorPrompt(root)] };
