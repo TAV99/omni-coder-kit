@@ -228,3 +228,28 @@ test('isolated Claude implementation denies source writes and still reaches a QC
     assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 1;\n', 'source untouched until QC');
     assert.equal(Buffer.from(handoff.result.changes[0].contentBase64, 'base64').toString(), 'module.exports = 2;\n');
 });
+
+test('shared claude worker turns skip the project root CLAUDE.md and hooks (P7f dual-9)', async () => {
+    const cwd = path.resolve('/work/project');
+    const turnRun = capture(reply({ result: '```json\n{"schema_version":1,"kind":"reply","body":"answer"}\n```' }));
+    const adapter = workerSlotAdapter('claude', { cwd, command: '/opt/claude', spawnImpl: turnRun.spawnImpl });
+    const binding = { provider: 'agy', role: 'argon', model: 'sonnet', effort: MODEL_DEFAULT_EFFORT, conversation_id: SESSION,
+        session_id: 'session-1', task_id: 'TASK-1', plan_revision: 1, snapshot_sha256: crypto.createHash('sha256').update('ctx').digest('hex') };
+    await adapter.invoke({ binding, snapshot: { text: 'ctx', sha256: binding.snapshot_sha256 }, envelope: { kind: 'question', body: 'scout?' },
+        invocationId: 'inv-1', timeoutMs: 10_000, signal: new AbortController().signal, markNudged() {} });
+    const args = turnRun.calls[0].args;
+    const settingsJson = JSON.parse(args[args.indexOf('--settings') + 1]);
+    assert.equal(settingsJson.disableAllHooks, true);
+    assert.ok(settingsJson.claudeMdExcludes.includes(path.join(cwd, 'CLAUDE.md')), 'the project root controller rules are excluded');
+    assert.ok(args.includes('--strict-mcp-config'));
+    const seedRun = capture(reply({ result: JSON.stringify({ schema_version: 1, kind: 'reply', body: 'ready' }) }));
+    await workerSlotSeed('claude')({ cwd, command: '/opt/claude', model: 'sonnet', spawnImpl: seedRun.spawnImpl });
+    const seedSettings = JSON.parse(seedRun.calls[0].args[seedRun.calls[0].args.indexOf('--settings') + 1]);
+    assert.ok(seedSettings.claudeMdExcludes.includes(path.join(cwd, 'CLAUDE.md')), 'the seed is excluded the same way');
+    // An isolated worker root keeps the previous behaviour: only the parents are excluded.
+    const isolatedRun = capture(reply({ result: JSON.stringify({ schema_version: 1, kind: 'reply', body: 'ready' }) }));
+    await workerSlotSeed('claude')({ cwd, command: '/opt/claude', model: 'sonnet', isolatedRoot: true, spawnImpl: isolatedRun.spawnImpl });
+    const isolatedSettings = JSON.parse(isolatedRun.calls[0].args[isolatedRun.calls[0].args.indexOf('--settings') + 1]);
+    assert.ok(!isolatedSettings.claudeMdExcludes.includes(path.join(cwd, 'CLAUDE.md')));
+    assert.ok(isolatedSettings.claudeMdExcludes.includes(path.join(path.dirname(cwd), 'CLAUDE.md')));
+});
