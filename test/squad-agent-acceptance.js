@@ -56,8 +56,8 @@ function requirementsMarkdown() {
 function orchestratorPrompt(root) {
     return [
         'You are the Omni orchestrator for this repository. Read AGENTS.md and .omni/workflows/dual-controller.md first and follow them.',
-        'Goal: deliver every requirement in requirements.md end to end through the Omni dual authority, using the omni_dual MCP tools.',
-        `Workspace root: ${root}. Begin (or attach to) the authority session, write and register one plan whose tasks cover the requirements (isolated worker tasks with minimal allowed_files and \`node --test\` validation), then drive every task with omni_dual_resume, omni_dual_status and omni_dual_completion until each task is TASK_VERIFIED.`,
+        'Goal: deliver every requirement in requirements.md end to end in AUTO mode through the Omni dual authority, exactly as that workflow describes.',
+        `Workspace root: ${root}. Prepare the planning artifacts the workflow names and start with \`omni dual bootstrap --json\` (its single AUTO entrypoint), then drive every task with the omni_dual MCP tools (status, resume, completion) until each task is TASK_VERIFIED.`,
         'A person approves spec/plan gates in a terminal with `omni squad approve`; never try to approve a gate yourself. While a gate or a worker is pending, wait with `sleep 60` between status checks instead of polling continuously.',
         'Do not edit source files yourself; workers implement. Answer worker questions only from requirements.md. Stop when every task is TASK_VERIFIED or when you are blocked, and end with a short summary of the final state.',
     ].join('\n\n');
@@ -126,10 +126,14 @@ async function runAgentAcceptance(args, { log = console.error, signal } = {}) {
         await daemon.waitUntilReady(poll, 20_000);
         const authority = daemon.authority;
         const invocation = orchestratorCommand({ preset: args.preset, root, binding: prepared.binding });
+        // `omni` on the orchestrator's PATH must be this checkout, not a globally installed release.
+        const shimDir = path.join(privateDir, 'bin'); fs.mkdirSync(shimDir, { mode: 0o700 });
+        fs.writeFileSync(path.join(shimDir, 'omni'), `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(OMNI)} "$@"\n`, { mode: 0o700 });
+        const orchestratorEnv = { ...process.env, PATH: `${shimDir}${path.delimiter}${process.env.PATH}` };
         const orchestratorLog = path.join(privateDir, 'orchestrator.jsonl');
         const fd = fs.openSync(orchestratorLog, 'wx', 0o600);
         try {
-            orchestrator = spawn(invocation.command, invocation.args, { cwd: root, detached: true, stdio: ['ignore', fd, fd], env: { ...process.env } });
+            orchestrator = spawn(invocation.command, invocation.args, { cwd: root, detached: true, stdio: ['ignore', fd, fd], env: orchestratorEnv });
         } finally { fs.closeSync(fd); }
         report.orchestrator = { runtime: prepared.binding.roles.orchestrator.runtime, model: prepared.binding.roles.orchestrator.model,
             pid: orchestrator.pid, startedAt: new Date().toISOString(), log: path.relative(outDir, orchestratorLog) };
