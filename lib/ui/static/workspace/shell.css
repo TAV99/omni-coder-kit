@@ -1,0 +1,134 @@
+/* 3-Region Workspace Shell Layout & Responsive Breakpoints (T09) */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--os-bg);
+  color: var(--os-text);
+  font: 12px/1.55 var(--os-font-sans);
+}
+
+.os-app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* Header */
+.os-header {
+  height: 52px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: var(--os-bg);
+  border-bottom: 1px solid var(--os-line);
+}
+
+/* 3-Region Layout */
+.os-main-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: var(--os-sidebar-width) minmax(360px, 1fr) var(--os-panel-width);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.os-main-layout.sidebar-collapsed {
+  grid-template-columns: 0px minmax(360px, 1fr) var(--os-panel-width);
+}
+
+.os-main-layout.context-collapsed {
+  grid-template-columns: var(--os-sidebar-width) minmax(360px, 1fr) 0px;
+}
+
+.os-main-layout.sidebar-collapsed.context-collapsed {
+  grid-template-columns: 0px minmax(360px, 1fr) 0px;
+}
+
+/* Left Sidebar */
+.os-sidebar-region {
+  background: var(--os-side);
+  border-right: 1px solid var(--os-line);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Primary Center Workspace */
+.os-workspace-region {
+  background: var(--os-bg);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 360px;
+}
+
+/* Right Context Panel */
+.os-context-region {
+  background: var(--os-side);
+  border-left: 1px solid var(--os-line);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-width: 0;
+}
+
+/* Dock Divider (Resize handle) */
+.os-dock-divider {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px; /* >= 8px touch/hit target */
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.os-dock-divider:hover,
+.os-dock-divider:focus-visible {
+  background: var(--os-accent);
+  opacity: 0.35;
+  outline: none;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1099px) {
+  .os-main-layout {
+    grid-template-columns: 180px minmax(360px, 1fr) var(--os-panel-width);
+  }
+}
+
+@media (max-width: 849px) {
+  .os-main-layout {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+  .os-context-region {
+    display: none; /* Can be opened as modal drawer */
+  }
+  .os-dock-divider {
+    display: none;
+  }
+}
+
+@media (max-width: 599px) {
+  .os-main-layout {
+    grid-template-columns: 1fr;
+  }
+  .os-sidebar-region {
+    display: none;
+  }
+}
+
+@media (max-width: 320px) {
+  html, body, .os-app-shell {
+    overflow-x: hidden;
+  }
+}
