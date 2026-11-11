@@ -24,6 +24,10 @@ test('T15 packaging: validates all workspace static files are under lib/', () =>
         'tokens.css',
         'shell.css',
         'panes.css',
+        'index.html',
+        'app.mjs',
+        'workspace.css',
+        'page.css',
     ];
 
     for (const file of expectedFiles) {

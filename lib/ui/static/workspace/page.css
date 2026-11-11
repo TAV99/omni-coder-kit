@@ -1,0 +1,27 @@
+/* Full-window page around the approved workspace look (workspace.css). */
+html, body { margin: 0; height: 100%; background: #fbfcfc; }
+@media (prefers-color-scheme: dark) { html, body { background: #1a1d1e; } }
+#omni-root { height: 100%; }
+.os-boot { font: 13px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 32px; color: #66746e; }
+
+#omni-web-final { min-height: 100vh; display: flex; flex-direction: column; border: 0; }
+#omni-web-final .os-layout { flex: 1; min-height: 0; }
+#omni-web-final .os-main { display: flex; flex-direction: column; min-height: 0; }
+#omni-web-final .os-work-content { flex: 1; min-height: 320px; overflow: hidden; }
+#omni-web-final #os-timeline-container { overflow: auto; }
+#omni-web-final #os-terminal-container { background: var(--os-term); border-radius: var(--os-radius); padding: 6px; }
+
+#omni-web-final .os-pty-bar { display: flex; align-items: center; gap: 8px; margin-left: auto; margin-right: 14px; padding-bottom: 10px; }
+#omni-web-final .os-pty-status { font: 10px ui-monospace, monospace; color: var(--os-sub); }
+#omni-web-final .os-pty-btn { font-size: 10px; padding: 3px 8px; border: 1px solid var(--os-line); border-radius: 4px; cursor: pointer; }
+#omni-web-final .os-live.down { color: #b7791f; }
+#omni-web-final .os-composer select { font-size: 11px; color: var(--os-sub); }
+
+#omni-web-final .os-view-pad { padding: 14px 16px; }
+#omni-web-final .os-view-pad h3 { margin: 6px 0 10px; font-size: 13px; }
+#omni-web-final .os-task-row { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--os-line); font-size: 11px; }
+#omni-web-final .os-task-row small { grid-column: 1 / -1; color: var(--os-sub); }
+#omni-web-final .os-task-state { justify-self: end; font: 10px ui-monospace, monospace; color: var(--os-sub); }
+#omni-web-final .os-view-pad .os-approval { margin: 8px 0; display: grid; gap: 4px; }
+#omni-web-final .os-view-pad .os-text-view pre { margin: 8px 0 0; }
+#omni-web-final .os-role .os-ring { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--os-sub); }

@@ -120,7 +120,8 @@ function tree(dir) {
 test('security: loopback only, token in the fragment, wrong Host/Origin/token → 403 on every route', async (t) => {
     const root = project(t);
     const ui = await serve(t, root);
-    assert.equal(ui.url, `http://127.0.0.1:${ui.port}/#token=${TOKEN}`);
+    assert.equal(ui.url, `http://127.0.0.1:${ui.port}/workspace/#token=${TOKEN}`);
+    assert.equal(ui.classicUrl, `http://127.0.0.1:${ui.port}/#token=${TOKEN}`);
     const port = ui.port;
     const bearer = { authorization: `Bearer ${TOKEN}` };
     for (const url of ['/', '/app.js', '/api/state', '/api/events']) {
@@ -235,6 +236,42 @@ test('SSE: ledger events in order, live tail, Last-Event-ID resumes with no gap 
     journal(root, `${JSON.stringify({ event: { envelope: { kind: 'note', body: 'later' } } })}\n`);
     const tail = await live;
     assert.equal(tail.events.at(-1).fields.body, 'later', 'new lines reach an open stream');
+});
+
+test('workspace page: served at /workspace/, static files stay inside it, needs no inline script', async (t) => {
+    const root = project(t);
+    const ui = await serve(t, root);
+    const get = (pathname) => new Promise((resolve, reject) => {
+        http.get({ host: '127.0.0.1', port: ui.port, path: pathname, headers: { Host: `127.0.0.1:${ui.port}` } }, (res) => {
+            let body = '';
+            res.on('data', (chunk) => { body += chunk; });
+            res.on('end', () => resolve({ status: res.statusCode, type: res.headers['content-type'], body }));
+        }).on('error', reject);
+    });
+    const page = await get('/workspace/');
+    assert.equal(page.status, 200);
+    assert.match(page.type, /^text\/html/);
+    assert.match(page.body, /<script type="module" src="\/workspace\/app\.mjs"><\/script>/);
+    assert.doesNotMatch(page.body, /<script>|\son\w+=|https?:\/\/(?!127)/, 'no inline script, handlers or remote assets (CSP self)');
+    assert.match((await get('/workspace/app.mjs')).type, /^text\/javascript/);
+    assert.equal((await get('/workspace/workspace.css')).status, 200);
+    assert.equal((await get('/workspace/../server.js')).status, 404);
+    assert.equal((await get('/workspace/%2e%2e/server.js')).status, 404);
+    assert.equal((await get('/')).status, 200, 'the P6 page stays as a fallback');
+});
+
+test('binding preflight: knows the built-in runtimes without a registry option', async (t) => {
+    const root = project(t);
+    const ui = await serve(t, root);
+    const candidate = { schema_version: 1, preset: 'squad', roles: {
+        orchestrator: { runtime: 'claude', model: 'sonnet', effort: 'low' },
+        worker: [{ id: 'worker-1', runtime: 'claude', model: 'sonnet', effort: 'low' }],
+        reviewer: { runtime: 'codex', model: 'gpt-6-luna', effort: 'low' } } };
+    const res = await request(ui.port, { method: 'POST', url: '/api/bindings/preflight',
+        headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ candidate }) });
+    assert.equal(res.status, 200, res.body);
+    const { errors = [] } = JSON.parse(res.body);
+    assert.deepEqual(errors.filter((e) => /unknown runtime/.test(e.message)), []);
 });
 
 test('page: renders server data only through textContent', () => {
