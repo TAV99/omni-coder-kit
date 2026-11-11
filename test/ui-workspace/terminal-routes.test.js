@@ -119,6 +119,10 @@ test('T04: terminal HTTP and SSE routes', async (t) => {
                 assert.deepEqual([res.status, res.json.code], [403, 'SHELL_DISABLED']);
                 const implicit = await req(locked.port, '/api/terminals', { method: 'POST', body: { request_id: crypto.randomUUID() } });
                 assert.equal(implicit.status, 403, 'no kind means user-shell');
+                // The route spawns a login shell for `primary` too, so it is locked the same way.
+                const primary = await req(locked.port, '/api/terminals', { method: 'POST',
+                    body: { request_id: crypto.randomUUID(), kind: 'primary' } });
+                assert.deepEqual([primary.status, primary.json.code], [403, 'SHELL_DISABLED']);
             } finally { await locked.close(); }
         });
 
