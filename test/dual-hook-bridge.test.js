@@ -1499,6 +1499,21 @@ test('Stop reports durable failed preparation without spinning but preserves unr
     assert.equal((await evaluateHook(input, { createClient: () => client })).decision, 'block');
 });
 
+test('a source write before any plan names bootstrap as the next step', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    setupTestSession(wsRoot, { tasks: [{ id: 'TASK-1', owner: 'codex', allowed_files: ['a.js'] }] });
+    const client = { health: async () => ({ status: 'healthy', session_id: 's' }),
+        status: async () => ({ state: 'DISCOVERED', tasks: {}, leases: {} }) };
+    const out = await evaluateHook({ session_id: 'codex-session', cwd: wsRoot, hook_event_name: 'PreToolUse',
+        tool_name: 'apply_patch', tool_input: { command: '*** Add File: index.html\n+<html>\n' } },
+    { createClient: () => client });
+    assert.equal(out.hookSpecificOutput?.permissionDecision, 'deny');
+    const reason = out.hookSpecificOutput?.permissionDecisionReason || '';
+    assert.match(reason, /no authorized task found/);
+    assert.match(reason, /omni dual bootstrap --json/);
+    assert.match(reason, /dual-controller\.md/);
+});
+
 test('Stop returns to the user while no plan is registered (a greeting is not unfinished work)', async (t) => {
     const wsRoot = createTempWorkspace(t);
     setupTestSession(wsRoot, { tasks: [{ id: 'TASK-1', owner: 'codex', allowed_files: ['a.js'] }] });
