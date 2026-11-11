@@ -1964,3 +1964,27 @@ test('stale daemon: restarted by the prompt hook when idle, reported while busy'
     await prompt();
     assert.deepEqual(spawns, ['spawn'], 'a fresh daemon is left alone');
 });
+
+// Real project (DemoOm, 2026-11-11): a trusted codex project loaded the omni
+// hooks for omni's own nested discussion seed; the Stop hook blocked it and the
+// scout failed at attempt 1. Nested turns step aside; the gate guard stays.
+test('an omni-spawned nested turn: the hook steps aside, but a gate approval is still denied', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    const env = { ...process.env, OMNI_HOOK_NESTED: '1' };
+    const offline = () => ({ health: async () => { throw new Error('offline'); } });
+    const stop = await evaluateHook({ session_id: 'nested', cwd: wsRoot, hook_event_name: 'Stop' }, { env, createClient: offline });
+    assert.deepEqual(stop, {});
+    const prompt = await evaluateHook({ session_id: 'nested', cwd: wsRoot, hook_event_name: 'UserPromptSubmit', prompt: 'hi' }, { env, createClient: offline });
+    assert.deepEqual(prompt, {});
+    const gate = await evaluateHook({ session_id: 'nested', cwd: wsRoot, hook_event_name: 'PreToolUse', tool_name: 'Bash',
+        tool_input: { command: 'omni squad approve spec-1 --code 123456' } }, { env, createClient: offline });
+    assert.equal(gate.hookSpecificOutput?.permissionDecision, 'deny');
+    // Contrast: once design is ready, the orchestrator's own source edit is denied.
+    fs.mkdirSync(path.join(wsRoot, '.omni', 'sdlc'), { recursive: true });
+    fs.writeFileSync(path.join(wsRoot, '.omni', 'sdlc', 'design-spec.md'), '# Approved design\n', 'utf8');
+    const patch = { session_id: 'top', cwd: wsRoot, hook_event_name: 'PreToolUse', tool_name: 'apply_patch',
+        tool_input: { command: '*** Add File: src/main.js\n+code\n' } };
+    assert.equal((await evaluateHook(patch, { env: {}, createClient: offline })).hookSpecificOutput?.permissionDecision, 'deny',
+        'the orchestrator itself is still governed');
+    assert.deepEqual(await evaluateHook(patch, { env, createClient: offline }), {});
+});

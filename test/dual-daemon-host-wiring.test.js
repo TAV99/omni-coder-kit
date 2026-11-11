@@ -172,6 +172,8 @@ for (const mode of ['SIGINT', 'SIGTERM', 'stopped', 'startup-failure']) {
         if (mode === 'stopped') stop();
         else if (mode !== 'startup-failure') { proc.emit(mode); proc.emit(mode); }
         await running;
+        // DemoOm 2026-11-11: children of the daemon are omni's nested turns.
+        assert.equal(proc.env.OMNI_HOOK_NESTED, '1');
         assert.equal(hostCloses, 1);
         assert.equal(daemonCloses, mode.startsWith('SIG') ? 1 : 0);
         assert.equal(proc.listenerCount('SIGINT'), 0);

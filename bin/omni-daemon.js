@@ -10,6 +10,7 @@ const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter'
 const { resolveRegisteredAgyProjectId } = require('../lib/dual/agy-project');
 const { createTrustedQualityRunner } = require('../lib/dual/quality-runner');
 const { createTrustedUiAdapter } = require('../lib/dual/visual-qa');
+const { NESTED_ENV } = require('../lib/dual/hook-nesting');
 
 function parseArguments(argv) {
     if (argv.length === 2 && argv[0] === '--workspace' && argv[1] && !argv[1].startsWith('--')) {
@@ -53,6 +54,11 @@ async function runDaemon(argv = process.argv.slice(2)) {
         process.exitCode = 1;
         return;
     }
+    // Everything this daemon spawns (discussion seeds/turns, reviewer QC,
+    // workers, quality checks) inherits this, so the project's omni hooks step
+    // aside for omni's own nested turns (lib/dual/hook-nesting.js). The
+    // orchestrator is never started by the daemon.
+    process.env[NESTED_ENV] = '1';
 
     if (!fs.existsSync(rawWorkspace)) {
         process.stderr.write(`omni-daemon error: workspace directory does not exist: ${rawWorkspace}\n`);
