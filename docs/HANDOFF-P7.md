@@ -526,5 +526,6 @@ The native C-09 report, audit, verification receipt and new aggregate are under 
 - **P7f done.** squad (claude orchestrator) PASS 4/4; dual (codex orchestrator, schema v2 coverage plan) PASS 4/4 at `78ba206` after 19 fixes, including the 32 KiB discussion envelope (user decision). Harness: `test/squad-agent-acceptance.js` (`--preset dual|squad`, `--delegate-all-gates`).
 - **Scripted matrix on the release candidate.** See `docs/ACCEPTANCE-3.2.0.md` "Release-candidate matrix (2026-11-11)". The scripted driver now requests bounded worker corrections like a real controller (`0cbbeab`).
 - **Known limits.** A host sleep/hibernate during a worker lease strands that task (`NEEDS_PROCESS_EVIDENCE`; seen on 1% battery) — keep the Mac on AC with `caffeinate`. A real codex orchestrator needs the project trusted in codex (or `-c` flags), and approves the `omni dual bootstrap` sandbox escalation once.
-- **Left for the user.** V44 (Safari/Firefox), bumping `package.json` to 3.2.0 (om-ship), merging `3.2.0` into `main` and pushing, then real Linux/Windows runs.
+- **V44 done** (user, Safari + Firefox). **P7 closed.**
+- **Left for the user.** Bumping `package.json` to 3.2.0 (om-ship), merging `3.2.0` into `main` and pushing, then real Linux/Windows runs.
 

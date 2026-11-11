@@ -718,3 +718,5 @@ Earlier attempts on intermediate candidates, kept for the record (`~/.omni/p7-fi
 - squad (claude orchestrator, claude worker, codex reviewer; schema v1 plan): **PASS** — hidden 4/4, scope clean, plan gate human/cli-tty, integrates delegated, 43 min (`squad-4`).
 - dual (codex orchestrator, claude worker; schema v2 coverage plan): **PASS** on `78ba206` (`dual-16`) — hidden 4/4, scope clean, all gates delegated, 28 min. It took 19 fixes found by the real orchestrator, including the 32 KiB discussion envelope (user decision).
 - 19 findings, each fixed with a regression test: see the P7 spec "P7f" Done notes.
+
+V44: the user confirmed `omni ui` in Safari and Firefox on 2026-11-11. With it every P7 §11 item is complete.

@@ -310,7 +310,7 @@ Since P5c, the `worker.task.failed` log records the abort/guard reason. If it re
 - [x] Both real-agent runs finished; bugs found are fixed or clearly recorded. (squad PASS 4/4 `squad-4`; dual PASS 4/4 `dual-16` on `78ba206`; 19 findings fixed with regression tests.)
 - [x] V37: each CLI either has classification based on real signals or is recorded as "not observed"; V36 and the cross-task abort have recorded results. (claude + codex classified from real signals; agy not observed; V36 not observed; cross-task abort not reproduced — see P7e/P7f notes.)
 - [x] `npm test` green on macOS, plus one loaded run. (3407 tests, normal and loaded, at `78ba206`.)
-- [ ] V44 (Safari/Firefox, from P6) tried by hand.
+- [x] V44 (Safari/Firefox, from P6) tried by hand. (User, 2026-11-11: `omni ui` works in Safari and Firefox.)
 - [x] Ready to take to real Linux/Windows machines (plan §11). (Simulated win32 tests stay green; set `OMNI_WORKER_WRITE_FENCE=off` there: the source-write fence is macOS-only and fails closed elsewhere. Real Linux/Windows runs are the user's next step.)
 
 ---
@@ -783,3 +783,4 @@ Findings, each fixed with a regression test unless stated:
 
 **P7f closed (2026-11-11).** dual-16 (codex orchestrator gpt-6.1-sol high, claude worker sonnet low, schema v2 coverage plan, `--delegate-all-gates`) **PASS**: hidden 4/4, changed `lib/catalog.js`, `lib/csv.js`, `lib/report.js`, `test/catalog.test.js`, `test/csv.test.js`, `test/format.test.js` all inside `allowed_files`, every task TASK_VERIFIED, spec/plan/integrate gates delegated (`test/test-harness`), 23 continuations, 28 min, complete capture. squad-4 PASS earlier. Both presets therefore passed the real-orchestrator tier.
 
+**P7 closed (2026-11-11).** Every §11 item is done; V44 confirmed by the user in Safari and Firefox.
