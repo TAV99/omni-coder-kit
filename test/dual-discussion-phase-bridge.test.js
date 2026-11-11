@@ -5,7 +5,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { bindingRef, sha256Utf8 } = require('../lib/dual/discussion/contracts');
+const { bindingRef, sha256Utf8, CEILINGS } = require('../lib/dual/discussion/contracts');
+// Inputs scale with the envelope ceiling (32 KiB since 2026-11-11; was 16 KiB).
+const LARGE_INPUT = Math.floor(CEILINGS.maxBodyBytes * 0.75);
 const { createDiscussionAdapter } = require('../lib/dual/discussion/adapter');
 const { createHostPorts } = require('../lib/dual/discussion/host-ports');
 const { createDiscussionSession } = require('../lib/dual/discussion/session');
@@ -300,7 +302,7 @@ for (const schemaPlacement of ['embedded', 'omitted', 'separate']) {
         const { calls, args } = await sessionFixture(t, { bodies: ['{"summary":42}', '{"summary":"fixed"}'] });
         const schemaText = 'SCHEMA: summary string';
         const outcome = await runDiscussionPhase({ ...args,
-            promptBody: 'x'.repeat(12 * 1024) + (schemaPlacement === 'separate' ? '' : `\n${schemaText}`),
+            promptBody: 'x'.repeat(LARGE_INPUT) + (schemaPlacement === 'separate' ? '' : `\n${schemaText}`),
             ...(schemaPlacement === 'omitted' ? {} : { schemaText }),
             validate: (value) => typeof value.summary === 'string' ? { ok: true } : { ok: false, issues: 'summary must be a string' },
         });
@@ -310,7 +312,7 @@ for (const schemaPlacement of ['embedded', 'omitted', 'separate']) {
         const correctionBody = calls[1].envelope.body;
         assert.ok(correctionBody.startsWith(originalBody));
         assert.ok(Buffer.byteLength(correctionBody) <= Buffer.byteLength(originalBody) + 1024);
-        assert.ok(Buffer.byteLength(correctionBody) < 16 * 1024);
+        assert.ok(Buffer.byteLength(correctionBody) < CEILINGS.maxBodyBytes);
         assert.equal(correctionBody.split(schemaText).length - 1, 1);
         assert.equal(correctionBody.split(args.snapshotText).length - 1, 1);
         assert.ok(correctionBody.endsWith('Answer with ONLY a JSON object matching the schema above.'));
@@ -424,14 +426,14 @@ for (const bodies of [
 }
 
 for (const embedded of [false, true]) {
-    test('parse nudge bounds multibyte diagnostics for 12 KiB input, embedded=' + embedded, async (t) => {
-        const { calls, args } = await sessionFixture(t, { bodies: ['坏'.repeat(4000), '{}'] });
+    test('parse nudge bounds multibyte diagnostics for a 3/4-ceiling input, embedded=' + embedded, async (t) => {
+        const { calls, args } = await sessionFixture(t, { bodies: ['坏'.repeat(Math.floor(CEILINGS.maxBodyBytes / 4)), '{}'] });
         const schemaText = 'SCHEMA: object';
         await runDiscussionPhase({ ...args, schemaText,
-            promptBody: 'x'.repeat(12 * 1024) + (embedded ? schemaText : '') });
+            promptBody: 'x'.repeat(LARGE_INPUT) + (embedded ? schemaText : '') });
         const body = calls[1].envelope.body;
         assert.ok(body.startsWith(calls[0].envelope.body));
-        assert.ok(Buffer.byteLength(body) <= 16384);
+        assert.ok(Buffer.byteLength(body) <= CEILINGS.maxBodyBytes);
         assert.equal(body.split(schemaText).length - 1, 1);
         assert.ok(body.endsWith('Answer with ONLY a JSON object matching the schema above.'));
     });
@@ -440,15 +442,15 @@ for (const embedded of [false, true]) {
 test('parse nudge refuses fixed overhead beyond body ceiling', async (t) => {
     const { calls, args } = await sessionFixture(t, { body: 'bad JSON' });
     await assert.rejects(runDiscussionPhase({ ...args, snapshotText: '',
-        promptBody: 'x'.repeat(16300) }), phaseError('LIMIT_EXCEEDED'));
+        promptBody: 'x'.repeat(CEILINGS.maxBodyBytes - 84) }), phaseError('LIMIT_EXCEEDED'));
     assert.equal(calls.length, 1);
 });
 
-test('parse nudge for 12 KiB input stays below 16 KiB', async (t) => {
+test('parse nudge for a 3/4-ceiling input stays below the ceiling', async (t) => {
     const { calls, args } = await sessionFixture(t, { bodies: ['not JSON', '{}'] });
-    await runDiscussionPhase({ ...args, promptBody: 'x'.repeat(12 * 1024) });
+    await runDiscussionPhase({ ...args, promptBody: 'x'.repeat(LARGE_INPUT) });
     const body = calls[1].envelope.body;
     assert.ok(body.startsWith(calls[0].envelope.body));
-    assert.ok(Buffer.byteLength(body) < 16384);
+    assert.ok(Buffer.byteLength(body) < CEILINGS.maxBodyBytes);
     assert.ok(body.endsWith('Answer with ONLY a JSON object matching the schema above.'));
 });

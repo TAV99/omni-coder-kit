@@ -170,7 +170,7 @@ test('oversized implementation evidence stops review before any transport call',
     const f = await fixture(t, { enabled: true });
     await f.orch.runPhase('scout', f.taskId);
     await f.route();
-    f.payloads.implement.command_outputs[0].output = 'large validation output '.repeat(1000);
+    f.payloads.implement.command_outputs[0].output = 'large validation output '.repeat(Math.ceil(CEILINGS.maxBodyBytes / 24) + 100);
     await f.orch.runPhase('implement', f.taskId);
     await f.orch.runPhase('scope', f.taskId);
     f.messages.length = 0;
@@ -268,6 +268,9 @@ test('every chunk must match task correlation', async (t) => {
 });
 
 const { planReviewChunks, reviewBody, aggregateReviews } = require('../lib/dual/review-chunking');
+// Fixture sizes were measured at the old 16 KiB ceiling; SCALE keeps their relation
+// to the ceiling (32 KiB since 2026-11-11).
+const SCALE = CEILINGS.maxBodyBytes / 16384;
 test('overhead is counted in bytes; exact-ceiling small body stays unchanged', () => {
     const input = 'tiếng Việt 😀';
     const schema = '{}';
@@ -277,14 +280,14 @@ test('overhead is counted in bytes; exact-ceiling small body stays unchanged', (
     assert.equal(p.chunks.length, 1);
     assert.equal(p.chunks[0].body_bytes, CEILINGS.maxBodyBytes);
     assert.equal(p.chunks[0].body, reviewBody(input, schema, diff));
-    assert.throws(() => planReviewChunks('x'.repeat(17000), schema, ''),
+    assert.throws(() => planReviewChunks('x'.repeat(17000 * SCALE), schema, ''),
         (e) => e.code === 'LIMIT_EXCEEDED' && /overhead/.test(e.message));
-    assert.throws(() => planReviewChunks('x'.repeat(17000), schema, 'a\nb\n'),
+    assert.throws(() => planReviewChunks('x'.repeat(17000 * SCALE), schema, 'a\nb\n'),
         (e) => e.code === 'LIMIT_EXCEEDED' && /overhead/.test(e.message));
 });
 test('whole file boundaries and initial git headers stay with hunks', () => {
     const file = (name) => `diff --git a/${name} b/${name}\n--- a/${name}\n+++ b/${name}\n@@ -1 +1,300 @@\n`
-        + '+tiếng Việt 😀\n'.repeat(300);
+        + '+tiếng Việt 😀\n'.repeat(300 * SCALE);
     const diff = file('a.js') + file('b.js') + file('c.js');
     const p = planReviewChunks('', '{}', diff);
     assert.ok(p.chunks.length > 1);
@@ -297,8 +300,8 @@ test('whole file boundaries and initial git headers stay with hunks', () => {
 
 test('review reserve cannot reject diff units that fit the exact envelope capacity', () => {
     const diff = 'Snapshot change: entry.js\nBaseline entry: ' + 'a'.repeat(180)
-        + '\nCurrent contents:\n' + 'const text = "tiếng Việt 😀";\n'.repeat(400);
-    for (const padding of [14700, 15500]) {
+        + '\nCurrent contents:\n' + 'const text = "tiếng Việt 😀";\n'.repeat(400 * SCALE);
+    for (const padding of [14700 * SCALE, 15500 * SCALE]) {
         const input = 'p'.repeat(padding);
         const plan = planReviewChunks(input, '{}', diff);
         assert.ok(plan.chunks.length > 1);
@@ -309,8 +312,8 @@ test('review reserve cannot reject diff units that fit the exact envelope capaci
             assert.ok(chunk.body_bytes <= CEILINGS.maxBodyBytes);
         }
     }
-    assert.throws(() => planReviewChunks('p'.repeat(15500), '{}',
-        'Snapshot change: entry.js\n' + 'x'.repeat(1200) + '\n' + 'line\n'.repeat(400)),
+    assert.throws(() => planReviewChunks('p'.repeat(15500 * SCALE), '{}',
+        'Snapshot change: entry.js\n' + 'x'.repeat(1200 * SCALE) + '\n' + 'line\n'.repeat(400)),
     { code: 'LIMIT_EXCEEDED' }, 'units exceeding actual capacity must still fail');
 });
 
@@ -323,8 +326,8 @@ test('an empty review at the exact ceiling survives lossless schema compaction',
 });
 
 test('the complete diff stays together when compacting schema whitespace makes it fit', () => {
-    const input = 'p'.repeat(15000);
-    const schema = '{\n' + ' '.repeat(1000) + '"type": "object"\n}';
+    const input = 'p'.repeat(15000 * SCALE);
+    const schema = '{\n' + ' '.repeat(1000 * SCALE) + '"type": "object"\n}';
     const diff = 'Snapshot change: entry.js\n' + 'const value = 1;\n'.repeat(65);
     assert.ok(Buffer.byteLength(reviewBody(input, schema, diff)) > CEILINGS.maxBodyBytes);
     const plan = planReviewChunks(input, schema, diff);
@@ -557,16 +560,17 @@ test('ten-file 40-55 KB review diff needs 15-18 chunks: over ceiling 12, within 
         return section;
     };
     const cases = [
-        // Measured: 46,560 bytes / 15 chunks (demo attempt 2 was 39,095 bytes / 15 chunks).
-        { counts: [...Array(5).fill(45), ...Array(5).fill(75)], chunks: 15 },
+        // Measured at 16 KiB: 46,560 bytes / 15 chunks; at 32 KiB the same chunk counts
+        // need SCALE² the lines (185,935 bytes / 15 chunks, 213,970 bytes / 18 chunks).
+        { counts: [...Array(5).fill(45 * SCALE * SCALE), ...Array(5).fill(75 * SCALE * SCALE)], chunks: 15 },
         // Measured: 53,388 bytes / 18 chunks (demo attempt 3 was 53,480 bytes / 18 chunks).
-        { counts: [...Array(2).fill(45), ...Array(8).fill(75)], chunks: 18 },
+        { counts: [...Array(2).fill(45 * SCALE * SCALE), ...Array(8).fill(75 * SCALE * SCALE)], chunks: 18 },
     ];
     for (const { counts, chunks } of cases) {
         const diff = counts.map((lines, i) => fileDiff(`src/tables/table${i}.js`, lines)).join('');
         const plan = planReviewChunks(input, schema, diff);
         assert.equal(plan.chunks.length, chunks, `10-file diff of ${plan.byte_length} bytes`);
-        assert.ok(plan.byte_length >= 40000 && plan.byte_length <= 56000, `diff size ${plan.byte_length}`);
+        assert.ok(plan.byte_length >= 40000 * SCALE * SCALE && plan.byte_length <= 56000 * SCALE * SCALE, `diff size ${plan.byte_length}`);
         assert.equal(plan.chunks.map((c) => c.text).join(''), diff, 'chunks reconstruct the diff exactly');
         for (const chunk of plan.chunks) assert.ok(chunk.body_bytes <= CEILINGS.maxBodyBytes);
         // Red on the old ceiling, green on the new one: the chunk count alone
@@ -655,11 +659,14 @@ for (const kind of ['projected', 'legacy', 'fallback']) {
         const schema = JSON.stringify(require('../lib/dual/contracts').toDraft7Schema(
             require('../lib/dual/contracts').ReviewSchema, 'omni-dual-review-v1', { schemaVersion: 2, baselineKind: 'git' }), null, 2);
         const diff = 'New file: app.js\nconst ok = true;\n';
-        assert.throws(() => planReviewChunks(before, schema, diff), { code: 'LIMIT_EXCEEDED' });
-        const planned = planReviewChunks(after, schema, diff);
+        // The trial-20 sizes were taken against the 16 KiB ceiling; pad both by the
+        // ceiling increase so "before overflows, after fits" still holds.
+        const pad = 'y'.repeat(CEILINGS.maxBodyBytes - 16384);
+        assert.throws(() => planReviewChunks(pad + before, schema, diff), { code: 'LIMIT_EXCEEDED' });
+        const planned = planReviewChunks(pad + after, schema, diff);
         assert.equal(planned.chunks.length, 1);
         assert.equal(planned.chunks[0].text, diff);
-        assert.throws(() => planReviewChunks(after + 'x'.repeat(8000), schema, diff), { code: 'LIMIT_EXCEEDED' });
+        assert.throws(() => planReviewChunks(pad + after + 'x'.repeat(8000), schema, diff), { code: 'LIMIT_EXCEEDED' });
         t.diagnostic(`fixture input bytes: ${Buffer.byteLength(before)} -> ${Buffer.byteLength(after)}; schema bytes: ${Buffer.byteLength(schema)} raw / ${Buffer.byteLength(JSON.stringify(JSON.parse(schema)))} compact; body bytes: ${planned.chunks[0].body_bytes}`);
     });
 }

@@ -145,10 +145,12 @@ describe('dual discussion contracts (Task 1: R03-R07, R18, R21)', () => {
             { code: 'LIMIT_EXCEEDED' },
         );
 
-        // Exact boundary 16384 bytes passes
-        const exactBody = 'a'.repeat(16384);
+        // Exact boundary at the ceiling passes
+        const exactBody = 'a'.repeat(CEILINGS.maxBodyBytes);
         const valid = validatePayload({ schema_version: 1, kind: 'question', body: exactBody });
-        assert.equal(valid.body.length, 16384);
+        assert.equal(valid.body.length, CEILINGS.maxBodyBytes);
+        assert.throws(() => validatePayload({ schema_version: 1, kind: 'question', body: exactBody + 'a' }), { code: 'LIMIT_EXCEEDED' });
+        assert.equal(CEILINGS.maxBodyBytes, 32768, 'the discussion envelope ceiling is 32 KiB');
 
         // Reject unknown fields, wrong version, NUL byte, non-plain prototype, NaN
         assert.throws(
@@ -180,7 +182,7 @@ describe('dual discussion contracts (Task 1: R03-R07, R18, R21)', () => {
         assert.equal(resolveLimits({ maxTurns: 24 }).maxInvocations, 24);
         assert.throws(() => resolveLimits({ maxInvocations: 25 }), { code: 'LIMIT_EXCEEDED' });
         assert.throws(() => resolveLimits({ maxTurns: 25 }), { code: 'LIMIT_EXCEEDED' });
-        assert.throws(() => resolveLimits({ maxBodyBytes: 16385 }), { code: 'LIMIT_EXCEEDED' });
+        assert.throws(() => resolveLimits({ maxBodyBytes: CEILINGS.maxBodyBytes + 1 }), { code: 'LIMIT_EXCEEDED' });
         assert.throws(() => resolveLimits({ maxEvents: 257 }), { code: 'LIMIT_EXCEEDED' });
         assert.throws(() => resolveLimits({ maxJournalBytes: 8 * 1024 * 1024 + 1 }), { code: 'LIMIT_EXCEEDED' });
         assert.throws(() => resolveLimits({ ttlMs: 900001 }), { code: 'LIMIT_EXCEEDED' });

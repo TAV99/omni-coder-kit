@@ -25,9 +25,11 @@ test('mixed review schema versions cannot erase v2 coverage fields', () => {
 
 test('empty diff retains one bounded review chunk when schema whitespace exceeds the ceiling', () => {
     const { planReviewChunks } = require('../lib/dual/review-chunking');
-    const schema = JSON.stringify({ type: 'object', properties: Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`field${i}`, { type: 'string' }])) }, null, 10);
+    const { CEILINGS } = require('../lib/dual/discussion/contracts');
+    const schema = JSON.stringify({ type: 'object', properties: Object.fromEntries(Array.from({ length: 600 }, (_, i) => [`field${i}`, { type: 'string' }])) }, null, 10);
+    assert.ok(Buffer.byteLength(schema) > CEILINGS.maxBodyBytes, 'the pretty schema alone exceeds the ceiling');
     const plan = planReviewChunks('Review', schema, '');
     assert.equal(plan.chunks.length, 1);
     assert.equal(plan.chunks[0].text, '');
-    assert.ok(plan.chunks[0].body_bytes <= 16384);
+    assert.ok(plan.chunks[0].body_bytes <= require('../lib/dual/discussion/contracts').CEILINGS.maxBodyBytes);
 });
