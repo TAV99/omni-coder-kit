@@ -19,6 +19,16 @@ Source: the Orca (stablyai/orca) analysis in session `de33aa78`, re-checked on 2
 - **Evidence.** In `lib/dual/orchestrator.js` (~line 1198), the `result.timedOut` branch counts a technical attempt and retries without asking the runtime. Only the contract-failure branch calls `classifyWorkerFailure`. HANDOFF §12 states "Discussion-relay turns are not classified yet".
 - **Orca.** Classify first; the breaker counts only real technical failures.
 - **Change.** Run the same `classifyWorkerFailure` verdict before counting a timeout. Wire the discussion relay (`lib/dual/discussion/live-*-invoke.js`) to `WAITING_RUNTIME`. A usage limit then never consumes the 3 attempts.
+- **Done (2026-11-11), discussion part.**
+  - The claude and codex discussion adapters attach the runtime's own `classifyFailure` verdict (`runtimeVerdict`) to a failed turn.
+  - The relay exposes it as `runtime_verdict`, but only on a correlated `failed` observation.
+  - `runDiscussionPhase({ runtimeWait })` waits and asks again without spending its one failed retry.
+  - The orchestrator passes the isolated authority's bounded `runtimeWait` (ledger `task.runtime.waiting`/`resumed`).
+  - Tests: `test/dual-discussion-phase-bridge.test.js`, `test/dual-discussion-live-adapters.test.js`.
+- **Not done, on purpose.**
+  - Timeouts. Claude writes its result envelope only when a turn ends, so a timed-out turn carries no observed limit signal. Classifying it would be a guess (P7 §6.1: "Do not guess").
+  - Codex's real usage-limit stream (P7f dual-12) has no conversation id. The adapter therefore settles it `unknown` and it goes through the existing reconcile path. Correlation is not relaxed to make it wait.
+  - The verdict is not journaled, so a relay rebuilt after a crash falls back to the ordinary failed retry.
 
 ### O2. Typed `next_action` on every orchestrator receipt (small)
 - **Evidence.** `next_action` is set in one place only (`lib/dual/mcp-server.mjs:421`). Stop-hook messages are free text.

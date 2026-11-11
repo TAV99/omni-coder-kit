@@ -13,7 +13,7 @@ const { createHostPorts } = require('../lib/dual/discussion/host-ports');
 const { createDiscussionSession } = require('../lib/dual/discussion/session');
 const { DISCUSSION_PHASES, DiscussionPhaseError, runDiscussionPhase } = require('../lib/dual/discussion/phase-bridge');
 
-async function sessionFixture(t, { body = '{"summary":"scouted"}', unknown = false, bodies, recover = false, invalidPayload = false, failed = [] } = {}) {
+async function sessionFixture(t, { body = '{"summary":"scouted"}', unknown = false, bodies, recover = false, invalidPayload = false, failed = [], rateLimited = [] } = {}) {
     const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'omni-phase-bridge-'));
     const calls = [];
     const snapshot = { text: 'Read-only phase context', sha256: sha256Utf8('Read-only phase context') };
@@ -36,8 +36,9 @@ async function sessionFixture(t, { body = '{"summary":"scouted"}', unknown = fal
             invoke: async (args) => {
                 calls.push(args);
                 if (unknown === true || (Array.isArray(unknown) && unknown.includes(calls.length))) throw new Error('provider outcome unavailable');
-                return { exitCode: failed.includes(calls.length) ? 7 : 0, stderr: '', stdout: JSON.stringify({
-                    conversationId: args.binding.conversation_id, invocationId: args.invocationId,
+                const limited = rateLimited.includes(calls.length);
+                return { exitCode: failed.includes(calls.length) || limited ? 7 : 0, stderr: '', stdout: JSON.stringify({
+                    conversationId: args.binding.conversation_id, invocationId: args.invocationId, rateLimited: limited,
                     payload: { schema_version: 1, kind: 'reply', body: invalidPayload ? { token: 'secret-value', text: 'x'.repeat(2000) } : (bodies ? bodies[calls.length - 1] : body) },
                 }) };
             },
@@ -45,7 +46,8 @@ async function sessionFixture(t, { body = '{"summary":"scouted"}', unknown = fal
                 const parsed = JSON.parse(raw.stdout);
                 return { completion: raw.exitCode === 0 ? 'succeeded' : 'failed', payload: parsed.payload,
                     observedConversationId: parsed.conversationId, observedInvocationId: parsed.invocationId,
-                    terminalMarker: 'fixture.completed', evidenceRef: 'fixture', hasTerminalError: false };
+                    terminalMarker: 'fixture.completed', evidenceRef: 'fixture', hasTerminalError: false,
+                    ...(parsed.rateLimited ? { runtimeVerdict: { kind: 'rate_limited', signal: 'usage_limit' } } : {}) };
             },
         });
     }
@@ -453,4 +455,44 @@ test('parse nudge for a 3/4-ceiling input stays below the ceiling', async (t) =>
     assert.ok(body.startsWith(calls[0].envelope.body));
     assert.ok(Buffer.byteLength(body) < CEILINGS.maxBodyBytes);
     assert.ok(body.endsWith('Answer with ONLY a JSON object matching the schema above.'));
+});
+
+// O1 (docs/SQUAD-ORCA-ADOPTION.md): a usage limit on a discussion turn waits
+// like a worker turn (WAITING_RUNTIME) instead of spending the one failed retry.
+test('rate-limited discussion turn waits through runtimeWait and keeps the failed retry', async (t) => {
+    const { calls, args } = await sessionFixture(t, { rateLimited: [1, 2], failed: [3] });
+    const waits = [];
+    const outcome = await runDiscussionPhase({ ...args, runtimeWait: async (info) => { waits.push(info); } });
+    assert.deepEqual(outcome.result, { summary: 'scouted' });
+    assert.equal(waits.length, 2);
+    assert.deepEqual({ ...waits[0], provider: undefined }, { phase: 'scout', kind: 'rate_limited', signal: 'usage_limit', provider: undefined });
+    assert.equal(typeof waits[0].provider, 'string');
+    // two waits, then one ordinary failure and its single failed retry
+    assert.equal(calls.length, 4);
+    assert.equal(outcome.discussionRecovery, 'failed-retry');
+});
+
+test('without runtimeWait a rate-limited discussion turn keeps the ordinary failed retry', async (t) => {
+    const { calls, args } = await sessionFixture(t, { rateLimited: [1] });
+    const outcome = await runDiscussionPhase(args);
+    assert.equal(calls.length, 2);
+    assert.equal(outcome.discussionRecovery, 'failed-retry');
+});
+
+test('runtimeWait that gives up ends the phase with its own error', async (t) => {
+    const { calls, args } = await sessionFixture(t, { rateLimited: [1, 2, 3] });
+    const exhausted = Object.assign(new Error('wait spent'), { code: 'DUAL_RUNTIME_WAIT_EXHAUSTED' });
+    let waits = 0;
+    await assert.rejects(runDiscussionPhase({ ...args, runtimeWait: async () => { if (++waits > 1) throw exhausted; } }),
+        (err) => err === exhausted);
+    assert.equal(calls.length, 2);
+});
+
+test('runtimeWait returning false falls back to the ordinary failed retry', async (t) => {
+    const { calls, args } = await sessionFixture(t, { rateLimited: [1] });
+    let asked = 0;
+    const outcome = await runDiscussionPhase({ ...args, runtimeWait: async () => { asked++; return false; } });
+    assert.equal(asked, 1);
+    assert.equal(calls.length, 2);
+    assert.equal(outcome.discussionRecovery, 'failed-retry');
 });

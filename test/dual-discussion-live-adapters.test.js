@@ -443,3 +443,15 @@ test('AGY invocation pins binding model and effort above adapter settings and pa
     assert.equal(observed[observed.indexOf('--model') + 1], 'fixture');
     assert.equal(observed[observed.indexOf('--effort') + 1], 'medium');
 });
+
+// O1: the claude discussion adapter reports the real B-05 usage-limit signal.
+test('claude discussion classify carries the runtime usage-limit verdict', () => {
+    const { classify } = require('../lib/dual/discussion/live-claude-invoke');
+    const stdout = require('node:fs').readFileSync(require('node:path').join(__dirname, 'fixtures', 'squad-cli', 'claude-usage-limit.json'), 'utf8');
+    const limited = classify({ exitCode: 1, stdout, timedOut: false, expectedKind: 'reply' });
+    assert.equal(limited.completion, 'failed');
+    assert.deepEqual(limited.runtimeVerdict, { kind: 'rate_limited', signal: 'usage_limit_reached' });
+    const ok = classify({ exitCode: 0, timedOut: false, expectedKind: 'reply',
+        stdout: JSON.stringify({ type: 'result', is_error: false, result: '{"schema_version":1,"kind":"reply","body":"x"}', session_id: 's' }) });
+    assert.equal(ok.runtimeVerdict, undefined);
+});
