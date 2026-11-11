@@ -70,6 +70,14 @@ Source: the Orca (stablyai/orca) analysis in session `de33aa78`, re-checked on 2
 - **Evidence.** HANDOFF §12, known limits: sleep during a worker lease leaves `NEEDS_PROCESS_EVIDENCE` forever.
 - **Orca.** `stop_unknown` has an explicit operator action (`worker-abandon`), separate from kill.
 - **Change.** Add a human-only `omni squad abandon <task>` (TTY, like approve) that records an `abandoned` fence event. It does not claim the process died. The task can then be re-dispatched with a new lease, and the old process stays fenced out.
+- **Decision (user, 2026-11-11): prevention first (option A).** The abandon command (option B) would be the ledger's first settlement from a person's word instead of process evidence. It stays unbuilt until it has its own spec and a live run.
+- **Done (2026-11-11).**
+  - `lib/dual/sleep-guard.js` keeps one refcounted `caffeinate -i -s -w <daemon pid>` on macOS while any worker lease is held.
+  - `executeIsolatedAuthorityTask` acquires it right after `acquireLease` and releases it with the heartbeat, on success or failure.
+  - `-w` ends the assertion when the daemon dies.
+  - The guard is best effort and never blocks a lease. Opt out with `OMNI_SLEEP_GUARD=off`.
+  - It cannot prevent a lid close or an empty battery (the 1% case).
+  - Tests: `test/dual-sleep-guard.test.js`. On this Mac the isolated suites (142 tests) started a caffeinate and left none behind.
 
 ### O5. Agent status channel for `omni ui` (later)
 - **Orca.** Hooks first, with OSC 7501 as the fallback, giving `blocked: permission|question|auth`.
