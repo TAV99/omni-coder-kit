@@ -3153,6 +3153,12 @@ test('coverage inspect fits the bound and says what approve must echo; approve r
     assert.deepEqual(inspect.structuredContent.approve_with, { session_id: 'sess-cov', workspace: 'ws-cov-id',
         plan_revision: 1, candidate_digest: 'd'.repeat(64) });
 
+    // DemoOm shape: ~6 KB of dimensions passed 16 KiB pretty-printed twice.
+    decisions.push(...Array.from({ length: 40 }, (_, i) => ({ id: `big.${i}`, state: 'pending', question: 'w'.repeat(110) })));
+    const big = await client.callTool({ name: 'omni_dual_coverage_inspect', arguments: { workspace_root: wsRoot, session_id: 'sess-cov' } });
+    assert.equal(big.isError, undefined, big.content[0].text.slice(0, 200));
+    assert.equal(JSON.parse(big.content[0].text).artifact.decisions.length, 70);
+
     const approve = await client.callTool({ name: 'omni_dual_coverage_approve', arguments: { workspace_root: wsRoot, submission: {
         request_id: 'r1', session_id: 'sess-cov', workspace: wsRoot, plan_revision: 1, candidate_digest: 'd'.repeat(64),
         actor: 'orchestrator', source: 'requirements.md', decisions: [] } } });
