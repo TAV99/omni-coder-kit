@@ -97,3 +97,26 @@ O1 → O2 → O3 → O4, each as its own sub-phase:
 - one Conventional Commit per item.
 
 O5 waits for a decision after O4.
+
+## Live verification (2026-11-11)
+
+Harness: `OMNI_SQUAD_LIVE=1 node test/squad-agent-acceptance.js <out> --preset squad --delegate-all-gates`. Orchestrator and worker are claude sonnet, the reviewer is codex, and there are 4 bookshelf tasks. Evidence is under `~/.omni/orca-20261111/`.
+
+### squad-1 (HEAD `732f74b`): stopped stuck after 30 min, 4 tasks ROUTED
+
+Two pre-existing MCP bugs blocked the spec coverage gate:
+- `omni_dual_coverage_inspect` always returned `DUAL_MCP_RESPONSE_TOO_LARGE`. The gate was 8.3 KB, but MCP sends it as both text and structured content, which went past 16 KiB.
+- The orchestrator therefore guessed the approve submission. It put a path in `workspace` instead of the `workspace_id`.
+- `omni_dual_coverage_approve` then reported `STALE_COVERAGE` as an opaque `DUAL_MCP_ERROR`. The code was not public, and the message contained a slash, so it was dropped.
+- Fixed in `4fc1b8a`: inspect is compact and adds `approve_with`, and coverage refusal codes are public.
+
+### squad-2 (HEAD `4fc1b8a`): PASS 4/4 in 12 min
+
+- Requirements 4/4: every hidden test passed (T01, T03, T06, T09).
+- Scope: no file changed outside the allowed set. Nothing unsettled. Every task reached `TASK_VERIFIED` at attempt 1.
+- **O2 live.** `omni_dual_status` returned `next_action` (38 occurrences in the transcript).
+- **Coverage fix live.** `COVERAGE_APPROVAL_CONFLICT` reached the orchestrator with its actionable text. It waited for the reconnaissance lease to end, then approved.
+- **O4 live.** macOS power log: the guard's `caffeinate -i -s -w` (PreventUserIdleSystemSleep + PreventSystemSleep) held during a lease and ended with it.
+- **Not exercised by this run:**
+  - O1, because no usage limit was hit;
+  - O3, because the temp workspace is projectless for codex, claude ran headless, and doctor is not run by the harness.
