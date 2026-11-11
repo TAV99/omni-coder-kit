@@ -3117,3 +3117,46 @@ test('MCP completion rejects standalone review_evidence instead of silently drop
     assert.equal(response.isError, true);
     assert.equal(completionCalls, 0);
 });
+
+// Live run 2026-11-11: coverage_inspect exceeded 16 KiB (the gate plus its plan
+// copy, sent twice) and coverage_approve hid STALE_COVERAGE as DUAL_MCP_ERROR,
+// so a real claude orchestrator never got past the spec coverage gate.
+test('coverage inspect fits the bound and says what approve must echo; approve refusals keep their code', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
+    const decisions = Array.from({ length: 30 }, (_, i) => ({ id: `dim.${i}`, state: 'pending', question: 'q'.repeat(90) }));
+    const fakeClient = {
+        health: async () => ({ status: 'healthy', workspace_root: wsRoot, session_id: 'sess-cov' }),
+        status: async () => ({ session_id: 'sess-cov', workspace_id: 'ws-cov-id', plan_revision: 1 }),
+        request: async (method, params) => {
+            if (method === 'coverage.inspect') return { state: 'AWAITING_APPROVAL', candidate_digest: 'd'.repeat(64),
+                artifact: { decisions }, plan: { tasks: Array.from({ length: 4 }, () => ({ goal: 'g'.repeat(900) })) },
+                artifact_path: '/private/x/coverage.json', report_path: '/private/x/report.json' };
+            if (method === 'coverage.approve') {
+                const { DualDaemonClientError } = await import('../lib/dual/daemon-client.js');
+                throw new DualDaemonClientError('STALE_COVERAGE', 'Approval session_id or workspace does not match current authority; workspace is the workspace_id, not a path');
+            }
+            throw new Error(`unexpected ${method} ${JSON.stringify(params)}`);
+        },
+    };
+    const server = createOmniDualMcpServer({ workspaceRoot: wsRoot, createClient: () => fakeClient });
+    const client = new Client({ name: 'cov', version: '1.0.0' }, { capabilities: {} });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(b), client.connect(a)]);
+    t.after(async () => { await client.close(); await server.close(); });
+
+    const inspect = await client.callTool({ name: 'omni_dual_coverage_inspect', arguments: { workspace_root: wsRoot, session_id: 'sess-cov' } });
+    assert.equal(inspect.isError, undefined, JSON.stringify(inspect.structuredContent));
+    assert.equal(inspect.structuredContent.plan, undefined);
+    assert.equal(inspect.structuredContent.artifact_path, undefined);
+    assert.equal(inspect.structuredContent.artifact.decisions.length, 30);
+    assert.deepEqual(inspect.structuredContent.approve_with, { session_id: 'sess-cov', workspace: 'ws-cov-id',
+        plan_revision: 1, candidate_digest: 'd'.repeat(64) });
+
+    const approve = await client.callTool({ name: 'omni_dual_coverage_approve', arguments: { workspace_root: wsRoot, submission: {
+        request_id: 'r1', session_id: 'sess-cov', workspace: wsRoot, plan_revision: 1, candidate_digest: 'd'.repeat(64),
+        actor: 'orchestrator', source: 'requirements.md', decisions: [] } } });
+    assert.equal(approve.isError, true);
+    assert.equal(approve.structuredContent?.error?.code ?? JSON.parse(approve.content[0].text).error.code, 'STALE_COVERAGE');
+    assert.match(approve.content[0].text, /workspace_id, not a path/);
+});
