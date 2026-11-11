@@ -50,6 +50,21 @@ Source: the Orca (stablyai/orca) analysis in session `de33aa78`, re-checked on 2
   - The claude orchestrator in `omni ui` opens on the "Do you trust this folder?" dialog.
   - HANDOFF §12: a codex orchestrator needs the project trusted, plus one sandbox escalation.
 - **Change.** `omni squad doctor` (and `omni ui` before autoStart) reports an untrusted project for each runtime, with the exact one-time command or flag. The user still decides. omni never edits the CLI's trust store.
+- **Done (2026-11-11).** `lib/squad/trust.js` is read-only and checks only the orchestrator runtime, because headless `-p`/`exec` turns show no prompt.
+  - **claude.** It reads `projects[key].hasTrustDialogAccepted` from `~/.claude.json` (or `$CLAUDE_CONFIG_DIR`).
+    - Inside git, the key is the main repository root.
+    - Outside git, a trusted parent folder covers the project.
+    - Source: code.claude.com/docs/en/permissions.
+  - **codex.** It reads `[projects."<path>"] trust_level` from `config.toml`, by exact match on the folder, the git root or the main checkout root.
+    - An explicit `untrusted` wins.
+    - A folder with no git and no `.codex` needs no trust.
+    - Source: codex-rs `decision_for_dir` and `resolve_root_git_project_for_trust`.
+    - A config form the small reader cannot parse reports `unknown`, never `trusted`.
+  - **Where it shows.**
+    - `omni skills doctor` warns `SQUAD_RUNTIME_UNTRUSTED` or `SQUAD_RUNTIME_TRUST_UNKNOWN`.
+    - `omni ui` prints a line explaining the prompt the orchestrator pane will show.
+  - **Tests.** `test/squad-trust.test.js`, `test/squad-doctor.test.js`.
+  - **Not done.** The codex sandbox-escalation approval for `omni dual bootstrap` (HANDOFF §12) is a separate one-time prompt and is not checked.
 
 ### O4. Recover a lease stranded by host sleep (medium)
 - **Evidence.** HANDOFF §12, known limits: sleep during a worker lease leaves `NEEDS_PROCESS_EVIDENCE` forever.

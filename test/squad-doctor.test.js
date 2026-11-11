@@ -61,3 +61,17 @@ test('broken YAML and broken binding are reported, not thrown', (t) => {
     fs.writeFileSync(path.join(ok, '.omni', 'squad.local.json'), '{ not json');
     assert.ok(runSquadChecks({ projectRoot: ok, homedir: '/nowhere', env: {} }).some((f) => f.code === 'SQUAD_BINDING_INVALID'));
 });
+
+// O3: the orchestrator CLI's trust state, read-only.
+test('an untrusted orchestrator folder is a warning with the one-time fix; trusted and unknown differ', (t) => {
+    const root = squadProject(t, 'schema_version: 1\nroles:\n  orchestrator: [plan-x]\n  worker: [code-x]\n');
+    const seen = [];
+    const run = (status) => runSquadChecks({ projectRoot: root, homedir: '/nowhere', env: {},
+        trust: (runtime, dir) => { seen.push([runtime, dir]); return { status, key: dir, fix: 'chạy "codex" ở đó' }; } });
+    const untrusted = run('untrusted').find((f) => f.code === 'SQUAD_RUNTIME_UNTRUSTED');
+    assert.equal(untrusted.level, 'warn');
+    assert.match(untrusted.message, /codex chưa tin cậy .*chạy "codex"/);
+    assert.deepEqual(seen[0], ['codex', root], 'only the orchestrator runtime is checked');
+    assert.equal(run('trusted').some((f) => /TRUST/.test(f.code)), false);
+    assert.ok(run('unknown').some((f) => f.code === 'SQUAD_RUNTIME_TRUST_UNKNOWN'));
+});
