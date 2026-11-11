@@ -621,3 +621,17 @@ for (const recommendation of ['NEEDS_FIX', 'INVALID']) {
         assert.equal(spawnImpl.calls[0].options.env.OMNI_SQUAD_ACCEPTANCE_EVIDENCE, undefined);
     });
 }
+
+test('a NEEDS_FIX verdict with only INFO findings fails the review instead of rejecting the worker (P7f C rerun)', async (t) => {
+    const f = await handoff(t);
+    const spawnImpl = fakeSpawn(() => ({ stdout: claudeVerdict(f.spec, 'NEEDS_FIX',
+        [{ file: 'index.js', line: 23, description: 'No defect? All fine.', severity: 'INFO' }]) }));
+    const result = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1', config: CONFIG, spawnImpl });
+    assert.deepEqual(result, { status: 'FAILED', attempt: 1, code: 'DUAL_REVIEW_VERDICT_INCONSISTENT' });
+    const task = f.store.derive().tasks['TASK-1'];
+    assert.equal(task.handoffRejection, undefined, 'the worker handoff is not rejected');
+    assert.equal(f.store.readEvents().some((event) => event.type === 'task.correction.requested'), false);
+    const none = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1', config: CONFIG,
+        spawnImpl: fakeSpawn(() => ({ stdout: claudeVerdict(f.spec, 'NEEDS_FIX', []) })) });
+    assert.equal(none.code, 'DUAL_REVIEW_VERDICT_INCONSISTENT', 'no findings at all is inconsistent too');
+});
