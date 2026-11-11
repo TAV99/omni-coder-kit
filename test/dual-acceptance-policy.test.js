@@ -230,3 +230,15 @@ test('post-integration blocked or unavailable checks never expose a correction g
         assert.equal(result.correction_grant, undefined);
     }
 });
+
+test('a pre-integration review of one task accepts a multi-task policy (P7f dual-15)', () => {
+    const base = policy();
+    const multi = { ...base, checks: [...base.checks,
+        { id: 'review-T2', requirement_id: 'REQ-2', task_id: 'T2', phase: 'pre_integration', kind: 'review', required: true }] };
+    assert.equal(validateAcceptancePolicy(multi, { taskIds: ['T1', 'T2'] }).ok, true);
+    const evidence = withEvidenceDigest({ policy_sha256: hashAcceptancePolicy(multi), task_id: 'T1', result_sha256: SHA,
+        check_results: [{ check_id: 'review-T1', status: 'PASS', findings: [] }, { check_id: 'test-T1', status: 'PASS', findings: [] }] });
+    assert.equal(evaluatePreIntegrationReview(multi, evidence, { taskId: 'T1', resultSha256: SHA }).status, 'PASSED');
+    assert.throws(() => evaluatePreIntegrationReview(multi, { ...evidence, task_id: 'T2' }, { taskId: 'T1', resultSha256: SHA }), /task/i,
+        'the evidence still has to name the task under review');
+});
