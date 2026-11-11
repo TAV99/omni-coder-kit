@@ -1,6 +1,6 @@
 # Squad 3.2.0 acceptance results
 
-Started: 2026-11-02. Updated: 2026-11-10 (Asia/Ho_Chi_Minh). Platform: macOS. Suite: bookshelf v1, T01–T10.
+Started: 2026-11-02. Updated: 2026-11-11 (Asia/Ho_Chi_Minh). Platform: macOS. Suite: bookshelf v1, T01–T10.
 Harness source: initial commit `ce6e005` (P7c), following Codex configuration fix `638ece4`; context-frontier fix `33e0e91` is used from A-T01-02 onward. Approval projection fix `058b42a` passed both full checks and was committed locally after explicit user approval.
 
 The audited full C-09 run passed **10/10 requirements and all five thresholds** on the current candidate. The recorded A/B/D passes came from an earlier candidate. The scripted matrix therefore spans different candidates, with P7e, P7f and the other release criteria still open. Historical entries below retain their native outcomes.
@@ -695,3 +695,26 @@ The audit verified all 87 runtime captures, 921 authority events, all 17 product
 The recorded A–D matrix meets the scripted thresholds across different candidates. A-09, B-06 and D-03 retain their historical grades on the earlier `a09df32b50cc` patch. The original historical raw collection is unavailable. C-07 remains FAIL 8/10, C-08 remains INCOMPLETE with the attributed source write, and C-06 remains unknown. P7e, interactive P7f and the remaining P7 release criteria require separate evidence.
 
 The native C-09 report, audit, verification receipt and new aggregate are under `~/.omni/p7d-20261110/`. The aggregate is `P7d-review-envelope-and-write-fence-aggregate-20261110-C09.json`.
+
+## Release-candidate matrix (2026-11-11)
+
+All four configurations re-ran, fresh and sequentially, on one candidate, commit `0cbbeab` (worktree `p7-final-matrix`, clean tree checked before and after every run), with delegated benchmark approvals (`test/test-harness`, `provesHumanTty: false`), AUTO only in D. The candidate includes every P7d/P7e/P7f fix up to the scripted driver's bounded worker corrections. Later commits (`fd44af1`, `24c2e7d`, `0b25242`) touch only schema-v2 coverage paths, the codex usage-limit classifier and the P7f harness, none of which these schema-v1 scripted runs exercise. Evidence: `~/.omni/p7-final3-20261111/`.
+
+| Config | Binding | AUTO | Result | Requirements | Scope | Unknown | Duplicates | Gates | Driver corrections | Wall |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A | codex orchestrator / agy worker | off | **PASS** | 10/10 | pass | pass | pass | pass | 0 | 56 min |
+| B | codex orchestrator / claude worker | off | **PASS** | 10/10 | pass | pass | pass | pass | 3 | 19 min |
+| C | claude orchestrator / agy + claude workers / codex reviewer | off | **FAIL** (model) — rerun in progress | 8/10 verified | pass | T09/T10 open | pass | pass | 0 (review path) | 64 min |
+| D | codex orchestrator / agy worker / codex reviewer | on | **PASS** | 10/10 | pass | pass | pass | pass | 0 | 148 min |
+
+C-final: T01–T08 verified; T09 received three independent codex-reviewer NEEDS_FIX verdicts on the same floating-point rounding point (`toFixed(2)` on the accumulated sum; the reviewer asked for exact half-cent rounding) and exhausted its correction budget; T10 shares `lib/report.js` and stayed behind it, so the driver stopped with `ACCEPTANCE_NEEDS_DECISION` before hidden grading. Recorded as a model/reviewer-quality outcome per §10 P7d ("record it, don't fix it"); C passed 10/10 on `989f249` and in C-09. A rerun of C on `0cbbeab` is in `~/.omni/p7-final4-20261111/`.
+
+Every run: complete runtime capture, source-integrity observer passed, hidden tests released only after settlement.
+
+Earlier attempts on intermediate candidates, kept for the record (`~/.omni/p7-final-20261110`, `~/.omni/p7-final2-20261111`): A PASS 10/10 and C PASS 10/10 on `989f249`; D interrupted by a host hibernation on 1% battery (lease expired, T03 stranded — known limit); B interrupted after a transient Claude seed failure left overlapping tasks behind a FAILED T02; a second D stalled the same way on an agy scout returning prose three times. Those two stalls led to the driver's bounded worker corrections (`0cbbeab`), the behaviour a real controller already has.
+
+### Real-orchestrator tier (P7f)
+
+- squad (claude orchestrator, claude worker, codex reviewer; schema v1 plan): **PASS** — hidden 4/4, scope clean, plan gate human/cli-tty, integrates delegated, 43 min (`squad-4`).
+- dual (codex orchestrator, claude worker; schema v2 coverage plan): reaches bootstrap, coverage reconnaissance, coverage approval, delegated spec/plan gates and worker implementation; stops at review on the 16 KiB discussion envelope — open protocol decision (P7 spec, P7f finding 17).
+- 17 findings, each fixed with a regression test or recorded: see the P7 spec "P7f" Done notes.
