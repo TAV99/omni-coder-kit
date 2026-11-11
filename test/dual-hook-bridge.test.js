@@ -1499,6 +1499,29 @@ test('Stop reports durable failed preparation without spinning but preserves unr
     assert.equal((await evaluateHook(input, { createClient: () => client })).decision, 'block');
 });
 
+test('Stop returns to the user while no plan is registered (a greeting is not unfinished work)', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    setupTestSession(wsRoot, { tasks: [{ id: 'TASK-1', owner: 'codex', allowed_files: ['a.js'] }] });
+    let state = 'DISCOVERED';
+    let tasks = {};
+    let completionCalls = 0;
+    const client = { health: async () => ({ status: 'healthy', session_id: 's' }),
+        status: async () => ({ state, tasks, leases: {} }),
+        evaluateCompletion: async () => { completionCalls += 1; return { verified: false, blockers: ['NO_TASKS_REGISTERED: plan contains no tasks'] }; } };
+    const input = { session_id: 'codex-session', cwd: wsRoot, hook_event_name: 'Stop', stop_hook_active: false };
+    for (const s of ['DISCOVERED', 'CAPABILITY_SAFE', 'INTERVIEWING']) {
+        state = s;
+        const out = await evaluateHook(input, { createClient: () => client });
+        assert.notEqual(out.decision, 'block', s);
+        assert.match(out.systemMessage || '', /no plan registered/i, s);
+    }
+    assert.equal(completionCalls, 0);
+    // Once tasks exist, an unfinished session still continues.
+    state = 'PLANNED';
+    tasks = { 'TASK-1': { task_id: 'TASK-1', state: 'ROUTED' } };
+    assert.equal((await evaluateHook(input, { createClient: () => client })).decision, 'block');
+});
+
 test('evaluateHook Stop returns empty object when session is verified', async (t) => {
     const wsRoot = createTempWorkspace(t);
     const { store, wsId, sessionId, baseline } = setupTestSession(wsRoot, {
