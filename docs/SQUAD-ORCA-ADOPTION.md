@@ -33,6 +33,17 @@ Source: the Orca (stablyai/orca) analysis in session `de33aa78`, re-checked on 2
 ### O2. Typed `next_action` on every orchestrator receipt (small)
 - **Evidence.** `next_action` is set in one place only (`lib/dual/mcp-server.mjs:421`). Stop-hook messages are free text.
 - **Change.** Add a shared enum (`request_correction | block_exhausted | wait_runtime | ask_human | integrate | none`) to `omni_dual_status` and `omni_dual_completion`. Claude and codex orchestrators then stop inventing recovery paths, which was the main source of P7f fixes.
+- **Done (2026-11-11).**
+  - `lib/dual/next-action.js` holds the `NEXT_ACTIONS` enum. It is the one derivation, moved out of `lib/commands/dual.js`, so `omni dual status` and MCP agree.
+  - `omni_dual_status` returns `tasks[id].next_action` and a session-level `next: { action, task_id? }`, in this order: human gate (`relay_gate_to_human`), then blocker, then the most urgent task, then `evaluate_completion`.
+  - `omni_dual_completion` returns `next_action`:
+    - isolated QC maps its status;
+    - `NEEDS_FIX`/`CONFLICT` → `check_task_status`, because only status knows whether attempts are spent.
+  - Tool descriptions tell the orchestrator to follow it and to relay gates, never approve them.
+  - Tests: `test/dual-next-action.test.js`, plus assertions in `test/dual-mcp-server.test.js`.
+- **Not done.**
+  - The Stop-hook context line (`hook-bridge.js deriveOwnerAndAction`) keeps its prose.
+  - The controller workflow template does not mention `next` yet. Changing the prompt calls for a live run first.
 
 ### O3. First-run trust prompts (UX, seen 2026-11-11)
 - **Evidence.**

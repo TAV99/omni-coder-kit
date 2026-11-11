@@ -946,6 +946,9 @@ test('all supported tools delegate exact client methods and parameters', async (
     assert.equal(statusCall.sessionId, 'sess-delegation');
     assert.equal(statusRes.structuredContent.session_id, 'sess-delegation');
     assert.equal(statusRes.structuredContent.state, 'PLANNED');
+    // O2: a typed next step for the session and for each task.
+    assert.equal(statusRes.structuredContent.tasks['TASK-1'].next_action, 'authority_resume');
+    assert.deepEqual(statusRes.structuredContent.next, { action: 'authority_resume', task_id: 'TASK-1' });
 
     // 4. omni_dual_completion
     const compRes = await client.callTool({
@@ -960,6 +963,7 @@ test('all supported tools delegate exact client methods and parameters', async (
     assert.ok(compCall);
     assert.equal(compCall.sessionId, 'sess-delegation');
     assert.equal(compRes.structuredContent.verified, false);
+    assert.equal(compRes.structuredContent.next_action, 'resolve_blockers');
 
     // 5. omni_dual_resume
     const resumeRes = await client.callTool({
