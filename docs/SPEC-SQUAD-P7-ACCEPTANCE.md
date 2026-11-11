@@ -307,11 +307,11 @@ Since P5c, the `worker.task.failed` log records the abort/guard reason. If it re
 
 - [x] Task suite + V46 green in `npm test`.
 - [x] Configs A–D finished, each meeting all 5 thresholds of §4; `docs/ACCEPTANCE-3.2.0.md` has the numbers per config. (Release candidate 2026-11-11: A, B, D PASS 10/10 on `0cbbeab`; C PASS 10/10 on `d1a0601`.)
-- [ ] Both real-agent runs finished; bugs found are fixed or clearly recorded. (squad PASS; dual reaches review, blocked by the 16 KiB envelope decision — P7f finding 17; 17 findings fixed or recorded.)
+- [x] Both real-agent runs finished; bugs found are fixed or clearly recorded. (squad PASS 4/4 `squad-4`; dual PASS 4/4 `dual-16` on `78ba206`; 19 findings fixed with regression tests.)
 - [x] V37: each CLI either has classification based on real signals or is recorded as "not observed"; V36 and the cross-task abort have recorded results. (claude + codex classified from real signals; agy not observed; V36 not observed; cross-task abort not reproduced — see P7e/P7f notes.)
-- [x] `npm test` green on macOS, plus one loaded run. (3405 tests, normal and loaded, 2026-11-11.)
+- [x] `npm test` green on macOS, plus one loaded run. (3407 tests, normal and loaded, at `78ba206`.)
 - [ ] V44 (Safari/Firefox, from P6) tried by hand.
-- [ ] Ready to take to real Linux/Windows machines (plan §11). (Set `OMNI_WORKER_WRITE_FENCE=off` there: the source-write fence is macOS-only and fails closed elsewhere.)
+- [x] Ready to take to real Linux/Windows machines (plan §11). (Simulated win32 tests stay green; set `OMNI_WORKER_WRITE_FENCE=off` there: the source-write fence is macOS-only and fails closed elsewhere. Real Linux/Windows runs are the user's next step.)
 
 ---
 
@@ -778,3 +778,8 @@ Findings, each fixed with a regression test unless stated:
 17. `0b25242` — a coverage review embedded the whole approved artifact (21 dimensions, ~11 KiB); the review brief now carries only the task's `decision_ids` rows. **Open, needs a decision:** even scoped, a real coverage-enabled review carries ~14.6 KiB of fixed input (task contract with context replies, coverage rows, evidence, checklist; Vietnamese text is 2–3 bytes per character) plus a 2.6 KiB compact schema, past the 16 KiB discussion envelope (`CEILINGS.maxBodyBytes`), so P7f dual-14 still failed review with `LIMIT_EXCEEDED`. Options: (a) raise the ceiling to 32 KiB (one constant; 12 contract/chunking tests encode the 16 KiB boundary and need updating); (b) slim the review prompt (contract once, replies by reference). Not changed overnight because it is a protocol decision.
 
 **P7f status (2026-11-11 06:00 +0700):** squad (claude orchestrator, schema v1 plan) PASS (squad-4). dual (codex orchestrator, schema v2 coverage plan) now passes bootstrap, coverage reconnaissance, coverage approval, delegated spec/plan gates and worker implementation, and stops at the review envelope (finding 17). V36 still not observed. V37: claude and codex observed and classified; agy not observed.
+18. `079c84e` — **resolved (user decision 2026-11-11): the discussion envelope is 32 KiB** (`CEILINGS.maxBodyBytes`); tests that encoded the 16 KiB boundary now derive their sizes from the constant.
+19. `78ba206` — the first pre-integration acceptance review of a multi-task plan failed with `DUAL_ACCEPTANCE_POLICY_INVALID` ("check … targets unknown task"): review-evidence validation re-checked the registered policy with only the reviewed task as known. Membership is checked at plan registration; review validation now only parses and hashes the policy.
+
+**P7f closed (2026-11-11).** dual-16 (codex orchestrator gpt-6.1-sol high, claude worker sonnet low, schema v2 coverage plan, `--delegate-all-gates`) **PASS**: hidden 4/4, changed `lib/catalog.js`, `lib/csv.js`, `lib/report.js`, `test/catalog.test.js`, `test/csv.test.js`, `test/format.test.js` all inside `allowed_files`, every task TASK_VERIFIED, spec/plan/integrate gates delegated (`test/test-harness`), 23 continuations, 28 min, complete capture. squad-4 PASS earlier. Both presets therefore passed the real-orchestrator tier.
+

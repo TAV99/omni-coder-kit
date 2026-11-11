@@ -520,11 +520,11 @@ The native C-09 report, audit, verification receipt and new aggregate are under 
 ## 12. Status 2026-11-11 — read this first
 
 - **Branch.** Work continued on `claude/check-current-progress-927817` (a worktree of this repo) and is fast-forwarded into `3.2.0` when green. Never pushed.
-- **Tests.** `npm test` normal and loaded: 3405 tests, 0 failed at `0b25242`.
+- **Tests.** `npm test` normal and loaded: 3407 tests, 0 failed at `78ba206`.
 - **P7e done.** WAITING_RUNTIME for real usage-limit signals: claude (B-05) and codex (P7f dual-12) classified; agy not observed; V36 not observed. Discussion-relay turns are not classified yet.
 - **Fence.** `OMNI_WORKER_WRITE_FENCE=off` is the explicit opt-out where the macOS-only source-write fence cannot run (Linux, Windows, pnpm hardlinks, >200k entries).
-- **P7f.** squad (claude orchestrator) PASS 4/4. dual (codex orchestrator, schema v2 coverage plan) reaches implementation and review and stops at the 16 KiB discussion envelope — **open protocol decision** (P7 spec P7f finding 17). Harness: `test/squad-agent-acceptance.js` (`--preset dual|squad`, `--delegate-all-gates`).
+- **P7f done.** squad (claude orchestrator) PASS 4/4; dual (codex orchestrator, schema v2 coverage plan) PASS 4/4 at `78ba206` after 19 fixes, including the 32 KiB discussion envelope (user decision). Harness: `test/squad-agent-acceptance.js` (`--preset dual|squad`, `--delegate-all-gates`).
 - **Scripted matrix on the release candidate.** See `docs/ACCEPTANCE-3.2.0.md` "Release-candidate matrix (2026-11-11)". The scripted driver now requests bounded worker corrections like a real controller (`0cbbeab`).
 - **Known limits.** A host sleep/hibernate during a worker lease strands that task (`NEEDS_PROCESS_EVIDENCE`; seen on 1% battery) — keep the Mac on AC with `caffeinate`. A real codex orchestrator needs the project trusted in codex (or `-c` flags), and approves the `omni dual bootstrap` sandbox escalation once.
-- **Left for the user.** V44 (Safari/Firefox), the envelope decision, real Linux/Windows runs, merging `3.2.0` into `main`.
+- **Left for the user.** V44 (Safari/Firefox), bumping `package.json` to 3.2.0 (om-ship), merging `3.2.0` into `main` and pushing, then real Linux/Windows runs.
 
