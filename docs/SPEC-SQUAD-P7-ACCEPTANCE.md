@@ -306,7 +306,7 @@ Since P5c, the `worker.task.failed` log records the abort/guard reason. If it re
 ## 11. Definition of done for P7
 
 - [x] Task suite + V46 green in `npm test`.
-- [ ] Configs A–D finished, each meeting all 5 thresholds of §4; `docs/ACCEPTANCE-3.2.0.md` has the numbers per config.
+- [x] Configs A–D finished, each meeting all 5 thresholds of §4; `docs/ACCEPTANCE-3.2.0.md` has the numbers per config. (Release candidate 2026-11-11: A, B, D PASS 10/10 on `0cbbeab`; C PASS 10/10 on `d1a0601`.)
 - [ ] Both real-agent runs finished; bugs found are fixed or clearly recorded. (squad PASS; dual reaches review, blocked by the 16 KiB envelope decision — P7f finding 17; 17 findings fixed or recorded.)
 - [x] V37: each CLI either has classification based on real signals or is recorded as "not observed"; V36 and the cross-task abort have recorded results. (claude + codex classified from real signals; agy not observed; V36 not observed; cross-task abort not reproduced — see P7e/P7f notes.)
 - [x] `npm test` green on macOS, plus one loaded run. (3405 tests, normal and loaded, 2026-11-11.)
