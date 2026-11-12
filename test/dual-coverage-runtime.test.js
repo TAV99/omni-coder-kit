@@ -329,3 +329,13 @@ test('reconnaissance leaves out context files a predecessor will create, and onl
     existing.add('src/state.ts');
     assert.deepEqual(reconnaissanceContextFiles(plan.tasks[1], plan, exists), ['spec.md', 'src/state.ts', 'missing.md'], 'existing files are always read');
 });
+
+test('each session scouts in its own directory, so a recovered session never replays an old terminal scout (omni-p8-test)', () => {
+    const { reconnaissanceDirectory } = require('../lib/dual/orchestrator-adapter');
+    const plan = { tasks: [{ task_id: 'L1' }] };
+    const base = { currentBaseline: { kind: 'git', id: 'a'.repeat(40) } };
+    const first = reconnaissanceDirectory(plan, { ...base, sessionId: 's-1' });
+    assert.equal(reconnaissanceDirectory(plan, { ...base, sessionId: 's-1' }), first, 'stable within a session');
+    assert.notEqual(reconnaissanceDirectory(plan, { ...base, sessionId: 's-2' }), first);
+    assert.match(first, /^\.omni\/codex-gemini\/coverage-recon\/[0-9a-f]{64}$/);
+});

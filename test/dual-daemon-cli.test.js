@@ -970,9 +970,16 @@ test('omni dual daemon recover on a snapshot baseline ignores omni state but sti
     assert.match(drift.stdout, /DUAL_RECOVERY_UNSAFE/);
 
     fs.writeFileSync(path.join(wsRoot, 'index.js'), 'initial\n', 'utf8');
+    // The old session's shared scout discussion must not follow into the new one (omni-p8-test OWNER_BUSY).
+    const discussion = path.join(wsRoot, '.omni', 'runs', 'dual-discussion', 'LANDING-1%7C%7C1%7Csonnet%7Clow');
+    fs.mkdirSync(discussion, { recursive: true });
+    fs.writeFileSync(path.join(discussion, 'journal.jsonl'), '{}\n', 'utf8');
     const recovery = await runOmniCli(['dual', 'daemon', 'recover', '--if-pristine', '--json'], { cwd: wsRoot });
     assert.equal(recovery.code, 0, recovery.stdout + recovery.stderr);
     assert.equal(JSON.parse(recovery.stdout).archived_session_id, health.session_id);
+    assert.equal(fs.existsSync(path.join(wsRoot, '.omni', 'runs', 'dual-discussion')), false, 'discussion state moved with the session');
+    assert.ok(fs.existsSync(path.join(wsRoot, '.omni', 'runs', 'dual-history', health.session_id, 'dual-discussion',
+        'LANDING-1%7C%7C1%7Csonnet%7Clow', 'journal.jsonl')), 'archived, not deleted');
 });
 
 test('omni dual daemon recover on a git baseline ignores omni state but still refuses source drift', async (t) => {
