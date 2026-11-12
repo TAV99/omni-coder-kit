@@ -31,3 +31,21 @@ test('message IDs from old attempts cannot be reused to wake the current lineage
     assert.throws(() => postTaskMessage({ authorityStore, sessionId: 'S', planRevision: 1, taskId: 'T',
         messageId: 'old-reply', kind: 'reply', body: '2', replyTo: 'old-q' }), { code: 'DUAL_MESSAGE_STALE' });
 });
+
+test('contextUndelivered allows a re-claim only with proof that no worker process saw the context', () => {
+    const { contextUndelivered } = require('../lib/dual/task-continuation');
+    const base = { contextDispatch: { status: 'failed', claimed_sequence: 10, reply_ids: ['r1'] },
+        executions: { before: { started_sequence: 5, processes: { a: {} } }, after: { started_sequence: 12, processes: {} } } };
+    assert.equal(contextUndelivered(base), true);
+    assert.equal(contextUndelivered({ contextDispatch: { status: 'abandoned', reply_ids: [] } }), true);
+    for (const status of ['claimed', 'completed', 'waiting_context', 'verified']) {
+        assert.equal(contextUndelivered({ ...base, contextDispatch: { ...base.contextDispatch, status } }), false, status);
+    }
+    assert.equal(contextUndelivered({ ...base, executions: { ...base.executions,
+        after: { started_sequence: 12, processes: { p: { state: 'exited' } } } } }), false, 'a process ran after the claim');
+    assert.equal(contextUndelivered({ ...base, executions: { x: { processes: {} } } }), false, 'unknown start sequence');
+    assert.equal(contextUndelivered({ ...base, lastOutcome: { status: 'FAILED' } }), false);
+    assert.equal(contextUndelivered({ ...base, isolatedHandoff: {} }), false);
+    assert.equal(contextUndelivered({ ...base, contextDispatch: { status: 'failed', reply_ids: ['r1'] } }), false, 'legacy claim without sequence');
+    assert.equal(contextUndelivered({ contextDispatch: base.contextDispatch }), false, 'no execution record');
+});

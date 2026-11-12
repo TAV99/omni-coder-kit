@@ -1487,6 +1487,23 @@ test('restart abandons a dead pre-execution context claim and dispatches once', 
     assert.equal(f.calls.length, 3);
     assert.ok(f.store.readEvents().some((e) => e.execution_id === executionId && e.status === 'abandoned'));
 });
+test('a failed context dispatch that never started a worker process is dispatched again after restart', async (t) => {
+    const f = await contextFixture(t);
+    await f.daemon.close();
+    const { postTaskMessage } = require('../lib/dual/task-messages');
+    postTaskMessage({ authorityStore: f.store, sessionId: f.input.sessionId, planRevision: 1, taskId: 'TASK-1',
+        messageId: f.reply.message_id, kind: 'reply', body: f.reply.body, replyTo: f.reply.reply_to });
+    const executionId = crypto.randomUUID();
+    f.store.append({ schema_version: 2, type: 'task.context.dispatch.claimed', task_id: 'TASK-1', execution_id: executionId,
+        controller_pid: process.pid, attempt: 1, reply_ids: [f.reply.message_id] });
+    // e.g. the worker write fence refused before any process was spawned (DemoOm 2026-11-12)
+    f.store.append({ schema_version: 2, type: 'task.context.dispatch.settled', task_id: 'TASK-1',
+        execution_id: executionId, status: 'failed' });
+    const restarted = await startDaemonServer({ workspaceRoot: f.input.workspaceRoot, authorityStore: f.store, orchestrator: f.adapter });
+    t.after(() => restarted.close());
+    await waitContext(() => !!f.store.derive().tasks['TASK-1'].isolatedHandoff);
+    assert.equal(f.store.readEvents().filter((e) => e.type === 'task.context.dispatch.claimed').length, 2);
+});
 test('stale context lineage and simultaneous durable claims are rejected without journal changes', async (t) => {
     const f = await contextFixture(t);
     await f.daemon.close();
