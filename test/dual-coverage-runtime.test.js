@@ -299,3 +299,16 @@ test('review coverage brief carries only the task-bound rows (P7f dual-13 envelo
     assert.equal(scopeCoverageToTask(artifact, plan, 'NOPE'), artifact);
     assert.equal(artifact.dimensions.length > 10, true, 'the input is not mutated');
 });
+
+test('a new plan with an older approval scouts again: incomplete reconnaissance is DRAFT, not STALE (omni-p8-test)', (t) => {
+    const { dir } = approvedFixture(t);
+    assert.equal(inspectRuntimeCoverage(dir).state, 'PASSED');
+    // The orchestrator re-plans into more tasks; the approval and the scout belong to the old plan.
+    const plan = JSON.parse(fs.readFileSync(path.join(dir, '.omni/sdlc/dual-plan.json'), 'utf8'));
+    plan.tasks[0] = { ...plan.tasks[0], execution_mode: 'isolated', depends_on: [] };
+    plan.tasks.push({ ...plan.tasks[0], task_id: 'TASK-B', allowed_files: ['src/b.js'], decision_ids: [], depends_on: ['TASK-A'] });
+    save(dir, '.omni/sdlc/dual-plan.json', plan);
+    const gate = inspectRuntimeCoverage(dir);
+    assert.deepEqual([gate.state, gate.reconnaissance_complete, gate.allowed], ['DRAFT', false, false],
+        'resume must run the read-only scout for the new plan before anyone can approve it');
+});
