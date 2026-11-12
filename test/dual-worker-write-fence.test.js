@@ -131,6 +131,34 @@ test('a protected source symlink to an outside inode is refused',
         assert.throws(() => createWorkerWriteFence({ ...f }), { code: 'DUAL_WORKER_WRITE_FENCE_UNAVAILABLE' });
     });
 
+test('a dangling symlink whose target stays inside source does not reject the fence',
+    { skip: process.platform !== 'darwin' }, (t) => {
+        const f = fixture(t);
+        // e.g. .claude/skills/x -> ../../.agents/skills/x after the skill was removed
+        fs.mkdirSync(path.join(f.sourceRoot, '.claude', 'skills'), { recursive: true });
+        fs.symlinkSync('../../.agents/skills/gone', path.join(f.sourceRoot, '.claude', 'skills', 'gone'));
+        assert.equal(createWorkerWriteFence({ ...f }).backend, 'macos-seatbelt');
+    });
+
+test('a dangling symlink that points outside source is refused and named',
+    { skip: process.platform !== 'darwin' }, (t) => {
+        const f = fixture(t);
+        fs.symlinkSync(path.join(f.container, 'missing-outside'), path.join(f.sourceRoot, 'dangling-out'));
+        assert.throws(() => createWorkerWriteFence({ ...f }),
+            (err) => err.code === 'DUAL_WORKER_WRITE_FENCE_UNAVAILABLE' && /dangling-out/.test(err.message));
+        fs.unlinkSync(path.join(f.sourceRoot, 'dangling-out'));
+        fs.symlinkSync('../../missing-outside', path.join(f.sourceRoot, 'dangling-up'));
+        assert.throws(() => createWorkerWriteFence({ ...f }), /dangling-up/);
+    });
+
+test('a refused source link names the offending path',
+    { skip: process.platform !== 'darwin' }, (t) => {
+        const f = fixture(t);
+        const outside = path.join(f.container, 'outside-file'); fs.writeFileSync(outside, 'outside');
+        fs.symlinkSync(outside, path.join(f.sourceRoot, 'external-link'));
+        assert.throws(() => createWorkerWriteFence({ ...f }), /external-link/);
+    });
+
 test('concurrently removed artifact directories and symlinks do not reject a valid fence',
     { skip: process.platform !== 'darwin' }, (t) => {
         const f = fixture(t), directory = path.join(f.sourceRoot, 'finalized-artifact');
