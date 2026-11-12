@@ -133,6 +133,20 @@ test('bootstrap names the invalid plan fields so an orchestrator can repair its 
         && error.details.issues.length <= 1024);
 });
 
+test('bootstrap rejects context files the worker snapshot never contains (omni-p8-test .claude/skills)', async (t) => {
+    const root = workspace(t);
+    const plan = validPlan();
+    plan.tasks[0] = { ...plan.tasks[0], context_files: ['.claude/skills/high-end-visual-design/SKILL.md'] };
+    writePlan(root, plan);
+    let sessionCalls = 0;
+    await assert.rejects(() => executeDualBootstrap({ workspaceRoot: root }, { ensureDaemonSession: async () => { sessionCalls++; } }),
+        (error) => error.code === 'DUAL_BOOTSTRAP_PLAN_INVALID'
+            && /tasks\[0\]\.context_files\[0\]/.test(error.details?.issues || '')
+            && /\.claude\/skills\/high-end-visual-design\/SKILL\.md/.test(error.details?.issues || '')
+            && /mounted/.test(error.details?.issues || ''));
+    assert.equal(sessionCalls, 0, 'no session before the plan is valid');
+});
+
 test('bootstrap rejects setup and final-QC pseudo tasks because they belong to controller/gates', async (t) => {
     const root = workspace(t);
     const task = validPlan().tasks[0];
