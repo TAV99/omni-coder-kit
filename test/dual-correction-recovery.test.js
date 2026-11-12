@@ -276,3 +276,23 @@ test('a recorded unknown classification replays and a precise one supersedes it'
     reduceRecoveryEvent(t, event('task.failure.classified', { ...base, category: 'harness', phase: 'worker_launch' }), context);
     assert.deepEqual([t.failureClassification.category, t.failureClassification.phase], ['harness', 'worker_launch']);
 });
+
+test('the implement brief states the exact decision log contract (DemoOm 2026-11-12)', () => {
+    const { decisionLogContract } = require('../lib/dual/coverage-runtime');
+    const { validateDecisionLog } = require('../lib/dual/spec-coverage');
+    const artifact = { schema_version: 1, catalog_version: 1, revision: 1, app_types: ['core'], dimensions: [
+        { id: 'actions.read', state: 'pinned', value: { enabled: true, behavior: 'Read the profile' }, sources: [{ kind: 'approval', ref: 'user' }] },
+        { id: 'ui.copy', state: 'delegated', constraints: ['Vietnamese sample copy'], sources: [{ kind: 'approval', ref: 'user' }] }] };
+    const plan = { tasks: [{ task_id: 'TASK-1', decision_ids: ['actions.read', 'ui.copy'] }] };
+    const text = decisionLogContract(artifact, plan, 'TASK-1');
+    const rows = JSON.parse(text.trim().split('\n').pop());
+    assert.deepEqual(rows.map((row) => row.dimension_id), ['ui.copy'], 'pinned rows are not listed');
+    assert.match(text, /Never log pinned/);
+    assert.deepEqual(rows[0].value_schema.required, ['labels', 'empty_state', 'success_state', 'content_source']);
+    // Following the contract's example shape passes the schema part of the validator.
+    const result = validateDecisionLog(artifact, [{ dimension_id: 'ui.copy', chosen_value: rows[0].example,
+        rationale: 'sample', evidence_refs: ['index.html'] }], { decision_ids: plan.tasks[0].decision_ids,
+        constraint_findings: [{ dimension_id: 'ui.copy', constraint: 'Vietnamese sample copy', satisfied: true, evidence_ref: 'index.html' }] });
+    assert.deepEqual(result.errors.filter((error) => /^(ui\.copy|actions\.read)/.test(error)), [], 'no decision-log error for the bound rows');
+    assert.match(decisionLogContract(artifact, { tasks: [{ task_id: 'T2', decision_ids: ['actions.read'] }] }, 'T2'), /empty decision_log/);
+});
