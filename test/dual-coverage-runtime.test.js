@@ -312,3 +312,20 @@ test('a new plan with an older approval scouts again: incomplete reconnaissance 
     assert.deepEqual([gate.state, gate.reconnaissance_complete, gate.allowed], ['DRAFT', false, false],
         'resume must run the read-only scout for the new plan before anyone can approve it');
 });
+
+test('reconnaissance leaves out context files a predecessor will create, and only those (omni-p8-test)', () => {
+    const { reconnaissanceContextFiles } = require('../lib/dual/orchestrator-adapter');
+    const plan = { tasks: [
+        { task_id: 'L1', allowed_files: ['src/state.ts', 'tsconfig.json'], context_files: ['spec.md'] },
+        { task_id: 'L2', depends_on: ['L1'], allowed_files: ['index.html'], context_files: ['spec.md', 'src/state.ts', 'tsconfig.json', 'missing.md'] },
+        { task_id: 'L3', depends_on: ['L2'], allowed_files: ['src/scene.ts'], context_files: ['src/state.ts', 'index.html'] },
+    ] };
+    const existing = new Set(['spec.md']);
+    const exists = (file) => existing.has(file);
+    assert.deepEqual(reconnaissanceContextFiles(plan.tasks[0], plan, exists), ['spec.md']);
+    assert.deepEqual(reconnaissanceContextFiles(plan.tasks[1], plan, exists), ['spec.md', 'missing.md'],
+        'a missing file nobody produces is kept, so it still fails loudly');
+    assert.deepEqual(reconnaissanceContextFiles(plan.tasks[2], plan, exists), [], 'transitive predecessors count');
+    existing.add('src/state.ts');
+    assert.deepEqual(reconnaissanceContextFiles(plan.tasks[1], plan, exists), ['spec.md', 'src/state.ts', 'missing.md'], 'existing files are always read');
+});
