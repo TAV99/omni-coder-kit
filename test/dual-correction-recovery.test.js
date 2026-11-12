@@ -250,3 +250,29 @@ test('a worker coverage artifact failure is a correctable worker failure; bare S
     }
     assert.deepEqual(classifyFailure(task('SPEC_COVERAGE_REQUIRED')), { category: 'unknown', phase: 'unclassified' });
 });
+
+test('a write-fence refusal with no launched process is a harness launch failure (DemoOm 2026-11-12)', () => {
+    const fenced = (processes) => ({ ...task('DUAL_WORKER_WRITE_FENCE_UNAVAILABLE'), executions: {
+        scout: { started_sequence: 18, processes: { a: {}, b: {} } }, implement: { started_sequence: 52, processes } } });
+    assert.deepEqual(classifyFailure(fenced({})), { category: 'harness', phase: 'worker_launch' });
+    assert.equal(classifyFailure(fenced({ p: {} })).category, 'unknown', 'a process ran: the worker may be the cause');
+    assert.equal(classifyFailure(task('DUAL_WORKER_WRITE_FENCE_UNAVAILABLE')).category, 'unknown', 'no execution record');
+    assert.equal(classifyFailure({ ...fenced({}), executions: { x: { processes: {} } } }).category, 'unknown', 'unknown start order');
+    // A harness launch failure still needs a single-use grant within the policy.
+    const t = classify(configure(fenced({})));
+    assert.throws(() => authorizeCorrection(t, { expectedAttempt: 1 }), { code: 'DUAL_CORRECTION_GRANT_INVALID' });
+    grant(t);
+    assert.equal(authorizeCorrection(t, { expectedAttempt: 1, grantId: 'grant-1' }).budget_class, 'harness');
+});
+
+test('a recorded unknown classification replays and a precise one supersedes it', () => {
+    const t = configure({ ...task('DUAL_WORKER_WRITE_FENCE_UNAVAILABLE'),
+        executions: { implement: { started_sequence: 52, processes: {} } } });
+    const base = { attempt: 1, failure_sha256: failureEvidence(t, context), harness_version: '3.2.0', policy_version: 1 };
+    reduceRecoveryEvent(t, event('task.failure.classified', { ...base, category: 'unknown', phase: 'unclassified' }), context);
+    assert.equal(t.failureClassification.category, 'unknown');
+    assert.throws(() => reduceRecoveryEvent(t, event('task.failure.classified', { ...base, category: 'worker', phase: 'worker_result' }), context),
+        { code: 'DUAL_CORRECTION_CLASSIFICATION_REQUIRED' }, 'only the derived class or unknown is accepted');
+    reduceRecoveryEvent(t, event('task.failure.classified', { ...base, category: 'harness', phase: 'worker_launch' }), context);
+    assert.deepEqual([t.failureClassification.category, t.failureClassification.phase], ['harness', 'worker_launch']);
+});
