@@ -99,5 +99,5 @@ After a successful save the page shows a one-line **commit reminder**. With a gi
 
 ## 9. Open questions for the user
 
-1. Should Squad sit **above** Dual mode in the init list (proposed), or should it replace Dual mode, given that Dual is only a squad preset now?
+1. **Decided (user, 2026-11-12):** Squad sits **above** Dual mode in the init list; Dual mode stays.
 2. Should init still ask "Manual / Auto" for squad? Proposed: yes. It sets the SDLC mode that `>om-*` workflows read, and that is unrelated to squad AUTO for gates.
