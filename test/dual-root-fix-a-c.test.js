@@ -42,6 +42,17 @@ test('npm audit is omitted for a zero-dependency package without a lockfile, kep
     assert.equal(buildQualityPlan(root).commands.find((item) => item.id === 'p0-security').available, true, 'a lockfile keeps the audit');
 });
 
+test('npm audit is omitted for a project with no package.json or lockfile (DemoOm static HTML/CSS)', (t) => {
+    const root = temp(t);
+    fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html>');
+    assert.equal(buildQualityPlan(root).commands.some((item) => item.id === 'p0-security'), false, 'no npm project to audit');
+    fs.writeFileSync(path.join(root, 'package-lock.json'), '{"lockfileVersion":3}');
+    assert.equal(buildQualityPlan(root).commands.find((item) => item.id === 'p0-security').available, true, 'a lockfile alone keeps the audit');
+    fs.unlinkSync(path.join(root, 'package-lock.json'));
+    fs.writeFileSync(path.join(root, 'package.json'), '{ not json');
+    assert.equal(buildQualityPlan(root).commands.find((item) => item.id === 'p0-security').available, false, 'an unreadable package.json stays UNAVAILABLE');
+});
+
 test('isolated QC compares validator output to a pre-validator manifest and never restores source', (t) => {
     const root = temp(t); fs.writeFileSync(path.join(root, 'src.js'), 'before'); const before = manifestWorker(root);
     fs.mkdirSync(path.join(root, 'dist')); fs.writeFileSync(path.join(root, 'dist', 'bundle.js'), 'generated'); fs.writeFileSync(path.join(root, 'src.js'), 'mutated');
