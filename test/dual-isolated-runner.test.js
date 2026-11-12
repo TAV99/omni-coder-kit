@@ -1919,3 +1919,16 @@ test('a worker decision-log coverage failure is recorded as DUAL_DECISION_LOG_IN
     const { classifyFailure } = require('../lib/dual/correction-policy');
     assert.deepEqual(classifyFailure(task), { category: 'worker', phase: 'worker_result' });
 });
+
+test('a registered argv matches the shell-quoted command the worker reports (DemoOm 2026-11-12)', () => {
+    const { commandOutputMatches, shellWords } = require('../lib/dual/isolated-runner');
+    const script = "const fs=require('fs'); for (const f of ['index.html','style.css']) if (!fs.readFileSync(f,'utf8').trim()) process.exit(1);";
+    const command = { program: 'node', args: ['-e', script], cwd: '.' };
+    assert.equal(commandOutputMatches(command, `node -e "${script}"`), true);
+    assert.equal(commandOutputMatches(command, `node -e '${script.replace(/'/g, `'\\''`)}'`), true);
+    assert.equal(commandOutputMatches({ program: 'node', args: ['--check', 'index.js'] }, 'node --check index.js'), true, 'legacy form');
+    assert.equal(commandOutputMatches({ program: 'npm', args: ['test'] }, 'npm.cmd run test'), true);
+    assert.equal(commandOutputMatches(command, `node -e "${script.replace('style.css', 'other.css')}"`), false, 'a different script');
+    assert.equal(commandOutputMatches(command, 'node -e "unbalanced'), false);
+    assert.deepEqual(shellWords('a "b c" \'d e\' f\\ g "h\\"i"'), ['a', 'b c', 'd e', 'f g', 'h"i']);
+});
