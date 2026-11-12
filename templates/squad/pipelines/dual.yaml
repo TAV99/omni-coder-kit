@@ -1,13 +1,16 @@
 # Omni squad pipeline (SPEC-SQUAD-P3 §2), preset dual: orchestrator + one worker.
-# gate: human        → waits for you; AUTO may skip it only when auto_ok: true
-# gate: human-always → always waits for you (D8), even in AUTO
+# Review happens in chat: the orchestrator stops after writing the spec and the
+# plan (.md) and waits for your reply. Integration runs once QC passes.
+# To require `omni squad approve` instead, add to a phase:
+#   gate: human         → waits for approve; AUTO may skip it when auto_ok: true
+#   gate: human-always  → always waits for approve (integrate: only this or no gate)
 schema_version: 1
 preset: dual
 phases:
-  - { id: spec,      role: orchestrator, gate: human, auto_ok: true }
-  - { id: plan,      role: orchestrator, gate: human, auto_ok: true }
+  - { id: spec,      role: orchestrator }
+  - { id: plan,      role: orchestrator }
   - { id: scout,     role: worker }
   - { id: implement, role: worker }
   - { id: review,    role: worker }
   - { id: qc,        role: orchestrator, on_needs_fix: implement, max_corrections: 3 }
-  - { id: integrate, role: orchestrator, gate: human-always }
+  - { id: integrate, role: orchestrator }

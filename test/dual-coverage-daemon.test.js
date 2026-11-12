@@ -97,7 +97,7 @@ test('squad project: coverage.approve waits for the spec gate and the approval a
     const templates = path.join(__dirname, '..', 'templates', 'squad');
     fs.mkdirSync(path.join(root, '.omni/squad/roles'), { recursive: true });
     for (const name of fs.readdirSync(path.join(templates, 'roles'))) fs.copyFileSync(path.join(templates, 'roles', name), path.join(root, '.omni/squad/roles', name));
-    fs.copyFileSync(path.join(templates, 'pipelines', 'dual.yaml'), path.join(root, '.omni/squad/pipeline.yaml'));
+    require('./helpers/gated-pipeline').writeGatedPipeline(root, 'dual');
     const store = createAuthorityStore(path.join(root, '.omni/sessions/test'));
     let handler;
     t.mock.method(http, 'createServer', callback => {
@@ -178,7 +178,7 @@ test('a recorded spec decision whose application fails is reported as DUAL_GATE_
     const templates = path.join(__dirname, '..', 'templates', 'squad');
     fs.mkdirSync(path.join(root, '.omni/squad/roles'), { recursive: true });
     for (const name of fs.readdirSync(path.join(templates, 'roles'))) fs.copyFileSync(path.join(templates, 'roles', name), path.join(root, '.omni/squad/roles', name));
-    fs.copyFileSync(path.join(templates, 'pipelines', 'dual.yaml'), path.join(root, '.omni/squad/pipeline.yaml'));
+    require('./helpers/gated-pipeline').writeGatedPipeline(root, 'dual');
     const store = createAuthorityStore(path.join(root, '.omni/sessions/test'));
     let handler;
     t.mock.method(http, 'createServer', callback => {

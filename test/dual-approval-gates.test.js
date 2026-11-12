@@ -28,13 +28,14 @@ function session(t) {
     return { root, store };
 }
 
-function withPipeline(root, preset = 'dual') {
+function withPipeline(root, preset = 'dual', { gated = true } = {}) {
     const squadDir = path.join(root, '.omni', 'squad');
     fs.mkdirSync(path.join(squadDir, 'roles'), { recursive: true });
     for (const name of fs.readdirSync(path.join(TEMPLATES, 'roles'))) {
         fs.copyFileSync(path.join(TEMPLATES, 'roles', name), path.join(squadDir, 'roles', name));
     }
-    fs.copyFileSync(path.join(TEMPLATES, 'pipelines', `${preset}.yaml`), path.join(squadDir, 'pipeline.yaml'));
+    if (gated) require('./helpers/gated-pipeline').writeGatedPipeline(root, preset);
+    else fs.copyFileSync(path.join(TEMPLATES, 'pipelines', `${preset}.yaml`), path.join(squadDir, 'pipeline.yaml'));
 }
 
 function bind(root, extra = {}) {
@@ -73,11 +74,17 @@ test('decisions need the shown code, a reason to reject, and a pending gate', (t
     assert.equal(gates.requireApproval(store, { phase: 'integrate', taskId: 'T-1', digest: DIGEST_A, summary: 'merge' }).rejected, true);
 });
 
-test('pipeline policy: no pipeline keeps spec/plan open; integrate always waits; a broken pipeline fails closed', (t) => {
+test('pipeline policy: no pipeline keeps spec/plan open and integrate waiting; the shipped pipeline has no gate; a gated one waits; a broken one fails closed', (t) => {
     const { root } = session(t);
     assert.deepEqual(gates.phaseGatePolicy(root, 'spec'), { gated: false, autoOk: false });
     assert.deepEqual(gates.phaseGatePolicy(root, 'integrate'), { gated: true, autoOk: false });
+    // User decision 2026-11-12: review in chat, integrate automatically.
+    for (const preset of ['dual', 'squad']) {
+        withPipeline(root, preset, { gated: false });
+        for (const phase of ['spec', 'plan', 'integrate']) assert.deepEqual(gates.phaseGatePolicy(root, phase), { gated: false, autoOk: false }, `${preset} ${phase}`);
+    }
     withPipeline(root);
+    assert.deepEqual(gates.phaseGatePolicy(root, 'integrate'), { gated: true, autoOk: false });
     assert.deepEqual(gates.phaseGatePolicy(root, 'spec'), { gated: true, autoOk: true });
     assert.deepEqual(gates.phaseGatePolicy(root, 'plan'), { gated: true, autoOk: true });
     assert.deepEqual(gates.phaseGatePolicy(root, 'scout'), { gated: false, autoOk: false });

@@ -58,3 +58,13 @@ test('standalone Codex cook never mandates commit stash or undeclared installati
     assert.doesNotMatch(cook, /commit or stash first|Install dependencies if missing/);
     assert.match(cook, /do not commit, stash, or reset automatically/);
 });
+
+test('the controller stops for chat review after the spec and the plan; shipped integrate is automatic (2026-11-12)', () => {
+    const source = fs.readFileSync(path.resolve(__dirname, '../templates/workflows/dual-controller.md'), 'utf8');
+    assert.match(source, /## User review pauses/);
+    assert.match(source, /After writing the spec[^\n]*stop/);
+    assert.match(source, /After writing the plan[^\n]*stop again before `omni dual bootstrap`/);
+    assert.match(source, /no reply is not approval/);
+    assert.match(source, /integrates as soon as QC passes/);
+    assert.match(source, /Never run `omni squad approve`/, 'the agent still never approves a declared gate itself');
+});

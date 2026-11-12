@@ -8,6 +8,15 @@ The user works in Codex CLI. Codex owns architecture, context, routing, independ
 
 Inspect the current canonical workspace, branch, package and `.omni/manifest.json` before loading planning artifacts. A todo/spec from another branch or project is not the active contract. Preserve it; do not overwrite it to make bootstrap pass.
 
+## User review pauses
+
+The user reviews the spec and the plan in this chat; there is no separate approve command for them.
+
+- After writing the spec (`.omni/sdlc/design-spec.md` and the coverage decisions you intend to submit), stop. Give the file paths and a short summary, then wait for the user's reply.
+- After writing the plan (`.omni/sdlc/todo.md` and `.omni/sdlc/dual-plan.json`), stop again before `omni dual bootstrap`.
+- Continue only after an explicit approval in the chat ("duyệt", "ok", "approve"…). A question, a change request or no reply is not approval: revise, then stop again. Quote the approving message as `source` in `coverage.approve`.
+- With the shipped pipeline these two reviews are the only pauses: `coverage.approve` and the first plan dispatch do not wait for `omni squad approve`, and a task integrates as soon as QC passes. Do not stop between tasks to ask about integration.
+
 ## Plan and dispatch
 
 - Complete `.omni/sdlc/setup.json`, design/context sources, `todo.md` and `dual-plan.json` before `omni dual bootstrap --json` (pass `--worker-model <model>` if specified by user prompt or config). Bootstrap is the single AUTO entrypoint: never create `bootstrap-plan-artifacts` or directly call begin/register as a workaround. With a Git baseline the read-only coverage scout refuses untracked or modified files outside `.omni/` (`DUAL_WORKTREE_DIRTY`), including files `omni init`/`omni squad setup` just wrote (`AGENTS.md`, `CLAUDE.md`, `.codex/`, `.claude/`, `.gitignore`, `.mcp.json`): ask the user to commit them before bootstrap; never commit, stash or delete them yourself.
@@ -131,9 +140,9 @@ For isolated QC, call `omni_dual_completion` with `isolated_qc: {"task_id":"TASK
 Then run isolated QC without caller-built review evidence. The compatibility CLI option `--review-evidence` remains available as an alias for a review-submission file, but legacy files containing policy/result/evidence hashes are rejected.
 The daemon runs exact registered validators, rechecks private evidence, binds independent review evidence, integrates under Codex authority, and records task completion only with valid integration evidence.
 
-### Human approval gates
+### Approval gates (only when the pipeline declares them)
 
-Integration waits for the user. When isolated QC passes, `omni_dual_completion` returns `AWAITING_HUMAN_APPROVAL` with a `gate` (`gate_id`, `summary`, `how`); the source is unchanged. Tell the user the summary and ask them to run `how` (`omni squad approve <gate_id>`) in their own terminal, then call isolated QC again: it re-runs the checks and integrates only the exact approved result. `INTEGRATION_REJECTED` carries the user's reason; request a bounded correction. With `.omni/squad/pipeline.yaml`, `coverage.approve` and the first dispatch of a plan also wait at `spec-r<N>` / `plan-r<N>` gates (`omni_dual_status` shows `awaiting_gate`). Never run `omni squad approve`, `omni squad auto` or the `gate.decide` RPC yourself: approving is the user's decision, the command needs a terminal and the hook denies it.
+The shipped pipeline has no approval gates (see User review pauses). A project whose `.omni/squad/pipeline.yaml` adds `gate:` to a phase, and a legacy dual project without a pipeline, still wait as follows. When isolated QC passes, `omni_dual_completion` returns `AWAITING_HUMAN_APPROVAL` with a `gate` (`gate_id`, `summary`, `how`); the source is unchanged. Tell the user the summary and ask them to run `how` (`omni squad approve <gate_id>`) in their own terminal, then call isolated QC again: it re-runs the checks and integrates only the exact approved result. `INTEGRATION_REJECTED` carries the user's reason; request a bounded correction. A gated `spec`/`plan` phase makes `coverage.approve` and the first dispatch of a plan wait at `spec-r<N>` / `plan-r<N>` (`omni_dual_status` shows `awaiting_gate`). Never run `omni squad approve`, `omni squad auto` or the `gate.decide` RPC yourself: approving is the user's decision, the command needs a terminal and the hook denies it.
 
 ### Post-integration acceptance correction
 

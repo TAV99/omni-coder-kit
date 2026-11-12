@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Review in chat, automatic integration (user decision 2026-11-12).** The shipped squad/dual pipelines no longer declare approval gates. The orchestrator stops after writing the spec and again after the plan, and continues only after the user's explicit reply in its chat; a task integrates as soon as QC passes. A project can opt back in by adding `gate: human` / `gate: human-always` to a phase in `.omni/squad/pipeline.yaml`; projects without a pipeline (legacy dual) still wait at the integrate gate. Existing projects keep their current `pipeline.yaml`.
+
+### Fixed
+- `omni dual bootstrap` rejects `context_files` under control-plane paths (`.claude/`, `.codex/`, `.omni/runs/`…) with `DUAL_BOOTSTRAP_PLAN_INVALID`, since a worker snapshot never contains them (seen as `DUAL_TASK_CONTEXT_UNAVAILABLE` after plan approval).
+
 ## [3.2.0] — 2026-11-12
 
 ### Changed

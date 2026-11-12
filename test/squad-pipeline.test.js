@@ -28,13 +28,16 @@ test('shipped presets: dual and squad (reviewer QC, SPEC-SQUAD-P5) both run on t
     assert.match(assertEngineSupports(parsePipeline(reviewerScout, 'p.yaml', roles)).problems.join(), /phase scout phải thuộc vai worker/);
 });
 
-test('gate rules: auto_ok only on human gates; integrate must always wait for the user', () => {
+test('gate rules: auto_ok only on human gates; integrate has no gate or human-always, never a skippable one', () => {
     const base = plain(dual);
     delete base.source;
     assert.throws(() => parsePipeline({ ...base, phases: base.phases.map((p) => (p.id === 'scout' ? { ...p, auto_ok: true } : p)) }, 'p.yaml', roles),
         /auto_ok only applies to gate: human/);
     const softIntegrate = { ...base, phases: base.phases.map((p) => (p.id === 'integrate' ? { ...p, gate: 'human', auto_ok: true } : p)) };
-    assert.match(assertEngineSupports(parsePipeline(softIntegrate, 'p.yaml', roles)).problems.join(), /integrate phải có gate: human-always/);
+    assert.match(assertEngineSupports(parsePipeline(softIntegrate, 'p.yaml', roles)).problems.join(), /integrate: dùng gate: human-always hoặc bỏ gate/);
+    const strict = { ...base, phases: base.phases.map((p) => (p.id === 'integrate' ? { ...p, gate: 'human-always' } : p)) };
+    assert.deepEqual(assertEngineSupports(parsePipeline(strict, 'p.yaml', roles)).problems, []);
+    assert.equal(base.phases.find((p) => p.id === 'integrate').gate, undefined, 'the shipped preset integrates automatically');
 });
 
 test('structure errors: duplicates, forward on_needs_fix, unknown role, wrong order', () => {
