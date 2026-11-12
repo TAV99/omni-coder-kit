@@ -174,6 +174,8 @@ test('T11 binding-service: saveDraft persists atomically and does not alter acti
 
 test('T11 server routes: /api/runtime-catalog, /api/bindings/preflight, /api/bindings/drafts', async (t) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-bind-test-'));
+    // Workspace routes need a squad project; without one the UI is in setup mode (P8).
+    fs.mkdirSync(path.join(tmpDir, '.omni', 'squad'), { recursive: true });
     t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
     const registry = createTestRegistry();

@@ -177,6 +177,8 @@ function stream(port, { until, headers = {} }) {
 test('timeline: the orchestrator chat streams over SSE and resumes without repeats', async (t) => {
     const project = temp(t, 'omni-tx-project-');
     const { home, file } = claudeHome(t, project);
+    // The timeline is a workspace route; a squad project is needed since P8 setup mode.
+    fs.mkdirSync(path.join(project, '.omni', 'squad'), { recursive: true });
     fs.mkdirSync(path.join(project, '.omni', 'ui'), { recursive: true });
     fs.writeFileSync(path.join(project, '.omni', 'ui', 'orchestrator.json'),
         JSON.stringify({ runtime: 'claude', session_id: CLAUDE_ID, started_at: '2026-11-02T05:36:00Z' }));

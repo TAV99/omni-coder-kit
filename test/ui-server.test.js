@@ -281,7 +281,7 @@ test('page: renders server data only through textContent', () => {
     assert.doesNotMatch(html, /<script>|\son\w+=|https?:\/\/(?!127)/, 'no inline script, handlers or remote assets (CSP self)');
 });
 
-test('omni ui: needs a squad project, rejects a bad port, opens the right browser command', async (t) => {
+test('omni ui: rejects a bad port, opens the right browser command', async (t) => {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-ui-cmd-')));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     const cwd = process.cwd();
@@ -291,7 +291,7 @@ test('omni ui: needs a squad project, rejects a bad port, opens the right browse
     console.error = (line) => errors.push(line);
     try {
         process.chdir(root);
-        assert.equal(await handleUi({ open: false }), null);
+        // Without .omni/squad the UI now opens in setup mode (SPEC-SQUAD-P8, test/ui-setup-mode.test.js).
         fs.mkdirSync(path.join(root, '.omni', 'squad'), { recursive: true });
         assert.equal(await handleUi({ open: false, port: '99999' }), null);
     } finally {
@@ -299,8 +299,7 @@ test('omni ui: needs a squad project, rejects a bad port, opens the right browse
         console.error = original;
         process.exitCode = exitCode;
     }
-    assert.match(errors[0], /omni squad setup/);
-    assert.match(errors[1], /--port/);
+    assert.match(errors[0], /--port/);
     const calls = [];
     const spawnImpl = (command, args) => { calls.push([command, args]); return { on() {}, unref() {} }; };
     for (const platform of ['darwin', 'linux', 'win32']) openBrowser('http://127.0.0.1:1/#token=a&b', { platform, spawnImpl });

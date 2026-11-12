@@ -140,6 +140,8 @@ test('T14 limits: sanitizes accountKey and degrades gracefully on provider error
 
 test('T14 limits routes: GET /api/limits and POST /api/limits/refresh', async (t) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-limits-server-'));
+    // Workspace routes need a squad project; without one the UI is in setup mode (P8).
+    fs.mkdirSync(path.join(tmpDir, '.omni', 'squad'), { recursive: true });
     t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
     const serverInstance = await startUiServer({

@@ -47,7 +47,7 @@ Everything else stays as it is:
 - `GET /api/state` returns `{ mode: 'setup' | 'workspace', ... }`. In setup mode, every workspace route (PTY, inbox, files, terminals) answers `409 SQUAD_SETUP_REQUIRED`.
 - New routes. All of them are token-checked, loopback-only and same-origin, like the existing ones.
   - `GET /api/setup/runtimes` returns `registry.probeAll()` (reusing `omni squad runtimes`): for each runtime its version, login status and models with efforts. Results are cached for 60 s; `?refresh=1` re-probes.
-  - `POST /api/setup/preflight` takes `{ preset: 'squad'|'dual', workers: 1..4, binds: { orchestrator, 'worker-1'.., reviewer? } }` and returns `checkBinding` errors and warnings, plus the trust verdict for the orchestrator runtime (`projectTrust`, read-only). It writes nothing.
+  - `POST /api/setup/preflight` takes `{ preset: 'squad'|'dual', workers (squad 1..8, dual 1, from PRESETS), binds: { orchestrator, 'worker-1'.., reviewer? } }` and returns `checkBinding` errors and warnings, plus the trust verdict for the orchestrator runtime (`projectTrust`, read-only). It writes nothing.
   - `POST /api/setup/apply` takes the same body plus `{ displace: boolean }`. It calls `runSetup({ projectRoot, preset, workers, binds, yes: true, displace })`. On success it switches the server to `workspace` mode in place, without a restart: the file watchers and the PTY host start then. Then it auto-starts the orchestrator, unless the UI was started with `--no-start`.
     - `apply` refuses when `.omni/squad` already exists. After setup, edits go through the existing binding editor.
     - `apply` is idempotent per request id. A second apply while one is running gets `409`.
