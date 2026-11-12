@@ -1,6 +1,6 @@
 # Omni-Coder Kit
 
-[![Version](https://img.shields.io/badge/version-3.1.1-blue.svg)](https://github.com/TAV99/omni-coder-kit/releases/tag/v3.1.1)
+[![Version](https://img.shields.io/badge/version-3.2.0-blue.svg)](https://github.com/TAV99/omni-coder-kit/releases/tag/v3.2.0)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
 
@@ -145,7 +145,7 @@ không chọn đường lạnh. Library chỉ bật khi `enabled === true`. Stan
 host/resolver mặc định: bật flag riêng lẻ vẫn không đủ chạy scout/review và sẽ fail-closed;
 caller tích hợp phải cung cấp discussion resolver hợp lệ.
 
-#### Isolated worker workflow (đang phát triển trên nhánh v3.1.2)
+#### Isolated worker workflow
 
 Contract dùng chung cho mọi native workflow nằm ở `.omni/workflows/dual-controller.md` sau init. Task low-risk có thể chọn `execution_mode: "isolated"` và `depends_on: []`: AGY làm trong snapshot riêng, Codex QC/integrate kết quả đã được chốt hash. Nhiều isolated tasks được xếp theo dependency/scope; adapter hiện dispatch tuần tự, chưa tuyên bố parallel throughput.
 

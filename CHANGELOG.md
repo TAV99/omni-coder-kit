@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] — 2026-11-12
+
 ### Changed
 - **Behaviour change — integrate waits for a person.** Isolated QC that passes no longer writes into the source by itself: it stops at `AWAITING_HUMAN_APPROVAL` until someone runs `omni squad approve integrate-<task>` on a terminal and types the code shown. This applies to every dual project, squad or not; AUTO never skips it. Revision promotion uses the same gate. Projects with `.omni/squad/pipeline.yaml` also gate spec coverage and the plan (AUTO may skip those when marked `auto_ok`).
 - Codex–AGY workflows share a controller reference across native entrypoints, with exact isolated QC, context-reply, correction and dependency contracts. Generated integration text respects the selected pairing and configured worker model.
@@ -15,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking — the old SDLC harness is gone.** `omni run` and its `gate`, `log`, `stats` and `accept` subcommands, `lib/harness/` and the harness-only debate prompt were removed; squad (`omni squad`, `omni ui`) is the only orchestration path. Chat workflows (`>om-*`) are unchanged.
 
 ### Fixed
+- First real-project runs (DemoOm): nested daemon CLI turns skip omni hooks; recovery ignores omni state on a git baseline; Stop returns to the user before a plan exists; the write fence accepts in-tree dangling symlinks, never turns a pre-launch refusal into a terminal failure, and classifies it as a harness launch failure; an undelivered context reply is re-dispatched; the implement brief states the decision-log contract; quoted validation commands match their registered argv; a project without `package.json` has no npm audit gate; large MCP responses degrade to compact JSON.
 - Isolated finalization preserves failure evidence after lease expiry and settles only the current execution with verified tracked-child close evidence; stale owner/revision/lease results cannot overwrite a newer attempt. Unmanaged dependencies fail before result collection scans them.
 - Fresh unborn Git repositories use verified snapshot bootstrap, and pre-authority interview stops no longer force premature continuation; safe task-status diagnostics retain full process-handle guidance.
 - Isolated dispatch no longer inherits the source AGY project binding. Private dependency fingerprints use bounded reads for native binaries, with readiness checks before dispatch and explicit resource limits.
@@ -23,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone Codex cook preserves uncommitted changes without requiring automatic commit/stash or undeclared dependency installation.
 
 ### Added
+- **omni squad.** Role-based agent team: a runtime registry (claude, codex, agy), role files with CLI/model/effort bindings, a declared pipeline with human gates (`omni squad approve` on a terminal), per-role skill mounts, and reviewer/worker roles. `omni dual` stays as the dual preset.
+- **omni ui.** Local web page for a squad project: roles, tasks, gates, timeline and the orchestrator terminal.
+- Orchestrator receipts carry a typed `next_action`; `omni skills doctor` and `omni ui` warn when the orchestrator CLI does not trust the project yet; a macOS sleep guard holds `caffeinate` while a worker lease is held.
 - Opt-in isolated worker snapshots, hash-bound handoffs, controller QC/integration journals, dependency waits, durable scout questions/replies, and bounded correction attempts. Live-host and release qualification remain pending; these entries do not announce a published release.
 
 ## [3.1.1] — 2026-09-03
@@ -112,7 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Agent harness Phases 0–3 and skills upgrades.
 
-[Unreleased]: https://github.com/TAV99/omni-coder-kit/compare/v3.1.1...HEAD
+[Unreleased]: https://github.com/TAV99/omni-coder-kit/compare/v3.2.0...HEAD
+[3.2.0]: https://github.com/TAV99/omni-coder-kit/compare/v3.1.1...v3.2.0
 [3.1.1]: https://github.com/TAV99/omni-coder-kit/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/TAV99/omni-coder-kit/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/TAV99/omni-coder-kit/releases/tag/v3.0.0
