@@ -2,7 +2,7 @@
 # Verified schema: [[rule]] with toolName/commandPrefix/commandRegex,
 # decision = "allow" | "deny" | "ask_user", priority 0-999, denyMessage, modes.
 # Apply via `/permissions` or place where your agy build reads policy rules.
-# Mirrors the harness deny-list (tools/shell.js) + YOLO 3-tier guardrails.
+# Shell deny-list + YOLO 3-tier guardrails.
 
 # ── DENY: irreversible / destructive (highest priority) ──────────────────────
 [[rule]]

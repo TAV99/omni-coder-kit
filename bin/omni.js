@@ -13,7 +13,6 @@ const { handleUpdate } = require('../lib/commands/update');
 const { handleCustomize } = require('../lib/commands/customize');
 const { handleDoctor } = require('../lib/commands/doctor');
 const { handleAgentFiles } = require('../lib/commands/agent-files');
-const { handleRun, handleTrace, handleGate, handleStats, handleAccept } = require('../lib/commands/run');
 const {
     handleDualCoverageInspect,
     handleDualCoverageApprove,
@@ -49,7 +48,7 @@ async function handleSkillsDefault(options = {}) {
 
 program
     .name('omni')
-    .description('Trình quản lý hệ tư tưởng Omni-Coder Kit (CLI gọn — nhóm lệnh chính + harness)')
+    .description('Trình quản lý hệ tư tưởng Omni-Coder Kit (CLI gọn — nhóm lệnh chính + squad)')
     .version(PKG.version);
 
 // -- 1) init -----------------------------------------------------------------
@@ -59,58 +58,6 @@ program
     .option('--dry-run', 'Xem trước danh sách files sẽ được tạo (không ghi)')
     .option('--onboard', 'Ép chạy onboard deep-scan sau init (kể cả khi không phải dự án lớn)')
     .action(handleInit);
-
-// -- 2) run + subcommands ----------------------------------------------------
-const run = program
-    .command('run')
-    .description('Harness loop — lái SDLC (intake → cook → check → acceptance → doc → ship)')
-    .option('--dry-run', 'In chuỗi state dự kiến, không thực thi, không ghi state')
-    .option('--from <state>', 'Bắt đầu từ một state cụ thể (INIT|BRAINSTORM|...|SHIP)')
-    .option('--resume', 'Tiếp tục từ .omni/run/state.json (fallback: events.ndjson)')
-    .option('--provider <name>', 'Provider động cơ: host-cli | claude-sdk | manual-relay | dry-run', 'host-cli')
-    .option('--yes-ship', 'Cho phép đi vào SHIP mà không pause (vẫn KHÔNG tự push/deploy)')
-    .option('--max-iterations <n>', 'Giới hạn số transition trước khi pause (mặc định 60)')
-    .option('--max-cost <usd>', 'Giới hạn chi phí token (USD) cho provider claude-sdk (mặc định 5)')
-    .option('--debate <specs>', 'Debate đối kháng chéo-provider, vd: "host-cli:claudecode,host-cli:antigravity"')
-    .option('--debate-on <phases>', 'Bật debate ở phase nào: "check,ship" (mặc định check)')
-    .option('--debate-rounds <n>', 'Số vòng tranh luận (mặc định 2)')
-    // Phase-4 ------------------------------------------------------------------
-    .option('--spec <file>', 'Đọc file spec/Q&A khách hàng → sinh .omni/sdlc/requirements.md trước khi chạy')
-    .option('--reintake', 'Ghi đè requirements.md kể cả khi đã tồn tại (hoặc tự động làm nếu file cũ thoái hoá/rác)')
-    .option('--accept <specs>', 'Provider participants cho acceptance debate (mặc định = --debate)')
-    .option('--max-accept-rounds <n>', 'Số vòng ACCEPTANCE → COOK trước BLOCKED (mặc định 3)')
-    .option('--max-time <minutes>', 'Ngân sách thời gian mỗi phiên chạy (phút, mặc định 60)')
-    .option('--step-timeout <minutes>', 'Timeout mỗi bước agent (cook/fix/check…) phút (mặc định 10)')
-    .option('--yolo', 'Mọi host-cli agent bỏ qua MỌI permission (claude/codex dùng --dangerously-skip-permissions như agy). Cho autonomous run; harness vẫn chặn lệnh nguy hiểm.')
-    .option('--stream', 'Đẩy raw output của agent ra terminal (prefix │) realtime. Tắt spinner heartbeat (output cuộn).')
-    .option('--no-progress', 'Tắt spinner heartbeat; chỉ in lỗi + task xong (alias: --quiet)')
-    .option('--quiet', 'Bí danh của --no-progress')
-    .action(handleRun);
-
-run.command('gate')
-    .description('Chỉ chạy quality pipeline P0–P5 (lint/build/test) và exit 0/1 — CI-friendly')
-    .option('--only <ids>', 'Chỉ chạy các gate theo id, vd: "P3" hoặc "P1,P3"')
-    .action(handleGate);
-
-run.command('log')
-    .description('In nhật ký event của lần chạy harness gần nhất (.omni/run/events.ndjson)')
-    .option('--limit <n>', 'Số event cuối cần in (mặc định 50)')
-    .option('--follow', 'Theo dõi live (tail -f): in event mới khi xuất hiện (Ctrl-C để dừng)')
-    .action(handleTrace);
-
-run.command('stats')
-    .description('Tổng hợp token/chi phí/thời gian theo state từ event log')
-    .action(handleStats);
-
-run.command('accept')
-    .description('Chạy state ACCEPTANCE riêng trên build hiện tại (CI: exit 0 nếu 100% met)')
-    .option('--accept <specs>', 'Provider participants cho acceptance debate')
-    .option('--max-time <minutes>', 'Ngân sách thời gian mỗi phiên chạy (phút, mặc định 60)')
-    .option('--step-timeout <minutes>', 'Timeout mỗi bước agent (cook/fix/check…) phút (mặc định 10)')
-    .option('--yolo', 'Agent bỏ qua mọi permission (xem `omni run --help`)')
-    .option('--no-progress', 'Tắt spinner heartbeat; chỉ in lỗi + task xong')
-    .option('--quiet', 'Bí danh của --no-progress')
-    .action(handleAccept);
 
 // -- 3) skills + subcommands -------------------------------------------------
 const skills = program

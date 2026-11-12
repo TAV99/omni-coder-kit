@@ -6,7 +6,7 @@
 
 **Omni-Coder Kit** là một bộ công cụ CLI giúp inject tư duy phát triển phần mềm chuẩn mực (**Karpathy Mindset**), quy trình SDLC tinh gọn và các kỹ năng chuyên sâu vào AI coding agents (Claude Code, Antigravity CLI, Cursor, Windsurf, Codex, Gemini CLI...). Công cụ này định hướng AI hoạt động với kỷ luật của một Senior Engineer, tuân thủ quy trình SDLC nghiêm ngặt và hạn chế tối đa lỗi ảo tưởng (hallucination).
 
-Trong phiên bản mới nhất (**v3.1.1**), Omni-Coder Kit hoạt động như một **Agent Harness & Loop Runtime** — tự lái vòng lặp SDLC: gọi LLM → thực thi quality gates (lint, build, test, security) → tự động sửa lỗi (fix loop) → tự động nghiệm thu (acceptance loop).
+Từ **3.2.0**, Omni-Coder Kit điều phối một **squad** agent theo vai: orchestrator chia việc, worker thực thi trong workspace riêng, reviewer/QC kiểm tra; người dùng duyệt cổng và theo dõi qua `omni ui`.
 
 ---
 
@@ -52,8 +52,8 @@ Omni-Coder Kit hỗ trợ 3 cách tiếp cận linh hoạt tùy theo thói quen 
         │                                   │                                  │
         ▼                                   ▼                                  ▼
 ┌──────────────────┐               ┌──────────────────┐               ┌──────────────────┐
-│  1. Chat Mode    │               │ 2. Terminal Run  │               │ 3. Dual AUTO     │
-│  (>om-* in IDE)  │               │   (omni run)     │               │ (Codex + Gemini) │
+│  1. Chat Mode    │               │  2. Squad + UI   │               │ 3. Dual AUTO     │
+│  (>om-* in IDE)  │               │ (omni squad/ui)  │               │ (Codex + Gemini) │
 └──────────────────┘               └──────────────────┘               └──────────────────┘
 ```
 
@@ -84,21 +84,17 @@ Nếu bạn muốn tự kiểm soát từng giai đoạn, hãy chat với AI the
 
 ---
 
-### Cách 2: Chế độ tự động hoàn toàn (`omni run`) — Dành cho Terminal
-Không cần mở khung chat IDE, bạn chỉ cần ra lệnh trên terminal của mình. Bộ điều phối (Orchestrator Harness) của Omni sẽ tự khởi chạy tác vụ và "lái" agent thực hiện từ đầu đến cuối một cách tự động.
+### Cách 2: Squad theo vai (`omni squad`, `omni ui`) — Dành cho Terminal
+Orchestrator (claude hoặc codex) chia việc thành task, worker làm trong workspace riêng, reviewer/QC kiểm tra trước khi tích hợp. Mọi cổng duyệt (spec, plan, integrate) do người duyệt trong terminal.
 
-#### 1. Chạy tự động từ file đặc tả (Spec) của khách hàng
-Nếu bạn có một file mô tả yêu cầu (`spec.md`), hãy để Omni tự đọc, tự phân tích thành checklist nghiệm thu (`requirements.md`), tự viết code, tự chạy test và sửa lỗi cho đến khi đạt 100% yêu cầu:
 ```bash
-omni run --spec spec.md
+omni squad runtimes          # kiểm tra CLI agent, đăng nhập, model
+omni squad setup             # gắn CLI/model/effort cho từng vai
+omni ui                      # trang web local: vai, task, cổng duyệt, terminal orchestrator
+omni squad approve <gateId>  # duyệt cổng (không có gateId → liệt kê cổng đang chờ)
 ```
 
-#### 2. Các lệnh điều khiển hữu ích trên Terminal:
-*   **Chạy tiếp tục:** `omni run --resume` (Nếu phiên chạy bị tạm dừng hoặc lỗi, chạy lệnh này để tiếp tục từ vị trí cũ mà không tốn lại token từ đầu).
-*   **Chạy nháp không sửa code:** `omni run --dry-run` (In ra kế hoạch hành động chi tiết để bạn kiểm tra trước).
-*   **Chạy kiểm định chất lượng độc lập:** `omni run gate` (Chạy toàn bộ pipeline kiểm thử P0-P5: Security → Lint → Build → Test → Content).
-*   **Xem nhật ký sự kiện:** `omni run log` (In event log chi tiết từ `.omni/run/events.ndjson`).
-*   **Xem thống kê tài nguyên:** `omni run stats` (Tổng hợp token, chi phí và thời gian thực thi).
+Lệnh `omni run` (harness SDLC cũ) và các lệnh con `gate`/`log`/`stats`/`accept` đã được gỡ trong 3.2.0; quality gates và nghiệm thu nay chạy trong squad.
 
 ---
 
@@ -208,11 +204,8 @@ Khi chat với AI trong IDE, hãy gõ các lệnh sau ở đầu câu để đ�
 | :--- | :--- | :--- |
 | `omni init` | Khởi tạo DNA dự án và cấu hình IDE thích hợp. | `--onboard`, `--dry-run`; hỏi ẩn/hiện agent files; chọn Dual mode |
 | `omni dual` | Điều phối Codex + Gemini qua agy (cross-platform). | `daemon`, `bootstrap`, `setup`, `baseline`, `status` |
-| `omni run` | Khởi chạy vòng lặp SDLC tự động từ terminal. | `--spec <file>`, `--resume`, `--dry-run`, `--yolo` |
-| `omni run gate` | Chạy độc lập Quality Pipeline P0-P5 (tiện cho CI/CD). | `--only <P0,P1,P3>` |
-| `omni run log` | Xem nhật ký sự kiện thực thi của phiên chạy gần nhất. | `--limit <n>`, `--follow` |
-| `omni run stats` | Tổng hợp token, chi phí và thời gian từ event log. | *(không)* |
-| `omni run accept` | Chạy riêng state ACCEPTANCE trên build hiện tại (CI). | `--accept <specs>`, `--yolo`, `--quiet` |
+| `omni squad` | Đội agent theo vai (3.2.0): runtime, vai, pipeline, cổng duyệt. | `runtimes`, `setup`, `pipeline`, `approve`, `qc` |
+| `omni ui` | Trang web local theo dõi squad và terminal orchestrator. | *(xem `omni ui --help`)* |
 | `omni skills` | Quản lý các bộ skill lập trình (cài đặt/kiểm tra). | `add <nguồn>`, `doctor` |
 | `omni map` | Tạo hoặc cập nhật sơ đồ tóm tắt mã nguồn dự án. | `--refresh` |
 | `omni rules` | Quản lý quy tắc cá nhân (Personal Rules sync). | `[action]`, `--dry-run` |
@@ -227,9 +220,7 @@ Các **hidden aliases** CLI đã bị gỡ. Dùng lệnh canonical:
 | `omni equip <src>` | `omni skills add <src>` |
 | `omni auto-equip` / `omni status` | `omni skills` |
 | `omni skills:doctor` | `omni skills doctor` |
-| `omni gate` | `omni run gate` |
-| `omni trace` | `omni run log` |
-| `omni stats` | `omni run stats` |
+| `omni gate` / `omni trace` / `omni stats` | gỡ hẳn trong 3.2.0 cùng `omni run` |
 | `omni onboard` | `omni init --onboard` |
 
 Chat commands `>om-*` **không** đổi. Chi tiết release: `CHANGELOG.md`, checklist ship: `RELEASE.md`.
@@ -268,9 +259,6 @@ your-project/
     │   └── runs/<task-id>/         # Thư mục transaction độc lập cho từng task
     │       ├── spec.json, events.ndjson, state.json...
     │       └── raw/                # Immutable logs của từng attempt
-    ├── run/                        # [Harness] Log hoạt động & state phiên chạy tự động
-    │   ├── state.json              # Trạng thái hiện tại (để resume)
-    │   └── events.ndjson           # Lịch sử sự kiện thực thi realtime
     ├── workflows/                  # File chỉ dẫn luồng SDLC nạp vào AI khi chat >om-
     ├── sdlc/                       # Output quá trình phát triển (todo.md, design-spec.md...)
     └── knowledge/                  # Bản đồ codebase (project-map.md) & tri thức (knowledge-base.md)

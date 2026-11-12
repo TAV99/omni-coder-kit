@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Behaviour change — integrate waits for a person.** Isolated QC that passes no longer writes into the source by itself: it stops at `AWAITING_HUMAN_APPROVAL` until someone runs `omni squad approve integrate-<task>` on a terminal and types the code shown. This applies to every dual project, squad or not; AUTO never skips it. Revision promotion uses the same gate. Projects with `.omni/squad/pipeline.yaml` also gate spec coverage and the plan (AUTO may skip those when marked `auto_ok`).
 - Codex–AGY workflows share a controller reference across native entrypoints, with exact isolated QC, context-reply, correction and dependency contracts. Generated integration text respects the selected pairing and configured worker model.
 
+### Removed
+- **Breaking — the old SDLC harness is gone.** `omni run` and its `gate`, `log`, `stats` and `accept` subcommands, `lib/harness/` and the harness-only debate prompt were removed; squad (`omni squad`, `omni ui`) is the only orchestration path. Chat workflows (`>om-*`) are unchanged.
+
 ### Fixed
 - Isolated finalization preserves failure evidence after lease expiry and settles only the current execution with verified tracked-child close evidence; stale owner/revision/lease results cannot overwrite a newer attempt. Unmanaged dependencies fail before result collection scans them.
 - Fresh unborn Git repositories use verified snapshot bootstrap, and pre-authority interview stops no longer force premature continuation; safe task-status diagnostics retain full process-handle guidance.

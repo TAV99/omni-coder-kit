@@ -59,7 +59,7 @@ Display extraction result to user:
 ❓ Còn thiếu: [list empty/ambiguous slots]
 ```
 
-- **Headless / Non-interactive Mode Guard:** If you detect you are running in a headless/automated environment (such as when spawned by `omni run` with stdin disconnected or redirected), you cannot ask questions interactively. In this case, you MUST skip Step 2 entirely: record reasonable proposals for empty/ambiguous slots as `unresolved` in `.omni/sdlc/spec-coverage.json`, link them from the design spec, and return `SPEC_COVERAGE_REQUIRED` when no valid coverage receipt exists. Assumptions/defaults never become pinned or delegated authority. Do not wait for stdin or implicitly delegate via `--yes`.
+- **Headless / Non-interactive Mode Guard:** If you detect you are running in a headless/automated environment (such as a headless squad or CLI turn with stdin disconnected or redirected), you cannot ask questions interactively. In this case, you MUST skip Step 2 entirely: record reasonable proposals for empty/ambiguous slots as `unresolved` in `.omni/sdlc/spec-coverage.json`, link them from the design spec, and return `SPEC_COVERAGE_REQUIRED` when no valid coverage receipt exists. Assumptions/defaults never become pinned or delegated authority. Do not wait for stdin or implicitly delegate via `--yes`.
 
 ### Step 2: Adaptive Questions (only ask what's missing)
 - Each question targets 1 empty or ambiguous slot.

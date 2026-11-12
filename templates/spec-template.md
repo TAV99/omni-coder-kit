@@ -2,7 +2,7 @@
 > Version: 1.0.0 | Compatible with Omni-Coder Kit Phase-4 (Acceptance Loop)
 > Filename Suggestion: `customer-spec.md` or `omni-spec.md`
 
-Use this template to design software specifications that AI coding agents (specifically `omni run`) can parse with 100% precision. This template aligns with the Omni SDLC states: `BRAINSTORM` ➔ `INTAKE` ➔ `PLAN` ➔ `COOK` ➔ `CHECK` ➔ `ACCEPTANCE`.
+Use this template to design software specifications that AI coding agents (the omni squad orchestrator and its workers) can parse with 100% precision. This template aligns with the Omni SDLC states: `BRAINSTORM` ➔ `INTAKE` ➔ `PLAN` ➔ `COOK` ➔ `CHECK` ➔ `ACCEPTANCE`.
 
 ---
 

@@ -17,35 +17,15 @@ function run(args, opts = {}) {
 test('omni --help: shows visible command groups', () => {
     const { code, stdout } = run(['--help']);
     assert.strictEqual(code, 0);
-    // Visible: init, run, skills, map, rules, agent-files (+ implicit help).
-    for (const name of ['init', 'run', 'skills', 'map', 'rules', 'agent-files']) {
+    // Visible: init, skills, map, rules, agent-files, squad, ui (+ implicit help).
+    for (const name of ['init', 'skills', 'map', 'rules', 'agent-files', 'squad', 'ui']) {
         assert.match(stdout, new RegExp(`^\\s+${name}\\b`, 'm'), `help should list ${name}`);
     }
     // Removed 2.x aliases + hidden utils must NOT appear in top-level help.
-    for (const name of ['equip', 'auto-equip', 'status', 'skills:doctor', 'gate', 'trace', 'stats', 'onboard', 'commands', 'update', 'customize']) {
+    // The old SDLC harness (`omni run` and its gate/log/stats/accept) was removed in 3.2.0.
+    for (const name of ['run', 'equip', 'auto-equip', 'status', 'skills:doctor', 'gate', 'trace', 'stats', 'onboard', 'commands', 'update', 'customize']) {
         assert.doesNotMatch(stdout, new RegExp(`^\\s+${name.replace(':', '\\:')}\\b`, 'm'), `${name} must not appear in help`);
     }
-});
-
-test('omni run --help: has Phase-4 flags + acceptance subcommand', () => {
-    const { code, stdout } = run(['run', '--help']);
-    assert.strictEqual(code, 0);
-    assert.match(stdout, /--spec </);
-    assert.match(stdout, /--accept </);
-    assert.match(stdout, /--max-accept-rounds </);
-    assert.match(stdout, /--max-time </);
-    assert.match(stdout, /--step-timeout </);
-    // Subcommands gate/log/stats/accept
-    for (const sub of ['gate', 'log', 'stats', 'accept']) {
-        assert.match(stdout, new RegExp(`^\\s+${sub}\\b`, 'm'), `run should list subcommand ${sub}`);
-    }
-});
-
-test('omni run accept --help: has --max-time flag', () => {
-    const { code, stdout } = run(['run', 'accept', '--help']);
-    assert.strictEqual(code, 0);
-    assert.match(stdout, /--max-time </);
-    assert.match(stdout, /--step-timeout </);
 });
 
 test('omni skills --help: lists -y/--yes option and `add`/`doctor` subcommands', () => {
@@ -65,14 +45,9 @@ test('omni skills -y / --yes: parses flag and reaches default skills action with
     }
 });
 
-test('omni run --dry-run shows ACCEPTANCE in the planned pipeline', () => {
-    const { code, stdout } = run(['run', '--dry-run']);
-    assert.strictEqual(code, 0);
-    assert.match(stdout, /ACCEPTANCE/);
-});
-
 test('v3.0: removed aliases are unknown commands (not deprecated wrappers)', () => {
-    for (const name of ['gate', 'trace', 'status', 'equip', 'onboard', 'auto-equip']) {
+    // `run` is the removed 3.x SDLC harness.
+    for (const name of ['run', 'gate', 'trace', 'status', 'equip', 'onboard', 'auto-equip']) {
         const { code, stderr, stdout } = run([name], { cwd: __dirname });
         assert.notStrictEqual(code, 0, `${name} should exit non-zero`);
         const err = `${stderr}\n${stdout}`;
@@ -80,8 +55,7 @@ test('v3.0: removed aliases are unknown commands (not deprecated wrappers)', () 
     }
 });
 
-test('canonical replacements still work: run gate / skills doctor help', () => {
-    assert.strictEqual(run(['run', 'gate', '--help']).code, 0);
+test('canonical replacements still work: skills doctor / init help', () => {
     assert.strictEqual(run(['skills', 'doctor', '--help']).code, 0);
     assert.strictEqual(run(['init', '--help']).code, 0);
 });

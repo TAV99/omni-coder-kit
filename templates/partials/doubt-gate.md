@@ -19,6 +19,6 @@ Doubt cycle (copy the checklist):
 **Orchestration constraint (depth = 1 — see docs/orchestration-patterns.md).** A persona MUST NOT spawn another persona to do the DOUBT step (anti-pattern: persona-calls-persona).
 - Inside a persona (CODER/QA): use the **degraded self-review fallback** — re-pose ARTIFACT + CONTRACT as a *fresh self-prompt* with a hard separator from your prior reasoning, then walk the cycle. Flag the result as self-review, not fresh-context.
 - For irreversible / security-sensitive decisions: do NOT rely on self-review — **escalate to the user** ("⚠️ Quyết định high-stakes: [claim]. Đề xuất review fresh-context hoặc cross-model trước khi tiếp tục.").
-- Only the **harness/main session** (`omni run`) may spawn a real fresh-context reviewer (Pattern 3 fan-out, merged at the main loop).
+- Only the **main session** (the squad orchestrator) may spawn a real fresh-context reviewer (Pattern 3 fan-out, merged at the main loop).
 
 Reject rationalizations: "Tôi tự tin" → confidence ≠ evidence. "Quá hiển nhiên" → then CLAIM takes 30 seconds. "Review sau" → review after = debug in prod.
