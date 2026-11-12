@@ -951,6 +951,30 @@ test('baseline promote fails closed when baseline or session state drifts before
 // DemoOm 2026-11-11: on a git baseline the pristine check counted omni's own
 // .omni/ state (ledger, runtime, coverage-recon, sdlc plan) as drift, so
 // recover --if-pristine could never succeed once a session had run.
+test('omni dual daemon recover on a snapshot baseline ignores omni state but still refuses source drift (omni-p8-test)', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    fs.writeFileSync(path.join(wsRoot, 'index.js'), 'initial\n', 'utf8');
+    const start = await runOmniCli(['dual', 'daemon', 'start'], { cwd: wsRoot });
+    assert.equal(start.code, 0, start.stderr);
+    const client = createDaemonClient({ workspaceRoot: wsRoot });
+    const health = await client.health();
+    assert.equal((await client.status(health.session_id)).current_baseline.kind, 'snapshot');
+    // the orchestrator's planning files after a blocked attempt
+    fs.mkdirSync(path.join(wsRoot, '.omni', 'sdlc'), { recursive: true });
+    fs.writeFileSync(path.join(wsRoot, '.omni', 'sdlc', 'recovery.md'), '# next plan\n', 'utf8');
+    fs.writeFileSync(path.join(wsRoot, '.omni', 'sdlc', 'dual-plan.next.json'), '{}\n', 'utf8');
+
+    fs.writeFileSync(path.join(wsRoot, 'index.js'), 'mutated\n', 'utf8');
+    const drift = await runOmniCli(['dual', 'daemon', 'recover', '--if-pristine', '--json'], { cwd: wsRoot });
+    assert.equal(drift.code, 1);
+    assert.match(drift.stdout, /DUAL_RECOVERY_UNSAFE/);
+
+    fs.writeFileSync(path.join(wsRoot, 'index.js'), 'initial\n', 'utf8');
+    const recovery = await runOmniCli(['dual', 'daemon', 'recover', '--if-pristine', '--json'], { cwd: wsRoot });
+    assert.equal(recovery.code, 0, recovery.stdout + recovery.stderr);
+    assert.equal(JSON.parse(recovery.stdout).archived_session_id, health.session_id);
+});
+
 test('omni dual daemon recover on a git baseline ignores omni state but still refuses source drift', async (t) => {
     const wsRoot = createTempWorkspace(t);
     const git = (...args) => execFileSync('git', args, { cwd: wsRoot, encoding: 'utf8' });
