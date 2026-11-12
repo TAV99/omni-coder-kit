@@ -3125,13 +3125,14 @@ test('coverage inspect fits the bound and says what approve must echo; approve r
     const wsRoot = createTempWorkspace(t);
     const { createOmniDualMcpServer } = await import('../lib/dual/mcp-server.mjs');
     const decisions = Array.from({ length: 30 }, (_, i) => ({ id: `dim.${i}`, state: 'pending', question: 'q'.repeat(90) }));
+    let receipt = null;
     const fakeClient = {
         health: async () => ({ status: 'healthy', workspace_root: wsRoot, session_id: 'sess-cov' }),
         status: async () => ({ session_id: 'sess-cov', workspace_id: 'ws-cov-id', plan_revision: 1 }),
         request: async (method, params) => {
             if (method === 'coverage.inspect') return { state: 'AWAITING_APPROVAL', candidate_digest: 'd'.repeat(64),
                 artifact: { decisions }, plan: { tasks: Array.from({ length: 4 }, () => ({ goal: 'g'.repeat(900) })) },
-                artifact_path: '/private/x/coverage.json', report_path: '/private/x/report.json' };
+                artifact_path: '/private/x/coverage.json', report_path: '/private/x/report.json', ...(receipt ? { receipt } : {}) };
             if (method === 'coverage.approve') {
                 const { DualDaemonClientError } = await import('../lib/dual/daemon-client.js');
                 throw new DualDaemonClientError('STALE_COVERAGE', 'Approval session_id or workspace does not match current authority; workspace is the workspace_id, not a path');
@@ -3158,6 +3159,14 @@ test('coverage inspect fits the bound and says what approve must echo; approve r
     const big = await client.callTool({ name: 'omni_dual_coverage_inspect', arguments: { workspace_root: wsRoot, session_id: 'sess-cov' } });
     assert.equal(big.isError, undefined, big.content[0].text.slice(0, 200));
     assert.equal(JSON.parse(big.content[0].text).artifact.decisions.length, 70);
+
+    // omni-p8-test: a receipt of the previous session (~16 KB) rode along and broke the bound.
+    receipt = { request_id: 'old-approval', session_id: 'old-session', plan_revision: 1, task_ids: ['LANDING-1'],
+        approved_artifact: { dimensions: Array.from({ length: 60 }, (_, i) => ({ id: `r.${i}`, state: 'pinned', value: 'v'.repeat(200) })) } };
+    const withReceipt = await client.callTool({ name: 'omni_dual_coverage_inspect', arguments: { workspace_root: wsRoot, session_id: 'sess-cov' } });
+    assert.equal(withReceipt.isError, undefined, withReceipt.content[0].text.slice(0, 200));
+    const shown = withReceipt.structuredContent || JSON.parse(withReceipt.content[0].text);
+    assert.deepEqual(shown.receipt, { request_id: 'old-approval', session_id: 'old-session', plan_revision: 1, task_ids: ['LANDING-1'] });
 
     const approve = await client.callTool({ name: 'omni_dual_coverage_approve', arguments: { workspace_root: wsRoot, submission: {
         request_id: 'r1', session_id: 'sess-cov', workspace: wsRoot, plan_revision: 1, candidate_digest: 'd'.repeat(64),
