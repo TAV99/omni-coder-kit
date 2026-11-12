@@ -229,6 +229,57 @@ test('isolated Claude implementation denies source writes and still reaches a QC
     assert.equal(Buffer.from(handoff.result.changes[0].contentBase64, 'base64').toString(), 'module.exports = 2;\n');
 });
 
+test('a write-fence refusal before launch is not a terminal implement failure (DemoOm 2026-11-12)', { skip: process.platform !== 'darwin' }, async (t) => {
+    const { workerRuntime, ...input } = isolatedFixture(t);
+    fs.mkdirSync(path.join(input.workspaceRoot, '.omni'), { recursive: true });
+    fs.writeFileSync(path.join(input.workspaceRoot, '.omni', 'manifest.json'), JSON.stringify({ workerRuntime }));
+    const outside = path.join(tempRoot(t), 'outside.txt');
+    fs.writeFileSync(outside, 'outside');
+    const alias = path.join(input.workspaceRoot, 'outside-alias');
+    const common = (workerRoot, taskId) => {
+        const spec = JSON.parse(fs.readFileSync(path.join(workerRoot, '.omni/codex-gemini/runs', taskId, 'spec.json'), 'utf8'));
+        return { schema_version: 1, task_id: taskId, expected_baseline: spec.expected_baseline };
+    };
+    const discussion = createDiscussionStub({
+        async turn({ workerRoot, phase, taskId }) {
+            const base = common(workerRoot, taskId);
+            if (phase === 'scout') {
+                // The refusal condition appears after scout, before the implement launch.
+                if (!fs.existsSync(alias) && launches === 0) fs.symlinkSync(outside, alias);
+                return { ...base, summary: 'Read index and spec', relevant_files: [{ path: 'index.js', description: 'return value' }],
+                    exact_symbols: [], validation_commands: ['node --check index.js'], constraints: ['scope only'], risks: [], open_questions: [],
+                    research_trace: ['index.js', 'spec.md'].map((source) => ({ question: 'What to change?', source, source_type: 'REPOSITORY', conclusion: 'Return two' })),
+                    alternatives_considered: [{ option: 'Edit existing', tradeoff: 'small' }, { option: 'New file', tradeoff: 'unnecessary' }],
+                    failure_modes: ['wrong return value'] };
+            }
+            return { ...base, recommendation: 'APPROVE', risk_level: 'LOW', findings: [], review_checks: ['scope', 'syntax', 'value'],
+                challenge_summary: 'Compared original and changed return.' };
+        },
+    });
+    let launches = 0;
+    const processRunner = async (invocation, deps) => {
+        const child = deps.spawn(process.execPath, ['-e', "require('node:fs').writeFileSync('index.js', 'module.exports = 2;\\n')"],
+            { cwd: invocation.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+        await once(child, 'close');
+        launches += 1;
+        const taskId = fs.readdirSync(path.join(invocation.cwd, '.omni/codex-gemini/runs'))[0];
+        const payload = { ...common(invocation.cwd, taskId), status: 'SUCCESS', modified_files: ['index.js'],
+            command_outputs: [{ command: 'node --check index.js', exit_code: 0, output: '' }], unverified_items: [],
+            self_review: { checks: ['scope', 'syntax', 'value'], remaining_risks: [] } };
+        return { exitCode: 0, stdout: reply({ structured: payload }), stderr: '', timedOut: false,
+            startedAt: new Date(), endedAt: new Date(), durationMs: 1 };
+    };
+    let reference;
+    await assert.rejects(() => runIsolatedTask({ ...input, discussion, processRunner, onPrepared(value) { reference = value; } }),
+        (error) => error.code === 'DUAL_WORKER_WRITE_FENCE_UNAVAILABLE' && error.category === 'PRECONDITION');
+    assert.equal(launches, 0, 'nothing was launched');
+    fs.unlinkSync(alias);
+    // The same attempt resumes once the host condition is fixed.
+    const handoff = await runIsolatedTask({ ...input, discussion, processRunner, reference });
+    assert.equal(handoff.status, 'AWAITING_CODEX_QC');
+    assert.equal(launches, 1);
+});
+
 test('shared claude worker turns skip the project root CLAUDE.md and hooks (P7f dual-9)', async () => {
     const cwd = path.resolve('/work/project');
     const turnRun = capture(reply({ result: '```json\n{"schema_version":1,"kind":"reply","body":"answer"}\n```' }));
