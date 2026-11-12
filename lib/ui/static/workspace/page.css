@@ -25,3 +25,26 @@ html, body { margin: 0; height: 100%; background: #fbfcfc; }
 #omni-web-final .os-view-pad .os-approval { margin: 8px 0; display: grid; gap: 4px; }
 #omni-web-final .os-view-pad .os-text-view pre { margin: 8px 0 0; }
 #omni-web-final .os-role .os-ring { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--os-sub); }
+
+/* First-run squad setup (SPEC-SQUAD-P8 §5.2). */
+.os-setup { max-width: 760px; margin: 0 auto; padding: 32px 20px; font: 13px/1.6 var(--os-font-sans); color: var(--os-text); }
+.os-setup h1 { font-size: 18px; margin: 0 0 4px; }
+.os-setup h2 { font-size: 15px; margin: 0 0 8px; }
+.os-setup-head p, .os-setup-hint { color: var(--os-sub); margin: 0 0 16px; }
+.os-setup-preset { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; }
+.os-setup-roles { display: grid; gap: 8px; margin-bottom: 16px; }
+.os-setup-row { display: grid; grid-template-columns: 110px 1fr 1.4fr 110px; gap: 8px; align-items: center; }
+.os-setup-role { font: 12px var(--os-font-mono); color: var(--os-sub); }
+.os-setup select, .os-setup input[type="text"] { font: inherit; padding: 5px 6px; border: 1px solid var(--os-line); border-radius: var(--os-radius); background: var(--os-bg); color: var(--os-text); min-width: 0; }
+.os-setup button { font: inherit; padding: 6px 12px; border: 1px solid var(--os-line); border-radius: var(--os-radius); background: var(--os-soft); color: var(--os-text); cursor: pointer; }
+.os-setup button:disabled { opacity: .5; cursor: default; }
+.os-setup .os-setup-save { background: var(--os-accent); color: var(--os-inverse); border-color: var(--os-accent); }
+.os-setup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.os-setup-displace { color: var(--os-sub); font-size: 12px; flex: 1 1 260px; }
+.os-setup-report { margin-top: 14px; }
+.os-setup-report p { margin: 2px 0; }
+.os-setup-report.error { color: #b54a3c; }
+.os-setup-report.ok { color: #2f7a52; }
+.os-setup-report .warn { color: #b7791f; }
+.os-setup-done { border: 1px solid var(--os-line); border-radius: var(--os-radius); padding: 16px; }
+@media (max-width: 640px) { .os-setup-row { grid-template-columns: 1fr 1fr; } .os-setup-role { grid-column: 1 / -1; } }

@@ -20,6 +20,7 @@ test('T15 packaging: validates all workspace static files are under lib/', () =>
         'context-panel.mjs',
         'workspace.mjs',
         'binding-editor.mjs',
+        'setup.mjs',
         'limits.mjs',
         'tokens.css',
         'shell.css',
