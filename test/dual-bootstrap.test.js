@@ -147,6 +147,16 @@ test('bootstrap rejects context files the worker snapshot never contains (omni-p
     assert.equal(sessionCalls, 0, 'no session before the plan is valid');
 });
 
+test('in a squad project bootstrap also rejects context under role skill dirs (omni-p8-test .agents/skills)', async (t) => {
+    const root = workspace(t);
+    fs.mkdirSync(path.join(root, '.omni', 'squad'), { recursive: true });
+    const plan = validPlan();
+    plan.tasks[0] = { ...plan.tasks[0], context_files: ['.agents/skills/karpathy-guidelines/SKILL.md'] };
+    writePlan(root, plan);
+    await assert.rejects(() => executeDualBootstrap({ workspaceRoot: root }, { ensureDaemonSession: async () => { throw new Error('no session'); } }),
+        (error) => error.code === 'DUAL_BOOTSTRAP_PLAN_INVALID' && /\.agents\/skills\/karpathy-guidelines/.test(error.details?.issues || ''));
+});
+
 test('bootstrap rejects setup and final-QC pseudo tasks because they belong to controller/gates', async (t) => {
     const root = workspace(t);
     const task = validPlan().tasks[0];
