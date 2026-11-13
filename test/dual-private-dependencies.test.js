@@ -9,7 +9,7 @@ const { EventEmitter } = require('node:events');
 const { spawnSync } = require('node:child_process');
 const { createCliResolver } = require('../lib/dual/setup-command');
 const { resolveSetupInvocation } = require('../lib/dual/setup-runner');
-const { preparePrivateDependencies, verifyPrivateDependencies, dependencyFingerprintAsync } = require('../lib/dual/private-dependencies');
+const { preparePrivateDependencies, verifyPrivateDependencies, verifyPrivateDependenciesAsync, dependencyFingerprintAsync } = require('../lib/dual/private-dependencies');
 
 function fixture(t) {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-private-deps-')));
@@ -212,6 +212,17 @@ test('allowlisted build cache directories (.vite, .cache) inside node_modules do
     fs.writeFileSync(path.join(input.workerRoot, 'node_modules/forged-pkg/index.js'), 'module.exports = 1');
     assert.throws(() => verifyPrivateDependencies({ ...input, reference }),
         (error) => error.code === 'DUAL_PRIVATE_SETUP_DRIFT');
+});
+
+test('the vitest result cache (.vitest-cache) in node_modules is not dependency drift (omni-p8-test)', async (t) => {
+    const input = fixture(t);
+    const reference = await preparePrivateDependencies(input);
+    // What `vitest run` (4.x) wrote in LANDING-1 before the worker asked its questions.
+    fs.mkdirSync(path.join(input.workerRoot, 'node_modules/.vitest-cache'), { recursive: true });
+    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.vitest-cache/CACHEDIR.TAG'), 'Signature: 8a477f597d28d172789f06886806bc55');
+    fs.writeFileSync(path.join(input.workerRoot, 'node_modules/.vitest-cache/_metadata.json'), '{}');
+    assert.doesNotThrow(() => verifyPrivateDependencies({ ...input, reference }));
+    await verifyPrivateDependenciesAsync({ ...input, reference });
 });
 
 test('private dependency verification rejects unknown dot entries and protected npm metadata', async (t) => {
