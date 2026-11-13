@@ -166,3 +166,22 @@ test('npm bin links inside node_modules are manifest entries, not failures; othe
     fs.symlinkSync('index.js', path.join(root, 'alias.js'));
     assert.match((await manifestWorkerAsync(root)).failures.join(), /symlink\/junction rejected: alias\.js/);
 });
+
+test('cache discovery during validator cleanup skips npm bin links too (omni-p8-test QC, second walker)', async (t) => {
+    const { cleanEphemeralRunnerCaches, cleanEphemeralRunnerCachesAsync } = require('../lib/dual/isolated-qc');
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-cache-links-')));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(root, 'node_modules/vite/bin'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'node_modules/vite/bin/vite.js'), 'x');
+    fs.mkdirSync(path.join(root, 'node_modules/.bin'));
+    fs.symlinkSync('../vite/bin/vite.js', path.join(root, 'node_modules/.bin/vite'));
+    fs.mkdirSync(path.join(root, 'node_modules/.vite/deps'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'node_modules/.vite/deps/a.js'), 'y');
+    assert.deepEqual(await cleanEphemeralRunnerCachesAsync(root, []), []);
+    assert.equal(fs.existsSync(path.join(root, 'node_modules/.vite')), false, 'the cache is still cleaned');
+    assert.ok(fs.lstatSync(path.join(root, 'node_modules/.bin/vite')).isSymbolicLink(), 'the bin link is left alone');
+    fs.mkdirSync(path.join(root, 'node_modules/.vite'));
+    assert.deepEqual(cleanEphemeralRunnerCaches(root, []), []);
+    fs.symlinkSync('index.js', path.join(root, 'alias.js'));
+    assert.match((await cleanEphemeralRunnerCachesAsync(root, [])).join(), /symlink\/junction rejected: alias\.js/);
+});
