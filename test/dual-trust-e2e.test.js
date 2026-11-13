@@ -821,7 +821,10 @@ test('E10: expired lease with unresolved operation stays fenced at the daemon re
     }], 'The stale writer must receive the authority fence diagnostic');
     const records = fs.readFileSync(path.join(context.authorityDir, 'operations.ndjson'), 'utf8')
         .trim().split('\n').map((line) => JSON.parse(line).record);
-    assert.deepEqual(records.map((record) => record.type), ['started']);
+    // The fenced writer, still this live controller, settles its own run as
+    // failed once its child exited (lease lost to a host sleep, 2026-11-13).
+    assert.deepEqual(records.map((record) => record.type), ['started', 'settled']);
+    assert.equal(records[1].outcome, 'failed');
     assert.match(fs.readFileSync(path.join(workerRootFor(context), 'index.html'), 'utf8'), /Trusted offline change/,
         'The stale worker produced a private mutation before attempting its fenced handoff');
     assert.equal(fs.readFileSync(path.join(context.root, 'index.html'), 'utf8'), '<html><body>Initial</body></html>\n');
@@ -831,8 +834,9 @@ test('E10: expired lease with unresolved operation stays fenced at the daemon re
     const finalizationFailures = context.authorityStore.readEvents()
         .filter((event) => event.type === 'task.execution.finalization_failed' && event.task_id === 'TASK-1');
     assert.equal(finalizationFailures.length, 1);
-    assert.equal(finalizationFailures[0].settled, false);
-    assert.equal(context.authorityStore.derive().leases[implementProcess.lease_id].status, 'expired');
+    assert.equal(finalizationFailures[0].settled, true);
+    assert.equal(context.authorityStore.derive().leases[implementProcess.lease_id].status, 'released');
+    assert.equal(context.authorityStore.derive().leases[implementProcess.lease_id].release_reason, 'finalization_failed');
 });
 
 test('E14: a worker that ignores deny_patterns is rejected before handoff, integration, or completion', async (t) => {
