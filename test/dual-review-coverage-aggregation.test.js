@@ -40,3 +40,14 @@ test('contradictory chunk reviews are a worker result failure; a broken chunk pl
     assert.deepEqual(classifyFailure(task('REVIEW_COVERAGE_CONTRADICTORY')), { category: 'worker', phase: 'worker_result' });
     assert.deepEqual(classifyFailure(task('REVIEW_COVERAGE_INVALID')), { category: 'unknown', phase: 'unclassified' });
 });
+
+test('a failed run records its validation errors in the outcome summary, never a path (omni-p8-test)', () => {
+    const { failureCause } = require('../lib/dual/isolated-authority');
+    const coverage = Object.assign(new Error('SPEC_COVERAGE_REQUIRED: coverage review failed'), { code: 'SPEC_COVERAGE_REQUIRED',
+        details: { worker_artifact: 'coverage_review', errors: ['data.entities: missing independent coverage check', 'ui.copy: missing independent coverage check'] } });
+    assert.equal(failureCause(coverage), ': data.entities: missing independent coverage check; ui.copy: missing independent coverage check');
+    assert.equal(failureCause(Object.assign(new Error('Contradictory coverage_checks: errors.messages'), { code: 'REVIEW_COVERAGE_CONTRADICTORY' })),
+        ': Contradictory coverage_checks: errors.messages');
+    assert.equal(failureCause(new Error('ENOENT: /Users/someone/project/file')), '');
+    assert.equal(failureCause(undefined), '');
+});

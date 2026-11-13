@@ -1477,6 +1477,7 @@ test('daemon missing or corrupt discovery returns stable isError without leaking
     assert.ok(res.content && res.content.length > 0);
     const errorText = res.content[0].text;
     assert.ok(errorText.includes('DUAL_DISCOVERY_MISSING'));
+    assert.ok(errorText.includes('omni dual daemon start'), 'the error says how to recover');
 });
 
 // --------------------------------------------------------------------------
@@ -3092,6 +3093,8 @@ test('omni_dual_completion MCP tool passes through safe diagnostic reason in err
     assert.equal(parsed.error.message, 'Failed to evaluate completion with Dual authority daemon');
     assert.ok(parsed.error.details);
     assert.equal(parsed.error.details.reason, 'Diff fingerprint mismatch: fresh diff is abc123, input got def456');
+    // The masked daemon code stays visible (omni-p8-test: "Isolated QC failed" hid DUAL_QC_*).
+    assert.equal(parsed.error.details.cause_code, 'DUAL_QUALITY_ERROR');
 });
 
 test('MCP completion rejects standalone review_evidence instead of silently dropping it', async (t) => {

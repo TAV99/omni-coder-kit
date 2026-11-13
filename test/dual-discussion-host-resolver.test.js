@@ -421,6 +421,8 @@ test('revocation between isolated seeds prevents the second seed', async (t) => 
     await assert.rejects(child.sessionResolver(state.request), { code: 'DUAL_ISOLATED_DISCUSSION_IDENTITY_INVALID' });
     const failure = JSON.parse(await fs.readFile(path.join(state.stateDir, 'isolated', child.executionKey + '.seed-failure.json')));
     assert.equal(failure.conversation_ids.codex, 'partial-codex');
+    assert.equal(typeof failure.message, 'string', 'the cause is kept for diagnosis');
+    assert.ok(failure.message.length > 0 && failure.message.length <= 1024);
     await child.close();
     await state.host.closeAll();
 });
