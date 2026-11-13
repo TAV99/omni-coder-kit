@@ -138,3 +138,31 @@ test('async manifest aborts when the final EOF read triggers cancellation', asyn
     await assert.rejects(() => manifestWorkerAsync(root, { signal: controller.signal }),
         (error) => error.code === 'DUAL_PRIVATE_SETUP_ABORTED');
 });
+
+test('npm bin links inside node_modules are manifest entries, not failures; other links still fail (omni-p8-test QC)', async (t) => {
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-manifest-links-')));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(root, 'node_modules/nanoid/bin'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'node_modules/nanoid/bin/nanoid.js'), '#!/usr/bin/env node\n');
+    fs.mkdirSync(path.join(root, 'node_modules/.bin'));
+    fs.symlinkSync('../nanoid/bin/nanoid.js', path.join(root, 'node_modules/.bin/nanoid'));
+    fs.writeFileSync(path.join(root, 'index.js'), 'x');
+    for (const manifest of [await manifestWorkerAsync(root), manifestWorker(root)]) {
+        assert.deepEqual(manifest.failures, []);
+        assert.ok(manifest.entries.has('node_modules/.bin/nanoid'), 'the link is tracked, so a changed target is a dependency mutation');
+    }
+    const before = await manifestWorkerAsync(root);
+    fs.unlinkSync(path.join(root, 'node_modules/.bin/nanoid'));
+    fs.symlinkSync('../nanoid/bin/other.js', path.join(root, 'node_modules/.bin/nanoid'));
+    fs.writeFileSync(path.join(root, 'node_modules/nanoid/bin/other.js'), 'y');
+    const after = await manifestWorkerAsync(root);
+    assert.notEqual(after.entries.get('node_modules/.bin/nanoid').sha256, before.entries.get('node_modules/.bin/nanoid').sha256);
+
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-manifest-outside-'));
+    t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
+    fs.symlinkSync(outside, path.join(root, 'node_modules/.bin/escape'));
+    assert.match((await manifestWorkerAsync(root)).failures.join(), /escape/);
+    fs.unlinkSync(path.join(root, 'node_modules/.bin/escape'));
+    fs.symlinkSync('index.js', path.join(root, 'alias.js'));
+    assert.match((await manifestWorkerAsync(root)).failures.join(), /symlink\/junction rejected: alias\.js/);
+});
