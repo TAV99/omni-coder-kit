@@ -15,12 +15,12 @@ test('v2 chunk aggregation retains checks from every chunk and deduplicates repe
     assert.equal(output.coverage_checks[0].evidence_refs.length, 1);
 });
 test('v2 contradictory dimension and prose constraint findings fail instead of being outvoted', () => {
-    assert.throws(() => aggregateReviews([review([check('actions.edit')]), review([check('actions.edit', false)])]), { code: 'REVIEW_COVERAGE_INVALID' });
+    assert.throws(() => aggregateReviews([review([check('actions.edit')]), review([check('actions.edit', false)])]), { code: 'REVIEW_COVERAGE_CONTRADICTORY' });
     const finding = { dimension_id: 'actions.edit', constraint: 'Preserve data', satisfied: true, evidence_ref: 'src/index.js:1' };
-    assert.throws(() => aggregateReviews([review([], [finding]), review([], [{ ...finding, satisfied: false }])]), { code: 'REVIEW_COVERAGE_INVALID' });
+    assert.throws(() => aggregateReviews([review([], [finding]), review([], [{ ...finding, satisfied: false }])]), { code: 'REVIEW_COVERAGE_CONTRADICTORY' });
 });
 test('mixed review schema versions cannot erase v2 coverage fields', () => {
-    assert.throws(() => aggregateReviews([review(), { ...review(), schema_version: 1 }]), { code: 'REVIEW_COVERAGE_INVALID' });
+    assert.throws(() => aggregateReviews([review(), { ...review(), schema_version: 1 }]), { code: 'REVIEW_COVERAGE_CONTRADICTORY' });
 });
 
 test('empty diff retains one bounded review chunk when schema whitespace exceeds the ceiling', () => {
@@ -32,4 +32,11 @@ test('empty diff retains one bounded review chunk when schema whitespace exceeds
     assert.equal(plan.chunks.length, 1);
     assert.equal(plan.chunks[0].text, '');
     assert.ok(plan.chunks[0].body_bytes <= require('../lib/dual/discussion/contracts').CEILINGS.maxBodyBytes);
+});
+
+test('contradictory chunk reviews are a worker result failure; a broken chunk plan stays unclassified', () => {
+    const { classifyFailure } = require('../lib/dual/correction-policy');
+    const task = (code) => ({ task_id: 'TASK-1', lastOutcome: { attempt: 2, status: 'FAILED', code } });
+    assert.deepEqual(classifyFailure(task('REVIEW_COVERAGE_CONTRADICTORY')), { category: 'worker', phase: 'worker_result' });
+    assert.deepEqual(classifyFailure(task('REVIEW_COVERAGE_INVALID')), { category: 'unknown', phase: 'unclassified' });
 });
