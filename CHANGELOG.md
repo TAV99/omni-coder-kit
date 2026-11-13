@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **A host sleep no longer strands a worker task.** When a lid close froze the daemon past the 120 s worker lease, the run failed its authority check (`CAPABILITY_BLOCKED`) and its operation could never settle, leaving the task in `NEEDS_PROCESS_EVIDENCE`. The live controller now settles its own failed run once every tracked child has exited, so the finalization releases the lease; a daemon restarted after the old behaviour recovers the orphaned operation through task recovery. The failure is classified as harness `lease_lost`, so the controller can request a bounded correction. Handoff, QC and integration stay fenced.
+- The review brief now lists the exact coverage checks and constraint findings a task's review must return, for every chunk of a chunked review, and asks for violations as ERROR findings rather than `satisfied: false` so chunks never contradict. A chunked review that skipped pinned rows failed with `DUAL_COVERAGE_REVIEW_INVALID`.
 - `omni dual bootstrap` rejects `context_files` under control-plane paths (`.claude/`, `.codex/`, `.omni/runs/`…) with `DUAL_BOOTSTRAP_PLAN_INVALID`, since a worker snapshot never contains them (seen as `DUAL_TASK_CONTEXT_UNAVAILABLE` after plan approval).
 
 ## [3.2.0] — 2026-11-12

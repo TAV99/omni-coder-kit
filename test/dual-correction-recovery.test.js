@@ -296,3 +296,26 @@ test('the implement brief states the exact decision log contract (DemoOm 2026-11
     assert.deepEqual(result.errors.filter((error) => /^(ui\.copy|actions\.read)/.test(error)), [], 'no decision-log error for the bound rows');
     assert.match(decisionLogContract(artifact, { tasks: [{ task_id: 'T2', decision_ids: ['actions.read'] }] }, 'T2'), /empty decision_log/);
 });
+
+test('the review brief lists every required coverage check and constraint finding (omni-p8-test 2026-11-13)', () => {
+    const { reviewCoverageContract } = require('../lib/dual/coverage-runtime');
+    const { aggregateReviews } = require('../lib/dual/review-chunking');
+    const artifact = { dimensions: [
+        { id: 'data.entities', state: 'pinned' }, { id: 'catalog.items', state: 'not_applicable' },
+        { id: 'ui.copy', state: 'delegated', constraints: ['Vietnamese sample copy', { type: 'object' }] },
+        { id: 'actions.read', state: 'pinned' }] };
+    const plan = { tasks: [{ task_id: 'TASK-2', decision_ids: ['data.entities', 'catalog.items', 'ui.copy'] }] };
+    const text = reviewCoverageContract(artifact, plan, 'TASK-2');
+    assert.match(text, /each chunk of a chunked review/);
+    assert.match(text, /\["data\.entities","catalog\.items"\]/, 'pinned and N/A rows bound to the task, not unbound ones');
+    assert.match(text, /\[\{"dimension_id":"ui\.copy","constraint":"Vietnamese sample copy"\}\]/, 'only textual constraints');
+    assert.match(text, /never set satisfied: false/);
+    assert.equal(reviewCoverageContract({}, plan, 'TASK-2'), '');
+    // Chunks that follow the contract merge without a contradiction.
+    const chunk = (ref) => ({ schema_version: 2, recommendation: 'APPROVE', risk_level: 'LOW', findings: [], review_checks: [],
+        challenge_summary: ref, coverage_findings: [],
+        coverage_checks: ['data.entities', 'catalog.items'].map((id) => ({ dimension_id: id, satisfied: true, description: ref, evidence_refs: [ref] })),
+        constraint_findings: [{ dimension_id: 'ui.copy', constraint: 'Vietnamese sample copy', satisfied: true, evidence_ref: ref }] });
+    const merged = aggregateReviews([chunk('index.html'), chunk('src/style.css')]);
+    assert.deepEqual(merged.coverage_checks.map((check) => check.evidence_refs), [['index.html', 'src/style.css'], ['index.html', 'src/style.css']]);
+});
