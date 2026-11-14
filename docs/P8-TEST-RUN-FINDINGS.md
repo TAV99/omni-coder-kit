@@ -86,3 +86,21 @@ correction all worked. The session blocked on attempt 2:
 - **Still open:** context re-dispatch after a pre-launch refusal is unbounded (each
   retry walked the tree synchronously for ~80 s); the refusal message lives only in
   `worker_start.error`, not in the ledger.
+
+## 5. Run 9d288f0b (2026-11-14, after F9–F10)
+
+F9 and F10 worked live: attempt 1's two WARNING findings reached attempt 2's
+`correction_context`, and the fence passed. Attempt 2's scout then stalled: the
+discussion received the scout question for argon (agy/sonnet) at 07:55:12 but never
+recorded a `dispatch_intent` (about 40 s in earlier turns), and no process started.
+The watchdog aborted after 300 s (`DUAL_NO_WRITE_PROGRESS`); the discussion close
+could not prove quiescence, so the run never settled, the lease expired and the
+session blocked on `NEEDS_PROCESS_EVIDENCE`. No host sleep.
+
+- **F11 — daemon diagnostics were discarded (fixed).** stderr went to `/dev/null`;
+  it now goes to `.omni/runtime/dual/daemon.log`.
+- **F12 — a watchdog abort with no live child now settles (fixed).** The ledger proves
+  quiescence when every tracked child exited; the outcome is recorded instead.
+- **Open:** why the scout turn never dispatched (needs the daemon log from a rerun);
+  `DUAL_NO_WRITE_PROGRESS` and `DUAL_TURN_STALLED` are unclassified, so F8 relays them
+  to the user instead of granting a correction.

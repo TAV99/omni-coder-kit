@@ -1360,6 +1360,32 @@ test('failed discussion child close leaves operation and lease unsettled for rec
     assert.equal(store.readEvents().some((event) => event.type === 'task.workspace.handoff'), false);
 });
 
+test('a watchdog abort settles the run when every tracked child exited, even if discussion close is unproven', async (t) => {
+    const input = fixture(t), { store } = seedAuthority(input), calls = [];
+    const worker = fakeWorker(calls);
+    const discussion = discussionForWorker(worker, {
+        // The turn never dispatches (omni-p8-test 9d288f0b): nothing writes until the watchdog aborts.
+        async beforeTurn(context) {
+            await new Promise((resolve) => context.signal.addEventListener('abort', resolve, { once: true }));
+            context.signal.throwIfAborted();
+        },
+        close() { throw Object.assign(new Error('relay still holds an undispatched envelope'), { code: 'DUAL_DISCUSSION_CLOSE_UNPROVEN' }); },
+    });
+    const adapter = createOrchestratorAdapter({ workspaceRoot: input.workspaceRoot, authorityStore: store, worker, discussion,
+        turnSafety: { softMs: 2000, hardMs: 4000, heartbeatMs: 10, noProgressMs: 250, graceMs: 50, pollMs: 5 } });
+    await assert.rejects(() => adapter.runTask(store.derive()), (error) => {
+        assert.equal(error.code, 'DUAL_NO_WRITE_PROGRESS');
+        assert.equal(error.discussionQuiescent, false);
+        return true;
+    });
+    const task = store.derive().tasks['TASK-1'];
+    assert.equal(store.readOperationRecords().some((record) => record.type === 'settled'), true);
+    assert.equal(Object.values(store.derive().leases).every((lease) => lease.status === 'released'), true);
+    assert.equal(task.lastOutcome.status, 'FAILED');
+    assert.equal(task.lastOutcome.code, 'DUAL_NO_WRITE_PROGRESS');
+    assert.equal(task.finalization, undefined);
+});
+
 for (const field of ['workerBaselineSha256', 'workerContractSha256', 'bindingSha256', 'workerRoot']) {
     test(`isolated discussion denies reference ${field} mismatch before factory or seeds`, async (t) => {
         const input = fixture(t), calls = [];
