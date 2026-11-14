@@ -68,3 +68,21 @@ Approved and done (2026-11-14):
 - **F8 — unclassified failures are relayed.** `next_action` is
   `relay_failure_to_human` when the correction policy cannot classify the failure,
   instead of a `request_correction` it would refuse.
+
+## 4. Run c2f42f52 (2026-11-14, after F1–F8)
+
+Bootstrap, context questions (answered by the orchestrator in under a minute, twice),
+a single-pass review (about 1 min, three real findings) and the automatic NEEDS_FIX
+correction all worked. The session blocked on attempt 2:
+
+- **F9 — the correction worker did not see the findings (fixed).** `correction_context`
+  carried only the reason; it now carries the previous rejection's findings verbatim.
+- **F10 — preserved attempts exhausted the write fence (fixed).** The fence walked the
+  whole project, including 11 preserved attempt workspaces with their own
+  `node_modules` (189k of 207k entries), and refused at 200k. Daemon re-dispatch of
+  undelivered context then repeated the refusal every ~90 s until the orchestrator
+  blocked the session. Other attempts' workspaces are no longer walked. The old
+  sessions' workspaces were moved to `~/Documents/omni-p8-archive/`.
+- **Still open:** context re-dispatch after a pre-launch refusal is unbounded (each
+  retry walked the tree synchronously for ~80 s); the refusal message lives only in
+  `worker_start.error`, not in the ledger.

@@ -285,6 +285,11 @@ test('multiple tasks and attempts open distinct bounded corrections', async (t) 
             const task = f.store.derive().tasks[taskId];
             const { workerRoot } = readTaskBinding(f.root, task.isolatedWorkspace.reference);
             const spec = JSON.parse(fs.readFileSync(path.join(workerRoot, '.omni/codex-gemini/runs', taskId, 'spec.json')));
+            // The correction worker sees the previous attempt's rejection findings verbatim.
+            if (attempt === 2) {
+                assert.deepEqual(spec.correction_context.findings, task.previousAttempts.at(-1).handoffRejection.findings);
+                assert.match(spec.correction_context.findings[0].description, /^\[ERROR\] Must return a string\.$/);
+            } else assert.equal(spec.correction_context, undefined);
             const result = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId, config: CONFIG,
                 spawnImpl: fakeSpawn(() => ({ stdout: claudeVerdict(spec, 'NEEDS_FIX',
                     [{ file: spec.allowed_files[0], line: 1, description: 'Must return a string.', severity: 'ERROR' }]) })) });
