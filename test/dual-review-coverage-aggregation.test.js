@@ -64,3 +64,21 @@ test('an outright seed failure is a harness launch failure; a kill mid-seed keep
     assert.deepEqual(classifyFailure({ task_id: 'TASK-1', lastOutcome: { attempt: 1, status: 'FAILED', code: 'DUAL_DISCUSSION_SEED_FAILED' } }),
         { category: 'harness', phase: 'worker_launch' });
 });
+
+test('a file cut across chunks says which part it is, and every chunk follows the coverage contract (omni-p8-test)', () => {
+    const { planReviewChunks } = require('../lib/dual/review-chunking');
+    const { CEILINGS } = require('../lib/dual/discussion/contracts');
+    const line = `<path d="${'M0 0 L1 1 '.repeat(20)}"/>\n`;
+    const diff = `New file: index.html\n${line.repeat(Math.ceil((CEILINGS.maxBodyBytes * 2.5) / line.length))}`;
+    const plan = planReviewChunks('# Task: T1\n', '{"type":"object"}', diff);
+    assert.ok(plan.chunks.length >= 3);
+    plan.chunks.forEach((chunk, index) => {
+        assert.match(chunk.body, new RegExp(`Part ${index + 1} of ${plan.chunks.length} of this file`));
+        assert.match(chunk.body, /follow the Review coverage contract/);
+        assert.doesNotMatch(chunk.body, /Never claim checks for unseen code/);
+        assert.ok(chunk.body_bytes <= CEILINGS.maxBodyBytes);
+    });
+    const small = planReviewChunks('# Task: T1\n', '{"type":"object"}', 'New file: a.css\nbody{}\n');
+    assert.equal(small.chunks.length, 1);
+    assert.doesNotMatch(small.chunks[0].body, /Part 1 of/);
+});

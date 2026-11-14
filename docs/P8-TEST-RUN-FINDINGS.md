@@ -51,15 +51,20 @@ Done before the next Codex window (this change set):
 - **F4 — the discovery error says how to recover.** `DUAL_DISCOVERY_MISSING` tells the
   orchestrator to run `omni dual daemon start`.
 
-Next (needs a design decision, not started):
+Approved and done (2026-11-14):
 
-- **F5 — classify seed failures.** A seed that fails on a rate limit or before any
-  model turn is a harness failure (`worker_launch`) and should wait or retry, not
-  end the session. Needs a reliable signal from the seed message (F3 first).
-- **F6 — whole-file review chunks.** Split the review diff at file boundaries and give a
-  chunk whole files; send the coverage contract once per review, not per chunk; raise
-  the chunk budget only with user approval (it was raised to 32 KiB on 2026-11-11).
-- **F7 — bootstrap returns early.** Return the session id as soon as the plan is
-  registered and let scout continue in the daemon; document a longer exec timeout.
-- **F8 — fewer terminal blocks.** Before the orchestrator writes `session.blocked`,
-  `next_action` should offer the in-session path (correction, recover lease, wait).
+- **F5 — seed failures are harness failures.** An outright seed failure (exit code set,
+  not timed out) is `DUAL_DISCUSSION_SEED_FAILED`, classified harness/`worker_launch`;
+  a kill mid-seed keeps `DUAL_WORKER_EXECUTION_FAILED` and its automatic recovery.
+  Rate-limit waiting for seeds (WAITING_RUNTIME) is still open.
+- **F6 (part) — chunk prompts agree with the contract.** The per-chunk text no longer
+  says "never claim checks for unseen code" (it contradicted the Review coverage
+  contract); a file cut across chunks is labelled "Part i of n", so a cut is not a
+  defect. Still open: sending the task input once per review. Chunks share one
+  conversation, but a discussion re-seed mid-review would leave later chunks without
+  the task contract, so it needs a re-seed-safe design first. Budget unchanged.
+- **F7 — bootstrap no longer times out.** `session.resume` waited on the 500 ms
+  discovery timeout while the daemon dispatched the scout; it now waits up to 35 s.
+- **F8 — unclassified failures are relayed.** `next_action` is
+  `relay_failure_to_human` when the correction policy cannot classify the failure,
+  instead of a `request_correction` it would refuse.
