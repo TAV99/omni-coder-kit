@@ -13,7 +13,7 @@ const { createHostPorts } = require('../lib/dual/discussion/host-ports');
 const { createDiscussionSession } = require('../lib/dual/discussion/session');
 const { DISCUSSION_PHASES, DiscussionPhaseError, runDiscussionPhase } = require('../lib/dual/discussion/phase-bridge');
 
-async function sessionFixture(t, { body = '{"summary":"scouted"}', unknown = false, bodies, recover = false, invalidPayload = false, failed = [], rateLimited = [] } = {}) {
+async function sessionFixture(t, { body = '{"summary":"scouted"}', unknown = false, bodies, recover = false, invalidPayload = false, failed = [], rateLimited = [], delays = [] } = {}) {
     const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'omni-phase-bridge-'));
     const calls = [];
     const snapshot = { text: 'Read-only phase context', sha256: sha256Utf8('Read-only phase context') };
@@ -35,6 +35,7 @@ async function sessionFixture(t, { body = '{"summary":"scouted"}', unknown = fal
                 allowlistedTerminalMarkers: ['fixture.completed'] },
             invoke: async (args) => {
                 calls.push(args);
+                if (delays[calls.length - 1]) await new Promise((resolve) => setTimeout(resolve, delays[calls.length - 1]));
                 if (unknown === true || (Array.isArray(unknown) && unknown.includes(calls.length))) throw new Error('provider outcome unavailable');
                 const limited = rateLimited.includes(calls.length);
                 return { exitCode: failed.includes(calls.length) || limited ? 7 : 0, stderr: '', stdout: JSON.stringify({
@@ -495,4 +496,32 @@ test('runtimeWait returning false falls back to the ordinary failed retry', asyn
     assert.equal(asked, 1);
     assert.equal(calls.length, 2);
     assert.equal(outcome.discussionRecovery, 'failed-retry');
+});
+
+test('a phase question defaults to the 900 s discussion TTL', async (t) => {
+    const { session, args } = await sessionFixture(t);
+    const { ttlMs, ...rest } = args;
+    await runDiscussionPhase(rest);
+    const [question] = (await session.relay.inspect()).messages;
+    assert.equal(question.expires_at - question.created_at, 900_000);
+});
+
+test('a reply that lands after its question expired is asked again once, not reported as malformed', async (t) => {
+    const { session, calls, args } = await sessionFixture(t, { delays: [120] });
+    const outcome = await runDiscussionPhase({ ...args, ttlMs: 60, now: Date.now() });
+    assert.deepEqual(outcome.result, { summary: 'scouted' });
+    assert.equal(outcome.discussionRecovery, 'expired-retry');
+    assert.equal(calls.length, 2);
+    const view = await session.relay.inspect();
+    assert.equal(view.messages.filter((message) => message.kind === 'question').length, 2);
+});
+
+test('a question that expires again after its retry fails as a classified harness expiry', async (t) => {
+    const { calls, args } = await sessionFixture(t, { delays: [120, 120] });
+    await assert.rejects(runDiscussionPhase({ ...args, ttlMs: 60, now: Date.now() }),
+        phaseError('DUAL_DISCUSSION_MESSAGE_EXPIRED'));
+    assert.equal(calls.length, 2);
+    const { classifyFailure } = require('../lib/dual/correction-policy');
+    assert.deepEqual(classifyFailure({ lastOutcome: { code: 'DUAL_DISCUSSION_MESSAGE_EXPIRED' } }),
+        { category: 'harness', phase: 'worker_launch' });
 });

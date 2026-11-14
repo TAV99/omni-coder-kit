@@ -107,6 +107,19 @@ session blocked on `NEEDS_PROCESS_EVIDENCE`. No host sleep.
   seen src/style.css. The chunk prompt said "report missing cross-chunk context as a
   risk/finding" and gave no position; worst-wins aggregation made it NEEDS_FIX. Chunks
   now know "i of N" and report unseen code as a risk only.
+- **F15 (run c3b7f3cb) — discussion questions expired in the queue (fixed).** Attempt 3
+  (byte-identical to attempt 2, typecheck and 10 unit tests green) failed review with
+  `RESULT_MALFORMED`: chunk 1 was created 11:52:13 with a 300 s TTL, received 11:54:08,
+  dispatched 11:56:33, and its reply landed 11:57:14, one second after expiry, so the
+  relay stored `stale/message_expired` and the phase saw no JSON. 9d288f0b's scout
+  question expired the same way before dispatch. Phase questions now use 900 s, an
+  expiry is asked once more, and a second expiry is the harness code
+  `DUAL_DISCUSSION_MESSAGE_EXPIRED`. Where the 2–4 minutes of queue delay go is still
+  open (fence 0.2 s per spawn and ledger derive 15–35 ms were measured and ruled out;
+  the gaps sit between short probe processes about 23 s apart).
+- **F16 (open) — a correction starts from the baseline.** Attempt N+1 gets a fresh
+  workspace, so a one-line fix redoes the task; c3b7f3cb carried attempt 2's files over
+  only because the worker read them by absolute path.
 - **Open:** why the scout turn never dispatched (needs the daemon log from a rerun);
   `DUAL_NO_WRITE_PROGRESS` and `DUAL_TURN_STALLED` are unclassified, so F8 relays them
   to the user instead of granting a correction.
