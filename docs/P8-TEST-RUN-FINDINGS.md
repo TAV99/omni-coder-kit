@@ -101,6 +101,12 @@ session blocked on `NEEDS_PROCESS_EVIDENCE`. No host sleep.
   it now goes to `.omni/runtime/dual/daemon.log`.
 - **F12 — a watchdog abort with no live child now settles (fixed).** The ledger proves
   quiescence when every tracked child exited; the outcome is recorded instead.
+- **F13 (run c3b7f3cb) — chunk reviews flagged what they had not seen yet (fixed).**
+  Attempt 1's worker review found one real ERROR (SVG text ~6px on mobile). Attempt 2's
+  review returned NEEDS_FIX on six WARNINGs that only said index.html's chunk had not
+  seen src/style.css. The chunk prompt said "report missing cross-chunk context as a
+  risk/finding" and gave no position; worst-wins aggregation made it NEEDS_FIX. Chunks
+  now know "i of N" and report unseen code as a risk only.
 - **Open:** why the scout turn never dispatched (needs the daemon log from a rerun);
   `DUAL_NO_WRITE_PROGRESS` and `DUAL_TURN_STALLED` are unclassified, so F8 relays them
   to the user instead of granting a correction.

@@ -82,3 +82,24 @@ test('a file cut across chunks says which part it is, and every chunk follows th
     assert.equal(small.chunks.length, 1);
     assert.doesNotMatch(small.chunks[0].body, /Part 1 of/);
 });
+
+test('each chunk knows its position across files, and an unseen file is a risk, not a finding (omni-p8-test c3b7f3cb)', () => {
+    const { planReviewChunks } = require('../lib/dual/review-chunking');
+    const { CEILINGS } = require('../lib/dual/discussion/contracts');
+    const line = (n) => `.rule-${n} { color: #123456; padding: 1rem; }\n`;
+    const file = (name, count) => `New file: ${name}\n${Array.from({ length: count }, (_, i) => line(i)).join('')}`;
+    const lines = Math.ceil((CEILINGS.maxBodyBytes * 0.8) / line(100).length);
+    const plan = planReviewChunks('# Task: T1\n', '{"type":"object"}', file('index.html', lines) + file('src/style.css', lines));
+    assert.ok(plan.chunks.length >= 2);
+    const count = plan.chunks.length;
+    plan.chunks.forEach((chunk, index) => {
+        assert.match(chunk.body, new RegExp(`Review chunk ${index + 1} of ${count} of a larger diff`));
+        assert.equal(/\(the last chunk\)/.test(chunk.body), index === count - 1);
+        assert.match(chunk.body, /never return NEEDS_FIX or REJECT for it; note it in remaining risks/);
+        assert.doesNotMatch(chunk.body, /Only approve this chunk if supported/);
+        assert.ok(chunk.body_bytes <= CEILINGS.maxBodyBytes);
+    });
+    assert.ok(plan.chunks.some((chunk) => /File context[^\n]*src\/style\.css/.test(chunk.body)));
+    const small = planReviewChunks('# Task: T1\n', '{"type":"object"}', 'New file: a.css\nbody{}\n');
+    assert.doesNotMatch(small.chunks[0].body, /Review chunk 1 of/);
+});
