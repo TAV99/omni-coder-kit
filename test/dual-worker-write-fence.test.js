@@ -123,6 +123,48 @@ test('an existing source hardlink outside both roots is refused before execution
         assert.equal(spawned, false);
     });
 
+function attemptFixture(t) {
+    const f = fixture(t);
+    const storage = path.join(f.sourceRoot, '.omni', 'runs', 'dual-workspaces');
+    const workerRoot = path.join(storage, 'session-b', 'task-a', 'attempt-2', 'workspace');
+    const sibling = path.join(storage, 'session-a', 'task-a', 'attempt-1', 'workspace');
+    const revision = path.join(storage, 'session-b', 'task-a', 'revision-r1', 'attempt-1');
+    for (const dir of [workerRoot, sibling, revision]) fs.mkdirSync(dir, { recursive: true });
+    return { ...f, workerRoot: fs.realpathSync(workerRoot), sibling: fs.realpathSync(sibling), revision: fs.realpathSync(revision) };
+}
+
+test('other attempts\' private workspaces are not inspected, so preserved attempts cannot exhaust the bound',
+    { skip: process.platform !== 'darwin' }, (t) => {
+        const f = attemptFixture(t);
+        // Shapes the walk would refuse anywhere else in source: a shared inode and an external link.
+        fs.writeFileSync(path.join(f.sibling, 'a.js'), 'a');
+        fs.linkSync(path.join(f.sibling, 'a.js'), path.join(f.sibling, 'b.js'));
+        fs.symlinkSync(path.join(f.container, 'outside'), path.join(f.revision, 'external-link'));
+        const fence = createWorkerWriteFence({ sourceRoot: f.sourceRoot, workerRoot: f.workerRoot, spawn: cp.spawnSync });
+        const r = fence.spawn(process.execPath, ['-e', `
+            const fs=require('fs');try{fs.writeFileSync(process.argv[1],'bad');process.exit(2)}catch(e){process.exit(['EPERM','EACCES'].includes(e.code)?0:3)}`,
+        path.join(f.sibling, 'a.js')], { timeout: 10000, shell: false });
+        assert.equal(r.status, 0, 'a sibling attempt stays write-protected');
+        assert.equal(fs.readFileSync(path.join(f.sibling, 'a.js'), 'utf8'), 'a');
+    });
+
+test('a hardlink from a sibling attempt into the worker root is still refused',
+    { skip: process.platform !== 'darwin' }, (t) => {
+        const f = attemptFixture(t);
+        fs.writeFileSync(path.join(f.sibling, 'shared.js'), 'protected');
+        fs.linkSync(path.join(f.sibling, 'shared.js'), path.join(f.workerRoot, 'shared.js'));
+        assert.throws(() => createWorkerWriteFence({ sourceRoot: f.sourceRoot, workerRoot: f.workerRoot }),
+            { code: 'DUAL_WORKER_WRITE_FENCE_UNAVAILABLE' });
+    });
+
+test('the worker\'s own attempt directory is still inspected',
+    { skip: process.platform !== 'darwin' }, (t) => {
+        const f = attemptFixture(t);
+        fs.symlinkSync(path.join(f.container, 'outside'), path.join(path.dirname(f.workerRoot), 'external-link'));
+        assert.throws(() => createWorkerWriteFence({ sourceRoot: f.sourceRoot, workerRoot: f.workerRoot }),
+            { code: 'DUAL_WORKER_WRITE_FENCE_UNAVAILABLE' });
+    });
+
 test('a protected source symlink to an outside inode is refused',
     { skip: process.platform !== 'darwin' }, (t) => {
         const f = fixture(t);
