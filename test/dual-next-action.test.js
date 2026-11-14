@@ -41,3 +41,13 @@ test('session action: a human gate first, then blocker, then the most urgent tas
     assert.deepEqual(sessionNextAction({ state: 'EXECUTING', taskActions: { T1: 'done', T2: 'done' } }), { action: 'evaluate_completion' });
     assert.deepEqual(sessionNextAction({ state: 'PLANNED', taskActions: {} }), { action: 'inspect_status' });
 });
+
+test('an unclassified failure is relayed to the person instead of a correction the policy refuses (omni-p8-test)', () => {
+    const failed = (code) => ({ task_id: 'T1', lastOutcome: { attempt: 2, status: 'FAILED', code, summary: 's' } });
+    assert.equal(authorityNextAction(failed('REVIEW_COVERAGE_INVALID'), 'EXECUTING', 'FAILED'), 'relay_failure_to_human');
+    assert.equal(authorityNextAction(failed('REVIEW_COVERAGE_CONTRADICTORY'), 'EXECUTING', 'FAILED'), 'request_correction');
+    assert.equal(authorityNextAction(failed('DUAL_DISCUSSION_SEED_FAILED'), 'EXECUTING', 'FAILED'), 'request_correction');
+    assert.ok(NEXT_ACTIONS.includes('relay_failure_to_human'));
+    assert.deepEqual(sessionNextAction({ state: 'EXECUTING', taskActions: { T1: 'relay_failure_to_human', T2: 'wait_for_agy' } }),
+        { action: 'relay_failure_to_human', task_id: 'T1' });
+});

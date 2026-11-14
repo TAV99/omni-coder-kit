@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chunk reviews that contradict each other (or mix schema versions) now fail as `REVIEW_COVERAGE_CONTRADICTORY`, a worker result failure that allows a bounded correction; it was the unclassified `REVIEW_COVERAGE_INVALID`, which blocked correction.
 - Failures name their cause: an MCP tool error keeps a masked daemon code as `details.cause_code`, isolated QC errors carry their path-free reason, a failed worker run records its validation errors in the outcome summary, seed failures keep their message, and `DUAL_DISCOVERY_MISSING` says to run `omni dual daemon start`.
 - A discussion seed that fails outright (rate limit, auth, CLI exit) is recorded as `DUAL_DISCUSSION_SEED_FAILED`, a harness launch failure eligible for a bounded harness correction; a kill mid-seed keeps its automatic recovery. Failure summaries redact paths and tokens instead of dropping the cause.
+- `next_action` is `relay_failure_to_human` for a failure the correction policy cannot classify, instead of a `request_correction` it would refuse; the controller workflow says to report the code and summary to the user and keep the session open.
 - `omni dual bootstrap` rejects `context_files` under control-plane paths (`.claude/`, `.codex/`, `.omni/runs/`…) with `DUAL_BOOTSTRAP_PLAN_INVALID`, since a worker snapshot never contains them (seen as `DUAL_TASK_CONTEXT_UNAVAILABLE` after plan approval).
 
 ## [3.2.0] — 2026-11-12

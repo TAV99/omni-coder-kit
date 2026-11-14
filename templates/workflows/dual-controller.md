@@ -52,7 +52,7 @@ Workers emit a `decision_log` sidecar for delegated IDs with `dimension_id`, `ch
 | WAITING_FOR_DEPENDENCY / WAITING_FOR_SCOPE | Finish/QC the predecessor; wait is not failure. |
 | NEEDS_CONTEXT / pending_questions | AUTONOMOUS REPLY MANDATORY for non-safety, in-scope conventions: inspect `.omni/sdlc/design-spec.md` and `.omni/sdlc/content-source.md` immediately, synthesize an authoritative answer, and dispatch `omni_dual_resume` with `context_reply` without pausing. For commerce, sensitive data, an external write, a paid action, a breaking change, or scope expansion, always require user input regardless of grounding. |
 | AWAITING_CODEX_QC / isolated handoff | Perform independent semantic review against the registered requirements before normal isolated QC. |
-| NEEDS_FIX / FAILED / last_outcome | Inspect preserved attempt artifacts, then request bounded correction if safe. |
+| NEEDS_FIX / FAILED / last_outcome | Inspect preserved attempt artifacts, then request bounded correction if safe. When `next_action` is `relay_failure_to_human`, the failure is unclassified and the policy refuses a correction: tell the user the `last_outcome` code and summary and wait for their decision; do not block the session. |
 | CONFLICT | Preserve user and worker versions. Resolve source/context disagreement; never blindly overwrite. |
 | Partial integration journal | Resume its integration/recovery; a new correction attempt is refused. |
 | Expired unreleased lease | Verify actual process ownership/termination before recovery; expiry is not proof the worker stopped. |
