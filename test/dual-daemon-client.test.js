@@ -389,6 +389,28 @@ test('plan registration RPC budget covers artifact and capability preflight rath
     assert.equal(result.registered, true);
 });
 
+test('session resume RPC budget covers task dispatch rather than the short discovery timeout (omni-p8-test)', async (t) => {
+    const wsRoot = createTempWorkspace(t);
+    let observedTimeout;
+    const server = http.createServer((req, res) => {
+        req.resume();
+        req.on('end', () => setTimeout(() => res.end(JSON.stringify({ result: { state: 'EXECUTING' } })), 30));
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    fs.mkdirSync(getRuntimeDir(wsRoot), { recursive: true });
+    fs.writeFileSync(path.join(getRuntimeDir(wsRoot), 'daemon.json'), JSON.stringify({
+        protocol_version: 1, workspace_id: computeWorkspaceId(wsRoot), workspace_root: wsRoot,
+        pid: process.pid, started_at: new Date().toISOString(), host: '127.0.0.1', port: server.address().port, token: 'a'.repeat(64),
+    }));
+    const client = createDaemonClient({ workspaceRoot: wsRoot, timeoutMs: 1, httpImpl: {
+        request(options, callback) { observedTimeout = options.timeout; return http.request(options, callback); },
+    } });
+    const result = await client.resumeSession('session');
+    assert.ok(observedTimeout >= 35_000, 'RPC timeout covers dispatching the next task');
+    assert.equal(result.state, 'EXECUTING');
+});
+
 test('completion RPC budget covers synchronous integrity measurement rather than the short discovery timeout', async (t) => {
     const wsRoot = createTempWorkspace(t);
     let observedTimeout;
