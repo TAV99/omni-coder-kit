@@ -68,3 +68,36 @@ test('importing daemon server as a library does not install fatal handlers', () 
         require('node:assert/strict').deepEqual(after, before);`);
     assert.equal(result.status, 0, result.stderr);
 });
+
+test('a spawned daemon writes stderr to the runtime log, rotating one previous log past the bound', (t) => {
+    const { openDaemonLogStdio } = require('../lib/dual/daemon-diagnostics');
+    const runtimeDir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dual-daemon-log-')), 'runtime', 'dual');
+    t.after(() => fs.rmSync(path.dirname(path.dirname(runtimeDir)), { recursive: true, force: true }));
+    const run = (line) => {
+        const log = openDaemonLogStdio(runtimeDir, { maxBytes: 64 });
+        try {
+            const result = spawnSync(process.execPath, ['-e', `process.stderr.write(${JSON.stringify(line)})`], { stdio: log.stdio });
+            assert.ifError(result.error);
+        } finally { log.close(); }
+    };
+    run('first diagnostic\n');
+    run('second diagnostic\n');
+    const file = path.join(runtimeDir, 'daemon.log');
+    assert.equal(fs.readFileSync(file, 'utf8'), 'first diagnostic\nsecond diagnostic\n');
+    assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+    run('x'.repeat(80) + '\n');
+    run('after rotation\n');
+    assert.equal(fs.readFileSync(file, 'utf8'), 'after rotation\n');
+    assert.match(fs.readFileSync(`${file}.1`, 'utf8'), /^first diagnostic\nsecond diagnostic\nx{80}\n$/);
+});
+
+test('an unusable runtime log never blocks the daemon spawn', (t) => {
+    const { openDaemonLogStdio } = require('../lib/dual/daemon-diagnostics');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dual-daemon-log-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const blocker = path.join(root, 'file');
+    fs.writeFileSync(blocker, '');
+    const log = openDaemonLogStdio(path.join(blocker, 'dual'));
+    assert.equal(log.stdio, 'ignore');
+    log.close();
+});
