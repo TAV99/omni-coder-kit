@@ -48,6 +48,19 @@ test('a failed run records its validation errors in the outcome summary, never a
     assert.equal(failureCause(coverage), ': data.entities: missing independent coverage check; ui.copy: missing independent coverage check');
     assert.equal(failureCause(Object.assign(new Error('Contradictory coverage_checks: errors.messages'), { code: 'REVIEW_COVERAGE_CONTRADICTORY' })),
         ': Contradictory coverage_checks: errors.messages');
-    assert.equal(failureCause(new Error('ENOENT: /Users/someone/project/file')), '');
+    assert.equal(failureCause(new Error('ENOENT: /Users/someone/project/file missing')), ': ENOENT: [path] missing');
+    assert.equal(failureCause(new Error('401 bearer abc.def rejected')), ': 401 [REDACTED_TOKEN] rejected');
     assert.equal(failureCause(undefined), '');
+});
+
+test('an outright seed failure is a harness launch failure; a kill mid-seed keeps its recovery path (omni-p8-test b9269199)', () => {
+    const { isSeedFailure } = require('../lib/dual/isolated-authority');
+    const { classifyFailure } = require('../lib/dual/correction-policy');
+    assert.equal(isSeedFailure(new Error('Codex seed failed (exit=1, timedOut=false, overflowed=false): 429 Too Many Requests')), true);
+    assert.equal(isSeedFailure(new Error('AGY seed failed with status \'error\': quota')), true);
+    assert.equal(isSeedFailure(new Error('Codex seed failed (exit=null, timedOut=false, overflowed=false): killed')), false, 'kill');
+    assert.equal(isSeedFailure(new Error('AGY seed process failed (exitCode=1, timedOut=true, overflowed=false, transportError=x): slow')), false, 'timeout');
+    assert.equal(isSeedFailure(Object.assign(new Error('Codex seed failed (exit=1)'), { code: 'OWNER_BUSY' })), false, 'a coded error keeps its code');
+    assert.deepEqual(classifyFailure({ task_id: 'TASK-1', lastOutcome: { attempt: 1, status: 'FAILED', code: 'DUAL_DISCUSSION_SEED_FAILED' } }),
+        { category: 'harness', phase: 'worker_launch' });
 });

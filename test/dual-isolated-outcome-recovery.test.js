@@ -136,7 +136,9 @@ for (const killed of [true, false]) {
         const first = await pollTask(client, session.session_id, task => task?.lastOutcome
             && !Object.values(authorityStore.derive().leases).some(lease => lease.status === 'active'), 'first outcome missing');
         assert.equal(first.lastOutcome.status, 'FAILED');
-        assert.equal(first.lastOutcome.code, 'DUAL_WORKER_EXECUTION_FAILED');
+        // A kill mid-seed keeps the recoverable generic code; a real seed failure
+        // is recorded as a harness launch failure (omni-p8-test b9269199).
+        assert.equal(first.lastOutcome.code, killed ? 'DUAL_WORKER_EXECUTION_FAILED' : 'DUAL_DISCUSSION_SEED_FAILED');
         assert.ok(!first.isolatedHandoff);
         const { workerRoot } = readTaskBinding(workspaceRoot, first.isolatedWorkspace.reference);
         const runDir = path.join(workerRoot, '.omni/codex-gemini/runs/task-1');
