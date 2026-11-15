@@ -746,3 +746,49 @@ test('acceptance correction validator: async responsiveness, mutation fence, and
     assert.equal(settled.exit_code, 0);
 });
 
+
+test('a session command check is run in every quality cycle and recorded for the current source (F18b)', async (t) => {
+    const workspaceRoot = createTempDir('dual-session-command-check');
+    initGitRepo(workspaceRoot);
+    const authorityStore = createAuthorityStore(path.join(workspaceRoot, '.omni', 'sessions', 'test-sess-command'));
+    const planned = [];
+    const passing = createPassingTrustedQualityRunner();
+    const daemon = await startDaemonServer({
+        ...createDaemonServerOptions({ workspaceRoot, authorityStore }),
+        trustedQualityRunner: (input) => { planned.push(input.expected?.commandPlan || []); return passing(input); },
+        preflightRunner: mockPreflightRunner,
+        planArtifactVerifier: async (_root, p) => ({ plan_path: p.plan_path, plan_sha256: p.plan_sha256 }),
+    });
+    t.after(async () => {
+        await daemon.close();
+        fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    });
+    const client = createDaemonClient({ workspaceRoot, timeoutMs: 10000 });
+    const session = await client.beginSession({ workspace_root: workspaceRoot, mode: 'auto' });
+    const command = { program: 'node', args: ['-e', 'process.exit(0)'], cwd: '.' };
+    await client.registerPlan(session.session_id, {
+        plan_path: '.omni/plan.json', plan_sha256: sha('plan-command-check'),
+        acceptance_policy: { protocol_version: 1, checks: [{ id: 'regression-unit', requirement_id: 'REQ-1', phase: 'session',
+            kind: 'command', required: true, command }] },
+        tasks: [{ task_id: 'task-1', title: 'Task 1', owner: 'codex', allowed_files: ['index.html'], deny_patterns: [] }],
+    });
+    const taskLease = authorityStore.acquireLease('task-1', 'codex');
+    authorityStore.append({ schema_version: 2, type: 'task.completed', task_id: 'task-1', owner: 'codex', authority_state: 'TASK_VERIFIED',
+        modified_files: ['index.html'], diff_fingerprint: sha('diff1'), verdict: 'SUCCESS', verified_by: 'codex' });
+    authorityStore.releaseLease(taskLease.lease_id, 'test_task_completed');
+
+    const before = await client.evaluateCompletion(session.session_id);
+    assert.ok(before.blockers.some((b) => b.includes('SESSION_ACCEPTANCE_MISSING') && b.includes('regression-unit')), JSON.stringify(before));
+    let last;
+    for (const cycle of [1, 2, 3]) {
+        const execution = await client.executeQualityCycle(session.session_id, cycle);
+        last = await client.evaluateCompletion(session.session_id, { quality_evidence: execution.quality_evidence });
+    }
+    const { registeredCommandId } = require('../lib/dual/quality-runner');
+    assert.ok(planned.every((plan) => plan.some((entry) => entry.id === registeredCommandId(command))),
+        'every cycle plans the session command check');
+    const gate = authorityStore.derive().gates['acceptance-regression-unit'];
+    assert.equal(gate?.status, 'PASSED', JSON.stringify(gate));
+    assert.equal(gate.details.source, 'quality_cycle');
+    assert.equal(last.verified, true, JSON.stringify(last));
+});

@@ -120,6 +120,18 @@ session blocked on `NEEDS_PROCESS_EVIDENCE`. No host sleep.
 - **F16 (open) — a correction starts from the baseline.** Attempt N+1 gets a fresh
   workspace, so a one-line fix redoes the task; c3b7f3cb carried attempt 2's files over
   only because the worker read them by absolute path.
+## 6. Runs 4c2bc1ae and f2522f66 (2026-11-15)
+
+- 4c2bc1ae: attempt 1 passed QC with one WARNING; the session blocked on two
+  contradicting operator messages (stale "retry review" after attempt 3 began).
+- f2522f66: LANDING-2 integrated at attempt 1 (QC APPROVE, 0 findings), the first
+  `TASK_VERIFIED` of the run, then blocked at `ACCEPTANCE`:
+  - **F17 (fixed)** — the UI gate had no browser runner, so a required gate was always
+    `UNAVAILABLE`. The daemon now owns a fenced Playwright runner (`ui_measure: true`).
+    The machine still needs `npx playwright install chromium` (Playwright 1.65 wants
+    headless shell 1254; 1228 was installed).
+  - **F18a (fixed)** — `omni_dual_quality` executed a cycle without recording it.
+  - **F18b (fixed)** — session acceptance checks of kind command had no path to a gate.
 - **Open:** why the scout turn never dispatched (needs the daemon log from a rerun);
   `DUAL_NO_WRITE_PROGRESS` and `DUAL_TURN_STALLED` are unclassified, so F8 relays them
   to the user instead of granting a correction.
