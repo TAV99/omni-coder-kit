@@ -153,15 +153,22 @@ for (const snapshot of [false, true]) {
         const f = await ready(t, large, { snapshot });
         const evidence = JSON.stringify(f.read('evidence.json'));
         const receive = f.session.relay.receive;
+        const shared = [];
         f.session.relay.receive = async (message) => {
-            const shared = message.body.split('--- BEGIN REVIEW DIFF ---')[0];
-            assert.ok(shared.includes(evidence), 'review must receive the full evidence JSON, not only its path');
-            assert.ok(shared.includes('untrusted worker report'), 'worker claims must not become controller authority');
+            if (message.kind === 'question') shared.push(message.body.split('--- BEGIN REVIEW DIFF ---')[0]);
             return receive(message);
         };
         await f.orch.runPhase('review', f.taskId);
         const manifest = verifyManifest(f);
         assert.ok(manifest.chunks.length > 1);
+        // F6: chunk 1 carries the full brief; later chunks of the same conversation point back to it.
+        assert.ok(shared[0].includes(evidence), 'review must receive the full evidence JSON, not only its path');
+        assert.ok(shared[0].includes('untrusted worker report'), 'worker claims must not become controller authority');
+        for (const later of shared.slice(1)) {
+            assert.match(later, new RegExp(`^# Review continuation: task ${f.taskId}`));
+            assert.match(later, /are in chunk 1 above: apply them unchanged/);
+            assert.ok(!later.includes(evidence), 'the brief is not repeated');
+        }
         assert.equal(f.read('review.json').recommendation, 'APPROVE');
     });
 }

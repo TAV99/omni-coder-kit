@@ -103,3 +103,27 @@ test('each chunk knows its position across files, and an unseen file is a risk, 
     const small = planReviewChunks('# Task: T1\n', '{"type":"object"}', 'New file: a.css\nbody{}\n');
     assert.doesNotMatch(small.chunks[0].body, /Review chunk 1 of/);
 });
+
+test('with a continuation only chunk 1 carries the brief, so a large review needs far fewer chunks (F6)', () => {
+    const { planReviewChunks } = require('../lib/dual/review-chunking');
+    const { CEILINGS } = require('../lib/dual/discussion/contracts');
+    // omni-p8-test LANDING-3: ~25 KB of brief left 4-6 KB of diff per chunk (ten chunks).
+    const input = `# Task: T1\n${'brief and contract line. '.repeat(1000)}`;
+    const schema = JSON.stringify({ type: 'object', properties: { pad: { description: 's'.repeat(4500) } } });
+    const line = (n) => `const value${n} = compute(${n}); // scene lifecycle\n`;
+    const file = (name) => `New file: ${name}\n${Array.from({ length: 700 }, (_, i) => line(i)).join('')}`;
+    const diff = file('src/scene.ts') + file('src/main.ts');
+    const continuation = '# Review continuation: task T1\n\nThe brief is in chunk 1 above: apply it unchanged.\n';
+    const repeated = planReviewChunks(input, schema, diff);
+    const once = planReviewChunks(input, schema, diff, { continuation });
+    assert.ok(repeated.chunks.length >= 8, `repeated brief: ${repeated.chunks.length}`);
+    assert.ok(once.chunks.length <= repeated.chunks.length / 2, `${once.chunks.length} vs ${repeated.chunks.length}`);
+    assert.ok(once.chunks[0].body.startsWith(input));
+    for (const chunk of once.chunks.slice(1)) {
+        assert.ok(chunk.body.startsWith(continuation));
+        assert.ok(!chunk.body.includes('brief and contract line.'));
+    }
+    assert.equal(once.chunks.map((chunk) => chunk.text).join(''), diff);
+    assert.ok(once.chunks.every((chunk) => chunk.body_bytes <= CEILINGS.maxBodyBytes));
+    assert.ok(once.chunks.every((chunk, index) => chunk.body.includes(`Review chunk ${index + 1} of ${once.chunks.length}`)));
+});
