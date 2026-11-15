@@ -645,16 +645,19 @@ for (const kind of ['projected', 'legacy', 'fallback']) {
             return;
         }
         const section = input.slice(input.indexOf(coverageHeader), input.indexOf(coverageInstruction) + coverageInstruction.length);
-        const expected = gate.effective_artifact || gate;
+        // F19: the review sees the task's rows without per-row approval sources.
+        const expected = gate.effective_artifact
+            ? require('../lib/dual/coverage-runtime').reviewCoverageView(gate.effective_artifact, null, f.taskId) : gate;
         assert.equal(section, coverageHeader + JSON.stringify(expected) + '\n' + coverageInstruction);
         if (kind === 'fallback') return;
         const rendered = JSON.parse(section.split('\n')[2]);
-        assert.deepEqual(rendered, gate.effective_artifact);
+        assert.deepEqual(rendered, expected);
         for (const key of ['receipt', 'artifact', 'plan']) assert.equal(Object.hasOwn(rendered, key), false);
-        for (const dimension of gate.effective_artifact.dimensions) assert.ok(section.includes(JSON.stringify(dimension)));
+        for (const dimension of expected.dimensions) assert.ok(section.includes(JSON.stringify(dimension)));
+        assert.ok(expected.dimensions.every((dimension) => !('sources' in dimension)));
         const after = 'x'.repeat(9697 - Buffer.byteLength(section)) + section;
-        const before = after.replace(JSON.stringify(gate.effective_artifact), JSON.stringify(gate));
-        assert.equal(Buffer.byteLength(before), 20395);
+        const before = after.replace(JSON.stringify(expected), JSON.stringify(gate));
+        assert.ok(Buffer.byteLength(before) >= 20395, 'the unprojected gate still overflows the trial-20 envelope');
         assert.equal(Buffer.byteLength(after), 9697);
         const schema = JSON.stringify(require('../lib/dual/contracts').toDraft7Schema(
             require('../lib/dual/contracts').ReviewSchema, 'omni-dual-review-v1', { schemaVersion: 2, baselineKind: 'git' }), null, 2);

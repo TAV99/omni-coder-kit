@@ -339,3 +339,24 @@ test('each session scouts in its own directory, so a recovered session never rep
     assert.notEqual(reconnaissanceDirectory(plan, { ...base, sessionId: 's-2' }), first);
     assert.match(first, /^\.omni\/codex-gemini\/coverage-recon\/[0-9a-f]{64}$/);
 });
+
+test('the review coverage view drops per-row approval sources but keeps every bound row, value and reason (F19)', () => {
+    const { reviewCoverageView } = require('../lib/dual/coverage-runtime');
+    const { expandCatalog } = require('../lib/dual/spec-coverage');
+    // omni-p8-test 9daa0c14: every row quoted the whole bootstrap message as its approval source.
+    const approval = { kind: 'approval', ref: `User approved the spec. ${'Bootstrap brief text. '.repeat(30)}` };
+    const ids = expandCatalog(['core']).map((d) => d.id);
+    const artifact = { schema_version: 1, catalog_version: 1, classification_sources: ['design-spec.md#Summary'],
+        dimensions: ids.map((id, index) => ({ id, state: index % 2 ? 'pinned' : 'not_applicable', sources: [approval],
+            reason: `reason ${index}`, ...(index % 2 ? { value: { n: index } } : {}) })) };
+    const plan = { tasks: [{ task_id: 'TASK-1', decision_ids: ids }] };
+    const view = reviewCoverageView(artifact, plan, 'TASK-1');
+    assert.deepEqual(view.dimensions.map((row) => row.id), ids);
+    assert.ok(view.dimensions.every((row) => !('sources' in row)));
+    assert.deepEqual(view.dimensions[1], { id: ids[1], state: 'pinned', reason: 'reason 1', value: { n: 1 } });
+    assert.deepEqual(view.classification_sources, ['design-spec.md#Summary']);
+    assert.match(view.sources_omitted, /approved coverage receipt/);
+    assert.ok(JSON.stringify(view).length < JSON.stringify(artifact).length / 3);
+    assert.ok(artifact.dimensions.every((row) => row.sources), 'the approved artifact is not mutated');
+});
+

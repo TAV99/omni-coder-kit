@@ -29,6 +29,15 @@ test('malformed worker JSON is worker failure, LIMIT_EXCEEDED alone stays unknow
     assert.deepEqual(classifyFailure(task('LIMIT_EXCEEDED')), { category: 'unknown', phase: 'unclassified' });
 });
 
+test('omni\'s own review budget refusal is a harness failure; other LIMIT_EXCEEDED stays unknown (F19)', () => {
+    const budget = task('LIMIT_EXCEEDED');
+    budget.lastOutcome.summary = 'Worker stopped: Review fixed overhead leaves no chunk byte budget; inspect preserved attempt artifacts before a bounded correction.';
+    assert.deepEqual(classifyFailure(budget), { category: 'harness', phase: 'worker_launch' });
+    const output = task('LIMIT_EXCEEDED');
+    output.lastOutcome.summary = 'Worker stopped: Provider stdout exceeds ceiling';
+    assert.deepEqual(classifyFailure(output), { category: 'unknown', phase: 'unclassified' });
+});
+
 test('QC behavior and evidence failures are worker failures in controller QC', () => {
     for (const code of ['DUAL_QC_BEHAVIOR_FAILED', 'DUAL_QC_EVIDENCE_FAILED']) {
         assert.deepEqual(classifyFailure(task(code)), { category: 'worker', phase: 'controller_qc' });
