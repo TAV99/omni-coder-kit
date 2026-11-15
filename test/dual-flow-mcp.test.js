@@ -122,6 +122,9 @@ test('omni_dual_quality binds the healthy workspace/session and delegates exactl
     assert.deepEqual(calls.quality, [{ sessionId: SESSION_ID, cycleIndex: 2 }]);
     assert.equal(result.structuredContent.session_id, SESSION_ID);
     assert.deepEqual(result.structuredContent.quality_evidence, qualityEvidence(2));
+    // F18a: the executed cycle is recorded with the daemon's own evidence, as `omni dual qc` does.
+    assert.deepEqual(calls.completion, [{ sessionId: SESSION_ID, evidence: { quality_evidence: qualityEvidence(2) } }]);
+    assert.equal(result.structuredContent.recorded, true);
 });
 
 test('omni_dual_quality rejects malformed, wrong-cycle, and oversized daemon evidence without leaking payloads', async (t) => {
