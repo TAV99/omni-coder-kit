@@ -83,6 +83,24 @@ Source: the Orca (stablyai/orca) analysis in session `de33aa78`, re-checked on 2
 - **Orca.** Hooks first, with OSC 7501 as the fallback, giving `blocked: permission|question|auth`.
 - **Change.** The watchdog and UI read claude/codex JSONL events for "waiting on permission" so they can tell it apart from "stalled". Do this after O1–O4. It needs a check of what the adapters parse today.
 
+## After the omni-p8-test run (2026-11-15)
+
+Re-read against Orca `3036ed0d` (2026-11-14), `skill-guides/orchestration/` and
+`src/main/runtime/orchestration/`. Each row is a gap that cost a session in
+`docs/P8-TEST-RUN-FINDINGS.md`.
+
+| omni gap (p8 evidence) | What Orca does (evidence) | Candidate change |
+|---|---|---|
+| **O6. A correction starts from the baseline (F16).** Attempt N+1 gets a fresh workspace and fresh conversations; c3b7f3cb/4c2bc1ae carried work only because the worker read the old attempt by absolute path. | A fix goes to the same worker: `send` to a finished worker becomes a follow-up Task on the same agent and workspace (`db/dispatch-context/worker-follow-up-plan.ts`: the follow-up inherits the predecessor's resource through `follow_up_of_dispatch_id`). The guide: "Send fixes to a worker." | Seed attempt N+1's private workspace from attempt N's candidate for review-driven corrections (not for harness failures), keeping the baseline fence. Optionally reuse the discussion conversation. |
+| **O7. One budget for quality and technical failures.** Three attempts covered review NEEDS_FIX, chunk blindness and queue expiry alike; c3b7f3cb spent its last attempt on a harness expiry. | The breaker counts only failed starts: `DISPATCH_CIRCUIT_BREAK_FAILURES = 3` advances in `failDispatch`; "A worker's own failed report does not advance that count" (`references/recovery-and-cleanup.md`). | Count harness failures separately from review-driven corrections, so a quality loop is bounded on its own and a harness fault never ends it. |
+| **O8. An exhausted or BLOCKED task needs a new session.** Five re-bootstraps, each redoing scout and coverage approval. | After the breaker, only an explicit user request may reopen the **same Task** in its Run (`task-update --status ready`); "this fresh series starts at zero"; history and the broken count stay; never route around it with a new Run. | A human-only `omni dual task reopen <task>` that keeps plan, receipt and coverage approval and starts a new attempt series, with the old attempts kept in the ledger. |
+| **O9. No retry for a reviewer that failed before its verdict.** 4c2bc1ae: Codex exited non-zero in 5 s with the handoff intact; the only path was a correction. | A reviewer is an ordinary worker Task, retried with `worker-start --task <id> --retry-of <dispatch>` against the breaker. | Retry independent QC on the same handoff when the reviewer produced no verdict (exit before contract), within the review budget; keep its stderr. |
+| **O10. Messages expire in the queue (F15).** The relay discarded a reply that landed 1 s after a 300 s TTL. | Mail has no expiry: a working worker gets a message "when its current turn ends" (`orchestration.md`); staleness is decided by dispatch identity, not by the clock. | F15 (900 s plus one retry) is the stopgap; consider dropping TTL as a failure cause for phase questions and keeping only authority staleness. |
+| **O11. Contradicting operator messages (4c2bc1ae).** A stale "retry review" arrived after the orchestrator had moved to attempt 3, so it blocked. | Every receipt carries `next`; the coordinator handles a whole `check` batch before the next, and recovery acts "only on proof". | Show the current `next` (task, attempt, action) in `omni ui` beside the orchestrator pane, so the user writes against the current state. |
+
+Already aligned: silence or a timeout never proves exit (Orca's guide, omni's
+`NEEDS_PROCESS_EVIDENCE`); a guarded stop is not a proof of stop.
+
 ## Not adopted
 - Nesting depth 4 (squad stays depth 1).
 - PTY as the control path (squad stays headless; the PTY is only for the human orchestrator view).
