@@ -1,6 +1,6 @@
 # SPEC F17 — a daemon-owned browser runner for the UI gate
 
-Status: draft for review (2026-11-15). Source: omni-p8-test session `f2522f66`, the
+Status: phase 1 implemented (2026-11-15); review answers: static server, height 900 full-page, "no infinite animation", missing reduced-motion CSS stays advisory. Source: omni-p8-test session `f2522f66`, the
 first session to reach `ACCEPTANCE`. LANDING-2 was `TASK_VERIFIED` at 06:07; the session
 then stalled because the UI gate can never pass.
 
@@ -128,3 +128,17 @@ orchestrator relays the exact reason to the user.
 
 `UiEvidenceSchema`, `evaluateUiGate` verdict rules, policy hashing, the source-fingerprint
 binding, and the advisory-only role of static CSS analysis.
+
+## 7. Phase 1 as built (deviations)
+
+- The static server runs inside the fenced child, not in the daemon.
+- A reduced-motion failure surfaces as `UNAVAILABLE` ("Browser evidence does not prove a
+  reduced-motion run"), because `validateRuntimeResult` is unchanged. The gate still does
+  not pass, and the reason is explicit.
+- A fence that cannot be set up surfaces as `UNAVAILABLE` with the fence's message, not
+  `BLOCKED`: the evaluator records adapter failures that way.
+- The submitted-evidence path is unchanged and still strict. `ui_measure` is the path
+  the orchestrator is told to use.
+- `omni dual qc` has no `--ui-measure` flag yet; the MCP tool carries it.
+- Live check on omni-p8-test: Playwright 1.65 needs `chromium_headless_shell-1254`;
+  the machine had 1228, and the runner reported the install command.

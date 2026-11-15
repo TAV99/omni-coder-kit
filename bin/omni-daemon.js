@@ -10,6 +10,7 @@ const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter'
 const { resolveRegisteredAgyProjectId } = require('../lib/dual/agy-project');
 const { createTrustedQualityRunner } = require('../lib/dual/quality-runner');
 const { createTrustedUiAdapter } = require('../lib/dual/visual-qa');
+const { createPlaywrightUiRunner } = require('../lib/dual/ui-runner');
 const { NESTED_ENV } = require('../lib/dual/hook-nesting');
 
 function parseArguments(argv) {
@@ -31,7 +32,8 @@ function createDaemonServerOptions({ workspaceRoot, authorityStore, orchestrator
         authorityStore,
         orchestrator,
         trustedQualityRunner: createTrustedQualityRunner(),
-        trustedUiAdapter: createTrustedUiAdapter(),
+        // F17: the daemon owns the browser runner, so a required UI gate can pass.
+        trustedUiAdapter: createTrustedUiAdapter({ headlessRunner: createPlaywrightUiRunner() }),
     };
 }
 

@@ -375,6 +375,65 @@ test('daemon derives UI authority from persisted policy and rejects mismatched e
     }
 });
 
+test('ui_measure: the daemon measures once with its own adapter and records that evidence (F17)', async () => {
+    const workspaceRoot = createTempDir('dual-ui-measure');
+    const baseCommit = initGitRepo(workspaceRoot);
+    const authorityStore = createAuthorityStore(path.join(workspaceRoot, '.omni', 'sessions', 'test-ui-measure'));
+    const policy = { protocol_version: 1, checks: [], ui: { required: true, viewport_widths: [390, 768], reduced_motion_required: true } };
+    const runUiDir = path.join(workspaceRoot, '.omni', 'runs', 'dual-authority', 'ui');
+    const calls = [];
+    const adapter = async (input) => {
+        calls.push(input);
+        fs.mkdirSync(runUiDir, { recursive: true });
+        const artifactPaths = input.viewports.map((width) => path.join(runUiDir, `${calls.length}-${width}.png`));
+        artifactPaths.forEach((file, index) => fs.writeFileSync(file, Buffer.from(`shot-${calls.length}-${index}`)));
+        const artifactHashes = artifactPaths.map((file) => sha(fs.readFileSync(file)));
+        const evidenceData = { runtime_status: 'AVAILABLE', policy_sha256: input.policySha256, source_fingerprint: input.sourceFingerprint,
+            requested_viewports: [...input.viewports],
+            viewports: input.viewports.map((width) => ({ width, passed: true, horizontal_overflow: false })),
+            reduced_motion: { tested: true, passed: true } };
+        return { evidence: { ...evidenceData, artifact_hashes: artifactHashes, evidence_sha256: sha(JSON.stringify({ evidenceData, artifactHashes })) },
+            artifact_paths: artifactPaths };
+    };
+    const daemon = await startDaemonServer({ workspaceRoot, authorityStore, preflightRunner: mockPreflightRunner,
+        planArtifactVerifier: async (_root, p) => ({ plan_path: p.plan_path, plan_sha256: p.plan_sha256 }), trustedUiAdapter: adapter });
+    const client = createDaemonClient({ workspaceRoot, timeoutMs: 10000 });
+    try {
+        const session = await client.beginSession({ workspace_root: workspaceRoot, mode: 'auto' });
+        await client.registerPlan(session.session_id, {
+            plan_path: '.omni/plan.json', plan_sha256: sha('ui-measure-plan'), acceptance_policy: policy,
+            tasks: [{ task_id: 'task-1', title: 'Task 1', owner: 'codex', allowed_files: ['README.md'], context_files: [],
+                deny_patterns: [], validation_commands: [{ program: 'node', args: ['--version'], cwd: '.' }] }],
+        });
+        await client.evaluateCompletion(session.session_id, { ui_measure: true });
+        assert.equal(calls.length, 1, 'one measurement, by the daemon');
+        assert.deepEqual(calls[0].viewports, [390, 768]);
+        assert.equal(calls[0].policySha256, hashAcceptancePolicy(policy));
+        assert.equal(calls[0].sourceFingerprint, captureDiffFingerprint({ repoRoot: workspaceRoot, baseCommit, excludedPaths: ['.omni'] }).patchSha256);
+        assert.equal(authorityStore.derive().gates.responsive_visual_qa.status, 'PASSED');
+    } finally {
+        await daemon.close();
+        fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
+test('ui_measure without a daemon browser adapter is refused with a typed code (F17)', async () => {
+    const workspaceRoot = createTempDir('dual-ui-measure-none');
+    initGitRepo(workspaceRoot);
+    const authorityStore = createAuthorityStore(path.join(workspaceRoot, '.omni', 'sessions', 'test-ui-measure-none'));
+    const daemon = await startDaemonServer({ workspaceRoot, authorityStore, preflightRunner: mockPreflightRunner,
+        planArtifactVerifier: async (_root, p) => ({ plan_path: p.plan_path, plan_sha256: p.plan_sha256 }) });
+    const client = createDaemonClient({ workspaceRoot, timeoutMs: 10000 });
+    try {
+        const session = await client.beginSession({ workspace_root: workspaceRoot, mode: 'auto' });
+        await assert.rejects(() => client.evaluateCompletion(session.session_id, { ui_measure: true }),
+            (error) => error?.code === 'DUAL_UI_ATTESTATION_REQUIRED');
+    } finally {
+        await daemon.close();
+        fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
 test('isolated QC enforces pre-integration review evidence before integrating task', async (t) => {
     const { completeIsolatedTask } = require('../lib/dual/isolated-qc');
     const { createOrchestratorAdapter } = require('../lib/dual/orchestrator-adapter');
