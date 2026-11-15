@@ -135,3 +135,19 @@ session blocked on `NEEDS_PROCESS_EVIDENCE`. No host sleep.
 - **Open:** why the scout turn never dispatched (needs the daemon log from a rerun);
   `DUAL_NO_WRITE_PROGRESS` and `DUAL_TURN_STALLED` are unclassified, so F8 relays them
   to the user instead of granting a correction.
+
+## 7. Run 9daa0c14 (2026-11-15/16, LANDING-3) and open notes
+
+- F19 (review input overflowed with approval sources) and F20 (harness correction had no
+  path to its policy/classification/grant) were found and fixed live; both then worked:
+  attempt 2's review chunked normally, and the correction recorded policy, classification,
+  grant and request in one step.
+- O6 worked live: attempt 3 (after QC NEEDS_FIX, four real 3D lifecycle findings) started
+  from attempt 2's three files byte for byte, with `carried_from_attempt: 2`.
+- **Open (noted by the user, fix later):**
+  - The worker slot is labelled `agy` in discussion bindings (`argon agy sonnet`) and in
+    phase meta (`agy_version`), while the runtime is claude/sonnet. Show the real runtime
+    (for example `worker_runtime: claude`).
+  - After a harness correction the new attempt re-asks the worker's earlier context
+    questions; carry answered replies forward (Orca keeps the worker's conversation on a
+    follow-up).
