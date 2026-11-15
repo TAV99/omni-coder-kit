@@ -98,6 +98,22 @@ Re-read against Orca `3036ed0d` (2026-11-14), `skill-guides/orchestration/` and
 | **O10. Messages expire in the queue (F15).** The relay discarded a reply that landed 1 s after a 300 s TTL. | Mail has no expiry: a working worker gets a message "when its current turn ends" (`orchestration.md`); staleness is decided by dispatch identity, not by the clock. | F15 (900 s plus one retry) is the stopgap; consider dropping TTL as a failure cause for phase questions and keeping only authority staleness. |
 | **O11. Contradicting operator messages (4c2bc1ae).** A stale "retry review" arrived after the orchestrator had moved to attempt 3, so it blocked. | Every receipt carries `next`; the coordinator handles a whole `check` batch before the next, and recovery acts "only on proof". | Show the current `next` (task, attempt, action) in `omni ui` beside the orchestrator pane, so the user writes against the current state. |
 
+### O6 spec: a quality correction continues the previous candidate
+
+- **When.** A correction whose previous attempt failed on a worker-quality cause:
+  `classifyFailure` gives `category: 'worker'` (QC findings, a worker review NEEDS_FIX,
+  a malformed result). Harness and unknown failures still start from the baseline.
+- **What.** Attempt N+1's private workspace is prepared from the source as before.
+  After its `worker-baseline.json` and `original-workspace.json` are written, each
+  allowed file takes attempt N's content and mode (verified through attempt N's
+  binding); one attempt N deleted is deleted. Generated outputs are not carried.
+- **Why after the baseline.** The review diff and the integrated result are measured
+  against that baseline, so carried files are ordinary candidate changes: reviewed in
+  full, fenced, integrated only through QC.
+- **Told to the worker.** `correction_context.carried_from_attempt` and
+  `carried_files`, next to the rejection `findings` (F9).
+- **Fallback.** A missing or unverifiable attempt N workspace carries nothing.
+
 Already aligned: silence or a timeout never proves exit (Orca's guide, omni's
 `NEEDS_PROCESS_EVIDENCE`); a guarded stop is not a proof of stop.
 

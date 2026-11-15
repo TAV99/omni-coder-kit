@@ -30,7 +30,7 @@ const TEMPLATES = path.join(__dirname, '..', 'templates', 'squad');
 const CONFIG = { runtime: 'claude', model: 'sonnet', effort: 'low', maxCorrections: 3 };
 
 // `beforeRun(store)` runs before the worker; `inputs` collects each phase's prompt (agy inlines the input).
-async function handoff(t, { beforeRun, taskIds = ['TASK-1'], sessionId = 'session-1', planRevision = 1,
+async function handoff(t, { beforeRun, onImplement, taskIds = ['TASK-1'], sessionId = 'session-1', planRevision = 1,
     questions = [], contextAnswer = 'Decision: return two. Source: spec.md. Scope unchanged.' } = {}) {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-reviewer-qc-')));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -73,6 +73,7 @@ async function handoff(t, { beforeRun, taskIds = ['TASK-1'], sessionId = 'sessio
             alternatives_considered: [{ option: 'Edit existing', tradeoff: 'small' }, { option: 'New file', tradeoff: 'unnecessary' }],
             failure_modes: ['wrong return value'] };
         else if (prompt.includes('implement phase')) {
+            onImplement?.({ cwd: invocation.cwd, file, spec, prompt });
             fs.writeFileSync(path.join(invocation.cwd, file), 'module.exports = 2;\n');
             payload = { ...common, status: 'SUCCESS', modified_files: [file],
                 command_outputs: [{ command: `node --check ${file}`, exit_code: 0, output: '' }], unverified_items: [],
@@ -302,6 +303,46 @@ test('multiple tasks and attempts open distinct bounded corrections', async (t) 
     assert.equal(new Set(events.map(e => e.request_id)).size, 8);
     for (const event of events) assert.equal(require('../lib/dual/contracts').TaskIdSchema.safeParse(event.request_id).success, true);
     for (const taskId of taskIds) assert.equal(f.store.derive().tasks[taskId].correction.attempt, 3);
+});
+
+test('a QC NEEDS_FIX correction starts from the previous candidate, not the baseline (O6)', async (t) => {
+    const seen = [];
+    const f = await handoff(t, { onImplement: ({ cwd, file, spec }) => {
+        const raw = path.join(cwd, '.omni/codex-gemini/runs', spec.task_id, 'raw');
+        const input = fs.readdirSync(raw).filter((name) => /^implement\.\d+\.input\.md$/.test(name)).sort().pop();
+        seen.push({ content: fs.readFileSync(path.join(cwd, file), 'utf8'), context: spec.correction_context,
+            prompt: fs.readFileSync(path.join(raw, input), 'utf8') });
+    } });
+    const result = await runReviewerQc({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1', config: CONFIG,
+        spawnImpl: fakeSpawn(() => ({ stdout: claudeVerdict(f.spec, 'NEEDS_FIX',
+            [{ file: 'index.js', line: 1, description: 'Must return a string.', severity: 'ERROR' }]) })) });
+    assert.deepEqual(settleReviewVerdict({ workspaceRoot: f.root, authorityStore: f.store, taskId: 'TASK-1',
+        verdict: result.verdict, attempt: result.attempt, config: CONFIG }), { status: 'CORRECTING', attempt: 2 });
+    await f.adapter.runTask(f.store.derive());
+    assert.equal(seen.length, 2);
+    assert.equal(seen[0].content, 'module.exports = 1;\n', 'attempt 1 starts from the baseline');
+    assert.equal(seen[1].content, 'module.exports = 2;\n', 'attempt 2 starts from attempt 1\'s candidate');
+    assert.equal(seen[1].context.carried_from_attempt, 1);
+    assert.deepEqual(seen[1].context.carried_files, ['index.js']);
+    assert.match(seen[1].prompt, /CORRECTION CARRY-FORWARD: this workspace already holds attempt 1's candidate for index\.js/);
+    // The carried change is still a candidate change measured against the source baseline.
+    const task = f.store.derive().tasks['TASK-1'];
+    assert.equal(task.isolatedHandoff !== undefined, true);
+    const { collectTaskResult } = require('../lib/dual/task-workspace');
+    const collected = collectTaskResult({ workspaceRoot: f.root, reference: task.isolatedWorkspace.reference, readOnly: true });
+    assert.deepEqual(collected.changes.map((change) => [change.path, change.kind]), [['index.js', 'modified']]);
+});
+
+test('a harness or unknown failure still corrects from the baseline (O6)', () => {
+    const { carryForwardPlan } = require('../lib/dual/isolated-runner');
+    const previous = (code) => ({ correction: { attempt: 2 },
+        previousAttempts: [{ workspace: { reference: { bindingPath: 'x', bindingSha256: 'y' } }, outcome: { attempt: 1, code } }] });
+    for (const code of ['DUAL_DISCUSSION_SEED_FAILED', 'DUAL_DISCUSSION_MESSAGE_EXPIRED', 'SOMETHING_UNCLASSIFIED']) {
+        assert.equal(carryForwardPlan('/nonexistent', previous(code)), null, code);
+    }
+    // A worker-quality cause whose workspace cannot be verified carries nothing either.
+    assert.equal(carryForwardPlan('/nonexistent', previous('DUAL_CONTROLLER_REVIEW_REJECTED')), null);
+    assert.equal(carryForwardPlan('/nonexistent', { previousAttempts: [] }), null);
 });
 
 test('review settlement request IDs distinguish session and plan revision', async (t) => {
