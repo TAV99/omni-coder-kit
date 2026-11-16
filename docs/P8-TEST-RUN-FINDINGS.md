@@ -151,3 +151,20 @@ session blocked on `NEEDS_PROCESS_EVIDENCE`. No host sleep.
   - After a harness correction the new attempt re-asks the worker's earlier context
     questions; carry answered replies forward (Orca keeps the worker's conversation on a
     follow-up).
+
+## 8. Run ae104a25 (2026-11-16): first VERIFIED session
+
+LANDING-3 went from bootstrap to `VERIFIED` in one session: attempt 1 carried the previous
+session's attempt-3 files byte for byte, the worker review needed 3 chunks (F6; the
+previous session needed 10 at ~7 min each), Codex QC returned APPROVE with 0 findings,
+integration at 03:48, three quality cycles and both session command checks passed
+(F18a, F18b), and the UI gate measured 320/390/768/1280/1920 plus reduced motion in real
+Chromium (F17) before `session.verified` at 04:02.
+
+- The orchestrator's MCP server had to be restarted (it was loaded before F17/F18).
+- The first `ui_measure` failed with `Page.captureScreenshot: Unable to capture screenshot`
+  and the retry passed; it did not reproduce fenced or unfenced afterwards. Two
+  `omni ui --resume` instances were running against the same Codex conversation at the
+  time, so concurrent measurements are the likely cause. Open: refuse a second
+  orchestrator on one session, and retry one screenshot failure inside the runner.
+- Not done by omni: the integrated LANDING-3 files are uncommitted in the project.
