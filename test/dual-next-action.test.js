@@ -19,7 +19,8 @@ test('task state: live lease, usage-limit wait, outcome, handoff, question, expi
 });
 
 test('task action: exhausted attempts beat a correction; every result is in the enum', () => {
-    assert.equal(authorityNextAction({ handoffRejection: { attempt: 3 } }, 'EXECUTING', 'NEEDS_FIX'), 'block_exhausted_attempts');
+    // O8: exhausted attempts go to the person with the session open (they may reopen), not to a block.
+    assert.equal(authorityNextAction({ handoffRejection: { attempt: 3 } }, 'EXECUTING', 'NEEDS_FIX'), 'relay_failure_to_human');
     const cases = [['NEEDS_FIX', 'request_correction'], ['NEEDS_CONTEXT', 'answer_worker_question'],
         ['WAITING_FOR_SCOPE', 'wait_for_dependency'], ['TASK_VERIFIED', 'done'], ['AWAITING_CODEX_QC', 'codex_qc'],
         ['AGY_IN_PROGRESS', 'wait_for_agy'], ['WAITING_RUNTIME', 'wait_for_runtime'], ['AGY_LEASE_EXPIRED', 'inspect_blocker']];

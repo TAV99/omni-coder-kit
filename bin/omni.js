@@ -190,6 +190,12 @@ dualAcceptance.command('complete <correction-id>')
     .option('--json', 'Xuất một JSON object duy nhất')
     .action(handleDualAcceptanceComplete);
 
+dual.command('task').description('Thao tác của người dùng trên một task Dual')
+    .command('reopen <task-id>')
+    .description('Mở lại task đã hỏng (hết budget hoặc chưa phân loại) cho thêm một correction; cần gõ trên terminal')
+    .requiredOption('--reason <text>', 'Vì sao mở lại')
+    .action((taskId, options) => require('../lib/commands/dual').handleDualTaskReopen(taskId, options));
+
 dual.command('block')
     .description('Ghi durable blocker và dừng session Dual')
     .requiredOption('--reason <text>', 'Lý do block')

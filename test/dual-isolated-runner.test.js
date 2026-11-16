@@ -894,6 +894,26 @@ test('validated worker NEEDS_FIX permits only the existing bounded public correc
     }
     for (const [file, bytes] of preserved) assert.deepEqual(fs.readFileSync(file), bytes);
     assert.equal(fs.readFileSync(path.join(input.workspaceRoot, 'index.js'), 'utf8'), 'module.exports = 1;\n');
+
+    // O8: the person reopens the exhausted task; one user-directed correction follows
+    // and the series budget starts again, while every earlier attempt stays in history.
+    const { authorityNextAction, deriveAuthorityTaskState } = require('../lib/dual/next-action');
+    const exhausted = store.derive().tasks['TASK-1'];
+    assert.equal(authorityNextAction(exhausted, 'EXECUTING', deriveAuthorityTaskState(exhausted, store.derive().leases)), 'relay_failure_to_human');
+    const reopened = await client.reopenTask(input.sessionId, { task_id: 'TASK-1', plan_revision: 1, base_attempt: 3,
+        reason: 'The person accepts one more correction after reviewing the findings.' });
+    assert.equal(reopened.reused, false);
+    const pending = store.derive().tasks['TASK-1'];
+    assert.equal(authorityNextAction(pending, 'EXECUTING', deriveAuthorityTaskState(pending, store.derive().leases)), 'request_correction');
+    const fourth = await client.correctTask(input.sessionId, { task_id: 'TASK-1', plan_revision: 1, expected_attempt: 3,
+        request_id: 'after-reopen-3', reason: 'Recheck the recorded value finding after the reopen.' });
+    assert.equal(fourth.attempt, 4);
+    const requested = store.readEvents().filter((event) => event.type === 'task.correction.requested').pop();
+    assert.equal(requested.budget_class, 'user');
+    assert.equal(store.readEvents().find((event) => event.type === 'task.recovery.reopened').approved_by, 'user');
+    assert.equal(store.derive().tasks['TASK-1'].previousAttempts.length, 3);
+    // The reopen is spent: replaying it for the same attempt is refused once consumed.
+    await assert.rejects(client.reopenTask(input.sessionId, { task_id: 'TASK-1', plan_revision: 1, base_attempt: 3, reason: 'again' }));
 });
 
 test('worker review needs-fix classification is a worker charge, never a harness recovery credit', () => {

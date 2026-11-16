@@ -143,13 +143,14 @@ test('workflow rejects independent semantic review FAIL before correction and do
     assert.equal(RejectHandoffInputSchema.safeParse(example).success, true);
 });
 
-test('CLI status gives exhausted rejection attempt a blocking action instead of impossible correction', () => {
+test('CLI status hands an exhausted rejection attempt to the person instead of an impossible correction', () => {
     const { normalizeAuthorityTaskStatus } = require('../lib/commands/dual');
     const result = normalizeAuthorityTaskStatus({ state: 'EXECUTING', tasks: { 'TASK-1': {
         owner: 'agy', state: 'ROUTED', execution_mode: 'isolated',
         handoffRejection: { attempt: 3, findings: [] }, lastOutcome: { status: 'NEEDS_FIX', attempt: 3 },
     } } }, 'TASK-1');
-    assert.equal(result.nextAction, 'block_exhausted_attempts');
+    // O8: the session stays open so the person can reopen the task.
+    assert.equal(result.nextAction, 'relay_failure_to_human');
 });
 
 test('CLI and MCP share durable rejection semantics and expose findings plus correction action', async (t) => {

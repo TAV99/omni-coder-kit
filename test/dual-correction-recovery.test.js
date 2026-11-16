@@ -328,3 +328,16 @@ test('the review brief lists every required coverage check and constraint findin
     const merged = aggregateReviews([chunk('index.html'), chunk('src/style.css')]);
     assert.deepEqual(merged.coverage_checks.map((check) => check.evidence_refs), [['index.html', 'src/style.css'], ['index.html', 'src/style.css']]);
 });
+
+test('a watchdog stall on a run whose lease expired is a harness lease loss once settlement is proven (O7)', () => {
+    for (const code of ['DUAL_TURN_STALLED', 'DUAL_NO_WRITE_PROGRESS']) {
+        const unsettled = task(code);
+        unsettled.finalization = { stage: 'unknown', recovery: 'NEEDS_PROCESS_EVIDENCE', settled: false };
+        assert.deepEqual(classifyFailure(unsettled), { category: 'unknown', phase: 'unclassified' }, 'no proof yet');
+        const settled = task(code);
+        settled.finalization = { stage: 'unknown', settled: true };
+        assert.deepEqual(classifyFailure(settled), { category: 'harness', phase: 'lease_lost' });
+        const live = task(code); // stalled while the lease held: not a host loss
+        assert.deepEqual(classifyFailure(live), { category: 'unknown', phase: 'unclassified' });
+    }
+});

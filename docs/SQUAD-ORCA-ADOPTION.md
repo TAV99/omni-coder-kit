@@ -114,6 +114,22 @@ Re-read against Orca `3036ed0d` (2026-11-14), `skill-guides/orchestration/` and
   `carried_files`, next to the rejection `findings` (F9).
 - **Fallback.** A missing or unverifiable attempt N workspace carries nothing.
 
+### O7 and O8 as built (2026-11-16)
+
+- **O7.** A watchdog stall on a run whose lease expired under it is harness `lease_lost`
+  once settlement is proven. The default recovery policy applied with a harness
+  correction is worker 2, harness 2, total 4. Not done: counting only failed starts as
+  Orca's breaker does; harness faults still have a finite budget of their own.
+- **O8.** `omni dual task reopen <task> --reason …` is a terminal-only, typed-confirmation
+  command, with no MCP tool. It appends `task.recovery.reopened` (`approved_by: user`)
+  for the current failed, released attempt of an executing session. That grants one
+  correction with `budget_class: user`, whatever the classification, and the attempt and
+  budget series restart after it; earlier attempts stay in the ledger. `next_action`
+  sends exhausted or unclassified failures to the person instead of blocking.
+  Not done: reopening a session that is already `BLOCKED`.
+- **One orchestrator per project.** `omni ui` holds `.omni/runtime/ui/ui.lock` (Orca: one
+  current coordinator per Run).
+
 Already aligned: silence or a timeout never proves exit (Orca's guide, omni's
 `NEEDS_PROCESS_EVIDENCE`); a guarded stop is not a proof of stop.
 

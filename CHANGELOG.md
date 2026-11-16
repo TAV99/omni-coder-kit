@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`omni dual task reopen <task> --reason …` (O8).** Following Orca, where only the user reopens the same Task and a fresh series starts at zero, a person on a terminal (the task id typed back; no MCP tool) reopens a failed task whose automatic correction is refused. It grants one user-directed correction (`budget_class: user`) and restarts the attempt and budget series, while every earlier attempt stays in the ledger (`task.recovery.reopened`). `next_action` for an exhausted or unclassified failure is now `relay_failure_to_human` with the session left open, instead of blocking it.
+- **One `omni ui` per project.** A second `omni ui` for the same project is refused while the first is alive (`.omni/runtime/ui/ui.lock`; a dead holder is taken over). Two orchestrators resumed the same conversation and drove one session at once.
+
 ### Changed
+- **A host loss no longer spends the quality budget (O7).** A watchdog stall (`DUAL_TURN_STALLED`, `DUAL_NO_WRITE_PROGRESS`) on a run whose lease expired under it is classified harness `lease_lost` once settlement is proven, like the other lease-loss codes. The default recovery policy is now worker 2, harness 2, total 4, so harness faults never use up the two worker corrections. In omni-p8-test the battery ran out mid-review, and the stall at wake was unclassified with no harness recovery left.
 - **Review in chat, automatic integration (user decision 2026-11-12).** The shipped squad/dual pipelines no longer declare approval gates. The orchestrator stops after writing the spec and again after the plan, and continues only after the user's explicit reply in its chat; a task integrates as soon as QC passes. A project can opt back in by adding `gate: human` / `gate: human-always` to a phase in `.omni/squad/pipeline.yaml`; projects without a pipeline (legacy dual) still wait at the integrate gate. Existing projects keep their current `pipeline.yaml`.
 - **A quality correction continues the previous candidate (O6).** After a worker-quality failure (QC findings, a worker review NEEDS_FIX, a malformed result), the next attempt's workspace starts from the previous attempt's allowed files instead of the baseline, and the worker is told so (`correction_context.carried_from_attempt`, `carried_files`). The carried files are still candidate changes against the source baseline: reviewed in full, fenced, and integrated only through QC. Harness and unknown failures still start clean.
 

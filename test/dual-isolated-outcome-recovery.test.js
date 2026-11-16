@@ -184,7 +184,7 @@ for (const killed of [true, false]) {
                 assert.ok(types.includes(type), type);
             }
             const policy = authorityStore.readEvents().find((event) => event.type === 'task.recovery.policy');
-            assert.deepEqual([policy.worker_limit, policy.harness_limit, policy.total_limit], [2, 1, 3]);
+            assert.deepEqual([policy.worker_limit, policy.harness_limit, policy.total_limit], [2, 2, 4]);
             assert.equal(authorityStore.readEvents().find((event) => event.type === 'task.correction.requested').budget_class, 'harness');
             assert.equal((await client.correctTask(session.session_id, correction)).reused, true, 'a repeated request is idempotent');
         }
