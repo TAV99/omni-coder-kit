@@ -168,3 +168,8 @@ Chromium (F17) before `session.verified` at 04:02.
   time, so concurrent measurements are the likely cause. Open: refuse a second
   orchestrator on one session, and retry one screenshot failure inside the runner.
 - Not done by omni: the integrated LANDING-3 files are uncommitted in the project.
+- **Open (found 2026-11-16 at shutdown):** an orphaned p8 daemon (pid 59664, started
+  2026-11-14) was still running beside the current one. `omni dual daemon stop` stops
+  only the daemon its discovery file names, so a daemon that lost its discovery and lock
+  lived on through every later restart. It had to be stopped by signal. Check whether
+  a daemon that loses its lock exits, and whether it could still append to the ledger.
