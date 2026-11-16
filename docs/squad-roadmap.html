@@ -273,7 +273,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
 
 <script>
 // ---- Dữ liệu tiến độ: sửa phần này khi qua mỗi checkpoint ----
-const STATE = { updated: '11/11/2026', head: '78ba206' };
+const STATE = { updated: '16/11/2026', head: '39875e7' };
 
 // Các việc chuẩn bị đã xong (hiện gọn trong một dòng).
 const PREP = [
@@ -328,11 +328,31 @@ const PHASES = [
     expect: ['Chạy được trên Mac, Windows, Linux'],
   },
   {
-    id: 'P7', name: 'Nghiệm thu 3.2.0', status: 'now',
+    id: 'P7', name: 'Nghiệm thu 3.2.0', status: 'done',
     result: '≥ 90% task đạt, 0 ngoài scope, 0 unknown, 0 dispatch trùng, cổng đúng 100%',
     steps: [['Viết spec P7', 'done', 'commit fe6ca27'], ['Chốt Q-P7-1..5', 'done', 'hai tầng · approve --all · bookshelf · config A–D'], ['Rà nợ P1–P6 + sửa 3 nợ', 'done', 'f7826ea codex config · fc552b0 daemon cũ · f02543a worker isolated · 3103 test xanh'], ['Bàn giao cho agent khác', 'done', 'docs/HANDOFF-P7.md · bdde019'], ['P7a · project mẫu + 10 task', 'done', '60a8d4e fixture + task suite · 35d23b7 live-test fix'], ['P7b · approve --all', 'done', '42a11a7 · real TTY: 12 gates approved · normal/loaded: 3142 tests, 3130 passed, 12 skipped'], ['Codex sandbox template fix', 'done', '638ece4 · supported workspace-write/network settings; normal/loaded 3279 tests, 3267 passed, 12 skipped, 0 failed'], ['P7c · harness nghiệm thu', 'done', 'ce6e005 · V48 + T01 subset passed; normal/loaded 3279 tests, 3267 passed, 12 skipped, 0 failed'], ['Context continuation fix', 'done', '33e0e91 · retain context audit and advance settled handoffs to QC; normal/loaded: 3281 tests, 3269 passed, 12 skipped, 0 failed'], ['Approval status projection fix', 'done', '058b42a · CLI approval reads omit task history; normal/loaded: 3283 tests, 3271 passed, 12 skipped, 0 failed'], ['Resume ACK fix + RPC audit', 'done', 'c5e7b82 · all three resume paths use ACK; normal/loaded: 3287 tests, 3275 passed, 12 skipped, 0 failed'], ['Source integrity observer', 'done', '922f260 · user-approved local commit; normal/loaded each 3298 tests, 3286 passed, 12 skipped, 0 failed; review clean'], ["P7d · chạy config A–D","done","Bản release: A, B, D PASS 10/10 (0cbbeab) · C PASS 10/10 (d1a0601)"], ['P7e · WAITING_RUNTIME', 'done', '76ccb05 claude · 24c2e7d codex · agy not observed'], ['P7f · lượt agent thật', 'done', 'squad PASS 4/4 · dual PASS 4/4 (78ba206) · 19 lỗi đã sửa · envelope 32 KiB']],
     does: ["C-09 PASS 10/10 on the current candidate. A-09 PASS 10/10, B-06 PASS 9/10 and D-03 PASS 9/10 are from the earlier candidate. C-07 and C-08 retain their native outcomes.","T04 missing CLI query must error; explicit empty returns all and whitespace is literal; four supplemental cases","The macOS source fences and review envelope were verified. Normal and loaded each ran 3,368 tests with 3,356 passed, 12 skipped and zero failures. C-09 observed zero source drift.","A-04, D-02, A-08 and C-02 remain unresolved. A-06 failed and C-03 remains FAIL 8/10. The D/T08 follow-up remains partial. P7e and P7f require separate evidence."],
     expect: ['The recorded scripted matrix meets the thresholds across different candidates. P7e and P7f remain open.', 'V44 Safari/Firefox confirmed by the user. Real Linux/Windows runs remain the next step.'],
+  },
+  {
+    id: 'P8', name: 'Chạy thật: landing page', status: 'now',
+    result: 'Một phiên trơn tru từ bootstrap tới VERIFIED trên project thật (omni-p8-test)',
+    steps: [
+      ['Lượt chạy đầu (14 phiên, ~10 giờ)', 'done', 'LANDING-1 verified · 12 phiên BLOCKED · docs/P8-TEST-RUN-FINDINGS.md'],
+      ['F1–F8: lỗi nêu nguyên nhân, seed, bootstrap, relay', 'done', '249ad67 → 3a94f3e'],
+      ['F9–F15: finding vào correction, fence, log daemon, chunk, TTL', 'done', 'd46a324 → 4f553b4'],
+      ['So sánh Orca → O6–O11', 'done', 'b5301cd · docs/SQUAD-ORCA-ADOPTION.md'],
+      ['O6 correction kế thừa bản trước', 'done', '854c680 · chạy thật: attempt 3 chép đúng bản attempt 2'],
+      ['LANDING-2 verified', 'done', 'f2522f66 · QC APPROVE 0 finding · p8 d63e81c'],
+      ['F17–F20: UI runner, session check, envelope, harness grant', 'done', 'c2fe9f7 → 076b38c'],
+      ['F6 review gửi brief một lần', 'done', '4ae5c59 · 10 chunk → 3'],
+      ['LANDING-3 · phiên VERIFIED đầu tiên', 'done', 'ae104a25 · 36 phút · p8 9a54372'],
+      ['Một omni ui · O7 · O8 reopen', 'done', 'f83b04e · ca3fc94 · đã push main + 3.2.0'],
+      ['LANDING-4: browser test + Lighthouse', 'todo', 'chờ Codex hồi quota (~19/11); checklist trong docs/HANDOFF-P7.md §P8'],
+      ['Việc còn mở', 'todo', 'daemon mồ côi · F17 pha 2 (dev server) · reopen phiên BLOCKED · giữ câu trả lời context · nhãn agy · O9–O11'],
+    ],
+    does: ['Chạy squad thật (orchestrator codex, worker claude sonnet, reviewer codex) trên một landing page 4 task', 'Mỗi lỗi lộ ra thành một bản sửa có test, xanh cả khi tải', 'Đối chiếu Orca trước khi thiết kế phần khó'],
+    expect: ['LANDING-4 VERIFIED trong một phiên, không cần can thiệp tay', 'Không còn phiên BLOCKED vì lỗi omni'],
   },
 ];
 
